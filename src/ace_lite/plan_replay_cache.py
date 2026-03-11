@@ -9,6 +9,8 @@ from pathlib import Path
 from time import time
 from typing import Any
 
+from ace_lite.stage_artifact_cache import StageArtifactCache
+
 _SCHEMA_VERSION = "plan-replay-cache-v1"
 _CONTENT_VERSION = "plan-replay-v1"
 _MAX_ENTRIES = 64
@@ -85,6 +87,11 @@ def build_plan_replay_cache_key(
 
 
 def load_cached_plan(*, cache_path: Path, key: str) -> dict[str, Any] | None:
+    manager = _build_stage_artifact_cache(cache_path=cache_path)
+    cached = manager.get_artifact(stage_name="source_plan", cache_key=key)
+    if cached is not None:
+        return copy.deepcopy(cached.payload)
+
     payload = _load_cache_payload(cache_path=cache_path, schema_version=_SCHEMA_VERSION)
     if payload is None:
         return None
@@ -109,6 +116,38 @@ def store_cached_plan(
     payload: dict[str, Any],
     meta: dict[str, Any] | None = None,
 ) -> bool:
+    normalized_meta = _normalize_cache_meta(meta)
+    manager = _build_stage_artifact_cache(cache_path=cache_path)
+    try:
+        manager.put_artifact(
+            stage_name=str(normalized_meta.get("stage") or "source_plan"),
+            cache_key=key,
+            query_hash=_build_query_hash(str(normalized_meta.get("query") or "")),
+            fingerprint=str(key),
+            settings_fingerprint=str(normalized_meta.get("settings_fingerprint") or ""),
+            payload=copy.deepcopy(payload),
+            token_weight=_estimate_payload_token_weight(payload),
+            ttl_seconds=max(0, int(normalized_meta.get("ttl_seconds") or 0)),
+            soft_ttl_seconds=max(0, int(normalized_meta.get("soft_ttl_seconds") or 0)),
+            content_version=_CONTENT_VERSION,
+            policy_name=str(normalized_meta.get("stage") or "source_plan"),
+            trust_class=str(normalized_meta.get("trust_class") or "exact"),
+            write_token="plan_replay",
+        )
+        _write_cache_payload(
+            cache_path=cache_path,
+            payload={
+                "schema_version": _SCHEMA_VERSION,
+                "backend": "stage_artifact_cache",
+                "updated_at_epoch": round(float(time()), 3),
+                "last_key": str(key),
+                "meta": normalized_meta,
+            },
+        )
+        return True
+    except Exception:
+        pass
+
     existing = _load_cache_payload(cache_path=cache_path, schema_version=_SCHEMA_VERSION)
     if existing is None:
         existing = {"schema_version": _SCHEMA_VERSION, "entries": []}
@@ -163,6 +202,31 @@ def content_version() -> str:
     return _CONTENT_VERSION
 
 
+def _build_stage_artifact_cache(*, cache_path: Path) -> StageArtifactCache:
+    anchor = Path(cache_path).resolve()
+    payload_root = anchor.parent / "artifacts"
+    temp_root = payload_root / "tmp"
+    db_path = anchor.parent / "stage-artifact-cache.db"
+    return StageArtifactCache(
+        repo_root=anchor.parent,
+        db_path=db_path,
+        payload_root=payload_root,
+        temp_root=temp_root,
+    )
+
+
+def _build_query_hash(query: str) -> str:
+    normalized = normalize_plan_query(query)
+    if not normalized:
+        return ""
+    return hashlib.sha256(normalized.encode("utf-8", "ignore")).hexdigest()
+
+
+def _estimate_payload_token_weight(payload: dict[str, Any]) -> int:
+    text = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return max(1, len(text) // 4)
+
+
 def _load_cache_payload(*, cache_path: Path, schema_version: str) -> dict[str, Any] | None:
     try:
         stat = cache_path.stat()
@@ -188,6 +252,8 @@ def _load_cache_payload(*, cache_path: Path, schema_version: str) -> dict[str, A
     if not isinstance(payload, dict):
         return None
     if str(payload.get("schema_version") or "") != str(schema_version):
+        return None
+    if str(payload.get("backend") or "").strip() == "stage_artifact_cache":
         return None
 
     _PLAN_REPLAY_CACHE_MEMORY[cache_key] = (stat.st_mtime_ns, stat.st_size, payload)
