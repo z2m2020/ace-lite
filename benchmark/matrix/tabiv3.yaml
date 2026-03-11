@@ -1,0 +1,41 @@
+defaults:
+  skills_dir: skills
+  top_k_files: 3
+  min_candidate_score: 3
+  candidate_relative_threshold: 0.35
+  candidate_ranker: heuristic
+  chunk_top_k: 6
+  chunk_per_file_limit: 2
+  chunk_token_budget: 800
+  chunk_diversity_enabled: false
+  cochange: false
+  repomap: true
+  index_incremental: false
+  memory_primary: none
+  memory_secondary: none
+  warmup_runs: 1
+  app: codex
+
+thresholds:
+  recall_at_k_min: 0.95
+  precision_at_k_min: 0.65
+  noise_rate_max: 0.35
+  dependency_recall_min: 0.90
+  latency_p95_ms_max: 170.0
+  repomap_latency_p95_ms_max: 90.0
+  chunk_hit_at_k_min: 0.90
+  notes_hit_ratio_min: 0.0
+  profile_selected_mean_min: 0.0
+  capture_trigger_ratio_min: 0.0
+  embedding_similarity_mean_min: 0.0
+  embedding_rerank_ratio_min: 0.0
+  embedding_cache_hit_ratio_min: 0.0
+  embedding_fallback_ratio_max: 1.0
+
+repos:
+  - name: flask-tabiv3
+    repo: flask
+    url: https://github.com/pallets/flask.git
+    ref: 3.0.3
+    languages: python
+    cases: benchmark/cases/matrix/flask.yaml

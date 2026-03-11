@@ -1,0 +1,90 @@
+schema_version: ace-lite-arm-catalog-v1
+name: default_v1
+description: >
+  Bounded ArmSweeper catalog for offline yearly routing evaluation. Arms reuse
+  benchmark-compatible retrieval knobs through config-pack overrides so runtime
+  routing stays unchanged.
+shared_overrides:
+  top_k_files: 8
+  embedding_fail_open: true
+  exact_search_enabled: true
+arms:
+  - arm_id: auto_default
+    label: auto_default
+    description: Current automatic policy surface with repository defaults.
+    overrides:
+      retrieval_policy: auto
+      candidate_ranker: hybrid_re2
+      embedding_enabled: true
+
+  - arm_id: general_rrf
+    label: general_rrf
+    description: Fixed general policy with RRF hybrid ranking.
+    overrides:
+      retrieval_policy: general
+      candidate_ranker: rrf_hybrid
+      embedding_enabled: true
+
+  - arm_id: general_hybrid
+    label: general_hybrid
+    description: Fixed general policy with hybrid_re2 ranking.
+    overrides:
+      retrieval_policy: general
+      candidate_ranker: hybrid_re2
+      embedding_enabled: true
+
+  - arm_id: general_heuristic
+    label: general_heuristic
+    description: Fixed general policy with lexical/heuristic-only ranking.
+    overrides:
+      retrieval_policy: general
+      candidate_ranker: heuristic
+      embedding_enabled: false
+
+  - arm_id: bugfix_dense
+    label: bugfix_dense
+    description: Bugfix-oriented profile with hybrid_re2 and semantic rerank enabled.
+    overrides:
+      retrieval_policy: bugfix_test
+      candidate_ranker: hybrid_re2
+      embedding_enabled: true
+
+  - arm_id: bugfix_heuristic
+    label: bugfix_heuristic
+    description: Bugfix-oriented profile with heuristic ranking and no semantic rerank.
+    overrides:
+      retrieval_policy: bugfix_test
+      candidate_ranker: heuristic
+      embedding_enabled: false
+
+  - arm_id: feature_graph
+    label: feature_graph
+    description: Feature profile using graph-aware RRF hybrid ranking.
+    overrides:
+      retrieval_policy: feature
+      candidate_ranker: rrf_hybrid
+      embedding_enabled: true
+
+  - arm_id: refactor_graph
+    label: refactor_graph
+    description: Refactor profile using graph-aware RRF hybrid ranking.
+    overrides:
+      retrieval_policy: refactor
+      candidate_ranker: rrf_hybrid
+      embedding_enabled: true
+
+  - arm_id: doc_intent_hybrid
+    label: doc_intent_hybrid
+    description: Documentation intent profile with hybrid ranking.
+    overrides:
+      retrieval_policy: doc_intent
+      candidate_ranker: hybrid_re2
+      embedding_enabled: true
+
+  - arm_id: perf_proxy_refactor
+    label: perf_proxy_refactor
+    description: Conservative perf proxy using refactor policy without semantic rerank.
+    overrides:
+      retrieval_policy: refactor
+      candidate_ranker: heuristic
+      embedding_enabled: false

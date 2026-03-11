@@ -1,0 +1,31 @@
+cases:
+  - case_id: pytest-fixture-decorator
+    query: where fixture decorator is implemented in pytest
+    expected_keys: [_pytest/fixtures.py, fixture]
+    top_k: 6
+
+  - case_id: pytest-parametrize-mark
+    query: where parametrize mark is defined in pytest
+    expected_keys: [_pytest/mark/structures.py, parametrize]
+    top_k: 6
+
+  - case_id: pytest-assertion-rewrite-hook
+    query: where AssertionRewritingHook is implemented in pytest
+    expected_keys: [_pytest/assertion/rewrite.py, AssertionRewritingHook]
+    top_k: 6
+
+  - case_id: pytest-plugin-manager
+    query: where PytestPluginManager is implemented in pytest
+    expected_keys: [_pytest/config/__init__.py, PytestPluginManager]
+    top_k: 6
+
+  - case_id: pytest-session-collector
+    query: where Session collector is implemented in pytest
+    expected_keys: [_pytest/main.py, Session]
+    top_k: 6
+
+  - case_id: pytest-terminal-reporter
+    query: where TerminalReporter is implemented in pytest
+    expected_keys: [_pytest/terminal.py, TerminalReporter]
+    top_k: 6
+

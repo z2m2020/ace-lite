@@ -1,0 +1,54 @@
+﻿name: freeze-stability-nightly
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "10 4 * * *"
+
+jobs:
+  freeze-stability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run freeze stability loop (20 runs)
+        run: |
+          python scripts/run_freeze_stability.py \
+            --matrix-config benchmark/matrix/repos.yaml \
+            --output-dir artifacts/release-freeze/stability/nightly \
+            --runs 20 \
+            --fail-on-thresholds \
+            --skip-skill-validation \
+            --max-failure-rate 0.05 \
+            --max-retry-median 2.0 \
+            --fail-on-gate
+
+      - name: Build freeze trend report
+        if: always()
+        run: |
+          python scripts/build_freeze_trend_report.py \
+            --history-root artifacts/release-freeze/stability/nightly \
+            --latest-report artifacts/release-freeze/stability/nightly/run-20/freeze_regression.json \
+            --output-dir artifacts/release-freeze/trend/nightly
+
+      - name: Upload freeze stability artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: freeze-stability-nightly-artifacts
+          path: |
+            artifacts/release-freeze/stability/nightly
+            artifacts/release-freeze/trend/nightly

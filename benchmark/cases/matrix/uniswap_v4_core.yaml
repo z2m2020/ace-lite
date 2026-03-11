@@ -1,0 +1,20 @@
+cases:
+  - case_id: uniswap-v4-pool-manager
+    query: where PoolManager contract is implemented
+    expected_keys: [src/PoolManager.sol, PoolManager]
+    top_k: 6
+
+  - case_id: uniswap-v4-currency-type
+    query: where Currency type is defined
+    expected_keys: [src/types/Currency.sol, Currency]
+    top_k: 6
+
+  - case_id: uniswap-v4-forge-std-test
+    query: where forge-std Test contract is defined
+    expected_keys: [lib/forge-std/src/Test.sol, Test]
+    top_k: 8
+
+  - case_id: uniswap-v4-solmate-mock-erc20
+    query: where solmate MockERC20 contract is defined
+    expected_keys: [lib/solmate/src/test/utils/mocks/MockERC20.sol, MockERC20]
+    top_k: 8

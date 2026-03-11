@@ -1,0 +1,133 @@
+slices:
+  feedback:
+    thresholds:
+      precision_delta_min: 0.5
+      noise_delta_min: 0.5
+    feedback:
+      boost_per_select: 0.8
+      max_boost: 0.8
+      decay_days: 60.0
+
+  temporal:
+    thresholds:
+      precision_delta_min: 0.5
+      noise_delta_min: 0.5
+    time:
+      start_date: 2026-02-10
+      end_date: 2026-02-15
+
+  index_batch:
+    thresholds:
+      require_files_equal: true
+    indexing:
+      batch_size: 1
+      timeout_per_file: 0.05
+      retry_timeouts: true
+      subprocess_batch: true
+
+  late_interaction:
+    thresholds:
+      precision_delta_min: 0.0
+      noise_delta_min: 0.0
+    late_interaction:
+      off_provider: hash_cross
+      on_provider: hash_colbert
+
+  dependency_recall:
+    thresholds:
+      dependency_recall_min: 0.8
+      dependency_recall_delta_min: 0.0
+      precision_delta_min: 0.0
+      noise_increase_max: 0.0
+      latency_growth_factor_max: 2.0
+    dependency_recall:
+      off_repomap_ranking_profile: heuristic
+      on_repomap_ranking_profile: graph_seeded
+      repomap_top_k: 1
+      repomap_neighbor_limit: 2
+      repomap_budget_tokens: 256
+
+  perf_routing:
+    thresholds:
+      task_success_min: 1.0
+      task_success_delta_min: 0.0
+      precision_delta_min: 0.0
+      noise_increase_max: 0.0
+      latency_growth_factor_max: 1.0
+      skills_latency_growth_factor_max: 1.0
+      skills_token_budget_used_increase_max: 0.0
+      skills_budget_exhausted_increase_max: 0.0
+    perf_routing:
+      retrieval_policy: general
+      off_precomputed_skills_routing: false
+      on_precomputed_skills_routing: true
+      top_k_files: 2
+      chunk_top_k: 8
+      repomap_top_k: 2
+      repomap_neighbor_limit: 4
+      repomap_budget_tokens: 384
+
+  stale_majority:
+    thresholds:
+      task_success_min: 1.0
+      task_success_delta_min: 0.0
+      precision_delta_min: 0.0
+      noise_increase_max: 0.0
+      latency_growth_factor_max: 2.0
+      pairwise_conflict_count_mean_min: 1.0
+      expected_retained_hit_rate_min: 1.0
+      report_only_improved_rate_min: 1.0
+    stale_majority:
+      retrieval_policy: general
+      top_k_files: 1
+      chunk_top_k: 8
+      chunk_guard_mode: enforce
+      chunk_guard_lambda_penalty: 4.0
+      chunk_guard_min_pool: 1
+      chunk_guard_min_marginal_utility: 0.2
+
+  topological_shield:
+    thresholds:
+      task_success_min: 1.0
+      task_success_delta_min: 0.0
+      precision_delta_min: 0.0
+      noise_increase_max: 0.0
+      latency_growth_factor_max: 2.0
+      attenuated_chunk_count_mean_min: 0.5
+      attenuation_total_mean_min: 0.05
+      require_repeat_fingerprints_equal: true
+      require_repeat_lane_metrics_equal: true
+    topological_shield:
+      retrieval_policy: general
+      top_k_files: 4
+      chunk_top_k: 8
+      mode: report_only
+      max_attenuation: 0.6
+      shared_parent_attenuation: 0.2
+      adjacency_attenuation: 0.5
+
+  perturbation:
+    thresholds:
+      task_success_min: 1.0
+      task_success_delta_min: 0.0
+      precision_delta_min: 0.0
+      noise_increase_max: 0.0
+    perturbation:
+      chunk_guard_mode: enforce
+      chunk_guard_lambda_penalty: 4.0
+      chunk_guard_min_pool: 1
+      chunk_guard_min_marginal_utility: 0.2
+
+  repomap_perturbation:
+    thresholds:
+      task_success_min: 1.0
+      task_success_delta_min: 0.0
+      precision_delta_min: 0.0
+      noise_increase_max: 0.0
+      dependency_recall_min: 0.8
+      dependency_recall_delta_min: 0.0
+    repomap_perturbation:
+      repomap_ranking_profile: graph_seeded
+      repomap_top_k: 1
+      repomap_neighbor_limit: 2
+      repomap_budget_tokens: 256

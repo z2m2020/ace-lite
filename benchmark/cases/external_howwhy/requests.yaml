@@ -1,0 +1,35 @@
+﻿cases:
+  - case_id: requests-why-session-state
+    query: why requests Session keeps shared state like cookies and headers across calls
+    expected_keys: [requests/sessions.py, Session]
+    top_k: 6
+
+  - case_id: requests-how-adapter-selection
+    query: how requests chooses the transport adapter for each request URL scheme
+    expected_keys: [requests/sessions.py, requests/adapters.py, get_adapter]
+    top_k: 6
+
+  - case_id: requests-why-merge-environment-settings
+    query: why requests merges environment proxy and certificate settings before sending
+    expected_keys: [requests/sessions.py, merge_environment_settings]
+    top_k: 6
+
+  - case_id: requests-how-httpadapter-send
+    query: how HTTPAdapter send drives connection pooling and retries in requests
+    expected_keys: [requests/adapters.py, HTTPAdapter, send]
+    top_k: 6
+
+  - case_id: requests-why-request-encoding-mixin
+    query: why RequestEncodingMixin exists in requests models module
+    expected_keys: [requests/models.py, RequestEncodingMixin]
+    top_k: 6
+
+  - case_id: requests-how-preparedrequest-url
+    query: how PreparedRequest prepare_url normalizes and validates request URL parameters
+    expected_keys: [requests/models.py, PreparedRequest, prepare_url]
+    top_k: 6
+
+  - case_id: requests-why-exception-hierarchy
+    query: why requests centralizes network and protocol errors under RequestException
+    expected_keys: [requests/exceptions.py, RequestException]
+    top_k: 6

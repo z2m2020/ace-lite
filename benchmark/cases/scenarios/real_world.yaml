@@ -1,0 +1,66 @@
+scenarios:
+  - name: bugfix_session
+    description: Validate bugfix policy defaults and local note recall.
+    steps:
+      - action: memory_wipe
+      - action: plan
+        query: fix TypeError in auth module
+        retrieval_policy: bugfix_test
+        repomap_enabled: true
+        cochange_enabled: true
+        expected:
+          expected_policy: bugfix_test
+          repomap_enabled: false
+          cochange_enabled: false
+          min_candidate_files: 4
+          min_candidate_chunks: 6
+      - action: memory_store
+        namespace: bugfix:auth
+        text: TypeError fix requires nullable token guard in auth pipeline.
+      - action: plan
+        query: TypeError auth nullable token guard regression
+        retrieval_policy: bugfix_test
+        memory_notes_enabled: true
+        memory_container_tag: bugfix:auth
+        expected:
+          require_memory_hit: true
+          min_candidate_chunks: 4
+
+  - name: feature_development
+    description: Validate feature policy + profile injection behavior.
+    steps:
+      - action: profile_wipe
+      - action: profile_add_fact
+        text: Prefer explicit token refresh implementations in auth features.
+        confidence: 0.95
+      - action: plan
+        query: add oauth2 token refresh feature
+        retrieval_policy: feature
+        repomap_enabled: true
+        cochange_enabled: true
+        memory_profile_enabled: true
+        expected:
+          expected_policy: feature
+          repomap_enabled: true
+          cochange_enabled: true
+          require_profile_selected: true
+          min_candidate_files: 4
+          min_candidate_chunks: 6
+          max_chunk_budget_ratio: 0.30
+
+  - name: refactor_session
+    description: Validate refactor policy keeps repomap/cochange active.
+    steps:
+      - action: plan
+        query: refactor pipeline stage boundaries for clarity
+        retrieval_policy: refactor
+        repomap_enabled: true
+        cochange_enabled: true
+        expected:
+          expected_policy: refactor
+          repomap_enabled: true
+          cochange_enabled: true
+          min_candidate_files: 4
+          min_candidate_chunks: 6
+          candidate_paths_contains:
+            - pipeline/stages

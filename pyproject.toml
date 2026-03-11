@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ace-lite-engine"
+version = "0.3.38"
+description = "Local-first Active Context Engine for AI coding"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pyyaml>=6.0",
+  "click>=8.1",
+  "pydantic>=2.7",
+  "rich>=13.7",
+  "tree-sitter-language-pack>=0.13.0",
+  "tiktoken>=0.9.0",
+  "mcp>=1.26.0,<2"
+]
+
+[project.optional-dependencies]
+local-ai = [
+  "sentence-transformers>=3.0,<4"
+]
+
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.6.0",
+  "mypy>=1.11.0",
+  "types-PyYAML>=6.0",
+  "bandit>=1.7.9",
+  "pip-audit>=2.7.3"
+]
+
+[project.scripts]
+ace-lite = "ace_lite.cli:main"
+ace-lite-mcp = "ace_lite.mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/ace_lite"]
+follow_imports = "skip"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.bandit]
+targets = ["src/ace_lite"]
+exclude_dirs = ["tests", ".venv", "context-map", "artifacts"]
+skips = ["B404", "B603", "B607", "B105"]
+
+[tool.coverage.run]
+source = ["ace_lite"]
+
+[tool.coverage.report]
+fail_under = 83
+show_missing = true

@@ -1,0 +1,273 @@
+"""CLI commands for local-first memory notes operations."""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import click
+
+from ace_lite.cli_app.output import echo_json
+from ace_lite.memory import prune_memory_notes_rows
+
+
+def _parse_tags(values: tuple[str, ...]) -> dict[str, str]:
+    tags: dict[str, str] = {}
+    for item in values:
+        raw = str(item or "").strip()
+        if not raw or "=" not in raw:
+            continue
+        key, value = raw.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key:
+            tags[key] = value
+    return tags
+
+
+def _load_notes(path: Path) -> list[dict[str, Any]]:
+    if not path.exists() or not path.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        raw = line.strip()
+        if not raw:
+            continue
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
+
+
+def _save_notes(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = "\n".join(json.dumps(row, ensure_ascii=False) for row in rows)
+    path.write_text((content + "\n") if content else "", encoding="utf-8")
+
+
+@click.group("memory", help="Manage local memory notes (local-first).")
+def memory_group() -> None:
+    return None
+
+
+@memory_group.command("search")
+@click.argument("query")
+@click.option("--limit", default=5, type=int, show_default=True, help="Max results.")
+@click.option("--namespace", default="", help="Optional namespace filter.")
+@click.option(
+    "--notes-path",
+    default="context-map/memory_notes.jsonl",
+    show_default=True,
+    help="Local notes JSONL path.",
+)
+def memory_search_command(
+    query: str,
+    limit: int,
+    namespace: str,
+    notes_path: str,
+) -> None:
+    notes = _load_notes(Path(notes_path).expanduser())
+    namespace_filter = str(namespace or "").strip()
+    tokens = [token for token in str(query or "").lower().split() if token]
+
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for row in notes:
+        row_namespace = str(row.get("namespace", "")).strip()
+        if namespace_filter and row_namespace != namespace_filter:
+            continue
+
+        search_blob = " ".join(
+            [
+                str(row.get("text", "")),
+                str(row.get("query", "")),
+                " ".join(str(item) for item in row.get("matched_keywords", []) if item),
+            ]
+        ).lower()
+        if not search_blob.strip():
+            continue
+
+        if not tokens:
+            score = 1.0
+        else:
+            hits = sum(1 for token in tokens if token in search_blob)
+            if hits <= 0:
+                continue
+            score = hits / max(1, len(tokens))
+        scored.append((score, row))
+
+    scored.sort(
+        key=lambda item: (
+            -float(item[0]),
+            str(item[1].get("captured_at") or item[1].get("created_at") or ""),
+        ),
+        reverse=False,
+    )
+    limit_value = max(1, int(limit))
+    items = [row for _, row in scored[:limit_value]]
+    echo_json(
+        {
+            "query": query,
+            "namespace": namespace_filter or None,
+            "count": len(items),
+            "items": items,
+            "notes_path": str(Path(notes_path).expanduser()),
+        }
+    )
+
+
+@memory_group.command("store")
+@click.argument("text")
+@click.option("--namespace", default="", help="Optional namespace tag for this note.")
+@click.option("--tag", "tags", multiple=True, help="Add metadata tag in k=v format.")
+@click.option(
+    "--notes-path",
+    default="context-map/memory_notes.jsonl",
+    show_default=True,
+    help="Local notes JSONL path.",
+)
+def memory_store_command(
+    text: str,
+    namespace: str,
+    tags: tuple[str, ...],
+    notes_path: str,
+) -> None:
+    normalized_text = str(text or "").strip()
+    if not normalized_text:
+        raise click.ClickException("text cannot be empty")
+
+    path = Path(notes_path).expanduser()
+    rows = _load_notes(path)
+    payload = {
+        "text": normalized_text,
+        "namespace": str(namespace or "").strip() or None,
+        "tags": _parse_tags(tags),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "source": "cli.store",
+    }
+    rows.append(payload)
+    _save_notes(path, rows)
+    echo_json({"ok": True, "stored": payload, "notes_path": str(path)})
+
+
+@memory_group.command("wipe")
+@click.option("--namespace", default="", help="Optional namespace filter.")
+@click.option(
+    "--notes-path",
+    default="context-map/memory_notes.jsonl",
+    show_default=True,
+    help="Local notes JSONL path.",
+)
+def memory_wipe_command(namespace: str, notes_path: str) -> None:
+    path = Path(notes_path).expanduser()
+    rows = _load_notes(path)
+    namespace_filter = str(namespace or "").strip()
+    if namespace_filter:
+        remaining = [
+            row
+            for row in rows
+            if str(row.get("namespace", "")).strip() != namespace_filter
+        ]
+    else:
+        remaining = []
+    removed_count = max(0, len(rows) - len(remaining))
+    _save_notes(path, remaining)
+    echo_json(
+        {
+            "ok": True,
+            "namespace": namespace_filter or None,
+            "removed_count": removed_count,
+            "remaining_count": len(remaining),
+            "notes_path": str(path),
+        }
+    )
+
+
+@memory_group.command("vacuum")
+@click.option("--namespace", default="", help="Optional namespace filter.")
+@click.option(
+    "--notes-path",
+    default="context-map/memory_notes.jsonl",
+    show_default=True,
+    help="Local notes JSONL path.",
+)
+@click.option(
+    "--expiry-enabled/--no-expiry-enabled",
+    default=True,
+    show_default=True,
+    help="Enable expiry-based pruning during vacuum.",
+)
+@click.option(
+    "--ttl-days",
+    default=90,
+    show_default=True,
+    type=int,
+    help="TTL days for note last-seen timestamps.",
+)
+@click.option(
+    "--max-age-days",
+    default=365,
+    show_default=True,
+    type=int,
+    help="Hard max age days for note timestamps.",
+)
+def memory_vacuum_command(
+    namespace: str,
+    notes_path: str,
+    expiry_enabled: bool,
+    ttl_days: int,
+    max_age_days: int,
+) -> None:
+    path = Path(notes_path).expanduser()
+    rows = _load_notes(path)
+    namespace_filter = str(namespace or "").strip()
+    if namespace_filter:
+        target_rows = [
+            row
+            for row in rows
+            if str(row.get("namespace", "")).strip() == namespace_filter
+        ]
+        kept_target_rows, removed_count = prune_memory_notes_rows(
+            target_rows,
+            expiry_enabled=bool(expiry_enabled),
+            ttl_days=max(1, int(ttl_days)),
+            max_age_days=max(1, int(max_age_days)),
+        )
+        target_cursor = iter(kept_target_rows)
+        remaining: list[dict[str, Any]] = []
+        for row in rows:
+            row_namespace = str(row.get("namespace", "")).strip()
+            if row_namespace != namespace_filter:
+                remaining.append(row)
+                continue
+            try:
+                remaining.append(next(target_cursor))
+            except StopIteration:
+                continue
+    else:
+        remaining, removed_count = prune_memory_notes_rows(
+            rows,
+            expiry_enabled=bool(expiry_enabled),
+            ttl_days=max(1, int(ttl_days)),
+            max_age_days=max(1, int(max_age_days)),
+        )
+    _save_notes(path, remaining)
+    echo_json(
+        {
+            "ok": True,
+            "namespace": namespace_filter or None,
+            "expiry_enabled": bool(expiry_enabled),
+            "ttl_days": max(1, int(ttl_days)),
+            "max_age_days": max(1, int(max_age_days)),
+            "removed_count": int(removed_count),
+            "remaining_count": len(remaining),
+            "notes_path": str(path),
+        }
+    )
+
+
+__all__ = ["memory_group"]

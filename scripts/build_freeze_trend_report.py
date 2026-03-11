@@ -1,0 +1,349 @@
+﻿from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+def _resolve_path(*, root: Path, value: str) -> Path:
+    candidate = Path(str(value).strip())
+    if candidate.is_absolute():
+        return candidate
+    return (root / candidate).resolve()
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    if not path.exists() or not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return float(default)
+
+
+def _iter_report_paths(*, history_root: Path, latest_report: Path | None, limit: int) -> list[Path]:
+    paths: list[Path] = []
+    if history_root.exists() and history_root.is_dir():
+        for path in history_root.rglob("freeze_regression.json"):
+            paths.append(path.resolve())
+    if isinstance(latest_report, Path) and latest_report.exists() and latest_report.is_file():
+        latest_resolved = latest_report.resolve()
+        if latest_resolved not in paths:
+            paths.append(latest_resolved)
+
+    # Stable ordering by mtime then path to keep deterministic output.
+    paths.sort(key=lambda item: (item.stat().st_mtime, str(item)))
+    if limit > 0 and len(paths) > limit:
+        paths = paths[-limit:]
+    return paths
+
+
+def _extract_failure_signatures(payload: dict[str, Any]) -> list[str]:
+    signatures: list[str] = []
+    for gate_name in (
+        "tabiv3_gate",
+        "concept_gate",
+        "external_concept_gate",
+        "embedding_gate",
+        "plugin_policy_gate",
+        "e2e_success_gate",
+        "runtime_gate",
+    ):
+        gate_raw = payload.get(gate_name)
+        gate = gate_raw if isinstance(gate_raw, dict) else {}
+        if not bool(gate.get("enabled", False)):
+            continue
+        failures_raw = gate.get("failures")
+        failures = failures_raw if isinstance(failures_raw, list) else []
+        if not failures and bool(gate.get("passed", True)):
+            continue
+        if not failures:
+            signatures.append(f"{gate_name}:gate_failed")
+            continue
+        for item in failures:
+            row = item if isinstance(item, dict) else {"metric": str(item)}
+            metric = str(row.get("metric") or "unknown")
+            signatures.append(f"{gate_name}:{metric}")
+    return signatures
+
+
+def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    tabiv3_summary_raw = payload.get("tabiv3_matrix_summary")
+    tabiv3_summary = tabiv3_summary_raw if isinstance(tabiv3_summary_raw, dict) else {}
+    tabiv3_means_raw = tabiv3_summary.get("latency_metrics_mean")
+    tabiv3_means = tabiv3_means_raw if isinstance(tabiv3_means_raw, dict) else {}
+
+    concept_gate_raw = payload.get("concept_gate")
+    concept_gate = concept_gate_raw if isinstance(concept_gate_raw, dict) else {}
+    concept_metrics_raw = concept_gate.get("metrics")
+    concept_metrics = concept_metrics_raw if isinstance(concept_metrics_raw, dict) else {}
+
+    external_gate_raw = payload.get("external_concept_gate")
+    external_gate = external_gate_raw if isinstance(external_gate_raw, dict) else {}
+    external_metrics_raw = external_gate.get("metrics")
+    external_metrics = external_metrics_raw if isinstance(external_metrics_raw, dict) else {}
+
+    embedding_gate_raw = payload.get("embedding_gate")
+    embedding_gate = embedding_gate_raw if isinstance(embedding_gate_raw, dict) else {}
+    embedding_means_raw = embedding_gate.get("means")
+    embedding_means = embedding_means_raw if isinstance(embedding_means_raw, dict) else {}
+
+    return {
+        "generated_at": str(payload.get("generated_at", "") or ""),
+        "path": str(path),
+        "passed": bool(payload.get("passed", False)),
+        "tabiv3_latency_p95_ms": _safe_float(tabiv3_means.get("latency_p95_ms"), 0.0),
+        "tabiv3_repomap_latency_p95_ms": _safe_float(
+            tabiv3_means.get("repomap_latency_p95_ms"), 0.0
+        ),
+        "concept_precision_at_k": _safe_float(concept_metrics.get("precision_at_k"), 0.0),
+        "concept_noise_rate": _safe_float(concept_metrics.get("noise_rate"), 0.0),
+        "external_precision_at_k": _safe_float(external_metrics.get("precision_at_k"), 0.0),
+        "external_noise_rate": _safe_float(external_metrics.get("noise_rate"), 0.0),
+        "embedding_enabled_ratio": _safe_float(
+            embedding_means.get("embedding_enabled_ratio"), 0.0
+        ),
+        "failure_signatures": _extract_failure_signatures(payload),
+    }
+
+
+def _collect_suspect_files(*, root: Path, limit: int = 20) -> list[str]:
+    command = ["git", "diff", "--name-only", "HEAD~1", "HEAD"]
+    completed = subprocess.run(
+        command,
+        cwd=str(root),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return []
+    rows = [line.strip().replace("\\", "/") for line in str(completed.stdout or "").splitlines()]
+    filtered = [line for line in rows if line]
+    return filtered[: max(0, int(limit))]
+
+
+def _build_delta(*, latest: dict[str, Any], previous: dict[str, Any]) -> dict[str, float]:
+    keys = (
+        "tabiv3_latency_p95_ms",
+        "tabiv3_repomap_latency_p95_ms",
+        "concept_precision_at_k",
+        "concept_noise_rate",
+        "external_precision_at_k",
+        "external_noise_rate",
+        "embedding_enabled_ratio",
+    )
+    delta: dict[str, float] = {}
+    for key in keys:
+        delta[key] = _safe_float(latest.get(key), 0.0) - _safe_float(previous.get(key), 0.0)
+    return delta
+
+
+def _render_markdown(*, payload: dict[str, Any]) -> str:
+    rows_raw = payload.get("history")
+    rows = rows_raw if isinstance(rows_raw, list) else []
+    latest_raw = payload.get("latest")
+    latest = latest_raw if isinstance(latest_raw, dict) else {}
+    previous_raw = payload.get("previous")
+    previous = previous_raw if isinstance(previous_raw, dict) else {}
+
+    lines: list[str] = [
+        "# Freeze Trend Report",
+        "",
+        f"- Generated: {payload.get('generated_at', '')}",
+        f"- History count: {int(payload.get('history_count', 0) or 0)}",
+        f"- Failure signatures scanned: {int(payload.get('failure_signature_count', 0) or 0)}",
+        "",
+    ]
+
+    if latest:
+        lines.append("## Latest")
+        lines.append("")
+        lines.append(f"- Path: `{latest.get('path', '')}`")
+        lines.append(f"- Passed: {bool(latest.get('passed', False))}")
+        lines.append(
+            "- Metrics: tabiv3_p95={tabi:.2f}, tabiv3_repomap_p95={repomap:.2f}, concept_precision={c_prec:.4f}, concept_noise={c_noise:.4f}, external_precision={e_prec:.4f}, external_noise={e_noise:.4f}, embedding_enabled_ratio={emb:.4f}".format(
+                tabi=_safe_float(latest.get("tabiv3_latency_p95_ms"), 0.0),
+                repomap=_safe_float(latest.get("tabiv3_repomap_latency_p95_ms"), 0.0),
+                c_prec=_safe_float(latest.get("concept_precision_at_k"), 0.0),
+                c_noise=_safe_float(latest.get("concept_noise_rate"), 0.0),
+                e_prec=_safe_float(latest.get("external_precision_at_k"), 0.0),
+                e_noise=_safe_float(latest.get("external_noise_rate"), 0.0),
+                emb=_safe_float(latest.get("embedding_enabled_ratio"), 0.0),
+            )
+        )
+        lines.append("")
+
+    if previous:
+        delta_raw = payload.get("delta")
+        delta = delta_raw if isinstance(delta_raw, dict) else {}
+        lines.append("## Delta")
+        lines.append("")
+        lines.append(f"- Previous path: `{previous.get('path', '')}`")
+        lines.append(
+            "- Delta: tabiv3_p95={tabi:+.2f}, tabiv3_repomap_p95={repomap:+.2f}, concept_precision={c_prec:+.4f}, concept_noise={c_noise:+.4f}, external_precision={e_prec:+.4f}, external_noise={e_noise:+.4f}, embedding_enabled_ratio={emb:+.4f}".format(
+                tabi=_safe_float(delta.get("tabiv3_latency_p95_ms"), 0.0),
+                repomap=_safe_float(delta.get("tabiv3_repomap_latency_p95_ms"), 0.0),
+                c_prec=_safe_float(delta.get("concept_precision_at_k"), 0.0),
+                c_noise=_safe_float(delta.get("concept_noise_rate"), 0.0),
+                e_prec=_safe_float(delta.get("external_precision_at_k"), 0.0),
+                e_noise=_safe_float(delta.get("external_noise_rate"), 0.0),
+                emb=_safe_float(delta.get("embedding_enabled_ratio"), 0.0),
+            )
+        )
+        lines.append("")
+
+    lines.append("## Failure Top3")
+    lines.append("")
+    top_failures_raw = payload.get("failure_top3")
+    top_failures = top_failures_raw if isinstance(top_failures_raw, list) else []
+    if top_failures:
+        for item in top_failures:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                "- {signature}: {count}".format(
+                    signature=str(item.get("signature", "")),
+                    count=int(item.get("count", 0) or 0),
+                )
+            )
+    else:
+        lines.append("- None")
+    lines.append("")
+
+    lines.append("## Suspect Files")
+    lines.append("")
+    suspect_files_raw = payload.get("suspect_files")
+    suspect_files = suspect_files_raw if isinstance(suspect_files_raw, list) else []
+    if suspect_files:
+        for item in suspect_files:
+            lines.append(f"- `{item!s}`")
+    else:
+        lines.append("- None")
+    lines.append("")
+
+    lines.append("## History")
+    lines.append("")
+    lines.append("| Generated | Passed | Tabiv3 p95 | Repomap p95 | Concept P | Concept N | External P | External N | Embedding Ratio |")
+    lines.append("| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "| {generated} | {passed} | {tabi:.2f} | {repomap:.2f} | {cp:.4f} | {cn:.4f} | {ep:.4f} | {en:.4f} | {emb:.4f} |".format(
+                generated=str(row.get("generated_at", "")),
+                passed="✅" if bool(row.get("passed", False)) else "❌",
+                tabi=_safe_float(row.get("tabiv3_latency_p95_ms"), 0.0),
+                repomap=_safe_float(row.get("tabiv3_repomap_latency_p95_ms"), 0.0),
+                cp=_safe_float(row.get("concept_precision_at_k"), 0.0),
+                cn=_safe_float(row.get("concept_noise_rate"), 0.0),
+                ep=_safe_float(row.get("external_precision_at_k"), 0.0),
+                en=_safe_float(row.get("external_noise_rate"), 0.0),
+                emb=_safe_float(row.get("embedding_enabled_ratio"), 0.0),
+            )
+        )
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Build trend report from freeze regression history.")
+    parser.add_argument(
+        "--history-root",
+        default="artifacts/release-freeze/history",
+        help="Directory that contains historical freeze_regression.json files.",
+    )
+    parser.add_argument(
+        "--latest-report",
+        default="artifacts/release-freeze/latest/freeze_regression.json",
+        help="Latest freeze report path.",
+    )
+    parser.add_argument(
+        "--history-limit",
+        type=int,
+        default=30,
+        help="Max number of reports retained in trend history.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="artifacts/release-freeze/trend/latest",
+        help="Output directory for trend report artifacts.",
+    )
+    args = parser.parse_args(sys.argv[1:])
+
+    root = Path(__file__).resolve().parents[1]
+    history_root = _resolve_path(root=root, value=str(args.history_root))
+    latest_report = _resolve_path(root=root, value=str(args.latest_report))
+    output_dir = _resolve_path(root=root, value=str(args.output_dir))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    report_paths = _iter_report_paths(
+        history_root=history_root,
+        latest_report=latest_report,
+        limit=max(1, int(args.history_limit)),
+    )
+
+    rows: list[dict[str, Any]] = []
+    failure_counter: Counter[str] = Counter()
+    for path in report_paths:
+        payload = _load_json(path)
+        if not payload:
+            continue
+        row = _extract_row(path=path, payload=payload)
+        rows.append(row)
+        failure_counter.update([str(item) for item in row.get("failure_signatures", [])])
+
+    latest = rows[-1] if rows else {}
+    previous = rows[-2] if len(rows) >= 2 else {}
+    delta = _build_delta(latest=latest, previous=previous) if latest and previous else {}
+
+    top3 = [
+        {"signature": str(signature), "count": int(count)}
+        for signature, count in failure_counter.most_common(3)
+    ]
+    suspect_files = _collect_suspect_files(root=root)
+
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "history_count": len(rows),
+        "failure_signature_count": int(sum(failure_counter.values())),
+        "latest": latest,
+        "previous": previous,
+        "delta": delta,
+        "failure_top3": top3,
+        "suspect_files": suspect_files,
+        "history": rows,
+    }
+
+    report_json = output_dir / "freeze_trend_report.json"
+    report_md = output_dir / "freeze_trend_report.md"
+    report_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    report_md.write_text(_render_markdown(payload=payload), encoding="utf-8")
+
+    print(f"[trend] report json: {report_json}")
+    print(f"[trend] report md:   {report_md}")
+    print(
+        "[trend] history_count={count} latest_passed={latest_passed} top_failures={top}".format(
+            count=len(rows),
+            latest_passed=bool(latest.get("passed", False)) if isinstance(latest, dict) else False,
+            top=",".join(item["signature"] for item in top3) if top3 else "-",
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

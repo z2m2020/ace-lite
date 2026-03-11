@@ -1,0 +1,19 @@
+﻿{
+  "cases": [
+    {
+      "id": "billing-route",
+      "query": "billing invoice checkout issue",
+      "expected_repos": ["billing-api"]
+    },
+    {
+      "id": "frontend-route",
+      "query": "checkout button ui regression",
+      "expected_repos": ["frontend-ui"]
+    },
+    {
+      "id": "ops-route",
+      "query": "alerts and trace latency spike",
+      "expected_repos": ["ops-observability"]
+    }
+  ]
+}

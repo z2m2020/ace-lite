@@ -1,0 +1,74 @@
+defaults:
+  skills_dir: skills
+  top_k_files: 6
+  min_candidate_score: 3
+  candidate_relative_threshold: 0.35
+  candidate_ranker: heuristic
+  chunk_top_k: 24
+  cochange: false
+  repomap: true
+  index_incremental: false
+  memory_primary: none
+  memory_secondary: none
+  embedding_enabled: false
+  warmup_runs: 1
+  app: codex
+
+thresholds:
+  recall_at_k_min: 0.90
+  precision_at_k_min: 0.55
+  noise_rate_max: 0.45
+  dependency_recall_min: 0.80
+  latency_p95_ms_max: 450.0
+  chunk_hit_at_k_min: 0.80
+
+repos:
+  - name: requests
+    repo: requests
+    url: https://github.com/psf/requests.git
+    ref: v2.32.5
+    languages: python
+    cases: benchmark/cases/matrix/requests.yaml
+
+  - name: cobra
+    repo: cobra
+    url: https://github.com/spf13/cobra.git
+    ref: v1.10.2
+    languages: go
+    cases: benchmark/cases/matrix/cobra.yaml
+
+  - name: protobuf-go
+    repo: protobuf-go
+    url: https://github.com/protocolbuffers/protobuf-go.git
+    ref: v1.36.11
+    languages: go
+    cases: benchmark/cases/matrix/protobuf_go.yaml
+
+  - name: blockscout-frontend
+    repo: blockscout-frontend
+    url: https://github.com/blockscout/frontend.git
+    ref: v2.6.2
+    languages: typescript,javascript
+    cases: benchmark/cases/matrix/blockscout_frontend.yaml
+
+  - name: lens-core
+    repo: lens-core
+    url: https://github.com/lens-protocol/core.git
+    ref: LensHub-1.0.0
+    languages: solidity
+    cases: benchmark/cases/matrix/lens_core.yaml
+    thresholds:
+      latency_p95_ms_max: 2500.0
+
+  - name: uniswap-v4-core
+    repo: uniswap-v4-core
+    url: https://github.com/Uniswap/v4-core.git
+    ref: v4.0.0
+    languages: solidity
+    cases: benchmark/cases/matrix/uniswap_v4_core.yaml
+    submodules:
+      - lib/forge-std
+      - lib/solmate
+      - lib/openzeppelin-contracts
+    thresholds:
+      latency_p95_ms_max: 3500.0

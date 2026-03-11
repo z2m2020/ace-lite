@@ -1,0 +1,31 @@
+cases:
+  - case_id: ace-recovery-insufficiency-01
+    query: where the benchmark promotion guidance says adaptive retrieval still needs validation evidence
+    expected_keys: [benchmark, report, validation]
+    top_k: 8
+    recovery_surface: insufficiency
+    comparison_lane: adaptive_recovery
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-recovery-ambiguity-02
+    query: where benchmark summaries are computed versus rendered for maintainers
+    expected_keys: [benchmark, summaries, report]
+    top_k: 8
+    recovery_surface: ambiguity
+    comparison_lane: adaptive_recovery
+
+  - case_id: ace-recovery-paraphrase-03
+    query: how the engine records why it retried, skipped, or fell back inside benchmark artifacts
+    expected_keys: [benchmark, case_evaluation, report]
+    top_k: 8
+    recovery_surface: paraphrase_drift
+    comparison_lane: adaptive_recovery
+
+  - case_id: ace-recovery-multifile-04
+    query: where evidence insufficiency is classified, summarized, and written into benchmark markdown
+    expected_keys: [benchmark, case_evaluation, summaries, report]
+    top_k: 8
+    recovery_surface: multi_file_recovery
+    comparison_lane: adaptive_recovery

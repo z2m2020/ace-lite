@@ -1,0 +1,67 @@
+﻿cases:
+  - case_id: source-plan-core
+    query: how source plan is assembled across pipeline stages
+    expectations:
+      min_source_plan_steps: 5
+      min_candidate_files: 4
+      min_candidate_chunks: 6
+      min_chunk_steps: 4
+      require_writeback_template: true
+      required_stages:
+        - memory
+        - index
+        - repomap
+        - augment
+        - skills
+        - source_plan
+
+  - case_id: repomap-ranking-path
+    query: where repomap ranking combines graph and symbol signals
+    retrieval_policy: general
+    expectations:
+      min_source_plan_steps: 5
+      min_candidate_files: 3
+      min_candidate_chunks: 5
+      min_chunk_steps: 3
+      require_writeback_template: true
+      required_stages:
+        - memory
+        - index
+        - repomap
+        - augment
+        - skills
+        - source_plan
+
+  - case_id: memory-disclosure-flow
+    query: how compact memory disclosure mode affects source plan
+    retrieval_policy: feature
+    expectations:
+      min_source_plan_steps: 5
+      min_candidate_files: 3
+      min_candidate_chunks: 5
+      min_chunk_steps: 3
+      require_writeback_template: true
+      required_stages:
+        - memory
+        - index
+        - repomap
+        - augment
+        - skills
+        - source_plan
+
+  - case_id: maintainers-benchmarking-negative-control
+    query: where is the maintainers benchmarking guide for matrix artifacts
+    retrieval_policy: general
+    expectations:
+      min_source_plan_steps: 4
+      min_candidate_files: 2
+      min_candidate_chunks: 2
+      min_chunk_steps: 1
+      require_writeback_template: true
+      required_stages:
+        - memory
+        - index
+        - repomap
+        - augment
+        - skills
+        - source_plan

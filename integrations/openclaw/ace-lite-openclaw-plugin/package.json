@@ -1,0 +1,22 @@
+{
+  "name": "@openclaw/ace-lite-engine",
+  "version": "0.3.20",
+  "private": true,
+  "description": "OpenClaw plugin wrapper for ACE-Lite (MCP stdio) providing repo context tools and auto-injected plan_quick context.",
+  "type": "module",
+  "main": "index.ts",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@sinclair/typebox": "0.34.48",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
+

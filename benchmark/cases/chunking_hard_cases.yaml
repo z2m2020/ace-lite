@@ -1,0 +1,50 @@
+cases:
+  - case_id: ace-chunking-files-01
+    query: where stage-aware chunk miss classification is computed for benchmark cases
+    expected_keys: [benchmark, case_evaluation, chunk]
+    top_k: 8
+    comparison_lane: chunking_hard_cases
+    oracle_file_path: src/ace_lite/benchmark/case_evaluation.py
+    oracle_chunk_ref:
+      path: src/ace_lite/benchmark/case_evaluation.py
+      qualified_name: evaluate_case_result
+
+  - case_id: ace-chunking-raw-chunks-02
+    query: where benchmark summaries aggregate case-level insufficiency and stage-aware miss counts
+    expected_keys: [benchmark, summaries, insufficiency]
+    top_k: 8
+    comparison_lane: chunking_hard_cases
+    oracle_file_path: src/ace_lite/benchmark/summaries.py
+    oracle_chunk_ref:
+      path: src/ace_lite/benchmark/summaries.py
+      qualified_name: build_evidence_insufficiency_summary
+
+  - case_id: ace-chunking-pack-03
+    query: where benchmark markdown renders evidence insufficiency and stage-aware miss summaries
+    expected_keys: [benchmark, report, summary]
+    top_k: 8
+    comparison_lane: chunking_hard_cases
+    oracle_file_path: src/ace_lite/benchmark/report.py
+    oracle_chunk_ref:
+      path: src/ace_lite/benchmark/report.py
+      qualified_name: _append_evidence_insufficiency_summary
+
+  - case_id: ace-chunking-sibling-shield-04
+    query: where graph-near sibling chunks use shared-parent and adjacency evidence to attenuate diversity penalties in report-only mode
+    expected_keys: [topological, shield, adjacency, shared_parent]
+    top_k: 8
+    comparison_lane: chunking_hard_cases
+    oracle_file_path: src/ace_lite/chunking/topological_shield.py
+    oracle_chunk_ref:
+      path: src/ace_lite/chunking/topological_shield.py
+      qualified_name: compute_topological_shield
+
+  - case_id: ace-chunking-hub-heavy-05
+    query: where graph-aware chunk scoring suppresses hub-heavy utility symbols before topological shield benchmark reporting
+    expected_keys: [graph, prior, hub, penalty]
+    top_k: 8
+    comparison_lane: chunking_hard_cases
+    oracle_file_path: src/ace_lite/chunking/graph_prior.py
+    oracle_chunk_ref:
+      path: src/ace_lite/chunking/graph_prior.py
+      qualified_name: apply_query_aware_graph_prior

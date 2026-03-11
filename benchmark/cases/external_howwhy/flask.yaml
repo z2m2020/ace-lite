@@ -1,0 +1,35 @@
+﻿cases:
+  - case_id: flask-how-request-context-push
+    query: how Flask pushes request context during a request lifecycle
+    expected_keys: [src/flask/ctx.py, RequestContext]
+    top_k: 6
+
+  - case_id: flask-why-route-on-scaffold
+    query: why Flask route decorator behavior is implemented in Scaffold
+    expected_keys: [src/flask/sansio/scaffold.py, route]
+    top_k: 6
+
+  - case_id: flask-how-jsonify-provider
+    query: how Flask jsonify uses app JSON provider to build responses
+    expected_keys: [src/flask/json/__init__.py, jsonify, src/flask/json/provider.py]
+    top_k: 6
+
+  - case_id: flask-why-before-request-chains
+    query: why Flask stores before_request handlers per blueprint and app scope
+    expected_keys: [src/flask/sansio/scaffold.py, before_request]
+    top_k: 6
+
+  - case_id: flask-how-error-handler-registration
+    query: how Flask registers and resolves custom error handlers
+    expected_keys: [src/flask/sansio/scaffold.py, errorhandler, register_error_handler]
+    top_k: 6
+
+  - case_id: flask-how-exception-to-response
+    query: how Flask converts exceptions into HTTP responses
+    expected_keys: [src/flask/app.py, handle_exception, handle_user_exception]
+    top_k: 6
+
+  - case_id: flask-why-local-proxy-globals
+    query: why Flask exposes request globals through LocalProxy wrappers
+    expected_keys: [src/flask/globals.py, LocalProxy]
+    top_k: 6

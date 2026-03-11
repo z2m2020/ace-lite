@@ -1,0 +1,35 @@
+﻿cases:
+  - case_id: pytest-why-fixture-scope-cache
+    query: why pytest fixture scope determines lifetime and cached fixture values
+    expected_keys: [_pytest/fixtures.py, FixtureDef, scope]
+    top_k: 6
+
+  - case_id: pytest-how-assertion-rewrite
+    query: how pytest assertion rewrite hook rewrites test module asserts on import
+    expected_keys: [_pytest/assertion/rewrite.py, AssertionRewritingHook]
+    top_k: 6
+
+  - case_id: pytest-why-parametrize-parameterset
+    query: why pytest parametrization uses ParameterSet structures
+    expected_keys: [_pytest/mark/structures.py, ParameterSet, parametrize]
+    top_k: 6
+
+  - case_id: pytest-how-plugin-discovery
+    query: how PytestPluginManager discovers and loads plugins
+    expected_keys: [_pytest/config/__init__.py, PytestPluginManager]
+    top_k: 6
+
+  - case_id: pytest-how-session-collection
+    query: how pytest Session drives test collection and execution start
+    expected_keys: [_pytest/main.py, Session]
+    top_k: 6
+
+  - case_id: pytest-how-terminal-summary
+    query: how pytest TerminalReporter renders and summarizes test results
+    expected_keys: [_pytest/terminal.py, TerminalReporter]
+    top_k: 6
+
+  - case_id: pytest-why-hookspec-centralized
+    query: why pytest keeps hook specifications centralized in hookspec module
+    expected_keys: [_pytest/hookspec.py, pytest_addoption, pytest_collection_modifyitems]
+    top_k: 6

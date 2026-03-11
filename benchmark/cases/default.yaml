@@ -1,0 +1,22 @@
+cases:
+  - case_id: repo-auth-01
+    query: where token validation happens
+    expected_keys:
+      - validate_token
+      - auth
+      - token
+    filters:
+      repo: mem0
+      topic: auth
+    top_k: 8
+
+  - case_id: repo-mcp-01
+    query: how to fix mcp 405 with openmemory bridge
+    expected_keys:
+      - mcp
+      - bridge
+      - 405
+    filters:
+      repo: mem0
+      topic: mcp
+    top_k: 8

@@ -1,0 +1,15 @@
+cases:
+  - case_id: grpc-java-managed-channel-builder
+    query: where ManagedChannelBuilder class is defined in grpc-java
+    expected_keys: [api/src/main/java/io/grpc/ManagedChannelBuilder.java, ManagedChannelBuilder]
+    top_k: 6
+
+  - case_id: grpc-java-netty-channel-builder
+    query: where NettyChannelBuilder class is implemented in grpc-java
+    expected_keys: [netty/src/main/java/io/grpc/netty/NettyChannelBuilder.java, NettyChannelBuilder]
+    top_k: 6
+
+  - case_id: grpc-java-xds-name-resolver-provider
+    query: where XdsNameResolverProvider class is defined in grpc-java
+    expected_keys: [xds/src/main/java/io/grpc/xds/XdsNameResolverProvider.java, XdsNameResolverProvider]
+    top_k: 6

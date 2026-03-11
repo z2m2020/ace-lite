@@ -1,0 +1,195 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+      - release/**
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - labeled
+
+jobs:
+  test:
+    if: github.event.action != 'labeled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run tests
+        run: pytest -q
+
+  docs-validate:
+    if: github.event.action != 'labeled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Validate docs CLI snippets
+        run: python scripts/validate_docs_cli_snippets.py
+
+  quality:
+    if: github.event.action != 'labeled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run unified quality gate
+        run: |
+          python scripts/run_quality_gate.py \
+            --root . \
+            --output-dir artifacts/quality/latest \
+            --pip-audit-baseline benchmark/quality/pip_audit_baseline.json \
+            --fail-on-new-vulns \
+            --friction-log artifacts/friction/events.jsonl
+
+      - name: Build friction report
+        if: always()
+        run: |
+          python scripts/build_friction_report.py \
+            --events-path artifacts/friction/events.jsonl \
+            --output-dir artifacts/friction/latest
+
+      - name: Upload quality artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-and-friction-artifacts
+          path: |
+            artifacts/quality/latest
+            artifacts/friction/latest
+
+  release-freeze-gates:
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-benchmarks')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run release freeze regression gates
+        run: |
+          python scripts/run_release_freeze_regression.py \
+            --matrix-config benchmark/matrix/repos.yaml \
+            --output-dir artifacts/release-freeze/latest \
+            --fail-on-thresholds \
+            --skip-skill-validation
+
+      - name: Validate freeze gates
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(
+              Path("artifacts/release-freeze/latest/freeze_regression.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          tabiv3 = payload.get("tabiv3_gate", {})
+          thresholds = tabiv3.get("thresholds", {})
+          assert tabiv3.get("enabled") is True, "tabiv3 gate missing or disabled"
+          assert tabiv3.get("passed") is True, "tabiv3 gate failed"
+          assert float(thresholds.get("latency_p95_ms_max", -1.0)) == 170.0
+          assert float(thresholds.get("repomap_latency_p95_ms_max", -1.0)) == 90.0
+
+          concept = payload.get("concept_gate", {})
+          concept_thresholds = concept.get("thresholds", {})
+          concept_cfg = concept.get("execution_config", {})
+          assert concept.get("enabled") is True, "concept gate missing or disabled"
+          assert concept.get("passed") is True, "concept gate failed"
+          assert str(concept.get("cases", "")).replace("\\\\", "/").endswith(
+              "benchmark/cases/p1_concepts.yaml"
+          ), "concept gate cases path mismatch"
+          assert float(concept_thresholds.get("precision_at_k_min", -1.0)) == 0.58
+          assert float(concept_thresholds.get("noise_rate_max", -1.0)) == 0.42
+          assert float(concept_thresholds.get("latency_p95_ms_max", -1.0)) == 450.0
+          assert float(concept_thresholds.get("chunk_hit_at_k_min", -1.0)) == 0.80
+          assert int(concept_cfg.get("top_k_files", -1)) == 4
+          assert int(concept_cfg.get("min_candidate_score", -1)) == 2
+          assert str(concept_cfg.get("candidate_ranker", "")) == "heuristic"
+          assert str(concept_cfg.get("retrieval_policy", "")) == "general"
+          assert int(concept_cfg.get("chunk_top_k", -1)) == 12
+          assert bool(concept_cfg.get("cochange", True)) is False
+
+          external = payload.get("external_concept_gate", {})
+          external_thresholds = external.get("thresholds", {})
+          assert external.get("enabled") is True, "external concept gate missing or disabled"
+          assert external.get("passed") is True, "external concept gate failed"
+          assert str(external.get("matrix_config", "")).replace("\\\\", "/").endswith(
+              "benchmark/matrix/external_howwhy.yaml"
+          ), "external concept matrix config mismatch"
+          assert float(external_thresholds.get("precision_at_k_min", -1.0)) == 0.58
+          assert float(external_thresholds.get("noise_rate_max", -1.0)) == 0.42
+          assert float(external_thresholds.get("latency_p95_ms_max", -1.0)) == 450.0
+          assert float(external_thresholds.get("chunk_hit_at_k_min", -1.0)) == 0.80
+
+          embedding = payload.get("embedding_gate", {})
+          embedding_thresholds = embedding.get("thresholds", {})
+          assert embedding.get("enabled") is True, "embedding gate missing or disabled"
+          assert embedding.get("passed") is True, "embedding gate failed"
+          assert float(embedding_thresholds.get("min_embedding_enabled_ratio", -1.0)) == 0.80
+          print(
+              "freeze gates validated: tabiv3(latency<=170,repomap<=90), concept(0.58/0.42), external concept(0.58/0.42), embedding coverage>=0.80"
+          )
+          PY
+
+      - name: Upload freeze artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-freeze-artifacts
+          path: artifacts/release-freeze/latest

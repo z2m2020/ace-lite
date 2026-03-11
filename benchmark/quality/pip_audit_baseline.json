@@ -1,0 +1,34 @@
+{
+  "generated_at": "2026-02-14T01:10:00Z",
+  "source": "pip-audit",
+  "findings": [
+    {
+      "package": "cryptography",
+      "id": "CVE-2026-26007",
+      "fix_versions": [
+        "46.0.5"
+      ]
+    },
+    {
+      "package": "pip",
+      "id": "CVE-2026-1703",
+      "fix_versions": [
+        "26.0"
+      ]
+    },
+    {
+      "package": "urllib3",
+      "id": "CVE-2026-21441",
+      "fix_versions": [
+        "2.6.3"
+      ]
+    },
+    {
+      "package": "werkzeug",
+      "id": "CVE-2026-21860",
+      "fix_versions": [
+        "3.1.5"
+      ]
+    }
+  ]
+}

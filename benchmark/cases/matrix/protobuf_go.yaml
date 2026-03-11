@@ -1,0 +1,18 @@
+cases:
+  # Non-generated business logic should be preferred for typical "where is X implemented" queries.
+  - case_id: protobuf-go-protojson-marshaloptions
+    query: where MarshalOptions struct is defined in protobuf-go protojson
+    expected_keys: [encoding/protojson/encode.go, MarshalOptions]
+    top_k: 6
+
+  - case_id: protobuf-go-prototext-marshal
+    query: where prototext Marshal function is implemented in protobuf-go
+    expected_keys: [encoding/prototext/encode.go, Marshal]
+    top_k: 6
+
+  # Generated code is still relevant for descriptor types; ensure generated files can surface when asked.
+  - case_id: protobuf-go-descriptorpb-filedescriptorproto
+    query: where FileDescriptorProto type is defined in protobuf-go
+    expected_keys: [types/descriptorpb/descriptor.pb.go, FileDescriptorProto]
+    top_k: 6
+

@@ -1,0 +1,30 @@
+cases:
+  - case_id: ace-stale-majority-anchor-01
+    query: where report-only chunk guard computes retained and filtered refs for conflicting versioned chunks
+    expected_keys: [chunk_guard, retained, filtered]
+    top_k: 8
+    comparison_lane: stale_majority
+    oracle_file_path: src/ace_lite/index_stage/chunk_guard.py
+    oracle_chunk_ref:
+      path: src/ace_lite/index_stage/chunk_guard.py
+      qualified_name: apply_chunk_guard
+
+  - case_id: ace-stale-majority-selection-02
+    query: where chunk selection wires robust signature sidecars into chunk guard after chunk build
+    expected_keys: [chunk_selection, chunk_guard, robust_signature]
+    top_k: 8
+    comparison_lane: stale_majority
+    oracle_file_path: src/ace_lite/index_stage/chunk_selection.py
+    oracle_chunk_ref:
+      path: src/ace_lite/index_stage/chunk_selection.py
+      qualified_name: apply_chunk_selection
+
+  - case_id: ace-stale-majority-signature-03
+    query: where robust signature lite builds compatibility domains and chunk identity keys for chunk guard conflicts
+    expected_keys: [robust_signature, compatibility, chunk_identity_key]
+    top_k: 8
+    comparison_lane: stale_majority
+    oracle_file_path: src/ace_lite/chunking/robust_signature.py
+    oracle_chunk_ref:
+      path: src/ace_lite/chunking/robust_signature.py
+      qualified_name: build_robust_signature_lite

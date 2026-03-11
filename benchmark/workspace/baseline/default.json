@@ -1,0 +1,18 @@
+﻿{
+  "metrics": {
+    "hit_at_k": 0.66,
+    "mrr": 0.5,
+    "avg_latency_ms": 200.0
+  },
+  "checks": {
+    "hit_at_k": {
+      "min": 0.66
+    },
+    "mrr": {
+      "min": 0.5
+    },
+    "avg_latency_ms": {
+      "max": 200.0
+    }
+  }
+}

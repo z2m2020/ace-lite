@@ -1,0 +1,13 @@
+﻿cases:
+  - case_id: flask-class
+    query: where Flask class is defined
+    expected_keys: [src/flask/app.py, Flask]
+    top_k: 6
+  - case_id: flask-route-decorator
+    query: where route decorator is implemented in flask scaffold
+    expected_keys: [src/flask/sansio/scaffold.py, route]
+    top_k: 6
+  - case_id: flask-jsonify
+    query: where jsonify helper is implemented
+    expected_keys: [src/flask/json/__init__.py, jsonify]
+    top_k: 6

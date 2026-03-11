@@ -1,0 +1,342 @@
+# Benchmarking (ACE-Lite Engine)
+
+ACE-Lite supports repeatable benchmark cases and regression gates so retrieval quality can be improved safely.
+
+Canonical adaptive-feature promotion rules live in
+`docs/maintainers/ADAPTIVE_PROMOTION_GOVERNANCE_2026-03-09.md`.
+This document defines the evidence lanes and metrics; the governance doc defines
+whether a path is currently `promote`, `stay_experimental`, or `reject`.
+
+## Author cases (YAML)
+
+```yaml
+cases:
+  - case_id: repo-auth-01
+    query: how token validation works
+    expected_keys: [validate_token, auth, expiry]
+    filters: { repo: mem0, topic: auth }
+    top_k: 8
+
+  - case_id: repo-benchmarking-negative-control
+    query: where is the maintainers benchmarking guide
+    expected_keys: [docs, maintainers, benchmarking]
+    top_k: 8
+    task_success:
+      mode: negative_control
+      min_validation_tests: 1
+```
+
+## Scored metrics (high level)
+
+Common metrics include:
+- `recall_at_k`, `precision_at_k`, `noise_rate`, `dependency_recall`
+- `task_success_rate` as the canonical task-oriented metric
+- `utility_rate` as the legacy compatibility alias for older artifacts
+- `latency_p95_ms`, `latency_median_ms`
+- stage-level latency summaries for `memory`, `index`, `repomap`, `augment`, `skills`, and `source_plan`
+- explicit SLO budget and downgrade signals such as `parallel_docs_timeout_ratio`, `embedding_time_budget_exceeded_ratio`, `chunk_semantic_fallback_ratio`, and `slo_downgrade_case_rate`
+- `chunk_hit_at_k`, `chunk_budget_used`
+- source-plan grounding ratios such as `source_plan_direct_evidence_ratio`, `source_plan_neighbor_context_ratio`, and `source_plan_hint_only_ratio`
+- skills-budget signals such as `skills_token_budget_used_mean`, `skills_budget_exhausted_ratio`, and `skills_skipped_for_budget_mean`
+- skills-routing signals such as `skills_route_latency_p95_ms`, `skills_hydration_latency_p95_ms`, `skills_metadata_only_routing_ratio`, and `skills_precomputed_route_ratio`
+- evidence-insufficiency rates such as `evidence_insufficient_rate`, `no_candidate_rate`, `low_support_chunk_rate`, `missing_validation_rate`, `budget_limited_recovery_rate`, and `noisy_hit_rate`
+
+For chunk-oriented metrics, benchmark scoring prefers the final `source_plan.candidate_chunks` and `source_plan.chunk_budget_used` payload when present, and falls back to raw `index` chunk outputs otherwise. That keeps chunk-packing experiments visible in the same benchmark and freeze artifacts that already track task success, latency, and noise.
+When `source_plan.evidence_summary` is present, benchmark artifacts also surface additive grounding ratios so maintainers can distinguish directly retrieved support from neighboring context and hint-only support without parsing `why` strings or other free-text explanations.
+
+`task_success` schema v1:
+- `mode`: `positive` (default) or `negative_control`
+- `require_recall_hit`: defaults to `true`
+- `min_validation_tests`: minimum `source_plan.validation_tests` count required for task success
+
+Negative-control cases are allowed to retrieve relevant files while still producing `task_success_hit = 0` when downstream execution evidence is insufficient.
+Benchmark reports now emit a dedicated retrieval-to-task gap section so cases with `recall_hit > 0` but `task_success_hit = 0` are visible without reading raw JSON.
+Benchmark reports also emit:
+- `Stage Latency Summary` so per-stage p95/mean latency drift is visible alongside the total latency budget
+- `SLO Budget Summary` so explicit downgrade boundaries and budget-trigger signals are visible in both current artifacts and baseline deltas
+- `Evidence Insufficiency Summary` so failing positive cases are classified into additive `no_hit`, `low_support`, `missing_validation`, `budget_limited`, and `noisy_hit` surfaces without changing stable benchmark report contracts
+- `Decision Observability Summary` so retry, skip, fallback, downgrade, and exact-search boost events are aggregated without changing stage behavior
+
+Evidence-insufficiency reporting is intentionally report-only in the current lane:
+- it applies only to failing `positive` task-success cases
+- `negative_control` cases are excluded from the insufficiency summary counts
+- per-case rows still carry additive `evidence_insufficiency_reason` and `evidence_insufficiency_signals` fields for debugging retrieval-to-task gaps
+
+Decision observability is also additive and report-only in the current lane:
+- per-case rows carry `decision_trace_count` and `decision_trace`
+- each decision event records `stage`, `action`, `target`, `reason`, and optional `outcome`
+- benchmark summaries aggregate action/target/reason/outcome counts so maintainers can see why retries or downgrades happened before any adaptive feature promotion
+
+## Run benchmarks
+
+```bash
+ace-lite benchmark run --cases benchmark/cases/default.yaml --repo mem0 --root . --output artifacts/benchmark/latest
+ace-lite benchmark report --input artifacts/benchmark/latest/results.json
+```
+
+## Multi-repo matrix (external evidence)
+
+```bash
+python scripts/run_benchmark_matrix.py --matrix-config benchmark/matrix/repos.yaml --output-dir artifacts/benchmark/matrix/latest --fail-on-thresholds
+```
+
+Thresholds are defined in `benchmark/matrix/repos.yaml`.
+Foundry-style repositories that vendor contract dependencies as git submodules can add `submodules: true` or a list of submodule paths in the repo spec; the matrix runner will sync and initialize those submodules after checkout before benchmarking.
+The primary release-facing matrix now intentionally carries a broader dependency-heavy mix instead of leaving those repos only in the auxiliary external OSS lane:
+- `blockscout-frontend` for large TypeScript/JavaScript frontend graph pressure
+- `protobuf-go` for generated-code-heavy Go dependency recall
+- `grpc-java` for Java multi-module transport, xDS, and builder dependency pressure
+- `lens-core` and `uniswap-v4-core` for Solidity dependency and submodule traversal
+The matrix summary now carries forward stage-latency and SLO-budget summaries so release-freeze reporting can surface the same latency and downgrade signals at the multi-repo level.
+The matrix runner now also emits a dedicated `latency_slo_summary.json` and `latency_slo_summary.md` next to `matrix_summary.*`. Those focused artifacts are intended to be the maintainer-facing decision surface for latency and downgrade work, rather than forcing future provider or policy experiments to grep the full matrix payload.
+Workload buckets default to repo-size buckets derived from each repo `index.json` `file_count` (`repo_size_small <= 128`, `repo_size_medium <= 1024`, `repo_size_large >= 1025`). A matrix repo spec can override that classification later with `workload_bucket` when a more explicit workload taxonomy is needed.
+The current full-fidelity dated latency/SLO artifacts are:
+- `artifacts/benchmark/matrix/h2_2026/2026-03-06/latency_slo_summary.json`
+- `artifacts/benchmark/matrix/h2_2026/2026-03-06/latency_slo_summary.md`
+- `artifacts/benchmark/matrix/h2_2026/2026-03-06-release-readiness/latency_slo_summary.json`
+- `artifacts/benchmark/matrix/h2_2026/2026-03-06-release-readiness/latency_slo_summary.md`
+- `artifacts/benchmark/matrix/h2_2026/2026-03-11-grpc-java/latency_slo_summary.json`
+- `artifacts/benchmark/matrix/h2_2026/2026-03-11-grpc-java/latency_slo_summary.md`
+
+The dedicated latency/SLO artifact lists two different control surfaces explicitly:
+- hard-budget features: `parallel_time_budget_ms_mean`, `embedding_time_budget_ms_mean`, `chunk_semantic_time_budget_ms_mean`, `xref_time_budget_ms_mean`
+- dynamic-downgrade features: `parallel_docs_timeout_ratio`, `parallel_worktree_timeout_ratio`, `embedding_time_budget_exceeded_ratio`, `embedding_adaptive_budget_ratio`, `embedding_fallback_ratio`, `chunk_semantic_time_budget_exceeded_ratio`, `chunk_semantic_fallback_ratio`, `xref_budget_exhausted_ratio`, `slo_downgrade_case_rate`
+
+The matrix summary also emits a richer `retrieval_policy_summary` so each policy can be compared by:
+- repo coverage and regression rate
+- task-success and positive-task success
+- retrieval-to-task gap rate
+- precision/noise
+- latency and repomap latency
+- SLO downgrade rate
+
+`scripts/run_release_freeze_regression.py` now consumes those policy rows through `freeze.policy_guard`, so task-aware policy tuning only survives when policy-level benchmark evidence and SLO guardrails stay inside configured limits.
+The same release-freeze summary also evaluates `freeze.memory_gate` against benchmark-level `notes_hit_ratio`, `profile_selected_mean`, and `capture_trigger_ratio`, so memory-policy experiments stay evidence-gated instead of quietly drifting into the default path.
+
+## Feature And Perturbation Slices
+
+```bash
+python scripts/run_feature_slice_matrix.py --config benchmark/matrix/feature_slices.yaml --output-dir artifacts/benchmark/slices/feature_slices/latest --fail-on-thresholds
+```
+
+The feature slice matrix now also includes a perturbation slice that checks robustness against:
+- `feedback`: replays local selection feedback as an opt-in experience-reuse experiment and requires measurable precision/noise improvement before the boosted path is considered viable
+- `temporal`: constrains local notes to an explicit time window so recency-driven memory policy changes can be compared off/on without changing the default plan path
+- `late_interaction`: compares the default lightweight rerank path against the optional `hash_colbert` provider path under explicit precision/noise thresholds, so the provider prototype stays rollback-safe and benchmark-gated
+- `dependency_recall`: compares `heuristic` versus `graph_seeded` repomap ranking profiles on a dependency-aware seeded repo and gates dependency recall, precision, noise, and latency together
+- `perf_routing`: compares `general` against the current perf proxy policy (`refactor`) on a seeded hotspot repo and gates task success, precision, noise, latency, and `slo_downgrade_case_rate` together before any perf-route promotion is considered
+- `rename`
+- `path_move`
+- `doc_noise`
+- `file_growth`
+- `query_paraphrase`
+- `repomap_perturbation`: reruns paired harmless graph/path perturbations with `repomap` enabled and gates `dependency_recall` alongside task success, precision, and noise so graph-aware retrieval remains stable under dependency rename and path-move changes
+
+The provider path stays opt-in through `embeddings.enabled` / `--embedding-enabled`, so local-first default plans continue on the existing path unless a benchmarked provider experiment is explicitly enabled.
+
+The same promotion rule now applies to future skills-routing architecture experiments:
+- keep `route early, hydrate later` off the default path until a paired benchmark lane shows no task-success, precision, noise, latency, or skills-budget regressions
+- treat `skills_token_budget_used_mean`, `skills_budget_exhausted_ratio`, `skills_route_latency_p95_ms`, and `skills_hydration_latency_p95_ms` as the first maintainer-facing evidence surface before proposing any routing promotion
+
+These paired runs are intended to fail freeze/CI reporting when a provider experiment or harmless repository/query perturbation causes `task_success_rate` or precision to regress, or noise to increase.
+The dependency-recall slice is also intended to keep graph-prior experiments honest: if a query-aware repomap profile does not improve dependency-aware retrieval, it must at least avoid precision/noise/latency regressions.
+The perf-routing slice plays the same role for future perf-aware routing: `refactor` remains only an offline proxy for perf intent until its paired slice shows no hotspot-localization, latency, or SLO-downgrade regressions against `general`.
+The current `stale_majority` and lexical `perturbation` lanes are also the controlled evidence surface for SHARS-lite `chunk_guard.mode=enforce`: benchmark config may turn enforce on there without changing the default runtime path, and the slice artifacts now record the exact chunk-guard mode and thresholds used for that run.
+The repomap perturbation slice extends that guardrail into paired baseline/perturbed repos, so maintainers can inspect the same `feature_slices_summary.json` artifact for graph/path robustness instead of relying only on lexical perturbation evidence.
+
+When reviewing SHARS-lite enforce evidence, read the same dated
+`feature_slices_summary.json` / `.md` artifact with these rules:
+
+- confirm `stale_majority` stays green first in report-only history, then in the
+  controlled enforce run with the same `chunk_guard` knobs shown in the slice
+  payload
+- require lexical `perturbation` to stay green under the same enforce-mode
+  config so harmless rename/path/doc/query changes are not confounded by the
+  feature toggle itself
+- use the stale-majority `latency_growth_factor` check as the primary bounded
+  latency surface for enforce-mode evaluation
+- cross-check the benchmark artifact with the chunk-guard permutation and
+  orchestrator integration regressions before discussing any broader rollout
+
+## Repeated-Run Stability
+
+```bash
+python scripts/run_freeze_stability.py \
+  --runs 2 \
+  --output-dir artifacts/release-freeze/stability/latest \
+  --skip-skill-validation \
+  --max-failure-rate 1.0 \
+  --tracked-feature-slices dependency_recall,perturbation,repomap_perturbation \
+  --min-feature-slice-pass-rate 1.0
+```
+
+Acceptable drift policy for the current robustness lane:
+
+- Core robustness slices (`dependency_recall`, `perturbation`, `repomap_perturbation`) must classify as `stable_pass` across the repeated runs.
+- A tracked slice classification of `one_off_pass`, `mixed`, or `stable_fail` counts as drift and blocks further robustness tuning work.
+- Whole-freeze `pass_rate` is still informative, but it is currently report-level context for this lane rather than the primary blocker. The dated 2026-03-06 stability artifact showed the tracked robustness slices at `stable_pass` while the overall freeze was `stable_fail` because `concept_gate` and `e2e_success_gate` were below threshold in that run; the later release-quality rerun repaired those adjacent gates.
+
+Current stability artifact:
+
+- `artifacts/release-freeze/stability/2026-03-06-feature-slice-stability/stability_summary.json`
+- `artifacts/release-freeze/stability/2026-03-06-feature-slice-stability/stability_summary.md`
+
+## Latency And SLO Trend Reporting
+
+```bash
+python scripts/backfill_latency_slo_summary.py \
+  --matrix-summary artifacts/benchmark/matrix/h2_2026/2026-03-06-release-readiness/matrix_summary.json
+
+python scripts/build_latency_slo_trend_report.py \
+  --history-root artifacts/benchmark/matrix/h2_2026 \
+  --latest-report artifacts/benchmark/matrix/h2_2026/2026-03-06-release-readiness/latency_slo_summary.json \
+  --output-dir artifacts/benchmark/matrix/h2_2026/2026-03-06-release-readiness-latency-slo-trend
+```
+
+`scripts/backfill_latency_slo_summary.py` exists for older matrix directories that already have a full-fidelity `matrix_summary.json` plus per-repo `index.json`, but were created before the dedicated latency/SLO artifact was emitted automatically.
+The trend report remains intentionally report-only. It now compares the latest `2026-03-06-release-readiness` latency/SLO artifact against the prior full-fidelity `2026-03-06` artifact, but it still does not fail CI or release gates yet.
+The older `2026-02-25` backfilled baseline remains in the history table for context, but it is no longer the immediate comparison baseline for the trend delta.
+The current dated trend artifact is:
+
+- `artifacts/benchmark/matrix/h2_2026/2026-03-06-release-readiness-latency-slo-trend/latency_slo_trend_report.json`
+- `artifacts/benchmark/matrix/h2_2026/2026-03-06-release-readiness-latency-slo-trend/latency_slo_trend_report.md`
+
+The current 2026-03-07 checkpoint shows why this still stays report-only: the newest comparison pair is finally full-fidelity, but it is still only a two-run comparison and the release `policy_guard` taxonomy has not been promoted from evidence gathering into explicit enforced modes yet.
+The same report-only rule applies to the new decision observability lane: maintainers can inspect retry/downgrade/skip/fallback summaries in benchmark artifacts now, but those decision traces are not release blockers yet.
+
+Before proposing any adaptive default-path switch, cross-check the benchmark
+artifact against `docs/maintainers/ADAPTIVE_PROMOTION_GOVERNANCE_2026-03-09.md`
+so the evidence lane and the promotion state stay aligned.
+
+## Router Promotion Evidence
+
+Adaptive-router promotion uses the normal benchmark output directory as its
+primary evidence surface. For any router default-switch discussion, review the
+same dated artifact set across these files together:
+
+- `results.json` for per-case `router_arm_id`, `router_shadow_arm_id`,
+  confidence fields, and downgrade/fallback `decision_trace` events
+- `summary.json` for `adaptive_router_arm_summary`,
+  `adaptive_router_observability_summary`, and
+  `adaptive_router_pair_summary`
+- `report.md` for the maintainer-facing agreement, per-arm quality, latency,
+  fallback, and downgrade rollups
+- the matching `latency_slo_summary.json` / `.md` and
+  `freeze_regression.json` / `.md` artifacts from the same dated evidence set
+
+Interpret those router artifacts with the following rules:
+
+- compare the candidate switch against current `auto` and fixed `general`, not
+  just against shadow agreement rate
+- treat high-volume executed-versus-shadow disagreement pairs as blocking until
+  their latency and fallback/downgrade behavior are explicitly reviewed
+- do not treat a green `summary.json` in isolation as promotion evidence if the
+  paired latency/SLO or release-freeze artifacts disagree
+- if `retrieval_policy_guard` or `feature_slices_gate` remains `report_only`,
+  record the evidence but do not reinterpret it as automatic approval for a
+  default switch
+
+## Online-Bandit Opt-In Evidence
+
+For `adaptive_router.online_bandit`, the first question is not "should this
+roll out more broadly?" The first question is "do repeated dated artifacts show
+the opt-in path is green and rollback-safe?"
+
+Review the same dated artifact set across these files together:
+
+- `results.json` for per-case `router_online_bandit_requested`,
+  `router_experiment_enabled`, `router_online_bandit_reason`,
+  `router_fallback_reason`, and reward-log case context
+- `summary.json` for `adaptive_router_observability_summary`,
+  `adaptive_router_pair_summary`, and `reward_log_summary`
+- `report.md` for maintainer-facing router disagreement, latency, downgrade,
+  and reward-log rollups
+
+Interpret opt-in online-bandit evidence with these rules:
+
+- require at least two dated artifact sets on the same lane/config before any
+  broader rollout discussion
+- require router observability to be fully visible on the intended lane, not
+  just present in one raw JSON fragment
+- require reward logging to be active on the same run with non-zero eligible
+  and written event counts
+- require repeated green task-success, precision, noise, latency, and
+  `slo_downgrade_case_rate` evidence versus the current heuristic-executed path
+- if the path is still heuristic-fallback-only, treat the artifact as
+  evidence-gathering proof rather than rollout approval
+
+## Recovery Hard Cases
+
+`benchmark/cases/recovery_hard_cases.yaml` is the dedicated adaptive-retrieval lane for the four planned hard surfaces:
+- `insufficiency`
+- `ambiguity`
+- `paraphrase_drift`
+- `multi_file_recovery`
+
+The file is intentionally separate from `default.yaml` so recovery-path gains stay separable from baseline retrieval quality.
+Use the same case file for paired A/B runs:
+
+```bash
+ace-lite benchmark run --cases benchmark/cases/recovery_hard_cases.yaml --repo ace-lite-engine --root . --no-deterministic-refine --output artifacts/benchmark/recovery_hard_cases/baseline
+ace-lite benchmark run --cases benchmark/cases/recovery_hard_cases.yaml --repo ace-lite-engine --root . --deterministic-refine --output artifacts/benchmark/recovery_hard_cases/adaptive
+ace-lite benchmark diff --a artifacts/benchmark/recovery_hard_cases/baseline/results.json --b artifacts/benchmark/recovery_hard_cases/adaptive/results.json --output artifacts/benchmark/recovery_hard_cases/diff
+```
+
+Stable `case_id` values and the shared `comparison_lane: adaptive_recovery` tag are the intended join keys when maintainers compare single-pass versus adaptive-path artifacts.
+The paired artifacts now expose the bounded refine gate explicitly through `index.candidate_ranking.refine_pass` and benchmark `decision_trace` events targeting `deterministic_refine`, so maintainers can separate "trigger condition met but disabled" from "retry executed and helped".
+
+## Chunking Hard Cases
+
+`benchmark/cases/chunking_hard_cases.yaml` is the Phase 0 chunking lane for
+stage-aware miss attribution.
+
+The intent is to distinguish where a miss happened before later chunking or
+graph-aware changes are judged:
+
+- `candidate_files_miss`
+- `candidate_chunks_miss`
+- `source_plan_pack_miss`
+
+Each case carries an oracle file path plus an oracle chunk reference. Benchmark
+case evaluation then classifies the miss without changing runtime retrieval
+behavior. The resulting label is reported in per-case output and aggregated in
+the `Chunk Stage Miss Summary` section.
+
+The lane now also includes two Phase 3 structural probes so later graph-aware
+chunking changes can be judged against fixed hard cases instead of anecdotes:
+
+- `ace-chunking-sibling-shield-04` targets graph-near sibling/shared-parent
+  attenuation in `src/ace_lite/chunking/topological_shield.py`
+- `ace-chunking-hub-heavy-05` targets hub-heavy suppression pressure in
+  `src/ace_lite/chunking/graph_prior.py`
+
+Use the lane like this:
+
+```bash
+ace-lite benchmark run --cases benchmark/cases/chunking_hard_cases.yaml --repo ace-lite-engine --root . --output artifacts/benchmark/chunking_hard_cases/latest
+ace-lite benchmark report --input artifacts/benchmark/chunking_hard_cases/latest/results.json
+```
+
+This lane is report-only in the current phase. It exists to localize file-stage,
+raw-chunk-stage, and source-plan-packing misses before any Phase 1 or Phase 3
+chunking change is promoted.
+
+Promotion beyond report-only is gated separately by the `topological_shield`
+feature slice in `benchmark/matrix/feature_slices.yaml`. That paired slice must
+show non-zero attenuation evidence while repeated runs stay deterministic and
+latency stays within the configured growth budget.
+
+## Workspace benchmark baseline (decision hub)
+
+```bash
+ace-lite workspace benchmark \
+  --manifest workspace.yaml \
+  --cases-json benchmark/workspace/cases/baseline_cases.json \
+  --baseline-json benchmark/workspace/baseline/default.json \
+  --fail-on-baseline
+```
+
+Artifacts:
+
+- Cases: `benchmark/workspace/cases/baseline_cases.json`
+- Baseline thresholds: `benchmark/workspace/baseline/default.json`

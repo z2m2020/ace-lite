@@ -1,0 +1,31 @@
+cases:
+  - case_id: blockscout-middleware
+    query: where middleware function is implemented in blockscout frontend
+    expected_keys: [middleware.ts, middleware]
+    top_k: 6
+
+  - case_id: blockscout-use-api-fetch
+    query: where useApiFetch hook is implemented in blockscout frontend
+    expected_keys: [lib/api/useApiFetch.tsx, useApiFetch]
+    top_k: 6
+
+  - case_id: blockscout-build-url
+    query: where buildUrl is implemented in blockscout frontend
+    expected_keys: [lib/api/buildUrl.ts, buildUrl]
+    top_k: 6
+
+  - case_id: blockscout-get-socket-url
+    query: where getSocketUrl is implemented in blockscout frontend
+    expected_keys: [lib/api/getSocketUrl.ts, getSocketUrl]
+    top_k: 6
+
+  - case_id: blockscout-socket-channel
+    query: where useSocketChannel hook is implemented in blockscout frontend
+    expected_keys: [lib/socket/useSocketChannel.tsx, useSocketChannel]
+    top_k: 6
+
+  - case_id: blockscout-decode-jwt
+    query: where decodeJWT is implemented in blockscout frontend
+    expected_keys: [lib/decodeJWT.ts, decodeJWT]
+    top_k: 6
+

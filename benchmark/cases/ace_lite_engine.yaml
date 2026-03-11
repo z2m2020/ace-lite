@@ -1,0 +1,91 @@
+cases:
+  - case_id: ace-orchestrator-ranking-01
+    query: how are candidate files ranked for a query
+    expected_keys: [rankers, pipeline, index_stage]
+    top_k: 8
+
+  - case_id: ace-orchestrator-slots-02
+    query: how are plugin slot contributions applied after each stage
+    expected_keys: [plugin_runtime, pipeline, plugins]
+    top_k: 8
+
+  - case_id: ace-repomap-ranking-03
+    query: how does the repomap graph ranking compute scores
+    expected_keys: [repomap, ranking]
+    top_k: 8
+
+  - case_id: ace-repomap-builder-04
+    query: how is the repomap skeleton markdown rendered with token budget
+    expected_keys: [repomap, builder]
+    top_k: 8
+
+  - case_id: ace-index-cache-05
+    query: how does the index cache incremental refresh work
+    expected_keys: [index_cache]
+    top_k: 8
+
+  - case_id: ace-indexer-core-06
+    query: where does the tree sitter indexer parse symbols and imports
+    expected_keys: [treesitter_engine]
+    top_k: 8
+
+  - case_id: ace-lsp-broker-07
+    query: how does the lsp diagnostics broker execute commands and timeouts
+    expected_keys: [lsp, broker]
+    top_k: 8
+
+  - case_id: ace-memory-dual-08
+    query: when primary memory fails how does it fall back to secondary
+    expected_keys: [memory]
+    top_k: 8
+
+  - case_id: ace-mcp-client-09
+    query: what payload does the mcp client send for search_memory
+    expected_keys: [mcp_client]
+    top_k: 8
+
+  - case_id: ace-rest-client-10
+    query: how does the rest client fail over across endpoints
+    expected_keys: [rest_client]
+    top_k: 8
+
+  - case_id: ace-benchmark-scoring-11
+    query: how is precision_at_k and noise_rate computed in benchmark scoring
+    expected_keys: [benchmark, scoring]
+    top_k: 8
+
+  - case_id: ace-cli-config-12
+    query: how does the cli resolve defaults from layered config
+    expected_keys: [cli_app, config_resolve]
+    top_k: 8
+
+  - case_id: ace-schema-validation-13
+    query: what validates schema_version and pipeline_order in context plan
+    expected_keys: [schema]
+    top_k: 8
+
+  - case_id: ace-plugin-loader-14
+    query: where is plugin.yaml loaded and runtime selected
+    expected_keys: [plugins, loader]
+    top_k: 8
+
+  - case_id: ace-skills-loader-15
+    query: how are markdown skills selected and sections lazy loaded
+    expected_keys: [skills]
+    top_k: 8
+
+  - case_id: ace-benchmarking-docs-negative-control-16
+    query: where is the maintainers benchmarking guide for matrix artifacts
+    expected_keys: [docs, maintainers, benchmarking]
+    top_k: 8
+    task_success:
+      mode: negative_control
+      min_validation_tests: 1
+
+  - case_id: ace-quality-governance-negative-control-17
+    query: where is the quality governance guide for benchmark gates
+    expected_keys: [quality, governance, docs]
+    top_k: 8
+    task_success:
+      mode: negative_control
+      min_validation_tests: 1

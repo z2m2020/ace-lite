@@ -1,0 +1,387 @@
+﻿from __future__ import annotations
+
+import json
+
+import pytest
+
+from ace_lite.memory import MemoryRecord, MemoryRecordCompact
+from ace_lite.orchestrator import AceOrchestrator
+from ace_lite.orchestrator_config import OrchestratorConfig
+from ace_lite.pipeline.types import StageContext
+from ace_lite.profile_store import ProfileStore
+
+
+class _FakeMemoryProvider:
+    last_channel_used = "fake"
+    fallback_reason = None
+    strategy = "hybrid"
+
+    def __init__(self, records: list[MemoryRecord]) -> None:
+        self._records_by_handle = {
+            f"m{idx}": record for idx, record in enumerate(records, start=1)
+        }
+        self.last_container_tag: str | None = None
+        self.last_container_tag_fallback: str | None = None
+
+    def search_compact(
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        container_tag: str | None = None,
+    ) -> list[MemoryRecordCompact]:
+        self.last_container_tag = container_tag
+        self.last_container_tag_fallback = None
+        rows = [
+            MemoryRecordCompact(
+                handle=handle,
+                preview=record.text,
+                score=record.score,
+                metadata=dict(record.metadata),
+                est_tokens=max(1, len(record.text.split())),
+                source="fake",
+            )
+            for handle, record in self._records_by_handle.items()
+        ]
+        if isinstance(limit, int) and limit > 0:
+            return rows[:limit]
+        return rows
+
+    def fetch(self, handles: list[str]) -> list[MemoryRecord]:
+        rows: list[MemoryRecord] = []
+        for handle in handles:
+            record = self._records_by_handle.get(handle)
+            if record is None:
+                continue
+            rows.append(
+                MemoryRecord(
+                    text=record.text,
+                    score=record.score,
+                    metadata=dict(record.metadata),
+                    handle=handle,
+                    source="fake",
+                )
+            )
+        return rows
+
+
+class _LegacyMemoryProvider:
+    def search(self, query: str) -> list[MemoryRecord]:
+        return [MemoryRecord(text="legacy")]
+
+
+def _run_memory_stage(
+    orch: AceOrchestrator,
+    *,
+    query: str,
+    repo: str = "",
+    root: str = ".",
+    time_range: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, object]:
+    ctx = StageContext(
+        query=query,
+        repo=repo,
+        root=root,
+        state={
+            "temporal": {
+                "time_range": time_range,
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+        },
+    )
+    return orch._run_memory(ctx=ctx)
+
+
+def test_run_memory_compact_returns_previews_only() -> None:
+    provider = _FakeMemoryProvider(
+        [
+            MemoryRecord(
+                text="A" * 500,
+                score=0.7,
+                metadata={"id": "m1", "path": "src/app.py"},
+            )
+        ]
+    )
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(memory={"preview_max_chars": 100}),
+    )
+    payload = _run_memory_stage(orch, query="q")
+
+    assert payload["disclosure"]["mode"] == "compact"
+    assert payload["strategy"] == "hybrid"
+    assert "hits" not in payload
+    assert payload["count"] == 1
+    assert payload["hits_preview"][0]["handle"] == "m1"
+    assert payload["hits_preview"][0]["preview"].endswith("...")
+    assert payload["hits_preview"][0]["est_tokens"] >= 1
+    assert payload["cost"]["preview_est_tokens_total"] >= 1
+    assert payload["cost"]["full_est_tokens_total"] is None
+    assert payload["cost"]["tokenizer_model"] == "gpt-4o-mini"
+    assert payload["cost"]["tokenizer_backend"] in {"tiktoken", "whitespace"}
+    assert payload["timeline"]["enabled"] is True
+
+
+def test_run_memory_full_returns_hits_and_previews() -> None:
+    provider = _FakeMemoryProvider(
+        [
+            MemoryRecord(
+                text="hello world",
+                score=0.5,
+                metadata={"id": "m1", "created_at": "2026-02-11T01:00:00+00:00"},
+            )
+        ]
+    )
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(memory={"disclosure_mode": "full"}),
+    )
+    payload = _run_memory_stage(orch, query="q")
+
+    assert payload["disclosure"]["mode"] == "full"
+    assert payload["count"] == 1
+    assert payload["hits"][0]["text"] == "hello world"
+    assert payload["hits"][0]["handle"] == "m1"
+    assert payload["hits_preview"][0]["handle"] == "m1"
+    assert payload["cost"]["full_est_tokens_total"] >= 1
+    assert payload["cost"]["fetch_est_tokens_total"] >= 1
+    assert payload["timeline"]["groups"][0]["date_bucket"] == "2026-02-11"
+
+
+def test_run_memory_requires_v2_provider() -> None:
+    orch = AceOrchestrator(memory_provider=_LegacyMemoryProvider(), config=OrchestratorConfig())
+    with pytest.raises(TypeError, match="MemoryProvider"):
+        _run_memory_stage(orch, query="q")
+
+
+def test_run_memory_uses_auto_repo_namespace_tag(tmp_path) -> None:
+    provider = _FakeMemoryProvider([MemoryRecord(text="hello world", score=0.5)])
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(memory={"namespace": {"auto_tag_mode": "repo"}}),
+    )
+
+    payload = _run_memory_stage(
+        orch, query="q", repo="My Demo Repo", root=str(tmp_path)
+    )
+
+    assert provider.last_container_tag == "repo:my-demo-repo"
+    assert payload["namespace"]["mode"] == "repo"
+    assert payload["namespace"]["source"] == "auto"
+    assert payload["namespace"]["container_tag_effective"] == "repo:my-demo-repo"
+    assert payload["namespace"]["fallback"] is None
+
+
+def test_run_memory_explicit_namespace_tag_overrides_auto_mode(tmp_path) -> None:
+    provider = _FakeMemoryProvider([MemoryRecord(text="hello world", score=0.5)])
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(
+            memory={
+                "namespace": {
+                    "container_tag": "team-alpha",
+                    "auto_tag_mode": "repo",
+                }
+            }
+        ),
+    )
+
+    payload = _run_memory_stage(orch, query="q", repo="demo", root=str(tmp_path))
+
+    assert provider.last_container_tag == "team-alpha"
+    assert payload["namespace"]["mode"] == "explicit"
+    assert payload["namespace"]["source"] == "explicit"
+    assert payload["namespace"]["container_tag_effective"] == "team-alpha"
+
+
+def test_run_memory_namespace_fallback_marks_effective_tag_none(tmp_path) -> None:
+    class _FallbackProvider(_FakeMemoryProvider):
+        def search_compact(
+            self,
+            query: str,
+            *,
+            limit: int | None = None,
+            container_tag: str | None = None,
+        ) -> list[MemoryRecordCompact]:
+            rows = super().search_compact(
+                query,
+                limit=limit,
+                container_tag=container_tag,
+            )
+            if container_tag:
+                self.last_container_tag_fallback = "backend_unsupported_container_tag"
+            return rows
+
+    provider = _FallbackProvider([MemoryRecord(text="hello world", score=0.5)])
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(memory={"namespace": {"container_tag": "team-alpha"}}),
+    )
+
+    payload = _run_memory_stage(orch, query="q", repo="demo", root=str(tmp_path))
+
+    assert payload["namespace"]["container_tag_requested"] == "team-alpha"
+    assert payload["namespace"]["container_tag_effective"] is None
+    assert payload["namespace"]["fallback"] == "backend_unsupported_container_tag"
+
+
+def test_run_memory_injects_profile_facts_deterministically(tmp_path) -> None:
+    profile_path = tmp_path / "profile.json"
+    store = ProfileStore(path=profile_path)
+    store.add_fact("beta preference", confidence=0.7)
+    store.add_fact("alpha preference", confidence=0.9)
+    store.add_fact("gamma preference", confidence=0.4)
+
+    provider = _FakeMemoryProvider([MemoryRecord(text="hello world", score=0.5)])
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(
+            memory={
+                "profile": {
+                    "enabled": True,
+                    "path": str(profile_path),
+                    "top_n": 2,
+                    "token_budget": 20,
+                }
+            }
+        ),
+    )
+
+    payload = _run_memory_stage(orch, query="q", repo="demo", root=str(tmp_path))
+
+    assert payload["profile"]["enabled"] is True
+    assert payload["profile"]["selected_count"] == 2
+    assert [fact["text"] for fact in payload["profile"]["facts"]] == [
+        "alpha preference",
+        "beta preference",
+    ]
+
+
+def test_run_memory_capture_writes_recent_context_and_notes(tmp_path) -> None:
+    profile_path = tmp_path / "profile.json"
+    notes_path = tmp_path / "memory_notes.jsonl"
+    provider = _FakeMemoryProvider([MemoryRecord(text="hello world", score=0.5)])
+
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(
+            memory={
+                "profile": {
+                    "path": str(profile_path),
+                },
+                "capture": {
+                    "enabled": True,
+                    "notes_path": str(notes_path),
+                    "min_query_length": 8,
+                    "keywords": ["fix", "bug"],
+                },
+            }
+        ),
+    )
+
+    payload = _run_memory_stage(
+        orch,
+        query="please fix bug in auth stage",
+        repo="demo",
+        root=str(tmp_path),
+    )
+
+    assert payload["capture"]["enabled"] is True
+    assert payload["capture"]["triggered"] is True
+    assert payload["capture"]["captured_items"] == 2
+    assert notes_path.exists()
+
+    note_line = notes_path.read_text(encoding="utf-8").strip()
+    note_payload = json.loads(note_line)
+    assert note_payload["repo"] == "demo"
+    assert "fix" in note_payload["matched_keywords"]
+
+    stored_profile = ProfileStore(path=profile_path).load()
+    assert stored_profile["recent_contexts"]
+    assert stored_profile["recent_contexts"][0]["query"] == "please fix bug in auth stage"
+
+
+def test_run_memory_capture_failure_downgrade(tmp_path) -> None:
+    profile_path = tmp_path / "profile.json"
+    notes_dir = tmp_path / "notes_dir"
+    notes_dir.mkdir(parents=True, exist_ok=True)
+    provider = _FakeMemoryProvider([MemoryRecord(text="hello world", score=0.5)])
+
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(
+            memory={
+                "profile": {
+                    "path": str(profile_path),
+                },
+                "capture": {
+                    "enabled": True,
+                    "notes_path": str(notes_dir),
+                    "min_query_length": 8,
+                    "keywords": ["fix"],
+                },
+            }
+        ),
+    )
+
+    payload = _run_memory_stage(
+        orch,
+        query="fix auth bug now please",
+        repo="demo",
+        root=str(tmp_path),
+    )
+
+    assert payload["capture"]["enabled"] is True
+    assert payload["capture"]["triggered"] is True
+    assert payload["capture"]["captured_items"] == 1
+    assert "notes_append_error" in str(payload["capture"]["warning"] or "")
+
+
+def test_run_memory_capture_prunes_expired_notes_before_append(tmp_path) -> None:
+    profile_path = tmp_path / "profile.json"
+    notes_path = tmp_path / "memory_notes.jsonl"
+    notes_path.write_text(
+        '{"query":"old issue","repo":"demo","captured_at":"2020-01-01T00:00:00+00:00"}\n',
+        encoding="utf-8",
+    )
+    provider = _FakeMemoryProvider([MemoryRecord(text="hello world", score=0.5)])
+
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(
+            memory={
+                "profile": {
+                    "path": str(profile_path),
+                },
+                "capture": {
+                    "enabled": True,
+                    "notes_path": str(notes_path),
+                    "min_query_length": 4,
+                    "keywords": ["fix"],
+                },
+                "notes": {
+                    "expiry_enabled": True,
+                    "ttl_days": 90,
+                    "max_age_days": 365,
+                },
+            }
+        ),
+    )
+
+    payload = _run_memory_stage(
+        orch,
+        query="fix auth now",
+        repo="demo",
+        root=str(tmp_path),
+    )
+
+    assert payload["capture"]["enabled"] is True
+    assert payload["capture"]["triggered"] is True
+    assert payload["capture"]["captured_items"] == 2
+    assert payload["capture"]["notes_pruned_expired_count"] == 1
+
+    rows = [line for line in notes_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(rows) == 1

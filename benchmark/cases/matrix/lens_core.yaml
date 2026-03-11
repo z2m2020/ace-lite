@@ -1,0 +1,25 @@
+cases:
+  - case_id: lens-lenshub-contract
+    query: where LensHub contract is implemented
+    expected_keys: [contracts/core/LensHub.sol, LensHub]
+    top_k: 6
+
+  - case_id: lens-ilenshub-interface
+    query: where ILensHub interface is defined
+    expected_keys: [contracts/interfaces/ILensHub.sol, ILensHub]
+    top_k: 6
+
+  - case_id: lens-follow-nft
+    query: where FollowNFT contract is implemented
+    expected_keys: [contracts/core/FollowNFT.sol, FollowNFT]
+    top_k: 6
+
+  - case_id: lens-collect-nft
+    query: where CollectNFT contract is implemented
+    expected_keys: [contracts/core/CollectNFT.sol, CollectNFT]
+    top_k: 6
+
+  - case_id: lens-module-globals
+    query: where ModuleGlobals contract is implemented
+    expected_keys: [contracts/core/modules/ModuleGlobals.sol, ModuleGlobals]
+    top_k: 6

@@ -1,0 +1,13 @@
+﻿cases:
+  - case_id: cobra-command-struct
+    query: where Command struct is defined in cobra
+    expected_keys: [command.go, Command]
+    top_k: 6
+  - case_id: cobra-executec
+    query: where ExecuteC function is implemented in cobra
+    expected_keys: [command.go, ExecuteC]
+    top_k: 6
+  - case_id: cobra-completion
+    query: where completion command support is implemented in cobra
+    expected_keys: [completions.go, completion]
+    top_k: 6

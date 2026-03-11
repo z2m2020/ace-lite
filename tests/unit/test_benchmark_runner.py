@@ -1,0 +1,1042 @@
+from __future__ import annotations
+
+from ace_lite.benchmark.runner import BenchmarkRunner
+
+
+class _StubOrchestrator:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, str]] = []
+
+    def plan(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        self.calls.append((query, repo, root))
+        return {
+            "index": {"candidate_files": [{"path": "src/app.py", "module": "src.app"}]},
+            "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
+            "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+            "observability": {
+                "plugin_policy_summary": {
+                    "mode": "strict",
+                    "allowlist": ["observability.mcp_plugins"],
+                    "totals": {
+                        "applied": 0,
+                        "conflicts": 0,
+                        "blocked": 0,
+                        "warn": 0,
+                        "remote_applied": 0,
+                    },
+                }
+            },
+        }
+
+
+def test_benchmark_runner_warmup_runs_are_excluded_from_case_count() -> None:
+    orchestrator = _StubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "find app", "expected_keys": ["app"], "top_k": 4},
+        {"case_id": "c2", "query": "find src", "expected_keys": ["src"], "top_k": 4},
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".", warmup_runs=2)
+
+    assert results["case_count"] == 2
+    assert results["warmup_runs"] == 2
+    assert results["warmup_plan_calls"] == 4
+    assert len(orchestrator.calls) == 6
+
+
+def test_benchmark_runner_can_omit_plan_payloads() -> None:
+    orchestrator = _StubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "find app", "expected_keys": ["app"], "top_k": 4},
+    ]
+
+    results = runner.run(
+        cases=cases,
+        repo="demo",
+        root=".",
+        include_plan_payload=False,
+    )
+
+    assert results["include_plan_payload"] is False
+    assert len(results["cases"]) == 1
+    assert "plan" not in results["cases"][0]
+    assert results["task_success_summary"]["case_count"] == 1
+    assert results["task_success_summary"]["task_success_rate"] == 1.0
+    assert results["evidence_insufficiency_summary"] == {
+        "case_count": 1,
+        "applicable_case_count": 0,
+        "excluded_negative_control_case_count": 0,
+        "evidence_insufficient_count": 0,
+        "evidence_insufficient_rate": 0.0,
+        "reasons": {},
+        "signals": {},
+    }
+    assert results["chunk_stage_miss_summary"] == {
+        "case_count": 1,
+        "oracle_case_count": 0,
+        "classified_case_count": 0,
+        "classified_case_rate": 0.0,
+        "labels": {},
+    }
+
+
+def test_benchmark_runner_can_omit_case_details() -> None:
+    orchestrator = _StubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "find app", "expected_keys": ["app"], "top_k": 4},
+    ]
+
+    results = runner.run(
+        cases=cases,
+        repo="demo",
+        root=".",
+        include_case_details=False,
+    )
+
+    assert results["include_case_details"] is False
+    assert len(results["cases"]) == 1
+    case_payload = results["cases"][0]
+    assert "candidate_paths" not in case_payload
+    assert "candidate_chunk_refs" not in case_payload
+    assert "expected_hits" not in case_payload
+    assert "chunk_hits" not in case_payload
+    assert "validation_tests" not in case_payload
+
+
+class _PolicyStubOrchestrator(_StubOrchestrator):
+    def plan(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        payload = super().plan(
+            query=query,
+            repo=repo,
+            root=root,
+            time_range=time_range,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        totals = {
+            "applied": 2,
+            "conflicts": 1,
+            "blocked": 1 if "block" in query else 0,
+            "warn": 1 if "warn" in query else 0,
+            "remote_applied": 1,
+        }
+        payload["observability"] = {
+            "plugin_policy_summary": {
+                "mode": "strict",
+                "allowlist": [
+                    "observability.mcp_plugins",
+                    "source_plan.writeback_template",
+                ],
+                "totals": totals,
+                "by_stage": [
+                    {
+                        "stage": "source_plan",
+                        "applied": 2,
+                        "conflicts": 1,
+                        "blocked": totals["blocked"],
+                        "warn": totals["warn"],
+                        "remote_applied": 1,
+                    }
+                ],
+            }
+        }
+        return payload
+
+
+def test_benchmark_runner_aggregates_plugin_policy_summary() -> None:
+    orchestrator = _PolicyStubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "find block", "expected_keys": ["app"], "top_k": 4},
+        {"case_id": "c2", "query": "find warn", "expected_keys": ["app"], "top_k": 4},
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    summary = results["plugin_policy_summary"]
+    assert summary["mode"] == "strict"
+    assert summary["allowlist"] == [
+        "observability.mcp_plugins",
+        "source_plan.writeback_template",
+    ]
+    assert summary["totals"] == {
+        "applied": 4,
+        "conflicts": 2,
+        "blocked": 1,
+        "warn": 1,
+        "remote_applied": 2,
+    }
+    assert summary["per_case_mean"] == {
+        "applied": 2.0,
+        "conflicts": 1.0,
+        "blocked": 0.5,
+        "warn": 0.5,
+        "remote_applied": 1.0,
+    }
+    assert summary["mode_distribution"] == {"strict": 2}
+    assert summary["by_stage"] == [
+        {
+            "stage": "source_plan",
+            "applied": 4,
+            "conflicts": 2,
+            "blocked": 1,
+            "warn": 1,
+            "remote_applied": 2,
+        }
+    ]
+    assert summary["by_stage_per_case_mean"] == [
+        {
+            "stage": "source_plan",
+            "applied": 2.0,
+            "conflicts": 1.0,
+            "blocked": 0.5,
+            "warn": 0.5,
+            "remote_applied": 1.0,
+        }
+    ]
+    assert results["task_success_summary"] == {
+        "case_count": 2,
+        "positive_case_count": 2,
+        "negative_control_case_count": 0,
+        "task_success_rate": 1.0,
+        "positive_task_success_rate": 1.0,
+        "negative_control_task_success_rate": 0.0,
+        "retrieval_task_gap_count": 0,
+        "retrieval_task_gap_rate": 0.0,
+    }
+    assert results["evidence_insufficiency_summary"] == {
+        "case_count": 2,
+        "applicable_case_count": 0,
+        "excluded_negative_control_case_count": 0,
+        "evidence_insufficient_count": 0,
+        "evidence_insufficient_rate": 0.0,
+        "reasons": {},
+        "signals": {},
+    }
+    assert results["chunk_stage_miss_summary"] == {
+        "case_count": 2,
+        "oracle_case_count": 0,
+        "classified_case_count": 0,
+        "classified_case_rate": 0.0,
+        "labels": {},
+    }
+
+
+class _RouterStubOrchestrator(_StubOrchestrator):
+    def plan(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        _ = (time_range, start_date, end_date)
+        self.calls.append((query, repo, root))
+        if "feature" in query:
+            arm_id = "feature"
+            shadow_arm_id = "feature_graph"
+        else:
+            arm_id = "general"
+            shadow_arm_id = "general_hybrid"
+        return {
+            "index": {
+                "candidate_files": [{"path": "src/app.py", "module": "src.app"}],
+                "policy_name": arm_id,
+                "adaptive_router": {
+                    "enabled": True,
+                    "mode": "shadow",
+                    "arm_set": "retrieval_policy_shadow",
+                    "arm_id": arm_id,
+                    "confidence": 0.0,
+                    "shadow_arm_id": shadow_arm_id,
+                    "shadow_confidence": 0.75,
+                    "online_bandit": {
+                        "requested": True,
+                        "experiment_enabled": False,
+                        "eligible": True,
+                        "active": False,
+                        "reason": "experiment_mode_required",
+                        "is_exploration": False,
+                        "exploration_probability": 0.0,
+                        "fallback_applied": True,
+                        "fallback_reason": "experiment_mode_disabled",
+                        "executed_mode": "heuristic",
+                    },
+                },
+            },
+            "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
+            "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+            "observability": {
+                "plugin_policy_summary": {
+                    "mode": "strict",
+                    "allowlist": ["observability.mcp_plugins"],
+                    "totals": {
+                        "applied": 0,
+                        "conflicts": 0,
+                        "blocked": 0,
+                        "warn": 0,
+                        "remote_applied": 0,
+                    },
+                }
+            },
+        }
+
+
+class _RewardWriter:
+    def __init__(self) -> None:
+        self.events: list[dict[str, object]] = []
+        self.flush_calls = 0
+
+    def submit(self, *, event: dict[str, object]) -> bool:
+        self.events.append(event)
+        return True
+
+    def flush(self) -> dict[str, object]:
+        self.flush_calls += 1
+        return {
+            "pending_count": 0,
+            "written_count": len(self.events),
+            "error_count": 0,
+            "last_error": "",
+        }
+
+
+class _FailingRewardWriter:
+    def __init__(self) -> None:
+        self.flush_calls = 0
+
+    def submit(self, *, event: dict[str, object]) -> bool:
+        _ = event
+        raise RuntimeError("disk full")
+
+    def flush(self) -> dict[str, object]:
+        self.flush_calls += 1
+        return {
+            "pending_count": 0,
+            "written_count": 0,
+            "error_count": 0,
+            "last_error": "",
+        }
+
+
+def test_benchmark_runner_reports_reward_log_disabled_by_default() -> None:
+    orchestrator = _StubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "find app", "expected_keys": ["app"], "top_k": 4},
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    assert results["reward_log_summary"] == {
+        "enabled": False,
+        "active": False,
+        "status": "disabled",
+        "path": "",
+        "eligible_case_count": 0,
+        "submitted_count": 0,
+        "pending_count": 0,
+        "written_count": 0,
+        "error_count": 0,
+        "last_error": "",
+    }
+
+
+def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch) -> None:
+    time_points = iter([0.0, 0.010, 0.020, 0.050])
+    monkeypatch.setattr(
+        "ace_lite.benchmark.runner.perf_counter",
+        lambda: next(time_points),
+    )
+    orchestrator = _RouterStubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "feature route", "expected_keys": ["app"], "top_k": 4},
+        {"case_id": "c2", "query": "general lookup", "expected_keys": ["app"], "top_k": 4},
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    assert results["cases"][0]["router_arm_id"] == "feature"
+    assert results["cases"][0]["router_shadow_arm_id"] == "feature_graph"
+    assert results["cases"][1]["router_arm_id"] == "general"
+    assert results["cases"][1]["router_shadow_arm_id"] == "general_hybrid"
+    arm_summary = results["adaptive_router_arm_summary"]
+    assert arm_summary["case_count"] == 2
+    assert arm_summary["enabled_case_count"] == 2
+    assert arm_summary["executed"]["arm_count"] == 2
+    assert arm_summary["shadow"]["arm_count"] == 2
+    assert arm_summary["executed"]["arms"] == [
+        {
+            "arm_id": "feature",
+            "case_count": 1,
+            "case_rate": 0.5,
+            "task_success_rate": 1.0,
+            "mrr": 1.0,
+            "fallback_case_count": 0,
+            "fallback_case_rate": 0.0,
+            "fallback_event_count": 0,
+            "fallback_targets": {},
+            "downgrade_case_count": 0,
+            "downgrade_case_rate": 0.0,
+            "downgrade_event_count": 0,
+            "downgrade_targets": {},
+            "latency_mean_ms": 10.0,
+            "latency_p95_ms": 10.0,
+            "index_latency_mean_ms": 0.0,
+            "index_latency_p95_ms": 0.0,
+        },
+        {
+            "arm_id": "general",
+            "case_count": 1,
+            "case_rate": 0.5,
+            "task_success_rate": 1.0,
+            "mrr": 1.0,
+            "fallback_case_count": 0,
+            "fallback_case_rate": 0.0,
+            "fallback_event_count": 0,
+            "fallback_targets": {},
+            "downgrade_case_count": 0,
+            "downgrade_case_rate": 0.0,
+            "downgrade_event_count": 0,
+            "downgrade_targets": {},
+            "latency_mean_ms": 30.0,
+            "latency_p95_ms": 30.0,
+            "index_latency_mean_ms": 0.0,
+            "index_latency_p95_ms": 0.0,
+        },
+    ]
+    assert arm_summary["shadow"]["arms"] == [
+        {
+            "arm_id": "feature_graph",
+            "case_count": 1,
+            "case_rate": 0.5,
+            "task_success_rate": 1.0,
+            "mrr": 1.0,
+            "fallback_case_count": 0,
+            "fallback_case_rate": 0.0,
+            "fallback_event_count": 0,
+            "fallback_targets": {},
+            "downgrade_case_count": 0,
+            "downgrade_case_rate": 0.0,
+            "downgrade_event_count": 0,
+            "downgrade_targets": {},
+            "latency_mean_ms": 10.0,
+            "latency_p95_ms": 10.0,
+            "index_latency_mean_ms": 0.0,
+            "index_latency_p95_ms": 0.0,
+        },
+        {
+            "arm_id": "general_hybrid",
+            "case_count": 1,
+            "case_rate": 0.5,
+            "task_success_rate": 1.0,
+            "mrr": 1.0,
+            "fallback_case_count": 0,
+            "fallback_case_rate": 0.0,
+            "fallback_event_count": 0,
+            "fallback_targets": {},
+            "downgrade_case_count": 0,
+            "downgrade_case_rate": 0.0,
+            "downgrade_event_count": 0,
+            "downgrade_targets": {},
+            "latency_mean_ms": 30.0,
+            "latency_p95_ms": 30.0,
+            "index_latency_mean_ms": 0.0,
+            "index_latency_p95_ms": 0.0,
+        },
+    ]
+    pair_summary = results["adaptive_router_pair_summary"]
+    assert pair_summary["case_count"] == 2
+    assert pair_summary["comparable_case_count"] == 2
+    assert pair_summary["disagreement_case_count"] == 2
+    assert pair_summary["disagreement_rate"] == 1.0
+    assert [
+        (item["executed_arm_id"], item["shadow_arm_id"])
+        for item in pair_summary["pairs"]
+    ] == [
+        ("feature", "feature_graph"),
+        ("general", "general_hybrid"),
+    ]
+    assert all(item["latency_mean_ms"] >= 0.0 for item in pair_summary["pairs"])
+    assert all(item["index_latency_mean_ms"] >= 0.0 for item in pair_summary["pairs"])
+    assert results["adaptive_router_observability_summary"] == {
+        "case_count": 2,
+        "enabled_case_count": 2,
+        "enabled_case_rate": 1.0,
+        "comparable_case_count": 2,
+        "comparable_case_rate": 1.0,
+        "agreement_case_count": 0,
+        "agreement_rate": 0.0,
+        "disagreement_case_count": 2,
+        "disagreement_rate": 1.0,
+        "executed_arm_count": 2,
+        "shadow_arm_count": 2,
+        "executed_arms": [
+            {
+                "arm_id": "feature",
+                "case_count": 1,
+                "case_rate": 0.5,
+                "task_success_rate": 1.0,
+                "mrr": 1.0,
+                "fallback_case_count": 0,
+                "fallback_case_rate": 0.0,
+                "fallback_event_count": 0,
+                "fallback_targets": {},
+                "downgrade_case_count": 0,
+                "downgrade_case_rate": 0.0,
+                "downgrade_event_count": 0,
+                "downgrade_targets": {},
+                "latency_mean_ms": 10.0,
+                "latency_p95_ms": 10.0,
+                "index_latency_mean_ms": 0.0,
+                "index_latency_p95_ms": 0.0,
+            },
+            {
+                "arm_id": "general",
+                "case_count": 1,
+                "case_rate": 0.5,
+                "task_success_rate": 1.0,
+                "mrr": 1.0,
+                "fallback_case_count": 0,
+                "fallback_case_rate": 0.0,
+                "fallback_event_count": 0,
+                "fallback_targets": {},
+                "downgrade_case_count": 0,
+                "downgrade_case_rate": 0.0,
+                "downgrade_event_count": 0,
+                "downgrade_targets": {},
+                "latency_mean_ms": 30.0,
+                "latency_p95_ms": 30.0,
+                "index_latency_mean_ms": 0.0,
+                "index_latency_p95_ms": 0.0,
+            },
+        ],
+        "shadow_arms": [
+            {
+                "arm_id": "feature_graph",
+                "case_count": 1,
+                "case_rate": 0.5,
+                "task_success_rate": 1.0,
+                "mrr": 1.0,
+                "fallback_case_count": 0,
+                "fallback_case_rate": 0.0,
+                "fallback_event_count": 0,
+                "fallback_targets": {},
+                "downgrade_case_count": 0,
+                "downgrade_case_rate": 0.0,
+                "downgrade_event_count": 0,
+                "downgrade_targets": {},
+                "latency_mean_ms": 10.0,
+                "latency_p95_ms": 10.0,
+                "index_latency_mean_ms": 0.0,
+                "index_latency_p95_ms": 0.0,
+            },
+            {
+                "arm_id": "general_hybrid",
+                "case_count": 1,
+                "case_rate": 0.5,
+                "task_success_rate": 1.0,
+                "mrr": 1.0,
+                "fallback_case_count": 0,
+                "fallback_case_rate": 0.0,
+                "fallback_event_count": 0,
+                "fallback_targets": {},
+                "downgrade_case_count": 0,
+                "downgrade_case_rate": 0.0,
+                "downgrade_event_count": 0,
+                "downgrade_targets": {},
+                "latency_mean_ms": 30.0,
+                "latency_p95_ms": 30.0,
+                "index_latency_mean_ms": 0.0,
+                "index_latency_p95_ms": 0.0,
+            },
+        ],
+    }
+
+
+def test_benchmark_runner_submits_router_reward_events_when_writer_is_present() -> None:
+    orchestrator = _RouterStubOrchestrator()
+    writer = _RewardWriter()
+    runner = BenchmarkRunner(
+        orchestrator,
+        reward_log_writer=writer,
+        reward_log_enabled=True,
+        reward_log_path="context-map/router/rewards.jsonl",
+    )
+    cases = [
+        {
+            "case_id": "router-case-01",
+            "query": "feature route",
+            "expected_keys": ["app"],
+            "top_k": 4,
+            "comparison_lane": "router_eval",
+        }
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    assert results["case_count"] == 1
+    assert writer.flush_calls == 1
+    assert len(writer.events) == 1
+    event = writer.events[0]
+    assert event["query_id"] == "router-case-01"
+    assert event["chosen_arm_id"] == "feature"
+    assert event["shadow_arm_id"] == "feature_graph"
+    assert event["router_mode"] == "shadow"
+    assert event["is_exploration"] is False
+    assert event["reward_source"] == "benchmark_task_success"
+    assert event["reward_value"] == 1.0
+    assert event["context_features"]["comparison_lane"] == "router_eval"
+    assert event["context_features"]["router_experiment_enabled"] is False
+    assert event["context_features"]["router_fallback_applied"] is True
+    assert event["context_features"]["router_fallback_reason"] == "experiment_mode_disabled"
+    assert results["reward_log_summary"] == {
+        "enabled": True,
+        "active": True,
+        "status": "enabled",
+        "path": "context-map/router/rewards.jsonl",
+        "eligible_case_count": 1,
+        "submitted_count": 1,
+        "pending_count": 0,
+        "written_count": 1,
+        "error_count": 0,
+        "last_error": "",
+    }
+
+
+def test_benchmark_runner_surfaces_reward_log_degraded_when_submit_fails() -> None:
+    orchestrator = _RouterStubOrchestrator()
+    writer = _FailingRewardWriter()
+    runner = BenchmarkRunner(
+        orchestrator,
+        reward_log_writer=writer,
+        reward_log_enabled=True,
+        reward_log_path="context-map/router/rewards.jsonl",
+    )
+    cases = [
+        {
+            "case_id": "router-case-01",
+            "query": "feature route",
+            "expected_keys": ["app"],
+            "top_k": 4,
+            "comparison_lane": "router_eval",
+        }
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    assert writer.flush_calls == 1
+    assert results["reward_log_summary"]["enabled"] is True
+    assert results["reward_log_summary"]["active"] is True
+    assert results["reward_log_summary"]["status"] == "degraded"
+    assert results["reward_log_summary"]["eligible_case_count"] == 1
+    assert results["reward_log_summary"]["submitted_count"] == 0
+    assert results["reward_log_summary"]["written_count"] == 0
+    assert results["reward_log_summary"]["error_count"] == 1
+    assert "disk full" in results["reward_log_summary"]["last_error"]
+
+
+class _SloStubOrchestrator(_StubOrchestrator):
+    def plan(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        _ = (time_range, start_date, end_date)
+        self.calls.append((query, repo, root))
+        return {
+            "index": {
+                "candidate_files": [{"path": "src/app.py", "module": "src.app"}],
+                "embeddings": {
+                    "time_budget_ms": 60,
+                    "time_budget_exceeded": True,
+                    "adaptive_budget_applied": True,
+                    "fallback": False,
+                },
+                "chunk_semantic_rerank": {
+                    "time_budget_ms": 25,
+                    "time_budget_exceeded": False,
+                    "fallback": True,
+                },
+                "parallel": {
+                    "time_budget_ms": 30,
+                    "docs": {"timed_out": True},
+                    "worktree": {"timed_out": False},
+                },
+            },
+            "augment": {
+                "xref": {
+                    "time_budget_ms": 15,
+                    "budget_exhausted": True,
+                }
+            },
+            "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
+            "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+            "observability": {
+                "plugin_policy_summary": {
+                    "mode": "strict",
+                    "allowlist": ["observability.mcp_plugins"],
+                    "totals": {
+                        "applied": 0,
+                        "conflicts": 0,
+                        "blocked": 0,
+                        "warn": 0,
+                        "remote_applied": 0,
+                    },
+                },
+                "stage_metrics": [
+                    {"stage": "memory", "elapsed_ms": 2.0},
+                    {"stage": "index", "elapsed_ms": 4.0},
+                    {"stage": "repomap", "elapsed_ms": 3.0},
+                    {"stage": "augment", "elapsed_ms": 1.0},
+                    {"stage": "skills", "elapsed_ms": 0.5},
+                    {"stage": "source_plan", "elapsed_ms": 2.5},
+                ],
+            },
+        }
+
+
+def test_benchmark_runner_emits_stage_latency_and_slo_budget_summaries() -> None:
+    orchestrator = _SloStubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "find app", "expected_keys": ["app"], "top_k": 4},
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    assert results["stage_latency_summary"]["index"]["p95_ms"] == 4.0
+    assert results["stage_latency_summary"]["total"]["p95_ms"] >= 0.0
+    assert results["slo_budget_summary"]["budget_limits_ms"] == {
+        "parallel_time_budget_ms_mean": 30.0,
+        "embedding_time_budget_ms_mean": 60.0,
+        "chunk_semantic_time_budget_ms_mean": 25.0,
+        "xref_time_budget_ms_mean": 15.0,
+    }
+    assert results["slo_budget_summary"]["downgrade_case_count"] == 1
+    assert results["slo_budget_summary"]["signals"]["parallel_docs_timeout_ratio"] == {
+        "count": 1,
+        "rate": 1.0,
+    }
+    assert results["metrics"]["embedding_time_budget_exceeded_ratio"] == 1.0
+    assert results["metrics"]["chunk_semantic_fallback_ratio"] == 1.0
+
+
+class _DecisionStubOrchestrator(_StubOrchestrator):
+    def plan(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        _ = (time_range, start_date, end_date)
+        self.calls.append((query, repo, root))
+        return {
+            "memory": {
+                "gate": {
+                    "skipped": True,
+                    "skip_reason": "greeting",
+                }
+            },
+            "index": {
+                "candidate_files": [{"path": "src/app.py", "module": "src.app"}],
+                "docs": {
+                    "enabled": True,
+                    "section_count": 1,
+                    "backend_fallback_reason": "fts5_unavailable",
+                },
+                "candidate_ranking": {
+                    "fallbacks": ["tiny_corpus"],
+                    "exact_search": {
+                        "enabled": True,
+                        "reason": "applied",
+                        "applied": True,
+                    },
+                    "refine_pass": {
+                        "enabled": True,
+                        "trigger_condition_met": True,
+                        "triggered": True,
+                        "applied": True,
+                        "reason": "low_candidate_count",
+                    },
+                    "second_pass": {
+                        "triggered": True,
+                        "applied": True,
+                        "reason": "low_candidate_count",
+                    },
+                },
+                "parallel": {
+                    "docs": {"timed_out": True},
+                },
+            },
+            "skills": {
+                "budget_exhausted": True,
+                "skipped_for_budget": [{"name": "skill-a"}],
+            },
+            "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
+            "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+        }
+
+
+def test_benchmark_runner_aggregates_decision_observability_summary() -> None:
+    orchestrator = _DecisionStubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "find app", "expected_keys": ["app"], "top_k": 4},
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    assert results["cases"][0]["decision_trace"] == [
+        {
+            "stage": "memory",
+            "action": "skip",
+            "target": "memory_retrieval",
+            "reason": "greeting",
+        },
+        {
+            "stage": "index",
+            "action": "fallback",
+            "target": "candidate_ranker",
+            "reason": "tiny_corpus",
+        },
+        {
+            "stage": "index",
+            "action": "boost",
+            "target": "exact_search",
+            "reason": "applied",
+            "outcome": "applied",
+        },
+        {
+            "stage": "index",
+            "action": "retry",
+            "target": "deterministic_refine",
+            "reason": "low_candidate_count",
+            "outcome": "applied",
+        },
+        {
+            "stage": "index",
+            "action": "fallback",
+            "target": "docs_backend",
+            "reason": "fts5_unavailable",
+        },
+        {
+            "stage": "index",
+            "action": "downgrade",
+            "target": "parallel_docs",
+            "reason": "timeout",
+        },
+        {
+            "stage": "skills",
+            "action": "skip",
+            "target": "skills_hydration",
+            "reason": "token_budget_exhausted",
+        },
+    ]
+    assert results["decision_observability_summary"] == {
+        "case_count": 1,
+        "case_with_decisions_count": 1,
+        "case_with_decisions_rate": 1.0,
+        "decision_event_count": 7,
+        "actions": {
+            "boost": 1,
+            "downgrade": 1,
+            "fallback": 2,
+            "retry": 1,
+            "skip": 2,
+        },
+        "targets": {
+            "candidate_ranker": 1,
+            "deterministic_refine": 1,
+            "docs_backend": 1,
+            "exact_search": 1,
+            "memory_retrieval": 1,
+            "parallel_docs": 1,
+            "skills_hydration": 1,
+        },
+        "reasons": {
+            "applied": 1,
+            "fts5_unavailable": 1,
+            "greeting": 1,
+            "low_candidate_count": 1,
+            "timeout": 1,
+            "tiny_corpus": 1,
+            "token_budget_exhausted": 1,
+        },
+        "outcomes": {
+            "applied": 2,
+        },
+    }
+
+
+class _DecisionSkipStubOrchestrator(_StubOrchestrator):
+    def plan(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        _ = (query, repo, root, time_range, start_date, end_date)
+        return {
+            "index": {
+                "candidate_files": [{"path": "src/app.py", "module": "src.app"}],
+                "candidate_ranking": {
+                    "fallbacks": [],
+                    "exact_search": {"enabled": False},
+                    "refine_pass": {
+                        "enabled": False,
+                        "trigger_condition_met": True,
+                        "triggered": False,
+                        "applied": False,
+                        "reason": "disabled",
+                    },
+                    "second_pass": {
+                        "triggered": False,
+                        "applied": False,
+                        "reason": "",
+                    },
+                },
+            },
+            "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
+            "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+        }
+
+
+def test_benchmark_runner_traces_disabled_deterministic_refine() -> None:
+    runner = BenchmarkRunner(_DecisionSkipStubOrchestrator())
+
+    results = runner.run(
+        cases=[{"case_id": "c1", "query": "find app", "expected_keys": ["app"], "top_k": 4}],
+        repo="demo",
+        root=".",
+    )
+
+    assert results["cases"][0]["decision_trace"] == [
+        {
+            "stage": "index",
+            "action": "skip",
+            "target": "deterministic_refine",
+            "reason": "disabled",
+        }
+    ]
+
+
+class _InsufficiencyStubOrchestrator(_StubOrchestrator):
+    def plan(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        _ = (time_range, start_date, end_date)
+        self.calls.append((query, repo, root))
+        return {
+            "index": {
+                "candidate_files": [
+                    {
+                        "path": "docs/maintainers/BENCHMARKING.md",
+                        "module": "docs.maintainers.benchmarking",
+                    }
+                ],
+                "docs": {"enabled": True, "section_count": 0},
+                "metadata": {
+                    "docs_enabled": True,
+                    "docs_section_count": 0,
+                    "docs_injected_count": 0,
+                },
+            },
+            "source_plan": {"candidate_chunks": [], "validation_tests": []},
+            "repomap": {
+                "dependency_recall": {"hit_rate": 0.0},
+                "neighbor_paths": [],
+            },
+        }
+
+
+def test_benchmark_runner_aggregates_evidence_insufficiency_summary() -> None:
+    orchestrator = _InsufficiencyStubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {
+            "case_id": "c1",
+            "query": "where benchmark guide lives",
+            "expected_keys": ["benchmarking", "docs"],
+            "top_k": 4,
+            "task_success": {
+                "mode": "positive",
+                "min_validation_tests": 1,
+            },
+        },
+        {
+            "case_id": "c2",
+            "query": "where benchmark guide lives",
+            "expected_keys": ["benchmarking", "docs"],
+            "top_k": 4,
+            "task_success": {
+                "mode": "negative_control",
+                "min_validation_tests": 1,
+            },
+        },
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    assert results["metrics"]["evidence_insufficient_rate"] == 0.5
+    assert results["metrics"]["missing_validation_rate"] == 0.5
+    assert results["evidence_insufficiency_summary"] == {
+        "case_count": 2,
+        "applicable_case_count": 1,
+        "excluded_negative_control_case_count": 1,
+        "evidence_insufficient_count": 1,
+        "evidence_insufficient_rate": 1.0,
+        "reasons": {"low_support": 1},
+        "signals": {
+            "low_chunk_support": 1,
+            "missing_candidate_chunks": 1,
+            "missing_docs_evidence": 1,
+            "missing_repomap_neighbors": 1,
+            "missing_validation_tests": 1,
+        },
+    }

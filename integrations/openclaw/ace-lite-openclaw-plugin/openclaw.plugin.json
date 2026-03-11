@@ -1,0 +1,153 @@
+{
+  "id": "ace-lite-engine",
+  "name": "ACE-Lite Engine",
+  "description": "Local-first repo context retrieval via ACE-Lite (MCP stdio). Exposes ace_* tools and can auto-inject plan_quick context before an agent starts.",
+  "version": "0.3.20",
+  "kind": "context",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "python": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "type": "string",
+            "default": "python"
+          },
+          "extraArgs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": []
+          }
+        }
+      },
+      "root": {
+        "type": "string",
+        "default": "."
+      },
+      "repo": {
+        "type": "string",
+        "description": "Optional repo identifier; defaults to the root folder name."
+      },
+      "skillsDir": {
+        "type": "string",
+        "default": "skills"
+      },
+      "languages": {
+        "type": "string",
+        "default": "python,typescript,javascript,go,solidity",
+        "description": "Comma-separated language profile passed to ace_* tools."
+      },
+      "autoContext": {
+        "type": "boolean",
+        "default": true
+      },
+      "autoMode": {
+        "type": "string",
+        "enum": ["plan_quick", "plan_quick_plus_repomap", "repomap", "off"],
+        "default": "plan_quick_plus_repomap"
+      },
+      "maxCandidateFiles": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 24,
+        "default": 8
+      },
+      "candidateRanker": {
+        "type": "string",
+        "enum": ["heuristic", "bm25_lite", "hybrid_re2", "rrf_hybrid"],
+        "default": "rrf_hybrid"
+      },
+      "repomapBudgetTokens": {
+        "type": "integer",
+        "minimum": 200,
+        "maximum": 6000,
+        "default": 900
+      },
+      "repomapTopK": {
+        "type": "integer",
+        "minimum": 10,
+        "maximum": 200,
+        "default": 40
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 500,
+        "maximum": 600000,
+        "default": 25000
+      }
+    },
+    "required": ["python", "root"]
+  },
+  "uiHints": {
+    "python.command": {
+      "label": "Python Command",
+      "placeholder": "python",
+      "help": "Python executable used to spawn `python -m ace_lite.mcp_server --transport stdio`."
+    },
+    "python.extraArgs": {
+      "label": "Python Extra Args",
+      "help": "Extra args appended after `python` (advanced). Useful for venv wrappers.",
+      "advanced": true
+    },
+    "root": {
+      "label": "Repo Root",
+      "placeholder": ".",
+      "help": "Repository root directory (relative paths are resolved via OpenClaw)."
+    },
+    "repo": {
+      "label": "Repo ID",
+      "placeholder": "my-repo",
+      "help": "Optional repo name; defaults to folder name.",
+      "advanced": true
+    },
+    "skillsDir": {
+      "label": "Skills Dir",
+      "placeholder": "skills",
+      "help": "Markdown skills directory used by ace_plan (relative to root).",
+      "advanced": true
+    },
+    "languages": {
+      "label": "Languages",
+      "placeholder": "python,typescript,javascript,go,solidity",
+      "help": "Comma-separated language profile for indexing and retrieval."
+    },
+    "autoContext": {
+      "label": "Auto Context Injection",
+      "help": "Automatically inject ACE-Lite context via before_agent_start hook."
+    },
+    "autoMode": {
+      "label": "Auto Mode",
+      "help": "Which ACE-Lite retrieval to run for auto-injection.",
+      "advanced": true
+    },
+    "maxCandidateFiles": {
+      "label": "Max Candidate Files",
+      "help": "Number of candidate files to inject from plan_quick.",
+      "advanced": true
+    },
+    "candidateRanker": {
+      "label": "Candidate Ranker",
+      "help": "Ranker used by plan_quick index stage.",
+      "advanced": true
+    },
+    "repomapBudgetTokens": {
+      "label": "RepoMap Budget Tokens",
+      "help": "Token budget for repo map markdown (only in modes that include repomap).",
+      "advanced": true
+    },
+    "repomapTopK": {
+      "label": "RepoMap Top K",
+      "help": "Max number of files in repomap selection.",
+      "advanced": true
+    },
+    "timeoutMs": {
+      "label": "Timeout (ms)",
+      "help": "Timeout applied to each tool call and auto-injection retrieval.",
+      "advanced": true
+    }
+  }
+}
+

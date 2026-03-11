@@ -1,0 +1,50 @@
+﻿cases:
+  - case_id: tabi-evmrpc-rpcstack-01
+    query: where EVM RPC handlers are defined
+    expected_keys: [evmrpc, rpcstack]
+    top_k: 8
+
+  - case_id: tabi-evmrpc-association-02
+    query: where Association API for EVM is implemented
+    expected_keys: [association, evmrpc]
+    top_k: 8
+
+  - case_id: tabi-evmrpc-websocket-03
+    query: where websocket rpc support is implemented
+    expected_keys: [websockets, evmrpc]
+    top_k: 8
+
+  - case_id: tabi-evmrpc-txpool-04
+    query: where txpool rpc endpoints are implemented
+    expected_keys: [txpool, evmrpc]
+    top_k: 8
+
+  - case_id: tabi-app-entry-05
+    query: where the main app wiring is defined
+    expected_keys: [app, app.go]
+    top_k: 8
+
+  - case_id: tabi-ante-gasless-06
+    query: where gasless ante decorators are implemented
+    expected_keys: [antedecorators, gasless]
+    top_k: 8
+
+  - case_id: tabi-cmd-root-07
+    query: where tabid root command is implemented
+    expected_keys: [cmd, root]
+    top_k: 8
+
+  - case_id: tabi-cmd-snapshot-08
+    query: where snapshot command is implemented
+    expected_keys: [snapshot, cmd]
+    top_k: 8
+
+  - case_id: tabi-sync-gas-09
+    query: where sync gas logic is implemented
+    expected_keys: [sync, gas]
+    top_k: 8
+
+  - case_id: tabi-precompile-gov-10
+    query: where precompile governance handler is implemented
+    expected_keys: [precompiles, gov, handler]
+    top_k: 8

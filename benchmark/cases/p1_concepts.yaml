@@ -1,0 +1,60 @@
+cases:
+  - case_id: p1-concept-docs-feedback-loop
+    query: why docs evidence and code hints are fed back into index ranking
+    expected_keys: [docs_channel, index]
+    top_k: 3
+
+  - case_id: p1-concept-worktree-prior
+    query: how worktree changed files are boosted and injected into candidate selection
+    expected_keys: [index_cache, test_orchestrator_cochange_gating]
+    top_k: 3
+
+  - case_id: p1-concept-repomap-cache
+    query: why repomap cache keys include index hash and worktree state
+    expected_keys: [repomap, index_cache]
+    top_k: 3
+
+  - case_id: p1-concept-graph-rerank
+    query: how scip and xref graph signals rerank candidate files
+    expected_keys: [test_graph_lookup_rerank, scip]
+    top_k: 3
+
+  - case_id: p1-concept-semantic-time-budget
+    query: why cross encoder rerank uses strict time budget with fail open fallback
+    expected_keys: [embeddings, test_orchestrator_embeddings]
+    top_k: 3
+
+  - case_id: p1-concept-freeze-tabiv3-gate
+    query: how release freeze validates tabiv3 latency and repomap latency gates
+    expected_keys: [run_release_freeze_regression, repomap]
+    top_k: 3
+
+  - case_id: p1-concept-freeze-concept-gate
+    query: where concept benchmark gate is configured and evaluated in freeze automation
+    expected_keys: [run_release_freeze_regression, test_matrix_freeze_scripts, benchmark]
+    top_k: 3
+
+  - case_id: p1-concept-docs-disk-cache
+    query: how docs channel stores and reloads section cache on disk
+    expected_keys: [docs_channel, cache]
+    top_k: 3
+
+  - case_id: p1-concept-worktree-guard
+    query: why worktree query guard filters unrelated changed files before ranking
+    expected_keys: [priors, ranking]
+    top_k: 3
+
+  - case_id: p1-concept-repomap-precompute
+    query: how repomap precompute cache prepares ranked graph structure for stage reuse
+    expected_keys: [repomap, precompute, builder]
+    top_k: 3
+
+  - case_id: p1-concept-index-cache-fastsha
+    query: why index cache fast git head sha path reads refs and packed refs
+    expected_keys: [index_cache, test_index_cache]
+    top_k: 3
+
+  - case_id: p1-concept-freeze-gate-automation
+    query: how freeze automation enforces tabiv3 and concept gate thresholds
+    expected_keys: [run_release_freeze_regression, test_matrix_freeze_scripts]
+    top_k: 3

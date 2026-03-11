@@ -1,0 +1,6 @@
+﻿name: plan-post-processor
+version: 1.0.0
+runtime: in_process
+trusted: true
+priority: 100
+entrypoint: main.py

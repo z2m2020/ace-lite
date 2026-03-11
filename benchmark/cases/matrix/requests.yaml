@@ -1,0 +1,13 @@
+﻿cases:
+  - case_id: requests-session-class
+    query: where Session class is implemented in requests
+    expected_keys: [requests/sessions.py, Session]
+    top_k: 6
+  - case_id: requests-http-adapter
+    query: where HTTPAdapter is implemented in requests
+    expected_keys: [requests/adapters.py, HTTPAdapter]
+    top_k: 6
+  - case_id: requests-request-exception
+    query: where RequestException is defined in requests
+    expected_keys: [requests/exceptions.py, RequestException]
+    top_k: 6

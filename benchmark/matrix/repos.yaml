@@ -1,0 +1,199 @@
+defaults:
+  skills_dir: skills
+  top_k_files: 6
+  min_candidate_score: 3
+  candidate_relative_threshold: 0.35
+  candidate_ranker: heuristic
+  chunk_top_k: 24
+  cochange: false
+  repomap: true
+  index_incremental: false
+  memory_primary: none
+  memory_secondary: none
+  embedding_enabled: false
+  embedding_provider: hash_cross
+  embedding_model: hash-cross-v1
+  embedding_dimension: 1
+  embedding_rerank_pool: 24
+  embedding_lexical_weight: 0.7
+  embedding_semantic_weight: 0.3
+  embedding_min_similarity: 0.0
+  embedding_fail_open: true
+  warmup_runs: 1
+  app: codex
+
+thresholds:
+  recall_at_k_min: 0.95
+  precision_at_k_min: 0.65
+  noise_rate_max: 0.35
+  dependency_recall_min: 0.90
+  latency_p95_ms_max: 350.0
+  chunk_hit_at_k_min: 0.90
+  notes_hit_ratio_min: 0.0
+  profile_selected_mean_min: 0.0
+  capture_trigger_ratio_min: 0.0
+  embedding_similarity_mean_min: 0.0
+  embedding_rerank_ratio_min: 0.0
+  embedding_cache_hit_ratio_min: 0.0
+  embedding_fallback_ratio_max: 1.0
+
+freeze:
+  runtime_gate:
+    enabled: true
+  tabiv3_gate:
+    enabled: true
+    matrix_config: benchmark/matrix/tabiv3.yaml
+    latency_p95_ms_max: 170.0
+    repomap_latency_p95_ms_max: 90.0
+    retry_count: 4
+  concept_gate:
+    enabled: true
+    cases: benchmark/cases/p1_concepts.yaml
+    repo: ace-lite-engine
+    root: .
+    skills_dir: skills
+    top_k_files: 4
+    min_candidate_score: 2
+    candidate_ranker: heuristic
+    retrieval_policy: general
+    chunk_top_k: 12
+    cochange: false
+    retry_count: 2
+    thresholds:
+      precision_at_k_min: 0.65
+      noise_rate_max: 0.35
+      latency_p95_ms_max: 350.0
+      chunk_hit_at_k_min: 0.90
+  external_concept_gate:
+    enabled: true
+    matrix_config: benchmark/matrix/external_howwhy.yaml
+    thresholds:
+      precision_at_k_min: 0.65
+      noise_rate_max: 0.35
+      latency_p95_ms_max: 350.0
+      chunk_hit_at_k_min: 0.90
+  feature_slices_gate:
+    enabled: true
+    config: benchmark/matrix/feature_slices.yaml
+  plugin_policy_gate_default_profile: strict
+  e2e_success_floor: 0.90
+  policy_guard:
+    mode: report_only
+    max_regressed_repo_rate: 0.0
+    min_task_success_mean: 0.65
+    max_retrieval_task_gap_rate_mean: 0.35
+    max_noise_rate_mean: 0.35
+    max_slo_downgrade_case_rate_mean: -1.0
+  memory_gate:
+    min_notes_hit_ratio: -1.0
+    min_profile_selected_mean: -1.0
+    min_capture_trigger_ratio: -1.0
+  embedding_gate:
+    min_embedding_enabled_ratio: 0.80
+    min_embedding_similarity_mean: -1.0
+    min_embedding_rerank_ratio: -1.0
+    min_embedding_cache_hit_ratio: -1.0
+    max_embedding_fallback_ratio: -1.0
+  plugin_policy_gate_profiles:
+    strict:
+      max_conflicts: 0
+      max_blocked: 0
+      max_warn: 1
+    balanced:
+      max_conflicts: 2
+      max_blocked: 1
+      max_warn: 5
+    relaxed:
+      max_conflicts: 4
+      max_blocked: 2
+      max_warn: 10
+
+repos:
+  - name: requests
+    repo: requests
+    url: https://github.com/psf/requests.git
+    ref: v2.32.3
+    languages: python
+    cases: benchmark/cases/matrix/requests.yaml
+    embedding_enabled: true
+
+  - name: flask
+    repo: flask
+    url: https://github.com/pallets/flask.git
+    ref: 3.0.3
+    languages: python
+    cases: benchmark/cases/matrix/flask.yaml
+    embedding_enabled: true
+    thresholds:
+      dependency_recall_min: 0.85
+
+  - name: cobra
+    repo: cobra
+    url: https://github.com/spf13/cobra.git
+    ref: v1.8.1
+    languages: go
+    cases: benchmark/cases/matrix/cobra.yaml
+    embedding_enabled: true
+
+  - name: pytest
+    repo: pytest
+    url: https://github.com/pytest-dev/pytest.git
+    ref: 9.0.2
+    languages: python
+    cases: benchmark/cases/matrix/pytest.yaml
+    embedding_enabled: true
+    retrieval_policy: general
+
+  - name: blockscout-frontend
+    repo: blockscout-frontend
+    url: https://github.com/blockscout/frontend.git
+    ref: v2.6.2
+    languages: typescript,javascript
+    cases: benchmark/cases/matrix/blockscout_frontend.yaml
+    embedding_enabled: true
+    thresholds:
+      latency_p95_ms_max: 900.0
+      dependency_recall_min: 0.85
+
+  - name: protobuf-go
+    repo: protobuf-go
+    url: https://github.com/protocolbuffers/protobuf-go.git
+    ref: v1.36.11
+    languages: go
+    cases: benchmark/cases/matrix/protobuf_go.yaml
+    embedding_enabled: true
+
+  - name: grpc-java
+    repo: grpc-java
+    url: https://github.com/grpc/grpc-java.git
+    ref: v1.79.0
+    languages: java
+    cases: benchmark/cases/matrix/grpc_java.yaml
+    embedding_enabled: true
+    thresholds:
+      latency_p95_ms_max: 2500.0
+      dependency_recall_min: 0.85
+
+  - name: lens-core
+    repo: lens-core
+    url: https://github.com/lens-protocol/core.git
+    ref: LensHub-1.0.0
+    languages: solidity
+    cases: benchmark/cases/matrix/lens_core.yaml
+    embedding_enabled: true
+    thresholds:
+      latency_p95_ms_max: 2500.0
+
+  - name: uniswap-v4-core
+    repo: uniswap-v4-core
+    url: https://github.com/Uniswap/v4-core.git
+    ref: v4.0.0
+    languages: solidity
+    cases: benchmark/cases/matrix/uniswap_v4_core.yaml
+    embedding_enabled: true
+    submodules:
+      - lib/forge-std
+      - lib/solmate
+      - lib/openzeppelin-contracts
+    thresholds:
+      latency_p95_ms_max: 3500.0

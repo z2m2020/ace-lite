@@ -1,0 +1,45 @@
+﻿defaults:
+  skills_dir: skills
+  top_k_files: 6
+  min_candidate_score: 2
+  candidate_relative_threshold: 0.30
+  candidate_ranker: heuristic
+  chunk_top_k: 24
+  cochange: false
+  repomap: true
+  index_incremental: false
+  memory_primary: none
+  memory_secondary: none
+  embedding_enabled: false
+  warmup_runs: 1
+  app: codex
+
+thresholds:
+  recall_at_k_min: 0.90
+  precision_at_k_min: 0.50
+  noise_rate_max: 0.50
+  dependency_recall_min: 0.75
+  latency_p95_ms_max: 450.0
+  chunk_hit_at_k_min: 0.80
+
+repos:
+  - name: requests-howwhy
+    repo: requests
+    url: https://github.com/psf/requests.git
+    ref: v2.32.3
+    languages: python
+    cases: benchmark/cases/external_howwhy/requests.yaml
+
+  - name: flask-howwhy
+    repo: flask
+    url: https://github.com/pallets/flask.git
+    ref: 3.0.3
+    languages: python
+    cases: benchmark/cases/external_howwhy/flask.yaml
+
+  - name: pytest-howwhy
+    repo: pytest
+    url: https://github.com/pytest-dev/pytest.git
+    ref: 9.0.2
+    languages: python
+    cases: benchmark/cases/external_howwhy/pytest.yaml
