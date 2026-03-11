@@ -21,6 +21,7 @@ from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.plan_replay_cache import (
     default_plan_replay_cache_path,
     load_cached_plan,
+    load_cached_plan_with_meta,
     normalize_plan_query,
     store_cached_plan,
 )
@@ -444,6 +445,10 @@ class AceOrchestrator:
             "stored": False,
             "reused_stages": [],
             "guarded_by": list(self.PLAN_REPLAY_GUARDED_BY),
+            "origin": "none",
+            "age_seconds": None,
+            "trust_class": "",
+            "policy_name": self.PLAN_REPLAY_STAGE,
             "reason": "disabled" if not enabled else "not_reached",
         }
 
@@ -460,7 +465,7 @@ class AceOrchestrator:
         replay_cache_info["reason"] = "miss"
 
         lookup_started = perf_counter()
-        cached_payload = load_cached_plan(
+        cached_payload, cache_metadata = load_cached_plan_with_meta(
             cache_path=replay_cache_path,
             key=replay_cache_key,
         )
@@ -486,6 +491,12 @@ class AceOrchestrator:
         replay_cache_info["hit"] = True
         replay_cache_info["safe_hit"] = True
         replay_cache_info["reused_stages"] = [self.PLAN_REPLAY_STAGE]
+        replay_cache_info["origin"] = str(cache_metadata.get("origin") or "unknown")
+        replay_cache_info["age_seconds"] = cache_metadata.get("age_seconds")
+        replay_cache_info["trust_class"] = str(cache_metadata.get("trust_class") or "")
+        replay_cache_info["policy_name"] = str(
+            cache_metadata.get("policy_name") or self.PLAN_REPLAY_STAGE
+        )
         replay_cache_info["reason"] = "hit"
         return cached_source_plan, replay_cache_info
 
@@ -519,6 +530,9 @@ class AceOrchestrator:
             3,
         )
         updated_info["stored"] = bool(stored)
+        updated_info["origin"] = "stage_artifact_cache"
+        updated_info["trust_class"] = "exact"
+        updated_info["policy_name"] = self.PLAN_REPLAY_STAGE
         if not bool(stored):
             updated_info["reason"] = "store_failed"
         return updated_info

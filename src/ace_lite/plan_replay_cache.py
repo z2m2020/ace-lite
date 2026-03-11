@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from datetime import datetime
+from datetime import timezone
 from pathlib import Path
 from time import time
 from typing import Any
@@ -87,17 +89,31 @@ def build_plan_replay_cache_key(
 
 
 def load_cached_plan(*, cache_path: Path, key: str) -> dict[str, Any] | None:
+    payload, _meta = load_cached_plan_with_meta(cache_path=cache_path, key=key)
+    return payload
+
+
+def load_cached_plan_with_meta(
+    *,
+    cache_path: Path,
+    key: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     manager = _build_stage_artifact_cache(cache_path=cache_path)
     cached = manager.get_artifact(stage_name="source_plan", cache_key=key)
     if cached is not None:
-        return copy.deepcopy(cached.payload)
+        return copy.deepcopy(cached.payload), {
+            "origin": "stage_artifact_cache",
+            "policy_name": str(cached.entry.policy_name or "source_plan"),
+            "trust_class": str(cached.entry.trust_class or "exact"),
+            "age_seconds": _coerce_age_seconds(_age_seconds_from_iso(cached.entry.updated_at)),
+        }
 
     payload = _load_cache_payload(cache_path=cache_path, schema_version=_SCHEMA_VERSION)
     if payload is None:
-        return None
+        return None, {}
     entries = payload.get("entries", [])
     if not isinstance(entries, list):
-        return None
+        return None, {}
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -105,8 +121,17 @@ def load_cached_plan(*, cache_path: Path, key: str) -> dict[str, Any] | None:
             continue
         cached_payload = entry.get("payload")
         if isinstance(cached_payload, dict):
-            return copy.deepcopy(cached_payload)
-    return None
+            meta_raw = entry.get("meta")
+            meta = meta_raw if isinstance(meta_raw, dict) else {}
+            return copy.deepcopy(cached_payload), {
+                "origin": "legacy_json",
+                "policy_name": str(meta.get("stage") or "source_plan"),
+                "trust_class": str(meta.get("trust_class") or ""),
+                "age_seconds": _coerce_age_seconds(
+                    _age_seconds_from_epoch(entry.get("updated_at_epoch"))
+                ),
+            }
+    return None, {}
 
 
 def store_cached_plan(
@@ -130,7 +155,11 @@ def store_cached_plan(
             ttl_seconds=max(0, int(normalized_meta.get("ttl_seconds") or 0)),
             soft_ttl_seconds=max(0, int(normalized_meta.get("soft_ttl_seconds") or 0)),
             content_version=_CONTENT_VERSION,
-            policy_name=str(normalized_meta.get("stage") or "source_plan"),
+            policy_name=str(
+                normalized_meta.get("policy_name")
+                or normalized_meta.get("stage")
+                or "source_plan"
+            ),
             trust_class=str(normalized_meta.get("trust_class") or "exact"),
             write_token="plan_replay",
         )
@@ -225,6 +254,35 @@ def _build_query_hash(query: str) -> str:
 def _estimate_payload_token_weight(payload: dict[str, Any]) -> int:
     text = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return max(1, len(text) // 4)
+
+
+def _age_seconds_from_iso(value: Any) -> float | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return max(0.0, time() - parsed.timestamp())
+
+
+def _age_seconds_from_epoch(value: Any) -> float | None:
+    try:
+        epoch = float(value)
+    except Exception:
+        return None
+    if epoch <= 0.0:
+        return None
+    return max(0.0, time() - epoch)
+
+
+def _coerce_age_seconds(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return round(float(value), 3)
 
 
 def _load_cache_payload(*, cache_path: Path, schema_version: str) -> dict[str, Any] | None:
@@ -328,6 +386,7 @@ __all__ = [
     "content_version",
     "default_plan_replay_cache_path",
     "load_cached_plan",
+    "load_cached_plan_with_meta",
     "normalize_plan_query",
     "store_cached_plan",
     "strip_plan_replay_runtime_metadata",

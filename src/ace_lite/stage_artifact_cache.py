@@ -248,6 +248,23 @@ class StageArtifactCache:
         self._store.upsert_entry(refreshed)
         return StageArtifactCacheHit(entry=refreshed, payload=payload)
 
+    def cleanup_temp_payloads(self) -> int:
+        if not self._temp_root.exists():
+            return 0
+
+        deleted = 0
+        for path in sorted(self._temp_root.rglob("*"), reverse=True):
+            if path.is_file():
+                path.unlink(missing_ok=True)
+                deleted += 1
+                continue
+            if path.is_dir():
+                try:
+                    path.rmdir()
+                except OSError:
+                    pass
+        return deleted
+
     def _record_step(self, step: str) -> None:
         if step not in STAGE_ARTIFACT_CACHE_WRITE_ORDER:
             return

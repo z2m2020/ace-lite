@@ -9,6 +9,7 @@ from ace_lite.plan_replay_cache import (
     content_version,
     default_plan_replay_cache_path,
     load_cached_plan,
+    load_cached_plan_with_meta,
     normalize_plan_query,
     store_cached_plan,
     strip_plan_replay_runtime_metadata,
@@ -140,6 +141,31 @@ def test_load_cached_plan_fails_open_on_invalid_json(tmp_path: Path) -> None:
     cache_path.write_text("{not-json", encoding="utf-8")
 
     assert load_cached_plan(cache_path=cache_path, key="missing") is None
+
+
+def test_load_cached_plan_with_meta_reports_backend_origin(tmp_path: Path) -> None:
+    cache_path = default_plan_replay_cache_path(root=str(tmp_path))
+    payload = {"source_plan": {"steps": [{"id": 1, "stage": "source_plan"}]}}
+
+    assert store_cached_plan(
+        cache_path=cache_path,
+        key="plan-key",
+        payload=payload,
+        meta={
+            "query": "fix auth flow",
+            "stage": "source_plan",
+            "trust_class": "exact",
+            "policy_name": "source_plan",
+        },
+    )
+
+    loaded, meta = load_cached_plan_with_meta(cache_path=cache_path, key="plan-key")
+
+    assert loaded == payload
+    assert meta["origin"] == "stage_artifact_cache"
+    assert meta["policy_name"] == "source_plan"
+    assert meta["trust_class"] == "exact"
+    assert float(meta["age_seconds"]) >= 0.0
 
 
 def test_strip_plan_replay_runtime_metadata_removes_cache_observability() -> None:

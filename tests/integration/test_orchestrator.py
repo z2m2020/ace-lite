@@ -283,6 +283,9 @@ def test_orchestrator_plan_replay_cache_hits_on_second_run(
     assert first_cache["stored"] is True
     assert first_cache["stale_hit_safe"] is True
     assert first_cache["reused_stages"] == []
+    assert first_cache["origin"] == "stage_artifact_cache"
+    assert first_cache["trust_class"] == "exact"
+    assert first_cache["policy_name"] == "source_plan"
 
     assert second_cache["enabled"] is True
     assert second_cache["stage"] == "source_plan"
@@ -290,6 +293,10 @@ def test_orchestrator_plan_replay_cache_hits_on_second_run(
     assert second_cache["safe_hit"] is True
     assert second_cache["stale_hit_safe"] is True
     assert second_cache["reused_stages"] == ["source_plan"]
+    assert second_cache["origin"] == "stage_artifact_cache"
+    assert second_cache["trust_class"] == "exact"
+    assert second_cache["policy_name"] == "source_plan"
+    assert float(second_cache["age_seconds"]) >= 0.0
     assert Path(second_cache["cache_path"]).exists()
     assert first["source_plan"] == second["source_plan"]
     assert first["repomap"] == second["repomap"]
