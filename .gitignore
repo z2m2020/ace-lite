@@ -24,3 +24,6 @@ src/*.egg-info/
 .claude/
 .mcp.json
 test_output.*
+pytest_out.txt
+tmp_review*/
+tmp_runtime_repo/
