@@ -125,3 +125,135 @@ def test_chunk_disclosure_controls_signature_and_snippet_payload(
     assert refs_used <= sig_used <= snippet_used
     assert refs["index"]["chunk_metrics"]["robust_signature_count"] >= 1.0
     assert refs["index"]["metadata"]["robust_signature_count"] >= 1
+
+def test_snippet_context_expansion_includes_class_and_imports(
+    tmp_path: Path,
+    fake_skill_manifest,
+) -> None:
+    (tmp_path / "src" / "core").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "src" / "core" / "auth.py").write_text(
+        textwrap.dedent(
+            """
+            import jwt
+            from typing import Any
+
+            class SessionManager:
+                def __init__(self):
+                    pass
+
+                def refresh_session(self, token: str) -> str:
+                    token = token.strip()
+                    return token
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    base_config = {
+        "skills": {"manifest": fake_skill_manifest},
+        "index": {
+            "languages": ["python"],
+            "cache_path": tmp_path / "context-map" / "index.json",
+        },
+        "repomap": {"enabled": False},
+        "cochange": {"enabled": False},
+        "scip": {"enabled": False},
+        "chunking": {
+            "top_k": 6,
+            "per_file_limit": 3,
+            "token_budget": 99999,
+            "disclosure": "snippet",
+            "snippet_max_lines": 5,
+            "snippet_max_chars": 200,
+        },
+    }
+
+    result = AceOrchestrator(
+        config=OrchestratorConfig(**base_config),
+    ).plan(
+        query="refresh session logic",
+        repo="demo",
+        root=str(tmp_path),
+    )
+
+    chunks = result["index"]["candidate_chunks"]
+    
+    # Check if we got the method chunk
+    method_chunk = next(
+        (c for c in chunks if c.get("qualified_name") == "SessionManager.refresh_session"),
+        None
+    )
+    assert method_chunk is not None
+    
+    snippet = method_chunk.get("snippet", "")
+    assert len(snippet.splitlines()) <= 5
+    assert "# Context: class SessionManager:" in snippet
+    assert "# Imports: import jwt, from typing import Any" in snippet
+    assert "def refresh_session" in snippet
+
+
+def test_snippet_context_expansion_respects_tiny_line_budgets(
+    tmp_path: Path,
+    fake_skill_manifest,
+) -> None:
+    (tmp_path / "src" / "core").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "src" / "core" / "auth.py").write_text(
+        textwrap.dedent(
+            """
+            import jwt
+            from typing import Any
+
+            class SessionManager:
+                def __init__(self):
+                    pass
+
+                def refresh_session(self, token: str) -> str:
+                    token = token.strip()
+                    return token
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    for max_lines in (1, 2):
+        result = AceOrchestrator(
+            config=OrchestratorConfig(
+                skills={"manifest": fake_skill_manifest},
+                index={
+                    "languages": ["python"],
+                    "cache_path": tmp_path / "context-map" / f"index-{max_lines}.json",
+                },
+                repomap={"enabled": False},
+                cochange={"enabled": False},
+                scip={"enabled": False},
+                chunking={
+                    "top_k": 6,
+                    "per_file_limit": 3,
+                    "token_budget": 99999,
+                    "disclosure": "snippet",
+                    "snippet_max_lines": max_lines,
+                    "snippet_max_chars": 200,
+                },
+            ),
+        ).plan(
+            query="refresh session logic",
+            repo="demo",
+            root=str(tmp_path),
+        )
+
+        method_chunk = next(
+            (
+                chunk
+                for chunk in result["index"]["candidate_chunks"]
+                if chunk.get("qualified_name") == "SessionManager.refresh_session"
+            ),
+            None,
+        )
+        assert method_chunk is not None
+
+        snippet = str(method_chunk.get("snippet") or "")
+        assert snippet
+        assert len(snippet.splitlines()) <= max_lines
+        assert "def refresh_session" in snippet

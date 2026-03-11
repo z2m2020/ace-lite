@@ -105,6 +105,60 @@ def _extract_signature(*, lines: list[str], lineno: int) -> str:
     return lines[index].strip()[:240]
 
 
+def _resolve_parent_class_signature(
+    *,
+    lines: list[str],
+    start_line: int,
+    symbol: dict[str, Any] | None,
+    all_symbols: list[Any] | None,
+) -> str:
+    if not symbol or not all_symbols:
+        return ""
+
+    qualified_name = str(symbol.get("qualified_name") or "").strip()
+    if "." not in qualified_name:
+        return ""
+
+    parent_name = qualified_name.rsplit(".", 1)[0]
+    for item in all_symbols:
+        if not isinstance(item, dict):
+            continue
+        item_kind = str(item.get("kind") or "").strip().lower()
+        item_name = str(item.get("qualified_name") or item.get("name") or "").strip()
+        if item_kind != "class" or item_name != parent_name:
+            continue
+        parent_lineno = int(item.get("lineno") or 0)
+        if 0 < parent_lineno < start_line:
+            return _extract_signature(lines=lines, lineno=parent_lineno)
+        return ""
+    return ""
+
+
+def _format_import_entry(item: Any) -> str:
+    if isinstance(item, str):
+        return str(item).strip()
+    if not isinstance(item, dict):
+        return ""
+
+    import_type = str(item.get("type") or "").strip().lower()
+    module = str(item.get("module") or "").strip()
+    name = str(item.get("name") or "").strip()
+    alias = str(item.get("alias") or "").strip()
+
+    if import_type == "from" and module and name:
+        rendered = f"from {module} import {name}"
+    elif module:
+        rendered = f"import {module}"
+    elif name:
+        rendered = name
+    else:
+        return ""
+
+    if alias:
+        rendered = f"{rendered} as {alias}"
+    return rendered
+
+
 def _extract_snippet(
     *,
     lines: list[str],
@@ -112,6 +166,9 @@ def _extract_snippet(
     end_lineno: int,
     max_lines: int,
     max_chars: int,
+    symbol: dict[str, Any] | None = None,
+    all_symbols: list[Any] | None = None,
+    file_entry: dict[str, Any] | None = None,
 ) -> str:
     if not lines:
         return ""
@@ -121,14 +178,50 @@ def _extract_snippet(
     limit_lines = max(1, int(max_lines))
     limit_chars = max(0, int(max_chars))
 
-    end_line = min(end_line, start_line + limit_lines - 1)
+    context_prefix: list[str] = []
+
+    class_sig = _resolve_parent_class_signature(
+        lines=lines,
+        start_line=start_line,
+        symbol=symbol,
+        all_symbols=all_symbols,
+    )
+    if class_sig:
+        context_prefix.append(f"# Context: {class_sig}")
+
+    if file_entry and isinstance(file_entry.get("imports"), list):
+        imports = [
+            rendered
+            for rendered in (_format_import_entry(imp) for imp in file_entry["imports"])
+            if rendered
+        ]
+        if imports:
+            import_str = ", ".join(imports[:3])
+            if len(imports) > 3:
+                import_str += ", ..."
+            context_prefix.append(f"# Imports: {import_str}")
+
+    prefix_lines: list[str] = []
+    if context_prefix and limit_lines > 1:
+        max_prefix_lines = max(0, limit_lines - 1)
+        if max_prefix_lines >= len(context_prefix):
+            prefix_lines = list(context_prefix)
+            if limit_lines >= len(context_prefix) + 2:
+                prefix_lines.append("...")
+        else:
+            prefix_lines = list(context_prefix[:max_prefix_lines])
+
+    body_line_budget = max(1, limit_lines - len(prefix_lines))
+    end_line = min(end_line, start_line + body_line_budget - 1)
 
     start_index = start_line - 1
     end_exclusive = min(len(lines), end_line)
     if end_exclusive <= start_index:
         return ""
 
-    snippet = "\n".join(lines[start_index:end_exclusive]).strip()
+    snippet_lines = lines[start_index:end_exclusive]
+    snippet_parts = [*prefix_lines, *snippet_lines]
+    snippet = "\n".join(snippet_parts).strip()
     if limit_chars and len(snippet) > limit_chars:
         return snippet[:limit_chars]
     return snippet
@@ -287,6 +380,9 @@ def build_candidate_chunks(
                     end_lineno=end_lineno,
                     max_lines=snippet_lines_limit,
                     max_chars=snippet_chars_limit,
+                    symbol=symbol,
+                    all_symbols=symbols,
+                    file_entry=file_entry,
                 )
             score, breakdown = score_chunk_candidate(
                 path=path,
