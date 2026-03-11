@@ -11,6 +11,7 @@ on:
       - reopened
       - synchronize
       - labeled
+  workflow_dispatch:
 
 jobs:
   test:
@@ -58,7 +59,7 @@ jobs:
         run: python scripts/validate_docs_cli_snippets.py
 
   quality:
-    if: github.event.action != 'labeled'
+    if: (github.event_name == 'workflow_dispatch') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-quality'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -102,7 +103,7 @@ jobs:
             artifacts/friction/latest
 
   release-freeze-gates:
-    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-benchmarks')
+    if: (github.event_name == 'workflow_dispatch') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-benchmarks'))
     runs-on: ubuntu-latest
     timeout-minutes: 120
 

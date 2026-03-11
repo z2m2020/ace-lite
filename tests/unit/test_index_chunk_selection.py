@@ -424,7 +424,9 @@ def test_apply_chunk_selection_reranks_rows_with_embeddings() -> None:
     )
 
     assert captured["rerank_pool"] == 1
-    assert captured["index_path"].endswith("context-map\\embeddings\\chunks.index.json")
+    assert captured["index_path"].replace("\\", "/").endswith(
+        "context-map/embeddings/chunks.index.json"
+    )
     assert result.chunk_semantic_rerank_payload["reason"] == "ok"
     assert result.chunk_semantic_rerank_payload["reranked_count"] == 1
     assert result.chunk_guard_payload["retained_count"] == 1
