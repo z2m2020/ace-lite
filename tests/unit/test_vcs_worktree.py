@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ace_lite.vcs_worktree import build_git_worktree_state_token
 from ace_lite.vcs_worktree import collect_git_worktree_summary
 
 
@@ -81,3 +82,23 @@ def test_collect_git_worktree_summary_parses_status_and_diffstat(
     assert diffstat["staged"]["file_count"] == 1
     assert diffstat["staged"]["additions"] == 10
 
+
+def test_build_git_worktree_state_token_is_stable() -> None:
+    payload = {
+        "enabled": True,
+        "reason": "ok",
+        "changed_count": 1,
+        "staged_count": 1,
+        "unstaged_count": 0,
+        "untracked_count": 0,
+        "entries": [{"path": "src/app.py", "status": "M ", "renamed_from": ""}],
+        "diffstat": {
+            "staged": {"file_count": 1, "binary_count": 0, "additions": 3, "deletions": 1},
+            "unstaged": {"file_count": 0, "binary_count": 0, "additions": 0, "deletions": 0},
+        },
+    }
+
+    first = build_git_worktree_state_token(payload)
+    second = build_git_worktree_state_token(dict(payload))
+
+    assert first == second

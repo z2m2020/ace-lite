@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from collections.abc import Iterable
 from pathlib import Path
@@ -164,6 +166,65 @@ def _empty_diffstat() -> dict[str, Any]:
         "timed_out": False,
         "truncated": False,
     }
+
+
+def build_git_worktree_state_token(
+    summary: dict[str, Any] | None,
+    *,
+    max_entries: int = 32,
+) -> str:
+    payload = summary if isinstance(summary, dict) else {}
+    diffstat = payload.get("diffstat", {}) if isinstance(payload.get("diffstat"), dict) else {}
+    staged = diffstat.get("staged", {}) if isinstance(diffstat.get("staged"), dict) else {}
+    unstaged = (
+        diffstat.get("unstaged", {})
+        if isinstance(diffstat.get("unstaged"), dict)
+        else {}
+    )
+    entries_raw = payload.get("entries", [])
+    entries = entries_raw if isinstance(entries_raw, list) else []
+    normalized_entries: list[dict[str, Any]] = []
+    for item in entries[: max(1, int(max_entries))]:
+        if not isinstance(item, dict):
+            continue
+        normalized_entries.append(
+            {
+                "path": str(item.get("path") or "").strip(),
+                "status": str(item.get("status") or "").strip(),
+                "renamed_from": str(item.get("renamed_from") or "").strip(),
+            }
+        )
+    fingerprint_payload = {
+        "enabled": bool(payload.get("enabled", False)),
+        "reason": str(payload.get("reason") or "").strip(),
+        "changed_count": int(payload.get("changed_count", 0) or 0),
+        "staged_count": int(payload.get("staged_count", 0) or 0),
+        "unstaged_count": int(payload.get("unstaged_count", 0) or 0),
+        "untracked_count": int(payload.get("untracked_count", 0) or 0),
+        "truncated": bool(payload.get("truncated", False)),
+        "entries": normalized_entries,
+        "diffstat": {
+            "staged": {
+                "file_count": int(staged.get("file_count", 0) or 0),
+                "binary_count": int(staged.get("binary_count", 0) or 0),
+                "additions": int(staged.get("additions", 0) or 0),
+                "deletions": int(staged.get("deletions", 0) or 0),
+            },
+            "unstaged": {
+                "file_count": int(unstaged.get("file_count", 0) or 0),
+                "binary_count": int(unstaged.get("binary_count", 0) or 0),
+                "additions": int(unstaged.get("additions", 0) or 0),
+                "deletions": int(unstaged.get("deletions", 0) or 0),
+            },
+        },
+    }
+    text = json.dumps(
+        fingerprint_payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest()
 
 
 def _normalize_path(value: str) -> str:
@@ -375,4 +436,4 @@ def _parse_numstat(stdout: str, *, max_files: int) -> dict[str, Any]:
     }
 
 
-__all__ = ["collect_git_worktree_summary"]
+__all__ = ["build_git_worktree_state_token", "collect_git_worktree_summary"]

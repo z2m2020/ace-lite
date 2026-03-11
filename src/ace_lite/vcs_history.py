@@ -13,6 +13,87 @@ _COMMIT_MARKER = "__ACE_COMMIT__"
 _DEFAULT_TIMEOUT_SECONDS = 0.35
 
 
+def collect_git_head_snapshot(
+    *,
+    repo_root: str | Path,
+    timeout_seconds: float | None = None,
+) -> dict[str, Any]:
+    root = Path(repo_root)
+    if not (root / ".git").exists():
+        return {
+            "enabled": False,
+            "reason": "not_git_repo",
+            "head_commit": "",
+            "head_ref": "",
+            "error": None,
+        }
+
+    resolved_timeout = (
+        float(timeout_seconds)
+        if isinstance(timeout_seconds, (int, float))
+        else float(os.getenv("ACE_LITE_GIT_HISTORY_TIMEOUT_SECONDS", "0") or 0.0)
+    )
+    if resolved_timeout <= 0.0:
+        resolved_timeout = _DEFAULT_TIMEOUT_SECONDS
+
+    started = perf_counter()
+    head_code, head_stdout, head_stderr, head_timed_out = run_capture_output(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        timeout_seconds=max(0.05, float(resolved_timeout)),
+        env_overrides=_GIT_TERMINAL_ENV,
+    )
+    if head_timed_out:
+        return {
+            "enabled": True,
+            "reason": "timeout",
+            "head_commit": "",
+            "head_ref": "",
+            "error": "timeout",
+            "elapsed_ms": round((perf_counter() - started) * 1000.0, 3),
+            "timeout_seconds": float(resolved_timeout),
+        }
+    if head_code != 0:
+        error = str(head_stderr or head_stdout or "").strip()[:240]
+        return {
+            "enabled": True,
+            "reason": "error",
+            "head_commit": "",
+            "head_ref": "",
+            "error": error or f"git_returncode:{head_code}",
+            "elapsed_ms": round((perf_counter() - started) * 1000.0, 3),
+            "timeout_seconds": float(resolved_timeout),
+        }
+
+    ref_code, ref_stdout, ref_stderr, ref_timed_out = run_capture_output(
+        ["git", "symbolic-ref", "--short", "HEAD"],
+        cwd=root,
+        timeout_seconds=max(0.05, float(resolved_timeout)),
+        env_overrides=_GIT_TERMINAL_ENV,
+    )
+    head_ref = ""
+    reason = "ok"
+    error = None
+    if ref_timed_out:
+        reason = "partial"
+        error = "head_ref_timeout"
+    elif ref_code == 0:
+        head_ref = str(ref_stdout or "").strip()
+    elif ref_code != 0:
+        reason = "partial"
+        error = str(ref_stderr or ref_stdout or "").strip()[:240] or f"git_returncode:{ref_code}"
+
+    return {
+        "enabled": True,
+        "reason": reason,
+        "head_commit": str(head_stdout or "").strip(),
+        "head_ref": head_ref,
+        "error": error,
+        "elapsed_ms": round((perf_counter() - started) * 1000.0, 3),
+        "timeout_seconds": float(resolved_timeout),
+    }
+
+
 def collect_git_commit_history(
     *,
     repo_root: str | Path,
@@ -178,4 +259,4 @@ def _parse_git_log_output(stdout: str) -> list[dict[str, Any]]:
     return normalized_commits
 
 
-__all__ = ["collect_git_commit_history"]
+__all__ = ["collect_git_commit_history", "collect_git_head_snapshot"]
