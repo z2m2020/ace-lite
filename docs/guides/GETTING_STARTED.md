@@ -50,7 +50,62 @@ Typical sequence for an agent:
 5. `ace_feedback_record` after the correct targets are confirmed
 6. `ace_memory_store` for durable project rules when needed
 
-## 5) Next steps
+## 5) Optional: global Codex MCP config pack sample
+
+If you want the same ACE-Lite MCP tuning to apply across repos, keep the config pack in your global Codex home and point `ACE_LITE_CONFIG_PACK` at it from the MCP server env.
+
+Windows example path:
+
+```text
+C:\Users\<you>\.codex\ace-lite-mcp-performance.json
+```
+
+Sample payload:
+
+```json
+{
+  "schema_version": "ace-lite-config-pack-v1",
+  "name": "ace-lite-mcp-performance-v1",
+  "overrides": {
+    "top_k_files": 10,
+    "min_candidate_score": 1,
+    "candidate_relative_threshold": 0.08,
+    "candidate_ranker": "rrf_hybrid",
+    "deterministic_refine_enabled": true,
+    "hybrid_re2_fusion_mode": "rrf",
+    "hybrid_re2_rrf_k": 60,
+    "embedding_enabled": true,
+    "embedding_provider": "ollama",
+    "embedding_model": "dengcao/Qwen3-Embedding-4B:Q4_K_M",
+    "embedding_dimension": 2560,
+    "embedding_index_path": "context-map/embeddings/index.json",
+    "embedding_rerank_pool": 16,
+    "embedding_lexical_weight": 0.55,
+    "embedding_semantic_weight": 0.45,
+    "embedding_min_similarity": 0.05,
+    "embedding_fail_open": true,
+    "memory_notes_enabled": true,
+    "memory_gate_enabled": false,
+    "memory_gate_mode": "auto",
+    "memory_postprocess_enabled": true,
+    "memory_postprocess_noise_filter_enabled": true,
+    "memory_postprocess_length_norm_anchor_chars": 500,
+    "memory_postprocess_time_decay_half_life_days": 7.0,
+    "memory_postprocess_hard_min_score": 0.05,
+    "memory_postprocess_diversity_enabled": true,
+    "memory_postprocess_diversity_similarity_threshold": 0.92,
+    "policy_version": "mcp-performance-v1"
+  }
+}
+```
+
+You can then register the MCP with:
+
+```bash
+ace-lite runtime setup-codex-mcp --root . --skills-dir skills --enable-memory --enable-embeddings --config-pack C:\Users\<you>\.codex\ace-lite-mcp-performance.json --user-id <your-openmemory-user-id> --apply
+```
+
+## 6) Next steps
 
 - MCP setup templates (Windows/WSL, OpenMemory, Ollama, Codex CLI): `docs/guides/MCP_SETUP.md`
 - Architecture overview: `docs/design/ARCHITECTURE_OVERVIEW.md`

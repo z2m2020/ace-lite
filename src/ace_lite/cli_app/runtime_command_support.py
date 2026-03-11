@@ -62,6 +62,18 @@ def build_codex_mcp_setup_plan(
     rest_base_url: str,
     user_id: str,
     app: str,
+    config_pack: str,
+    enable_embeddings: bool,
+    embedding_provider: str,
+    embedding_model: str,
+    embedding_dimension: int,
+    embedding_index_path: str,
+    embedding_rerank_pool: int,
+    embedding_lexical_weight: float,
+    embedding_semantic_weight: float,
+    embedding_min_similarity: float,
+    embedding_fail_open: bool,
+    ollama_base_url: str,
     replace: bool,
     apply: bool,
     verify: bool,
@@ -71,6 +83,9 @@ def build_codex_mcp_setup_plan(
     normalized_name = str(name or "").strip() or "ace-lite"
     normalized_root = resolve_cli_path_fn(root)
     normalized_skills = resolve_cli_path_fn(skills_dir)
+    normalized_config_pack = str(config_pack or "").strip()
+    if normalized_config_pack:
+        normalized_config_pack = resolve_cli_path_fn(normalized_config_pack)
     resolved_user_id = (
         str(user_id or "").strip()
         or str(env_get_fn("ACE_LITE_USER_ID", "")).strip()
@@ -83,6 +98,8 @@ def build_codex_mcp_setup_plan(
         f"ACE_LITE_DEFAULT_ROOT={normalized_root}",
         f"ACE_LITE_DEFAULT_SKILLS_DIR={normalized_skills}",
     ]
+    if normalized_config_pack:
+        env_items.append(f"ACE_LITE_CONFIG_PACK={normalized_config_pack}")
     if enable_memory:
         env_items.extend(
             [
@@ -101,6 +118,24 @@ def build_codex_mcp_setup_plan(
                 "ACE_LITE_MEMORY_SECONDARY=none",
             ]
         )
+    if enable_embeddings:
+        env_items.extend(
+            [
+                "ACE_LITE_EMBEDDING_ENABLED=1",
+                f"ACE_LITE_EMBEDDING_PROVIDER={str(embedding_provider).strip().lower() or 'ollama'}",
+                f"ACE_LITE_EMBEDDING_MODEL={str(embedding_model).strip() or 'dengcao/Qwen3-Embedding-4B:Q4_K_M'}",
+                f"ACE_LITE_EMBEDDING_DIMENSION={max(8, int(embedding_dimension))}",
+                f"ACE_LITE_EMBEDDING_INDEX_PATH={str(embedding_index_path).strip() or 'context-map/embeddings/index.json'}",
+                f"ACE_LITE_EMBEDDING_RERANK_POOL={max(1, int(embedding_rerank_pool))}",
+                f"ACE_LITE_EMBEDDING_LEXICAL_WEIGHT={max(0.0, float(embedding_lexical_weight))}",
+                f"ACE_LITE_EMBEDDING_SEMANTIC_WEIGHT={max(0.0, float(embedding_semantic_weight))}",
+                f"ACE_LITE_EMBEDDING_MIN_SIMILARITY={float(embedding_min_similarity)}",
+                f"ACE_LITE_EMBEDDING_FAIL_OPEN={'1' if embedding_fail_open else '0'}",
+                f"ACE_LITE_OLLAMA_BASE_URL={str(ollama_base_url).strip() or 'http://localhost:11434'}",
+            ]
+        )
+    else:
+        env_items.append("ACE_LITE_EMBEDDING_ENABLED=0")
 
     remove_cmd = [str(codex_executable), "mcp", "remove", normalized_name]
     add_cmd: list[str] = [str(codex_executable), "mcp", "add", normalized_name]
@@ -122,23 +157,58 @@ def build_codex_mcp_setup_plan(
         "ACE_LITE_DEFAULT_SKILLS_DIR": normalized_skills,
         "ACE_LITE_MEMORY_PRIMARY": "none",
         "ACE_LITE_MEMORY_SECONDARY": "none",
+        "ACE_LITE_EMBEDDING_ENABLED": "0",
     }
+    if normalized_config_pack:
+        self_test_env["ACE_LITE_CONFIG_PACK"] = normalized_config_pack
     if enable_memory:
         self_test_env = {
             "ACE_LITE_DEFAULT_ROOT": normalized_root,
             "ACE_LITE_DEFAULT_SKILLS_DIR": normalized_skills,
             "ACE_LITE_MEMORY_PRIMARY": str(memory_primary).strip().lower() or "mcp",
             "ACE_LITE_MEMORY_SECONDARY": str(memory_secondary).strip().lower() or "rest",
+            "ACE_LITE_EMBEDDING_ENABLED": "0",
             "ACE_LITE_MCP_BASE_URL": str(mcp_base_url).strip() or "http://localhost:8765",
             "ACE_LITE_REST_BASE_URL": str(rest_base_url).strip() or "http://localhost:8765",
             "ACE_LITE_USER_ID": resolved_user_id,
             "ACE_LITE_APP": str(app).strip() or "ace-lite",
         }
+        if normalized_config_pack:
+            self_test_env["ACE_LITE_CONFIG_PACK"] = normalized_config_pack
+    if enable_embeddings:
+        self_test_env.update(
+            {
+                "ACE_LITE_EMBEDDING_ENABLED": "1",
+                "ACE_LITE_EMBEDDING_PROVIDER": str(embedding_provider).strip().lower()
+                or "ollama",
+                "ACE_LITE_EMBEDDING_MODEL": str(embedding_model).strip()
+                or "dengcao/Qwen3-Embedding-4B:Q4_K_M",
+                "ACE_LITE_EMBEDDING_DIMENSION": str(max(8, int(embedding_dimension))),
+                "ACE_LITE_EMBEDDING_INDEX_PATH": str(embedding_index_path).strip()
+                or "context-map/embeddings/index.json",
+                "ACE_LITE_EMBEDDING_RERANK_POOL": str(
+                    max(1, int(embedding_rerank_pool))
+                ),
+                "ACE_LITE_EMBEDDING_LEXICAL_WEIGHT": str(
+                    max(0.0, float(embedding_lexical_weight))
+                ),
+                "ACE_LITE_EMBEDDING_SEMANTIC_WEIGHT": str(
+                    max(0.0, float(embedding_semantic_weight))
+                ),
+                "ACE_LITE_EMBEDDING_MIN_SIMILARITY": str(
+                    float(embedding_min_similarity)
+                ),
+                "ACE_LITE_EMBEDDING_FAIL_OPEN": "1" if embedding_fail_open else "0",
+                "ACE_LITE_OLLAMA_BASE_URL": str(ollama_base_url).strip()
+                or "http://localhost:11434",
+            }
+        )
 
     return {
         "normalized_name": normalized_name,
         "normalized_root": normalized_root,
         "normalized_skills": normalized_skills,
+        "normalized_config_pack": normalized_config_pack,
         "resolved_user_id": resolved_user_id,
         "env_items": env_items,
         "remove_cmd": remove_cmd,
@@ -152,6 +222,8 @@ def build_codex_mcp_setup_plan(
             "verify": bool(verify),
             "name": normalized_name,
             "memory_enabled": bool(enable_memory),
+            "embeddings_enabled": bool(enable_embeddings),
+            "config_pack": normalized_config_pack,
             "resolved_user_id": resolved_user_id,
             "env": env_items,
         },

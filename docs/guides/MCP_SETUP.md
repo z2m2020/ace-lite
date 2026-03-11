@@ -74,6 +74,26 @@ ace-lite runtime setup-codex-mcp --root . --skills-dir skills --enable-memory --
 ace-lite runtime setup-codex-mcp --root . --skills-dir skills --enable-memory --user-id <your-openmemory-user-id> --apply
 ```
 
+For a higher-performance local setup, point the MCP env at a config pack and enable embeddings in the generated registration:
+
+```bash
+ace-lite runtime setup-codex-mcp \
+  --root . \
+  --skills-dir skills \
+  --enable-memory \
+  --memory-primary rest \
+  --memory-secondary none \
+  --enable-embeddings \
+  --embedding-provider ollama \
+  --embedding-model dengcao/Qwen3-Embedding-4B:Q4_K_M \
+  --embedding-dimension 2560 \
+  --config-pack C:\Users\bdxx2\.codex\ace-lite-mcp-performance.json \
+  --user-id <your-openmemory-user-id> \
+  --dry-run
+```
+
+Recommended: store the config pack under your global Codex home so the same MCP defaults can be reused across repos, for example `C:\Users\<you>\.codex\ace-lite-mcp-performance.json`.
+
 ## Practical example (Windows + OpenMemory REST + Ollama embeddings)
 
 This is a Windows example using:

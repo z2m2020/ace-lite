@@ -651,6 +651,95 @@ def runtime_doctor_mcp_command(
     help="Memory app scope passed to OpenMemory.",
 )
 @click.option(
+    "--config-pack",
+    default="",
+    show_default=True,
+    help="Optional config pack path exported as ACE_LITE_CONFIG_PACK.",
+)
+@click.option(
+    "--enable-embeddings/--disable-embeddings",
+    default=False,
+    show_default=True,
+    help="Enable embedding rerank env vars in the MCP registration.",
+)
+@click.option(
+    "--embedding-provider",
+    type=click.Choice(
+        [
+            "ollama",
+            "sentence_transformers",
+            "bge_m3",
+            "bge_reranker",
+            "hash",
+            "hash_cross",
+            "hash_colbert",
+        ],
+        case_sensitive=False,
+    ),
+    default="ollama",
+    show_default=True,
+    help="Embedding provider when embeddings are enabled.",
+)
+@click.option(
+    "--embedding-model",
+    default="dengcao/Qwen3-Embedding-4B:Q4_K_M",
+    show_default=True,
+    help="Embedding model identifier when embeddings are enabled.",
+)
+@click.option(
+    "--embedding-dimension",
+    default=2560,
+    type=int,
+    show_default=True,
+    help="Embedding dimension for the configured model.",
+)
+@click.option(
+    "--embedding-index-path",
+    default="context-map/embeddings/index.json",
+    show_default=True,
+    help="Embedding index path exported to the MCP env.",
+)
+@click.option(
+    "--embedding-rerank-pool",
+    default=16,
+    type=int,
+    show_default=True,
+    help="Embedding rerank pool size for MCP plans.",
+)
+@click.option(
+    "--embedding-lexical-weight",
+    default=0.55,
+    type=float,
+    show_default=True,
+    help="Lexical weight for embedding rerank fusion.",
+)
+@click.option(
+    "--embedding-semantic-weight",
+    default=0.45,
+    type=float,
+    show_default=True,
+    help="Semantic weight for embedding rerank fusion.",
+)
+@click.option(
+    "--embedding-min-similarity",
+    default=0.05,
+    type=float,
+    show_default=True,
+    help="Minimum similarity threshold for embedding rerank.",
+)
+@click.option(
+    "--embedding-fail-open/--no-embedding-fail-open",
+    default=True,
+    show_default=True,
+    help="Keep planning available when the embedding provider is unavailable.",
+)
+@click.option(
+    "--ollama-base-url",
+    default="http://localhost:11434",
+    show_default=True,
+    help="Ollama base URL for embedding providers that use Ollama.",
+)
+@click.option(
     "--replace/--no-replace",
     default=True,
     show_default=True,
@@ -681,6 +770,18 @@ def runtime_setup_codex_mcp_command(
     rest_base_url: str,
     user_id: str,
     app: str,
+    config_pack: str,
+    enable_embeddings: bool,
+    embedding_provider: str,
+    embedding_model: str,
+    embedding_dimension: int,
+    embedding_index_path: str,
+    embedding_rerank_pool: int,
+    embedding_lexical_weight: float,
+    embedding_semantic_weight: float,
+    embedding_min_similarity: float,
+    embedding_fail_open: bool,
+    ollama_base_url: str,
     replace: bool,
     apply: bool,
     verify: bool,
@@ -698,6 +799,18 @@ def runtime_setup_codex_mcp_command(
         rest_base_url=rest_base_url,
         user_id=user_id,
         app=app,
+        config_pack=config_pack,
+        enable_embeddings=enable_embeddings,
+        embedding_provider=embedding_provider,
+        embedding_model=embedding_model,
+        embedding_dimension=embedding_dimension,
+        embedding_index_path=embedding_index_path,
+        embedding_rerank_pool=embedding_rerank_pool,
+        embedding_lexical_weight=embedding_lexical_weight,
+        embedding_semantic_weight=embedding_semantic_weight,
+        embedding_min_similarity=embedding_min_similarity,
+        embedding_fail_open=embedding_fail_open,
+        ollama_base_url=ollama_base_url,
         replace=replace,
         apply=apply,
         verify=verify,

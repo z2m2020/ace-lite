@@ -308,6 +308,8 @@ def test_cli_runtime_setup_codex_mcp_dry_run_defaults(tmp_path: Path) -> None:
 
 def test_cli_runtime_setup_codex_mcp_dry_run_memory_enabled(tmp_path: Path) -> None:
     (tmp_path / "skills").mkdir(parents=True, exist_ok=True)
+    config_pack = tmp_path / "mcp-pack.json"
+    config_pack.write_text("{}", encoding="utf-8")
 
     runner = CliRunner()
     result = runner.invoke(
@@ -326,6 +328,15 @@ def test_cli_runtime_setup_codex_mcp_dry_run_memory_enabled(tmp_path: Path) -> N
             "rest",
             "--memory-secondary",
             "none",
+            "--enable-embeddings",
+            "--embedding-provider",
+            "ollama",
+            "--embedding-model",
+            "dengcao/Qwen3-Embedding-4B:Q4_K_M",
+            "--embedding-dimension",
+            "2560",
+            "--config-pack",
+            str(config_pack),
             "--user-id",
             "test-user",
             "--dry-run",
@@ -338,11 +349,20 @@ def test_cli_runtime_setup_codex_mcp_dry_run_memory_enabled(tmp_path: Path) -> N
     payload = json.loads(lines[-1])
     assert payload["ok"] is True
     assert payload["memory_enabled"] is True
+    assert payload["embeddings_enabled"] is True
+    assert payload["config_pack"] == str(config_pack.resolve())
     assert payload["resolved_user_id"] == "test-user"
     env_lines = payload.get("env", [])
     assert "ACE_LITE_MEMORY_PRIMARY=rest" in env_lines
     assert "ACE_LITE_MEMORY_SECONDARY=none" in env_lines
     assert "ACE_LITE_USER_ID=test-user" in env_lines
+    assert "ACE_LITE_EMBEDDING_ENABLED=1" in env_lines
+    assert "ACE_LITE_EMBEDDING_PROVIDER=ollama" in env_lines
+    assert (
+        "ACE_LITE_EMBEDDING_MODEL=dengcao/Qwen3-Embedding-4B:Q4_K_M" in env_lines
+    )
+    assert "ACE_LITE_EMBEDDING_DIMENSION=2560" in env_lines
+    assert f"ACE_LITE_CONFIG_PACK={config_pack.resolve()}" in env_lines
 
 
 def test_cli_runtime_setup_codex_mcp_apply_writes_snapshot(
@@ -350,6 +370,8 @@ def test_cli_runtime_setup_codex_mcp_apply_writes_snapshot(
 ) -> None:
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir(parents=True, exist_ok=True)
+    config_pack = tmp_path / "mcp-pack.json"
+    config_pack.write_text("{}", encoding="utf-8")
 
     def _fake_run(command, capture_output, text, check=False, env=None, timeout=None):
         _ = (capture_output, text, check, env, timeout)
@@ -396,6 +418,9 @@ def test_cli_runtime_setup_codex_mcp_apply_writes_snapshot(
             "rest",
             "--memory-secondary",
             "none",
+            "--enable-embeddings",
+            "--config-pack",
+            str(config_pack),
             "--user-id",
             "snapshot-user",
             "--apply",
@@ -413,3 +438,71 @@ def test_cli_runtime_setup_codex_mcp_apply_writes_snapshot(
     env_payload = snapshot_payload.get("env", {})
     assert env_payload.get("ACE_LITE_MEMORY_PRIMARY") == "rest"
     assert env_payload.get("ACE_LITE_USER_ID") == "snapshot-user"
+    assert env_payload.get("ACE_LITE_EMBEDDING_ENABLED") == "1"
+    assert env_payload.get("ACE_LITE_CONFIG_PACK") == str(config_pack.resolve())
+
+
+def test_cli_runtime_setup_codex_mcp_verify_disables_embeddings_when_not_enabled(
+    tmp_path: Path, monkeypatch
+) -> None:
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    captured_env: dict[str, str] = {}
+
+    def _fake_run(command, capture_output, text, check=False, env=None, timeout=None):
+        _ = (capture_output, text, check, env, timeout)
+        if command[:3] == ["codex", "mcp", "get"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="ace-lite\n  enabled: true\n",
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout="ok\n",
+            stderr="",
+        )
+
+    def _fake_self_test(*, root, skills_dir, python_executable, timeout_seconds, env_overrides=None):
+        _ = (root, skills_dir, python_executable, timeout_seconds)
+        captured_env.update(env_overrides or {})
+        return {
+            "ok": True,
+            "memory_primary": "rest",
+            "memory_secondary": "none",
+            "memory_ready": True,
+            "embedding_enabled": False,
+        }
+
+    monkeypatch.setattr(runtime_module.subprocess, "run", _fake_run)
+    monkeypatch.setattr(runtime_module, "_run_mcp_self_test", _fake_self_test)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "setup-codex-mcp",
+            "--name",
+            "ace-lite",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(skills_dir),
+            "--enable-memory",
+            "--memory-primary",
+            "rest",
+            "--memory-secondary",
+            "none",
+            "--user-id",
+            "snapshot-user",
+            "--apply",
+            "--verify",
+        ],
+        env={**_cli_env(tmp_path), "ACE_LITE_EMBEDDING_ENABLED": "1"},
+    )
+
+    assert result.exit_code == 0
+    assert captured_env.get("ACE_LITE_EMBEDDING_ENABLED") == "0"
