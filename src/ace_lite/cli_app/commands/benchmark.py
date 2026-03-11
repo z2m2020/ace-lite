@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -13,11 +14,13 @@ from ace_lite.benchmark.report import write_report_from_json, write_results
 from ace_lite.benchmark.runner import BenchmarkRunner, load_baseline_metrics, load_cases
 from ace_lite.benchmark.scoring import REGRESSION_THRESHOLD_PROFILES
 from ace_lite.cli_app.commands.benchmark_support import (
+    attach_benchmark_runtime_stats_summary,
     build_threshold_overrides,
     resolve_benchmark_run_settings,
     resolve_benchmark_threshold_settings,
     run_benchmark_and_write_outputs,
 )
+from ace_lite.cli_app.runtime_command_support import DEFAULT_RUNTIME_STATS_DB_PATH
 from ace_lite.cli_app.config_resolve import (
     _load_command_config,
     _resolve_shared_plan_config,
@@ -283,6 +286,20 @@ def benchmark_replay_rewards_command(input_path: str, output_dir: str) -> None:
     help="Append-only reward log JSONL path used when reward logging is enabled.",
 )
 @click.option(
+    "--runtime-stats/--no-runtime-stats",
+    "runtime_stats_enabled",
+    default=False,
+    show_default=True,
+    help="Include durable runtime stats snapshot in benchmark artifacts.",
+)
+@click.option(
+    "--runtime-stats-db-path",
+    default=DEFAULT_RUNTIME_STATS_DB_PATH,
+    show_default=True,
+    type=click.Path(path_type=str),
+    help="Durable runtime stats SQLite path used for benchmark export.",
+)
+@click.option(
     "--fail-on-regression/--no-fail-on-regression",
     default=False,
     show_default=True,
@@ -439,6 +456,8 @@ def benchmark_run_command(
     include_case_details: bool,
     reward_log_enabled: bool,
     reward_log_path: str,
+    runtime_stats_enabled: bool,
+    runtime_stats_db_path: str,
     fail_on_regression: bool,
     output_dir: str,
 ) -> None:
@@ -459,6 +478,8 @@ def benchmark_run_command(
         reward_log_enabled=reward_log_enabled,
         reward_log_path=reward_log_path,
         precomputed_skills_routing_enabled=precomputed_skills_routing_enabled,
+        runtime_stats_enabled=runtime_stats_enabled,
+        runtime_stats_db_path=runtime_stats_db_path,
     )
 
     resolved = _resolve_shared_plan_config(
@@ -820,12 +841,16 @@ def benchmark_run_command(
         include_case_details=bool(run_settings["include_case_details"]),
         reward_log_enabled=bool(run_settings["reward_log_enabled"]),
         reward_log_path=str(run_settings["reward_log_path"]),
+        runtime_stats_enabled=bool(run_settings["runtime_stats_enabled"]),
+        runtime_stats_db_path=str(run_settings["runtime_stats_db_path"]),
+        home_path=os.environ.get("HOME") or os.environ.get("USERPROFILE"),
         output_dir=output_dir,
         runner_cls=BenchmarkRunner,
         reward_log_writer_cls=AsyncRewardLogWriter,
         write_results_fn=write_results,
         echo_json_fn=echo_json,
         merge_reward_log_summary_fn=_merge_reward_log_summary,
+        attach_runtime_stats_summary_fn=attach_benchmark_runtime_stats_summary,
     )
 
     regression = results.get("regression", {})

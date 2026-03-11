@@ -25,14 +25,24 @@ from ace_lite.cli_app.runtime_mcp_ops import (
     write_mcp_env_snapshot as _write_mcp_env_snapshot,
 )
 from ace_lite.cli_app.runtime_command_support import (
+    DEFAULT_RUNTIME_STATS_DB_PATH,
     build_codex_mcp_setup_plan,
     evaluate_runtime_memory_state,
     load_runtime_snapshot,
+    load_runtime_stats_summary,
 )
 from ace_lite.cli_app.output import echo_json
 from ace_lite.config import find_git_root, load_layered_config
 from ace_lite.config_models import validate_cli_config
 from ace_lite.runtime import ConfigWatcher, TaskScheduler
+from ace_lite.runtime_settings import RuntimeSettingsManager
+from ace_lite.runtime_settings_store import (
+    DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH,
+    DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH,
+    load_runtime_settings_with_fallback,
+    resolve_user_runtime_settings_last_known_good_path,
+    resolve_user_runtime_settings_path,
+)
 
 
 def _layered_config_paths(*, root: str, config_file: str) -> list[Path]:
@@ -79,6 +89,134 @@ def _runtime_scheduler_section(config: dict[str, Any]) -> dict[str, Any]:
 @click.group("runtime", help="Run service-mode utilities (hot-reload, scheduler).")
 def runtime_group() -> None:
     return None
+
+
+@runtime_group.group("settings", help="Inspect effective runtime settings.")
+def runtime_settings_group() -> None:
+    return None
+
+
+@runtime_settings_group.command("show")
+@click.option("--root", default=".", show_default=True, help="Repository root path.")
+@click.option(
+    "--config-file",
+    default=".ace-lite.yml",
+    show_default=True,
+    help="Config filename in layered lookup.",
+)
+@click.option(
+    "--mcp-name",
+    default="ace-lite",
+    show_default=True,
+    help="MCP server name for loading saved env snapshot.",
+)
+@click.option(
+    "--use-snapshot/--no-use-snapshot",
+    default=True,
+    show_default=True,
+    help="Load env snapshot from context-map/mcp/<name>.env.json when present.",
+)
+@click.option(
+    "--current-path",
+    default=DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH,
+    show_default=True,
+    help="User-scope persisted runtime settings snapshot path.",
+)
+@click.option(
+    "--last-known-good-path",
+    default=DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH,
+    show_default=True,
+    help="User-scope last-known-good runtime settings snapshot path.",
+)
+def runtime_settings_show_command(
+    root: str,
+    config_file: str,
+    mcp_name: str,
+    use_snapshot: bool,
+    current_path: str,
+    last_known_good_path: str,
+) -> None:
+    snapshot_env, snapshot_path = load_runtime_snapshot(
+        root=root,
+        mcp_name=mcp_name,
+        use_snapshot=use_snapshot,
+        snapshot_path_fn=_mcp_env_snapshot_path,
+        load_snapshot_fn=_load_mcp_env_snapshot,
+    )
+    manager = RuntimeSettingsManager()
+    resolved = manager.resolve(
+        root=root,
+        cwd=Path.cwd(),
+        config_file=config_file,
+        mcp_env=dict(os.environ),
+        mcp_snapshot_env=snapshot_env if snapshot_env else None,
+    )
+    resolved_current_path = resolve_user_runtime_settings_path(
+        configured_path=current_path,
+    )
+    resolved_lkg_path = resolve_user_runtime_settings_last_known_good_path(
+        configured_path=last_known_good_path,
+    )
+    persisted_record, persisted_source = load_runtime_settings_with_fallback(
+        current_path=resolved_current_path,
+        last_known_good_path=resolved_lkg_path,
+    )
+    selected_profile = None
+    if isinstance(persisted_record, dict):
+        metadata = persisted_record.get("metadata", {})
+        if isinstance(metadata, dict):
+            selected_profile = metadata.get("selected_profile")
+
+    echo_json(
+        {
+            "ok": True,
+            "event": "runtime_settings_show",
+            "settings": resolved.snapshot,
+            "provenance": resolved.provenance,
+            "fingerprint": resolved.fingerprint,
+            "selected_profile": selected_profile,
+            "persisted_source": persisted_source,
+            "current_path": str(resolved_current_path),
+            "last_known_good_path": str(resolved_lkg_path),
+            "snapshot_loaded": bool(snapshot_env),
+            "snapshot_path": str(snapshot_path),
+            "metadata": resolved.metadata,
+        }
+    )
+
+
+@runtime_group.command("stats")
+@click.option(
+    "--repo",
+    default="",
+    help="Optional repo filter. Defaults to the latest repo in the stats DB.",
+)
+@click.option(
+    "--profile",
+    default="",
+    help="Optional profile filter.",
+)
+@click.option(
+    "--db-path",
+    default=DEFAULT_RUNTIME_STATS_DB_PATH,
+    show_default=True,
+    help="User-scope durable runtime stats SQLite path.",
+)
+def runtime_stats_command(repo: str, profile: str, db_path: str) -> None:
+    echo_json(
+        {
+            "ok": True,
+            "event": "runtime_stats",
+            **load_runtime_stats_summary(
+                db_path=db_path,
+                repo_key=repo,
+                profile_key=profile,
+                home_path=os.environ.get("HOME")
+                or os.environ.get("USERPROFILE")
+                or Path.home(),
+            ),
+        }
+    )
 
 
 @runtime_group.command("watch-config")

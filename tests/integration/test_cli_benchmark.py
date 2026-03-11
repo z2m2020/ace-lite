@@ -116,6 +116,49 @@ def test_cli_benchmark_run_and_report(tmp_path: Path) -> None:
     assert "## Reward Log Summary" in report_path.read_text(encoding="utf-8")
 
 
+def test_cli_benchmark_run_can_export_runtime_stats_snapshot(tmp_path: Path) -> None:
+    _seed_repo(tmp_path)
+    output_dir = tmp_path / "artifacts" / "benchmark" / "latest"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "benchmark",
+            "run",
+            "--cases",
+            str(tmp_path / "benchmark" / "cases" / "default.yaml"),
+            "--repo",
+            "demo",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(tmp_path / "skills"),
+            "--languages",
+            "python",
+            "--memory-primary",
+            "none",
+            "--memory-secondary",
+            "none",
+            "--runtime-stats",
+            "--output",
+            str(output_dir),
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    summary_json = Path(payload["summary_json"])
+    report_md = Path(payload["report_md"])
+    summary_payload = json.loads(summary_json.read_text(encoding="utf-8"))
+    runtime_stats = summary_payload["runtime_stats_summary"]
+    assert runtime_stats["latest_match"]["repo_key"] == "demo"
+    assert runtime_stats["summary"]["session"]["counters"]["invocation_count"] == 1
+    assert runtime_stats["summary"]["all_time"]["counters"]["invocation_count"] == 1
+    assert "## Runtime Stats Summary" in report_md.read_text(encoding="utf-8")
+
+
 def test_cli_benchmark_fail_on_regression(tmp_path: Path) -> None:
     _seed_repo(tmp_path)
     output_dir = tmp_path / "artifacts" / "benchmark" / "latest"

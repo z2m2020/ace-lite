@@ -5,6 +5,8 @@ from typing import Any
 import click
 
 from ace_lite.cli_app.config_resolve import _resolve_from_config
+from ace_lite.cli_app.runtime_command_support import DEFAULT_RUNTIME_STATS_DB_PATH
+from ace_lite.cli_app.runtime_command_support import load_runtime_stats_summary
 from ace_lite.cli_app.params import _to_bool, _to_float, _to_int
 from ace_lite.router_reward_store import DEFAULT_REWARD_LOG_PATH
 
@@ -76,6 +78,8 @@ def resolve_benchmark_run_settings(
     reward_log_enabled: bool,
     reward_log_path: str,
     precomputed_skills_routing_enabled: bool,
+    runtime_stats_enabled: bool,
+    runtime_stats_db_path: str,
 ) -> dict[str, Any]:
     return {
         "warmup_runs": _resolve_from_config(
@@ -135,6 +139,29 @@ def resolve_benchmark_run_settings(
             ],
             transform=_to_bool,
         ),
+        "runtime_stats_enabled": _resolve_from_config(
+            ctx=ctx,
+            param_name="runtime_stats_enabled",
+            current=runtime_stats_enabled,
+            config=config,
+            paths=[
+                ("benchmark", "runtime_stats", "enabled"),
+                ("benchmark", "runtime_stats_enabled"),
+            ],
+            transform=_to_bool,
+        ),
+        "runtime_stats_db_path": _resolve_from_config(
+            ctx=ctx,
+            param_name="runtime_stats_db_path",
+            current=runtime_stats_db_path,
+            config=config,
+            paths=[
+                ("benchmark", "runtime_stats", "db_path"),
+                ("benchmark", "runtime_stats_db_path"),
+            ],
+            transform=lambda value: str(value or "").strip()
+            or DEFAULT_RUNTIME_STATS_DB_PATH,
+        ),
     }
 
 
@@ -144,6 +171,31 @@ def build_threshold_overrides(settings: dict[str, Any]) -> dict[str, float]:
         for key, value in settings.items()
         if key != "benchmark_threshold_profile" and value is not None
     }
+
+
+def attach_benchmark_runtime_stats_summary(
+    *,
+    results: dict[str, Any],
+    orchestrator: Any,
+    repo: str,
+    runtime_stats_enabled: bool,
+    runtime_stats_db_path: str,
+    home_path: str | None,
+) -> dict[str, Any]:
+    if not runtime_stats_enabled:
+        return results
+    session_id = str(
+        getattr(orchestrator, "_durable_stats_session_id", "") or ""
+    ).strip()
+    payload = load_runtime_stats_summary(
+        db_path=runtime_stats_db_path,
+        session_id=session_id or None,
+        repo_key=repo,
+        home_path=home_path,
+    )
+    updated = dict(results)
+    updated["runtime_stats_summary"] = payload
+    return updated
 
 
 def run_benchmark_and_write_outputs(
@@ -163,12 +215,16 @@ def run_benchmark_and_write_outputs(
     include_case_details: bool,
     reward_log_enabled: bool,
     reward_log_path: str,
+    runtime_stats_enabled: bool,
+    runtime_stats_db_path: str,
+    home_path: str | None,
     output_dir: str,
     runner_cls: Any,
     reward_log_writer_cls: Any,
     write_results_fn: Any,
     echo_json_fn: Any,
     merge_reward_log_summary_fn: Any,
+    attach_runtime_stats_summary_fn: Any,
 ) -> dict[str, Any]:
     reward_log_writer: Any = None
     reward_log_init_error = ""
@@ -213,12 +269,21 @@ def run_benchmark_and_write_outputs(
         else:
             if isinstance(reward_log_summary, dict):
                 merge_reward_log_summary_fn(reward_log_summary, close_stats)
+    results = attach_runtime_stats_summary_fn(
+        results=results,
+        orchestrator=orchestrator,
+        repo=repo,
+        runtime_stats_enabled=bool(runtime_stats_enabled),
+        runtime_stats_db_path=str(runtime_stats_db_path),
+        home_path=home_path,
+    )
     outputs = write_results_fn(results, output_dir=output_dir)
     echo_json_fn(outputs)
     return results
 
 
 __all__ = [
+    "attach_benchmark_runtime_stats_summary",
     "build_threshold_overrides",
     "resolve_benchmark_run_settings",
     "resolve_benchmark_threshold_settings",

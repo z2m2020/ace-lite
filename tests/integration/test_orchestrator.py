@@ -14,6 +14,7 @@ from ace_lite.memory import OpenMemoryMemoryProvider
 from ace_lite.orchestrator import AceOrchestrator
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.rankers.bm25 import rank_candidates_bm25_two_stage
+from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.schema import SCHEMA_VERSION
 
 
@@ -198,6 +199,49 @@ def test_orchestrator_pipeline_and_injected_client(tmp_path: Path, fake_skill_ma
             "limit": 4,
         }
     ]
+
+
+def test_orchestrator_plan_records_durable_runtime_stats(
+    tmp_path: Path,
+    fake_skill_manifest: list[dict[str, Any]],
+) -> None:
+    _seed_repo(tmp_path)
+    db_path = tmp_path / "user-runtime" / "runtime-stats.db"
+    config = OrchestratorConfig(
+        skills={"manifest": fake_skill_manifest},
+        index={
+            "languages": ["python"],
+            "cache_path": tmp_path / "context-map" / "index.json",
+        },
+        repomap={"enabled": False},
+    )
+    orchestrator = AceOrchestrator(
+        config=config,
+        durable_stats_store_factory=lambda: DurableStatsStore(db_path=db_path),
+    )
+
+    payload = orchestrator.plan(
+        query="record durable runtime stats for auth",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+    )
+
+    durable_stats = payload["observability"]["durable_stats"]
+    assert durable_stats["enabled"] is True
+    assert durable_stats["recorded"] is True
+
+    store = DurableStatsStore(db_path=db_path)
+    all_time = store.read_scope(scope_kind="all_time", scope_key="all")
+    session = store.read_scope(
+        scope_kind="session",
+        scope_key=str(durable_stats["session_id"]),
+    )
+
+    assert all_time is not None
+    assert session is not None
+    assert all_time.to_payload()["counters"]["invocation_count"] == 1
+    assert session.to_payload()["counters"]["invocation_count"] == 1
+    assert "total" in [item["stage_name"] for item in session.to_payload()["stage_latencies"]]
 
 
 def test_orchestrator_plan_replay_cache_hits_on_second_run(

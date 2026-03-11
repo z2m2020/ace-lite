@@ -15,6 +15,7 @@ OPTIONAL_SUMMARY_MAPPING_KEYS = (
     "stage_latency_summary",
     "slo_budget_summary",
     "reward_log_summary",
+    "runtime_stats_summary",
 )
 
 

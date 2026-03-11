@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, Callable
+from uuid import uuid4
 
 from ace_lite.conventions import load_conventions
 from ace_lite.exceptions import StageContractError
@@ -73,6 +75,8 @@ from ace_lite.token_estimator import (
     estimate_tokens,
 )
 from ace_lite.tracing import export_stage_trace_jsonl, export_stage_trace_otlp
+from ace_lite.runtime_stats import RuntimeInvocationStats
+from ace_lite.runtime_stats_store import DurableStatsStore
 
 logger = logging.getLogger(__name__)
 
@@ -110,9 +114,14 @@ class AceOrchestrator:
         memory_provider: MemoryProvider | None = None,
         config: OrchestratorConfig | None = None,
         plugin_loader: PluginLoader | None = None,
+        durable_stats_store_factory: Callable[[], Any] | None = None,
     ) -> None:
         self._config = config or OrchestratorConfig()
         self._memory_provider = memory_provider or NullMemoryProvider()
+        self._durable_stats_store_factory = (
+            durable_stats_store_factory or DurableStatsStore
+        )
+        self._durable_stats_session_id = f"session-{uuid4().hex[:12]}"
 
         self._conventions_files = (
             list(self._config.index.conventions_files)
@@ -261,6 +270,18 @@ class AceOrchestrator:
         )
         if trace_export.get("enabled"):
             payload["observability"]["trace_export"] = trace_export
+
+        payload["observability"]["durable_stats"] = self._record_durable_stats(
+            query=query,
+            repo=repo,
+            root=root_path,
+            started_at=started_at,
+            total_ms=total_ms,
+            stage_metrics=stage_metrics,
+            contract_error=contract_error,
+            replay_cache_info=replay_cache_info,
+            trace_export=trace_export,
+        )
 
         return payload
 
@@ -696,6 +717,147 @@ class AceOrchestrator:
         if not self._config.plugins.enabled:
             return HookBus(), []
         return self._plugin_loader.load_hooks(repo_root=root)
+
+    def _record_durable_stats(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        started_at: datetime,
+        total_ms: float,
+        stage_metrics: list[StageMetric],
+        contract_error: StageContractError | None,
+        replay_cache_info: dict[str, Any] | None,
+        trace_export: dict[str, Any],
+    ) -> dict[str, Any]:
+        invocation_seed = "|".join(
+            (
+                repo,
+                root,
+                query,
+                started_at.astimezone(timezone.utc).isoformat(),
+            )
+        )
+        invocation_id = hashlib.sha256(invocation_seed.encode("utf-8")).hexdigest()[:24]
+        degraded_reason_codes = self._collect_durable_stats_reasons(
+            stage_metrics=stage_metrics,
+            contract_error=contract_error,
+            replay_cache_info=replay_cache_info,
+            trace_export=trace_export,
+        )
+        status = "succeeded"
+        if contract_error is not None:
+            status = "failed"
+        elif degraded_reason_codes:
+            status = "degraded"
+        try:
+            store = self._durable_stats_store_factory()
+            store.record_invocation(
+                RuntimeInvocationStats(
+                    invocation_id=invocation_id,
+                    session_id=self._durable_stats_session_id,
+                    repo_key=repo,
+                    status=status,
+                    total_latency_ms=round(float(total_ms), 6),
+                    started_at=started_at.astimezone(timezone.utc).isoformat(),
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                    contract_error_code=contract_error.error_code
+                    if contract_error is not None
+                    else "",
+                    degraded_reason_codes=tuple(degraded_reason_codes),
+                    stage_latencies=tuple(
+                        {"stage_name": item.stage, "elapsed_ms": item.elapsed_ms}
+                        for item in stage_metrics
+                    )
+                    + (
+                        {"stage_name": "total", "elapsed_ms": round(float(total_ms), 6)},
+                    ),
+                    plan_replay_hit=bool((replay_cache_info or {}).get("hit", False)),
+                    plan_replay_safe_hit=bool(
+                        (replay_cache_info or {}).get("safe_hit", False)
+                    ),
+                    plan_replay_store_written=bool(
+                        (replay_cache_info or {}).get("stored", False)
+                    ),
+                    trace_exported=bool(trace_export.get("exported", False)),
+                    trace_export_failed=bool(
+                        trace_export.get("enabled", False)
+                        and not trace_export.get("exported", False)
+                    ),
+                )
+            )
+            return {
+                "enabled": True,
+                "recorded": True,
+                "session_id": self._durable_stats_session_id,
+                "invocation_id": invocation_id,
+                "status": status,
+                "db_path": str(getattr(store, "db_path", "")),
+            }
+        except Exception as exc:
+            logger.warning(
+                "durable.stats.record.error",
+                extra={"repo": repo, "error": str(exc)},
+            )
+            return {
+                "enabled": True,
+                "recorded": False,
+                "session_id": self._durable_stats_session_id,
+                "invocation_id": invocation_id,
+                "status": status,
+                "error": str(exc),
+            }
+
+    @staticmethod
+    def _collect_durable_stats_reasons(
+        *,
+        stage_metrics: list[StageMetric],
+        contract_error: StageContractError | None,
+        replay_cache_info: dict[str, Any] | None,
+        trace_export: dict[str, Any],
+    ) -> list[str]:
+        reasons: set[str] = set()
+        if contract_error is not None:
+            reasons.add("contract_error")
+        replay_reason = str((replay_cache_info or {}).get("reason") or "").strip().lower()
+        if replay_reason == "invalid_cached_payload":
+            reasons.add("plan_replay_invalid_cached_payload")
+        if replay_reason == "store_failed":
+            reasons.add("plan_replay_store_failed")
+        if trace_export.get("enabled", False) and not trace_export.get("exported", False):
+            reasons.add("trace_export_failed")
+        for metric in stage_metrics:
+            tags = metric.tags if isinstance(metric.tags, dict) else {}
+            if metric.stage == "memory":
+                if bool(tags.get("fallback", False)):
+                    reasons.add("memory_fallback")
+                if bool(tags.get("memory_namespace_fallback", False)):
+                    reasons.add("memory_namespace_fallback")
+            if metric.stage == "index":
+                if bool(tags.get("candidate_ranker_fallback", False)):
+                    reasons.add("candidate_ranker_fallback")
+                if bool(tags.get("embedding_time_budget_exceeded", False)):
+                    reasons.add("embedding_time_budget_exceeded")
+                if bool(tags.get("embedding_fallback", False)):
+                    reasons.add("embedding_fallback")
+                if bool(tags.get("chunk_semantic_time_budget_exceeded", False)):
+                    reasons.add("chunk_semantic_time_budget_exceeded")
+                if bool(tags.get("chunk_semantic_fallback", False)):
+                    reasons.add("chunk_semantic_fallback")
+                if bool(tags.get("parallel_docs_timed_out", False)):
+                    reasons.add("parallel_docs_timeout")
+                if bool(tags.get("parallel_worktree_timed_out", False)):
+                    reasons.add("parallel_worktree_timeout")
+                if bool(tags.get("router_fallback_applied", False)):
+                    reasons.add("router_fallback_applied")
+            if metric.stage == "augment" and bool(tags.get("xref_budget_exhausted", False)):
+                reasons.add("xref_budget_exhausted")
+            if int(tags.get("slot_policy_blocked", 0) or 0) > 0:
+                reasons.add("plugin_policy_blocked")
+            if int(tags.get("slot_policy_warn", 0) or 0) > 0:
+                reasons.add("plugin_policy_warn")
+        return sorted(reasons)
 
     def _estimate_tokens(self, text: str) -> int:
         return estimate_tokens(text, model=self._tokenizer_model)

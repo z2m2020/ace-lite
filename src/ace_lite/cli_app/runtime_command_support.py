@@ -1,7 +1,22 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Any
+
+from ace_lite.runtime_db import connect_runtime_db
+from ace_lite.runtime_paths import DEFAULT_USER_RUNTIME_DB_PATH
+from ace_lite.runtime_paths import resolve_user_runtime_db_path
+from ace_lite.runtime_stats import RuntimeScopeRollup
+from ace_lite.runtime_stats_schema import (
+    RUNTIME_STATS_ALL_TIME_SCOPE_KEY,
+    RUNTIME_STATS_INVOCATIONS_TABLE,
+    build_runtime_stats_migration_bootstrap,
+)
+from ace_lite.runtime_stats_store import DurableStatsStore
+
+
+DEFAULT_RUNTIME_STATS_DB_PATH = DEFAULT_USER_RUNTIME_DB_PATH
 
 
 def load_runtime_snapshot(
@@ -230,8 +245,171 @@ def build_codex_mcp_setup_plan(
     }
 
 
+def resolve_user_runtime_stats_path(
+    *,
+    home_path: str | Path | None = None,
+    configured_path: str | Path | None = None,
+) -> Path:
+    base = Path(home_path).expanduser() if home_path is not None else Path.home()
+    resolved = resolve_user_runtime_db_path(
+        home_path=str(base),
+        configured_path=configured_path or DEFAULT_RUNTIME_STATS_DB_PATH,
+    )
+    return Path(str(resolved)).resolve()
+
+
+def _normalize_filter_value(value: str | None) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+def _summarize_scope(scope: RuntimeScopeRollup | None) -> dict[str, Any] | None:
+    if scope is None:
+        return None
+    payload = scope.to_payload()
+    counters = payload.get("counters", {})
+    invocation_count = max(0, int(counters.get("invocation_count", 0) or 0))
+    latency = dict(payload.get("latency", {}))
+    latency_sum = float(latency.get("latency_ms_sum", 0.0) or 0.0)
+    latency["latency_ms_avg"] = (
+        round(latency_sum / invocation_count, 6) if invocation_count else 0.0
+    )
+    payload["latency"] = latency
+    payload["stage_latencies"] = [
+        {
+            **dict(item),
+            "latency_ms_avg": (
+                round(
+                    float(item.get("latency_ms_sum", 0.0) or 0.0)
+                    / max(1, int(item.get("invocation_count", 0) or 0)),
+                    6,
+                )
+                if int(item.get("invocation_count", 0) or 0) > 0
+                else 0.0
+            ),
+        }
+        for item in payload.get("stage_latencies", [])
+    ]
+    return payload
+
+
+def _connect_runtime_stats_db(db_path: Path) -> Any:
+    return connect_runtime_db(
+        db_path=db_path,
+        row_factory=sqlite3.Row,
+        migration_bootstrap=build_runtime_stats_migration_bootstrap(),
+    )
+
+
+def load_latest_runtime_stats_match(
+    *,
+    db_path: str | Path,
+    session_id: str | None = None,
+    repo_key: str | None = None,
+    profile_key: str | None = None,
+) -> dict[str, Any] | None:
+    resolved_path = Path(db_path).resolve()
+    normalized_session = _normalize_filter_value(session_id)
+    normalized_repo = _normalize_filter_value(repo_key)
+    normalized_profile = _normalize_filter_value(profile_key)
+    conn = _connect_runtime_stats_db(resolved_path)
+    try:
+        clauses: list[str] = []
+        params: list[str] = []
+        if normalized_session is not None:
+            clauses.append("session_id = ?")
+            params.append(normalized_session)
+        if normalized_repo is not None:
+            clauses.append("repo_key = ?")
+            params.append(normalized_repo)
+        if normalized_profile is not None:
+            clauses.append("profile_key = ?")
+            params.append(normalized_profile)
+        sql = (
+            f"SELECT invocation_id, session_id, repo_key, profile_key, finished_at "
+            f"FROM {RUNTIME_STATS_INVOCATIONS_TABLE}"
+        )
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY finished_at DESC, invocation_id DESC LIMIT 1"
+        row = conn.execute(sql, tuple(params)).fetchone()
+        if row is None:
+            return None
+        return {
+            "invocation_id": str(row["invocation_id"]),
+            "session_id": str(row["session_id"]),
+            "repo_key": str(row["repo_key"]),
+            "profile_key": str(row["profile_key"]),
+            "finished_at": str(row["finished_at"]),
+        }
+    finally:
+        conn.close()
+
+
+def load_runtime_stats_summary(
+    *,
+    db_path: str | Path | None = None,
+    session_id: str | None = None,
+    repo_key: str | None = None,
+    profile_key: str | None = None,
+    home_path: str | Path | None = None,
+) -> dict[str, Any]:
+    resolved_path = resolve_user_runtime_stats_path(
+        home_path=home_path,
+        configured_path=db_path or DEFAULT_RUNTIME_STATS_DB_PATH,
+    )
+    normalized_repo = _normalize_filter_value(repo_key)
+    normalized_profile = _normalize_filter_value(profile_key)
+    store = DurableStatsStore(db_path=resolved_path)
+    latest_match = load_latest_runtime_stats_match(
+        db_path=resolved_path,
+        session_id=session_id,
+        repo_key=normalized_repo,
+        profile_key=normalized_profile,
+    )
+    scope_map: dict[str, dict[str, Any] | None] = {
+        "session": None,
+        "all_time": _summarize_scope(
+            store.read_scope(
+                scope_kind="all_time",
+                scope_key=RUNTIME_STATS_ALL_TIME_SCOPE_KEY,
+            )
+        ),
+        "repo": None,
+        "profile": None,
+        "repo_profile": None,
+    }
+    if latest_match is not None:
+        snapshot = store.read_snapshot(
+            session_id=str(latest_match["session_id"]),
+            repo_key=str(latest_match["repo_key"]),
+            profile_key=str(latest_match["profile_key"]) or None,
+        )
+        for scope in snapshot.scopes:
+            scope_map[scope.scope_kind] = _summarize_scope(scope)
+    scopes = [
+        scope_map[name]
+        for name in ("session", "all_time", "repo", "profile", "repo_profile")
+        if scope_map[name] is not None
+    ]
+    return {
+        "db_path": str(resolved_path),
+        "filters": {
+            "repo": normalized_repo,
+            "profile": normalized_profile,
+        },
+        "latest_match": latest_match,
+        "summary": scope_map,
+        "scopes": scopes,
+    }
+
+
 __all__ = [
     "build_codex_mcp_setup_plan",
+    "DEFAULT_RUNTIME_STATS_DB_PATH",
     "evaluate_runtime_memory_state",
+    "load_latest_runtime_stats_match",
     "load_runtime_snapshot",
+    "load_runtime_stats_summary",
+    "resolve_user_runtime_stats_path",
 ]

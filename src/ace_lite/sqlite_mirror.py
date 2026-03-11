@@ -8,6 +8,8 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
+from ace_lite.runtime_db import connect_runtime_db
+
 try:  # pragma: no cover - sqlite3 may be unavailable in minimal runtimes
     import sqlite3
 except Exception:  # pragma: no cover
@@ -51,10 +53,10 @@ def _connect(db_path: Path) -> Any:
     if sqlite3 is None:
         raise RuntimeError("sqlite3_unavailable")
 
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    return conn
+    return connect_runtime_db(
+        db_path=db_path,
+        row_factory=sqlite3.Row,
+    )
 
 
 def _ensure_meta_table(conn: Any) -> None:

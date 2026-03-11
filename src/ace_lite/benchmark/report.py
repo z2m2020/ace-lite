@@ -338,6 +338,49 @@ def _append_comparison_lane_summary(lines: list[str], results: dict[str, Any]) -
     lines.append("")
 
 
+def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> None:
+    summary_raw = results.get("runtime_stats_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    latest_raw = summary.get("latest_match")
+    latest: dict[str, Any] = latest_raw if isinstance(latest_raw, dict) else {}
+    scopes_raw = summary.get("summary")
+    scopes: dict[str, Any] = scopes_raw if isinstance(scopes_raw, dict) else {}
+
+    lines.append("## Runtime Stats Summary")
+    lines.append("")
+    lines.append(f"- DB path: {summary.get('db_path', '')}")
+    if latest:
+        lines.append(f"- Latest session: {latest.get('session_id', '')}")
+        lines.append(f"- Latest repo: {latest.get('repo_key', '')}")
+        profile = str(latest.get("profile_key") or "").strip()
+        lines.append(f"- Latest profile: {profile or '(none)'}")
+        lines.append(f"- Latest finished_at: {latest.get('finished_at', '')}")
+    else:
+        lines.append("- Latest match: (none)")
+    lines.append("")
+    lines.append("| Scope | Invocations | Success | Degraded | Failed | Avg Latency ms |")
+    lines.append("| --- | ---: | ---: | ---: | ---: | ---: |")
+    for scope_name in ("session", "all_time", "repo", "profile", "repo_profile"):
+        item_raw = scopes.get(scope_name)
+        item: dict[str, Any] = item_raw if isinstance(item_raw, dict) else {}
+        if not item:
+            continue
+        counters = item.get("counters", {}) if isinstance(item.get("counters"), dict) else {}
+        latency = item.get("latency", {}) if isinstance(item.get("latency"), dict) else {}
+        lines.append(
+            "| "
+            f"{scope_name} | {int(counters.get('invocation_count', 0) or 0)}"
+            f" | {int(counters.get('success_count', 0) or 0)}"
+            f" | {int(counters.get('degraded_count', 0) or 0)}"
+            f" | {int(counters.get('failure_count', 0) or 0)}"
+            f" | {float(latency.get('latency_ms_avg', 0.0) or 0.0):.2f} |"
+        )
+    lines.append("")
+
+
 def _append_evidence_insufficiency_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
@@ -942,6 +985,7 @@ def build_report_markdown(results: dict[str, Any]) -> str:
 
     _append_adaptive_router_observability_summary(lines, results)
     _append_reward_log_summary(lines, results)
+    _append_runtime_stats_summary(lines, results)
 
     baseline_metrics_raw = results.get("baseline_metrics")
     baseline_metrics = (
