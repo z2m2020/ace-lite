@@ -69,9 +69,9 @@ def test_cli_plan_timeout_returns_fallback_payload(tmp_path: Path, monkeypatch) 
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
-    assert payload["schema_version"] == "3.2"
+    assert payload["schema_version"] == "3.3"
     assert payload["observability"]["error"]["type"] == "plan_timeout"
     assert payload["observability"]["error"]["fallback_mode"] == "plan_quick"
     assert payload["index"]["candidate_files"][0]["path"] == "src/sample.py"
     assert payload["source_plan"]["steps"] == ["Inspect candidate files."]
-
+    assert payload["validation"]["reason"] == "disabled"

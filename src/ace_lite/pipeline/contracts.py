@@ -14,6 +14,7 @@ def validate_stage_output(stage_name: str, output: Any) -> None:
         "augment",
         "skills",
         "source_plan",
+        "validation",
     }:
         return
 
@@ -38,6 +39,8 @@ def validate_stage_output(stage_name: str, output: Any) -> None:
         _validate_skills(output)
     elif normalized == "source_plan":
         _validate_source_plan(output)
+    elif normalized == "validation":
+        _validate_validation(output)
 
 
 def _require_key(output: dict[str, Any], key: str, *, stage: str) -> Any:
@@ -216,6 +219,21 @@ def _validate_source_plan(output: dict[str, Any]) -> None:
     _require_str(output, "policy_version", stage=stage)
     _require_list(output, "steps", stage=stage)
     _require_dict(output, "writeback_template", stage=stage)
+
+
+def _validate_validation(output: dict[str, Any]) -> None:
+    stage = "validation"
+    _require_bool(output, "enabled", stage=stage)
+    _require_str(output, "reason", stage=stage)
+    _require_dict(output, "sandbox", stage=stage)
+    _require_list(output, "diagnostics", stage=stage)
+    _require_number(output, "diagnostic_count", stage=stage)
+    _require_bool(output, "xref_enabled", stage=stage)
+    _require_dict(output, "xref", stage=stage)
+    _require_dict(output, "result", stage=stage)
+    _require_bool(output, "patch_artifact_present", stage=stage)
+    _require_str(output, "policy_name", stage=stage)
+    _require_str(output, "policy_version", stage=stage)
 
 
 __all__ = ["validate_stage_output"]

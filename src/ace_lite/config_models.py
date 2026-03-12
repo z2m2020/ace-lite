@@ -718,6 +718,13 @@ class SharedPlanConfig(_StrictModel):
     lsp_xref_commands: dict[str, Any] | list[Any] | str | None = None
     lsp: LspConfig | None = None
 
+    validation_enabled: bool | None = None
+    validation_include_xref: bool | None = None
+    validation_top_n: int | None = None
+    validation_xref_top_n: int | None = None
+    validation_sandbox_timeout_seconds: float | None = None
+    validation: dict[str, Any] | None = None
+
     memory_disclosure_mode: str | None = None
     memory_preview_max_chars: int | None = None
     memory_strategy: str | None = None

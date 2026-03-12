@@ -171,7 +171,15 @@ def test_orchestrator_pipeline_and_injected_client(tmp_path: Path, fake_skill_ma
     )
 
     assert payload["schema_version"] == SCHEMA_VERSION
-    assert payload["pipeline_order"] == ["memory", "index", "repomap", "augment", "skills", "source_plan"]
+    assert payload["pipeline_order"] == [
+        "memory",
+        "index",
+        "repomap",
+        "augment",
+        "skills",
+        "source_plan",
+        "validation",
+    ]
     assert payload["memory"]["count"] == 1
     assert payload["memory"]["channel_used"] == "mcp"
     assert "docs/design/ORCHESTRATOR_DESIGN.md" in payload["index"]["targets"]
@@ -185,8 +193,10 @@ def test_orchestrator_pipeline_and_injected_client(tmp_path: Path, fake_skill_ma
     assert payload["skills"]["metadata_only_routing"] is True
     assert payload["skills"]["route_latency_ms"] >= 0.0
     assert payload["skills"]["selected"][0]["name"] == "mem0-codex-playbook"
+    assert payload["validation"]["enabled"] is False
+    assert payload["validation"]["reason"] == "disabled"
     assert isinstance(payload["observability"]["stage_metrics"], list)
-    assert len(payload["observability"]["stage_metrics"]) == 6
+    assert len(payload["observability"]["stage_metrics"]) == 7
     first_stage = payload["observability"]["stage_metrics"][0]
     assert "tags" in first_stage
     assert isinstance(first_stage["tags"], dict)
@@ -423,8 +433,8 @@ def test_orchestrator_plan_replay_cache_hits_on_second_run(
     assert first["repomap"] == second["repomap"]
     assert first["skills"]["selected"] == second["skills"]["selected"]
     assert first["skills"]["routing_source"] == second["skills"]["routing_source"]
-    assert len(second["observability"]["stage_metrics"]) == 6
-    assert second["observability"]["stage_metrics"][-1]["stage"] == "source_plan"
+    assert len(second["observability"]["stage_metrics"]) == 7
+    assert second["observability"]["stage_metrics"][-1]["stage"] == "validation"
 
 
 def test_orchestrator_plan_replay_cache_invalidates_when_budget_changes(
@@ -732,7 +742,15 @@ def test_cli_plan_outputs_json(tmp_path: Path, fake_skill_manifest: list[dict[st
     payload = json.loads(result.output)
     assert payload["query"] == "draft auth plan"
     assert payload["repo"] == "ace-lite-engine"
-    assert payload["pipeline_order"] == ["memory", "index", "repomap", "augment", "skills", "source_plan"]
+    assert payload["pipeline_order"] == [
+        "memory",
+        "index",
+        "repomap",
+        "augment",
+        "skills",
+        "source_plan",
+        "validation",
+    ]
     assert payload["memory"]["channel_used"] == "none"
     assert payload["augment"]["enabled"] is False
     assert "source_plan" in payload

@@ -41,7 +41,8 @@ def test_build_plan_timeout_fallback_payload_is_schema_compatible(tmp_path) -> N
         debug_dump_path=None,
     )
 
-    assert payload["schema_version"] == "3.2"
+    assert payload["schema_version"] == "3.3"
     assert payload["observability"]["error"]["type"] == "plan_timeout"
     assert payload["observability"]["error"]["fallback_mode"] == "plan_quick"
-
+    assert payload["validation"]["enabled"] is False
+    assert payload["validation"]["reason"] == "disabled"

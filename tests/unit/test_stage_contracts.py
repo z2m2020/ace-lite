@@ -126,6 +126,56 @@ def test_validate_stage_output_accepts_minimal_valid_payloads() -> None:
         },
     )
 
+    validate_stage_output(
+        "validation",
+        {
+            "enabled": False,
+            "reason": "disabled",
+            "sandbox": {
+                "enabled": False,
+                "sandbox_root": "",
+                "patch_applied": False,
+                "cleanup_ok": False,
+                "restore_ok": False,
+                "apply_result": {},
+            },
+            "diagnostics": [],
+            "diagnostic_count": 0,
+            "xref_enabled": False,
+            "xref": {},
+            "result": {
+                "schema_version": "validation_result_v1",
+                "syntax": {"ok": True, "issues": [], "issue_count": 0},
+                "type": {"ok": True, "issues": [], "issue_count": 0},
+                "tests": {
+                    "ok": True,
+                    "issues": [],
+                    "issue_count": 0,
+                    "selected": [],
+                    "executed": [],
+                },
+                "environment": {
+                    "ok": True,
+                    "sandboxed": False,
+                    "runner": "disabled",
+                    "artifacts": [],
+                    "degraded_reasons": [],
+                },
+                "summary": {
+                    "ok": True,
+                    "status": "skipped",
+                    "issue_count": 0,
+                    "replay_key": "",
+                    "artifact_refs": [],
+                    "comparison_key": "abc123",
+                },
+            },
+            "patch_artifact_present": False,
+            "policy_name": "general",
+            "policy_version": "v1",
+        },
+    )
+
 
 def test_validate_stage_output_missing_key_has_stable_code_and_reason() -> None:
     with pytest.raises(StageContractError) as exc_info:

@@ -46,6 +46,7 @@ from ace_lite.pipeline.stages.memory import run_memory
 from ace_lite.pipeline.stages.repomap import run_repomap
 from ace_lite.pipeline.stages.skills import route_skills, run_skills
 from ace_lite.pipeline.stages.source_plan import run_source_plan
+from ace_lite.pipeline.stages.validation import run_validation_stage
 from ace_lite.pipeline.types import StageContext, StageMetric
 from ace_lite.plugins.loader import PluginLoader
 from ace_lite.profile_store import ProfileStore
@@ -69,12 +70,13 @@ from ace_lite.token_estimator import (
 )
 from ace_lite.tracing import export_stage_trace_jsonl, export_stage_trace_otlp
 from ace_lite.runtime_stats import RuntimeInvocationStats
+from ace_lite.validation.result import build_validation_result_v1
 
 logger = logging.getLogger(__name__)
 
 
 class AceOrchestrator:
-    PIPELINE_ORDER = ("memory", "index", "repomap", "augment", "skills", "source_plan")
+    PIPELINE_ORDER = ("memory", "index", "repomap", "augment", "skills", "source_plan", "validation")
     CANDIDATE_RANKERS = ("heuristic", "bm25_lite", "hybrid_re2", "rrf_hybrid")
     REMOTE_SLOT_ALLOWLIST = ("observability.mcp_plugins",)
     PLAN_REPLAY_STAGE = "source_plan"
@@ -215,6 +217,15 @@ class AceOrchestrator:
             stage_metrics=stage_metrics,
             contract_error=contract_error,
         )
+        if contract_error is None:
+            contract_error = self._execute_stage(
+                stage_name="validation",
+                repo=repo,
+                ctx=ctx,
+                registry=registry,
+                hook_bus=hook_bus,
+                stage_metrics=stage_metrics,
+            )
 
         total_ms = (perf_counter() - started) * 1000.0
 
@@ -286,6 +297,7 @@ class AceOrchestrator:
         registry.register("augment", lambda ctx: self._run_augment(ctx=ctx))
         registry.register("skills", lambda ctx: self._run_skills(ctx=ctx))
         registry.register("source_plan", lambda ctx: self._run_source_plan(ctx=ctx))
+        registry.register("validation", lambda ctx: self._run_validation(ctx=ctx))
         return registry
 
     def _execute_stage(
@@ -400,6 +412,12 @@ class AceOrchestrator:
             "augment": ctx.state.get("augment", {}),
             "skills": ctx.state.get("skills", {}),
             "source_plan": ctx.state.get("source_plan", {}),
+            "validation": (
+                ctx.state.get("validation", {})
+                if isinstance(ctx.state.get("validation"), dict)
+                and ctx.state.get("validation")
+                else self._default_validation_payload()
+            ),
             "observability": observability,
         }
 
@@ -417,6 +435,41 @@ class AceOrchestrator:
             )
 
         return payload
+
+    def _default_validation_payload(self) -> dict[str, Any]:
+        return {
+            "enabled": False,
+            "reason": "disabled",
+            "sandbox": {
+                "enabled": False,
+                "sandbox_root": "",
+                "patch_applied": False,
+                "cleanup_ok": False,
+                "restore_ok": False,
+                "apply_result": {},
+            },
+            "diagnostics": [],
+            "diagnostic_count": 0,
+            "xref_enabled": False,
+            "xref": {
+                "count": 0,
+                "results": [],
+                "errors": [],
+                "budget_exhausted": False,
+                "elapsed_ms": 0.0,
+                "time_budget_ms": 0,
+            },
+            "result": build_validation_result_v1(
+                selected_tests=[],
+                sandboxed=False,
+                runner="disabled",
+                replay_key="",
+                status="skipped",
+            ).as_dict(),
+            "patch_artifact_present": False,
+            "policy_name": "general",
+            "policy_version": str(self._config.retrieval.policy_version),
+        }
 
     def _resolve_plan_replay_cache_path(self, *, root: str) -> Path:
         configured = str(self._config.plan_replay_cache.cache_path or "").strip()
@@ -1196,6 +1249,41 @@ class AceOrchestrator:
             chunk_token_budget=cfg.chunking.token_budget,
             chunk_disclosure=cfg.chunking.disclosure,
             policy_version=cfg.retrieval.policy_version,
+        )
+
+    def _run_validation(self, *, ctx: StageContext) -> dict[str, Any]:
+        cfg = self._config
+        policy = (
+            ctx.state.get("__policy", {})
+            if isinstance(ctx.state.get("__policy"), dict)
+            else {}
+        )
+        return run_validation_stage(
+            root=ctx.root,
+            query=ctx.query,
+            source_plan_stage=(
+                ctx.state.get("source_plan", {})
+                if isinstance(ctx.state.get("source_plan"), dict)
+                else {}
+            ),
+            index_stage=(
+                ctx.state.get("index", {})
+                if isinstance(ctx.state.get("index"), dict)
+                else {}
+            ),
+            enabled=cfg.validation.enabled,
+            include_xref=cfg.validation.include_xref,
+            top_n=cfg.validation.top_n,
+            xref_top_n=cfg.validation.xref_top_n,
+            sandbox_timeout_seconds=cfg.validation.sandbox_timeout_seconds,
+            broker=self._lsp_broker,
+            patch_artifact=(
+                ctx.state.get("_validation_patch_artifact")
+                if isinstance(ctx.state.get("_validation_patch_artifact"), dict)
+                else None
+            ),
+            policy_name=str(policy.get("name", "general")),
+            policy_version=str(policy.get("version", cfg.retrieval.policy_version)),
         )
 
     @staticmethod

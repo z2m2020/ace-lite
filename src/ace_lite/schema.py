@@ -4,7 +4,7 @@ from typing import Any
 
 from ace_lite.validation.result import validate_validation_result_v1
 
-SCHEMA_VERSION = "3.2"
+SCHEMA_VERSION = "3.3"
 EXPECTED_PIPELINE_ORDER = [
     "memory",
     "index",
@@ -12,6 +12,7 @@ EXPECTED_PIPELINE_ORDER = [
     "augment",
     "skills",
     "source_plan",
+    "validation",
 ]
 REQUIRED_TOP_LEVEL_KEYS = (
     "schema_version",
@@ -25,6 +26,7 @@ REQUIRED_TOP_LEVEL_KEYS = (
     "augment",
     "skills",
     "source_plan",
+    "validation",
     "observability",
     "conventions",
 )
@@ -226,6 +228,27 @@ def validate_validation_result_payload(payload: Any, *, prefix: str) -> None:
     raise ValueError(f"{prefix} {message}")
 
 
+def _validate_validation_stage_payload(payload: Any, *, prefix: str) -> None:
+    if not isinstance(payload, dict):
+        raise ValueError(f"{prefix} must be a dictionary")
+    for key in (
+        "enabled",
+        "reason",
+        "sandbox",
+        "diagnostics",
+        "diagnostic_count",
+        "xref_enabled",
+        "xref",
+        "result",
+        "patch_artifact_present",
+        "policy_name",
+        "policy_version",
+    ):
+        if key not in payload:
+            raise ValueError(f"{prefix}.{key} is required")
+    validate_validation_result_payload(payload.get("result"), prefix=f"{prefix}.result")
+
+
 def validate_context_plan(payload: dict[str, Any]) -> None:
     if not isinstance(payload, dict):
         raise ValueError("context plan must be a dictionary")
@@ -320,6 +343,13 @@ def validate_context_plan(payload: dict[str, Any]) -> None:
                     raise ValueError(
                         f"source_plan.writeback_template.metadata missing keys: {', '.join(missing)}"
                     )
+
+    validation_stage = payload.get("validation")
+    if validation_stage is not None:
+        _validate_validation_stage_payload(
+            validation_stage,
+            prefix="validation",
+        )
 
 
 __all__ = ["EXPECTED_PIPELINE_ORDER", "SCHEMA_VERSION", "validate_context_plan"]

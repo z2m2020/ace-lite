@@ -561,6 +561,30 @@ class LspConfig(_StrictModel):
             return 1500
 
 
+class ValidationConfig(_StrictModel):
+    enabled: bool = False
+    include_xref: bool = False
+    top_n: int = 5
+    xref_top_n: int = 3
+    sandbox_timeout_seconds: float = 5.0
+
+    @field_validator("top_n", "xref_top_n", mode="before")
+    @classmethod
+    def _normalize_non_negative_int(cls, value: Any) -> int:
+        try:
+            return max(0, int(value))
+        except Exception:
+            return 0
+
+    @field_validator("sandbox_timeout_seconds", mode="before")
+    @classmethod
+    def _normalize_timeout(cls, value: Any) -> float:
+        try:
+            return max(0.1, float(value))
+        except Exception:
+            return 5.0
+
+
 class PluginsConfig(_StrictModel):
     enabled: bool = True
     remote_slot_allowlist: list[str] | tuple[str, ...] | None = None
@@ -921,6 +945,7 @@ class OrchestratorConfig(_StrictModel):
     index: IndexConfig = Field(default_factory=IndexConfig)
     repomap: RepomapConfig = Field(default_factory=RepomapConfig)
     lsp: LspConfig = Field(default_factory=LspConfig)
+    validation: ValidationConfig = Field(default_factory=ValidationConfig)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     tokenizer: TokenizerConfig = Field(default_factory=TokenizerConfig)

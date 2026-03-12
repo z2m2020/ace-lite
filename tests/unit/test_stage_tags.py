@@ -141,3 +141,40 @@ def test_source_plan_stage_tags_include_packing_observability() -> None:
     assert tags["packing_focused_file_promoted_count"] == 3
     assert tags["packing_packed_path_count"] == 3
     assert tags["packing_reason"] == "ok"
+
+
+def test_validation_stage_tags_include_sandbox_and_result_summary() -> None:
+    tags = build_stage_tags(
+        stage_name="validation",
+        output={
+            "enabled": True,
+            "reason": "ok",
+            "patch_artifact_present": True,
+            "diagnostic_count": 2,
+            "xref_enabled": True,
+            "xref": {"count": 1},
+            "sandbox": {
+                "patch_applied": True,
+                "cleanup_ok": True,
+            },
+            "result": {
+                "summary": {
+                    "status": "failed",
+                    "issue_count": 2,
+                }
+            },
+            "policy_name": "general",
+            "policy_version": "v1",
+        },
+    )
+
+    assert tags["enabled"] is True
+    assert tags["reason"] == "ok"
+    assert tags["patch_artifact_present"] is True
+    assert tags["patch_applied"] is True
+    assert tags["cleanup_ok"] is True
+    assert tags["diagnostic_count"] == 2
+    assert tags["xref_enabled"] is True
+    assert tags["xref_count"] == 1
+    assert tags["validation_status"] == "failed"
+    assert tags["validation_issue_count"] == 2

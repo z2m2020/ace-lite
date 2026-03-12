@@ -14,6 +14,7 @@ from typing import Any
 
 from ace_lite.pipeline.contracts import validate_stage_output
 from ace_lite.schema import EXPECTED_PIPELINE_ORDER, SCHEMA_VERSION, validate_context_plan
+from ace_lite.validation.result import build_validation_result_v1
 
 PLAN_TIMEOUT_SECONDS_ENV = "ACE_LITE_PLAN_TIMEOUT_SECONDS"
 PLAN_TIMEOUT_DEBUG_ENV = "ACE_LITE_PLAN_TIMEOUT_DEBUG"
@@ -321,6 +322,40 @@ def build_plan_timeout_fallback_payload(
         },
     }
 
+    validation_payload: dict[str, Any] = {
+        "enabled": False,
+        "reason": "disabled",
+        "sandbox": {
+            "enabled": False,
+            "sandbox_root": "",
+            "patch_applied": False,
+            "cleanup_ok": False,
+            "restore_ok": False,
+            "apply_result": {},
+        },
+        "diagnostics": [],
+        "diagnostic_count": 0,
+        "xref_enabled": False,
+        "xref": {
+            "count": 0,
+            "results": [],
+            "errors": [],
+            "budget_exhausted": False,
+            "elapsed_ms": 0.0,
+            "time_budget_ms": 0,
+        },
+        "result": build_validation_result_v1(
+            selected_tests=[],
+            sandboxed=False,
+            runner="timeout-fallback",
+            replay_key="",
+            status="skipped",
+        ).as_dict(),
+        "patch_artifact_present": False,
+        "policy_name": str(policy_name),
+        "policy_version": str(policy_version),
+    }
+
     observability: dict[str, Any] = {
         "total_ms": float(max(0.0, float(elapsed_ms))),
         "stage_metrics": [],
@@ -360,6 +395,7 @@ def build_plan_timeout_fallback_payload(
         "augment": augment_payload,
         "skills": skills_payload,
         "source_plan": source_plan_payload,
+        "validation": validation_payload,
         "observability": observability,
     }
 
@@ -369,6 +405,7 @@ def build_plan_timeout_fallback_payload(
     validate_stage_output("augment", payload["augment"])
     validate_stage_output("skills", payload["skills"])
     validate_stage_output("source_plan", payload["source_plan"])
+    validate_stage_output("validation", payload["validation"])
     validate_context_plan(payload)
 
     return payload
@@ -385,4 +422,3 @@ __all__ = [
     "is_plan_timeout_debug_enabled",
     "resolve_plan_timeout_seconds",
 ]
-

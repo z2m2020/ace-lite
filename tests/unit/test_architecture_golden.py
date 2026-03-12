@@ -147,15 +147,23 @@ def fake_skill_manifest() -> list[dict[str, Any]]:
 class TestPipelineOrderInvariance:
     """Ensure PIPELINE_ORDER remains stable across refactors."""
 
-    EXPECTED_ORDER = ("memory", "index", "repomap", "augment", "skills", "source_plan")
+    EXPECTED_ORDER = (
+        "memory",
+        "index",
+        "repomap",
+        "augment",
+        "skills",
+        "source_plan",
+        "validation",
+    )
 
     def test_pipeline_order_constant_matches_expected(self) -> None:
         """PIPELINE_ORDER must match the documented order."""
         assert AceOrchestrator.PIPELINE_ORDER == self.EXPECTED_ORDER
 
-    def test_pipeline_order_length_is_six(self) -> None:
-        """Pipeline must have exactly 6 stages."""
-        assert len(AceOrchestrator.PIPELINE_ORDER) == 6
+    def test_pipeline_order_length_is_seven(self) -> None:
+        """Pipeline must have exactly 7 stages."""
+        assert len(AceOrchestrator.PIPELINE_ORDER) == 7
 
     def test_pipeline_order_tuple_is_immutable(self) -> None:
         """PIPELINE_ORDER must be a tuple (immutable)."""
@@ -415,6 +423,7 @@ class TestOutputSchemaStability:
         "augment",
         "skills",
         "source_plan",
+        "validation",
         "observability",
     })
 

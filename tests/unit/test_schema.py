@@ -14,7 +14,7 @@ from ace_lite.validation.result import build_validation_result_v1
 
 def _valid_payload() -> dict[str, Any]:
     payload = {
-        "schema_version": "3.0",
+        "schema_version": "3.3",
         "query": "q",
         "repo": "r",
         "root": "/tmp/repo",
@@ -25,6 +25,7 @@ def _valid_payload() -> dict[str, Any]:
             "augment",
             "skills",
             "source_plan",
+            "validation",
         ],
         "conventions": {},
         "memory": {},
@@ -45,14 +46,47 @@ def _valid_payload() -> dict[str, Any]:
                 }
             }
         },
+        "validation": {
+            "enabled": False,
+            "reason": "disabled",
+            "sandbox": {
+                "enabled": False,
+                "sandbox_root": "",
+                "patch_applied": False,
+                "cleanup_ok": False,
+                "restore_ok": False,
+                "apply_result": {},
+            },
+            "diagnostics": [],
+            "diagnostic_count": 0,
+            "xref_enabled": False,
+            "xref": {
+                "count": 0,
+                "results": [],
+                "errors": [],
+                "budget_exhausted": False,
+                "elapsed_ms": 0.0,
+                "time_budget_ms": 0,
+            },
+            "result": build_validation_result_v1(
+                replay_key="validation-run-001",
+                selected_tests=[],
+                sandboxed=False,
+                runner="disabled",
+                status="skipped",
+            ).as_dict(),
+            "patch_artifact_present": False,
+            "policy_name": "general",
+            "policy_version": "v1",
+        },
         "observability": {"stage_metrics": []},
     }
     payload["schema_version"] = SCHEMA_VERSION
     return payload
 
 
-def test_schema_version_is_3_2() -> None:
-    assert SCHEMA_VERSION == "3.2"
+def test_schema_version_is_3_3() -> None:
+    assert SCHEMA_VERSION == "3.3"
 
 
 def test_validate_context_plan_accepts_valid_payload() -> None:
@@ -205,6 +239,17 @@ def test_validate_context_plan_accepts_optional_validation_result_payload() -> N
     ).as_dict()
 
     validate_context_plan(payload)
+
+
+def test_validate_context_plan_rejects_invalid_validation_stage_payload() -> None:
+    payload = _valid_payload()
+    payload["validation"]["result"]["summary"]["status"] = "mystery"
+
+    with pytest.raises(
+        ValueError,
+        match=r"validation\.result\.summary\.status",
+    ):
+        validate_context_plan(payload)
 
 
 def test_validate_validation_result_payload_rejects_invalid_summary_status() -> None:
