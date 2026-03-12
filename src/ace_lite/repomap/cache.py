@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from pathlib import Path
 from time import time
 from typing import Any
 
+from ace_lite.stage_artifact_cache import StageArtifactCache
 from ace_lite.token_estimator import normalize_tokenizer_model
 
 _SCHEMA_VERSION = "repomap-cache-v3"
 _MAX_ENTRIES = 96
 _PRECOMPUTE_SCHEMA_VERSION = "repomap-precompute-cache-v3"
 _PRECOMPUTE_MAX_ENTRIES = 32
+_REPOMAP_STAGE_NAME = "repomap"
+_PRECOMPUTE_STAGE_NAME = "repomap_precompute"
 
 _REPOMAP_CACHE_MEMORY: dict[tuple[str, str], tuple[int, int, dict[str, Any]]] = {}
+_REPOMAP_ARTIFACT_MEMORY: dict[tuple[str, str, str], tuple[int, int, dict[str, Any]]] = {}
 
 
 def build_repomap_cache_key(
@@ -72,6 +77,7 @@ def load_cached_repomap(*, cache_path: Path, key: str) -> dict[str, Any] | None:
     return _load_cached_payload_entry(
         cache_path=cache_path,
         schema_version=_SCHEMA_VERSION,
+        stage_name=_REPOMAP_STAGE_NAME,
         key=key,
         max_age_seconds=0,
         required_meta=None,
@@ -88,6 +94,7 @@ def load_cached_repomap_checked(
     return _load_cached_payload_entry(
         cache_path=cache_path,
         schema_version=_SCHEMA_VERSION,
+        stage_name=_REPOMAP_STAGE_NAME,
         key=key,
         max_age_seconds=max_age_seconds,
         required_meta=required_meta,
@@ -98,6 +105,7 @@ def load_cached_repomap_precompute(*, cache_path: Path, key: str) -> dict[str, A
     return _load_cached_payload_entry(
         cache_path=cache_path,
         schema_version=_PRECOMPUTE_SCHEMA_VERSION,
+        stage_name=_PRECOMPUTE_STAGE_NAME,
         key=key,
         max_age_seconds=0,
         required_meta=None,
@@ -114,6 +122,7 @@ def load_cached_repomap_precompute_checked(
     return _load_cached_payload_entry(
         cache_path=cache_path,
         schema_version=_PRECOMPUTE_SCHEMA_VERSION,
+        stage_name=_PRECOMPUTE_STAGE_NAME,
         key=key,
         max_age_seconds=max_age_seconds,
         required_meta=required_meta,
@@ -124,6 +133,7 @@ def _load_cached_payload_entry(
     *,
     cache_path: Path,
     schema_version: str,
+    stage_name: str,
     key: str,
     max_age_seconds: int,
     required_meta: dict[str, Any] | None,
@@ -135,6 +145,7 @@ def _load_cached_payload_entry(
     if not isinstance(entries, list):
         return None
     now_epoch = float(time())
+    backend = str(payload.get("backend") or "").strip()
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -148,9 +159,35 @@ def _load_cached_payload_entry(
             continue
         if not _entry_meta_matches(entry=entry, required_meta=required_meta):
             continue
-        map_payload = entry.get("payload")
-        if isinstance(map_payload, dict):
-            return dict(map_payload)
+        legacy_payload = entry.get("payload")
+        if isinstance(legacy_payload, dict):
+            return copy.deepcopy(legacy_payload)
+        if backend != "stage_artifact_cache":
+            continue
+
+        memoized = _load_artifact_memory(
+            schema_version=schema_version,
+            cache_path=cache_path,
+            key=key,
+        )
+        if memoized is not None:
+            return memoized
+
+        manager = _build_stage_artifact_cache(cache_path=cache_path)
+        cached = manager.get_artifact(
+            stage_name=str(entry.get("stage_name") or stage_name),
+            cache_key=key,
+        )
+        if cached is None:
+            continue
+        materialized = copy.deepcopy(cached.payload)
+        _store_artifact_memory(
+            schema_version=schema_version,
+            cache_path=cache_path,
+            key=key,
+            payload=materialized,
+        )
+        return materialized
     return None
 
 
@@ -161,40 +198,15 @@ def store_cached_repomap(
     payload: dict[str, Any],
     meta: dict[str, Any] | None = None,
 ) -> bool:
-    existing = _load_cache_payload(cache_path=cache_path, schema_version=_SCHEMA_VERSION)
-    if existing is None:
-        existing = {"schema_version": _SCHEMA_VERSION, "entries": []}
-
-    entries = existing.get("entries", [])
-    if not isinstance(entries, list):
-        entries = []
-
-    normalized_entries: list[dict[str, Any]] = []
-    for item in entries:
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("key") or "") == str(key):
-            continue
-        normalized_entries.append(item)
-
-    normalized_entries.insert(
-        0,
-        {
-            "key": str(key),
-            "updated_at_epoch": round(float(time()), 3),
-            "meta": _normalize_cache_meta(meta),
-            "payload": dict(payload),
-        },
+    return _store_cached_payload_entry(
+        cache_path=cache_path,
+        schema_version=_SCHEMA_VERSION,
+        stage_name=_REPOMAP_STAGE_NAME,
+        max_entries=_MAX_ENTRIES,
+        key=key,
+        payload=payload,
+        meta=meta,
     )
-    if len(normalized_entries) > _MAX_ENTRIES:
-        normalized_entries = normalized_entries[:_MAX_ENTRIES]
-
-    final_payload = {
-        "schema_version": _SCHEMA_VERSION,
-        "entries": normalized_entries,
-    }
-    _write_cache_payload(cache_path=cache_path, payload=final_payload)
-    return True
 
 
 def store_cached_repomap_precompute(
@@ -204,43 +216,205 @@ def store_cached_repomap_precompute(
     payload: dict[str, Any],
     meta: dict[str, Any] | None = None,
 ) -> bool:
-    existing = _load_cache_payload(
+    return _store_cached_payload_entry(
         cache_path=cache_path,
         schema_version=_PRECOMPUTE_SCHEMA_VERSION,
+        stage_name=_PRECOMPUTE_STAGE_NAME,
+        max_entries=_PRECOMPUTE_MAX_ENTRIES,
+        key=key,
+        payload=payload,
+        meta=meta,
     )
+
+
+def _store_cached_payload_entry(
+    *,
+    cache_path: Path,
+    schema_version: str,
+    stage_name: str,
+    max_entries: int,
+    key: str,
+    payload: dict[str, Any],
+    meta: dict[str, Any] | None,
+) -> bool:
+    normalized_meta = _normalize_cache_meta(meta)
+    existing = _load_cache_payload(cache_path=cache_path, schema_version=schema_version)
     if existing is None:
-        existing = {"schema_version": _PRECOMPUTE_SCHEMA_VERSION, "entries": []}
+        existing = {"schema_version": schema_version, "entries": []}
 
     entries = existing.get("entries", [])
     if not isinstance(entries, list):
         entries = []
 
-    normalized_entries: list[dict[str, Any]] = []
+    trimmed_entries: list[dict[str, Any]] = []
     for item in entries:
         if not isinstance(item, dict):
             continue
         if str(item.get("key") or "") == str(key):
             continue
-        normalized_entries.append(item)
+        trimmed_entries.append(
+            {
+                "key": str(item.get("key") or ""),
+                "updated_at_epoch": float(item.get("updated_at_epoch", 0.0) or 0.0),
+                "meta": _normalize_cache_meta(item.get("meta")),
+                "stage_name": str(item.get("stage_name") or stage_name),
+                **(
+                    {"payload": copy.deepcopy(item["payload"])}
+                    if isinstance(item.get("payload"), dict)
+                    else {}
+                ),
+            }
+        )
 
-    normalized_entries.insert(
+    try:
+        manager = _build_stage_artifact_cache(cache_path=cache_path)
+        manager.put_artifact(
+            stage_name=stage_name,
+            cache_key=key,
+            query_hash=_build_query_hash(key),
+            fingerprint=str(key),
+            settings_fingerprint=_build_meta_fingerprint(normalized_meta),
+            payload=copy.deepcopy(payload),
+            token_weight=_estimate_payload_token_weight(payload),
+            ttl_seconds=max(0, int(normalized_meta.get("ttl_seconds") or 0)),
+            content_version=str(normalized_meta.get("content_version") or schema_version),
+            policy_name=str(normalized_meta.get("policy_name") or stage_name),
+            trust_class=str(normalized_meta.get("trust_class") or "exact"),
+            write_token=stage_name,
+        )
+        trimmed_entries.insert(
+            0,
+            {
+                "key": str(key),
+                "updated_at_epoch": round(float(time()), 3),
+                "meta": normalized_meta,
+                "stage_name": stage_name,
+            },
+        )
+        if len(trimmed_entries) > max_entries:
+            trimmed_entries = trimmed_entries[:max_entries]
+        _write_cache_payload(
+            cache_path=cache_path,
+            payload={
+                "schema_version": schema_version,
+                "backend": "stage_artifact_cache",
+                "entries": trimmed_entries,
+            },
+        )
+        _store_artifact_memory(
+            schema_version=schema_version,
+            cache_path=cache_path,
+            key=key,
+            payload=payload,
+        )
+        return True
+    except Exception:
+        pass
+
+    trimmed_entries.insert(
         0,
         {
             "key": str(key),
             "updated_at_epoch": round(float(time()), 3),
-            "meta": _normalize_cache_meta(meta),
-            "payload": dict(payload),
+            "meta": normalized_meta,
+            "stage_name": stage_name,
+            "payload": copy.deepcopy(payload),
         },
     )
-    if len(normalized_entries) > _PRECOMPUTE_MAX_ENTRIES:
-        normalized_entries = normalized_entries[:_PRECOMPUTE_MAX_ENTRIES]
-
-    final_payload = {
-        "schema_version": _PRECOMPUTE_SCHEMA_VERSION,
-        "entries": normalized_entries,
-    }
-    _write_cache_payload(cache_path=cache_path, payload=final_payload)
+    if len(trimmed_entries) > max_entries:
+        trimmed_entries = trimmed_entries[:max_entries]
+    _write_cache_payload(
+        cache_path=cache_path,
+        payload={
+            "schema_version": schema_version,
+            "entries": trimmed_entries,
+        },
+    )
+    _store_artifact_memory(
+        schema_version=schema_version,
+        cache_path=cache_path,
+        key=key,
+        payload=payload,
+    )
     return True
+
+
+def _build_stage_artifact_cache(*, cache_path: Path) -> StageArtifactCache:
+    anchor = Path(cache_path).resolve()
+    payload_root = anchor.parent / "artifacts"
+    temp_root = payload_root / "tmp"
+    db_path = anchor.parent / "stage-artifact-cache.db"
+    return StageArtifactCache(
+        repo_root=anchor.parent,
+        db_path=db_path,
+        payload_root=payload_root,
+        temp_root=temp_root,
+    )
+
+
+def _build_query_hash(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest()
+
+
+def _build_meta_fingerprint(meta: dict[str, Any]) -> str:
+    text = json.dumps(meta, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest()
+
+
+def _estimate_payload_token_weight(payload: dict[str, Any]) -> int:
+    text = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return max(1, len(text) // 4)
+
+
+def _artifact_memory_key(schema_version: str, cache_path: Path, key: str) -> tuple[str, str, str]:
+    return (str(schema_version), str(cache_path.resolve()), str(key))
+
+
+def _load_artifact_memory(
+    *,
+    schema_version: str,
+    cache_path: Path,
+    key: str,
+) -> dict[str, Any] | None:
+    try:
+        stat = cache_path.stat()
+    except OSError:
+        return None
+    cached = _REPOMAP_ARTIFACT_MEMORY.get(
+        _artifact_memory_key(schema_version, cache_path, key)
+    )
+    if cached is None:
+        return None
+    if cached[0] != stat.st_mtime_ns or cached[1] != stat.st_size:
+        _REPOMAP_ARTIFACT_MEMORY.pop(
+            _artifact_memory_key(schema_version, cache_path, key),
+            None,
+        )
+        return None
+    return copy.deepcopy(cached[2])
+
+
+def _store_artifact_memory(
+    *,
+    schema_version: str,
+    cache_path: Path,
+    key: str,
+    payload: dict[str, Any],
+) -> None:
+    try:
+        stat = cache_path.stat()
+    except OSError:
+        _REPOMAP_ARTIFACT_MEMORY.pop(
+            _artifact_memory_key(schema_version, cache_path, key),
+            None,
+        )
+        return
+    _REPOMAP_ARTIFACT_MEMORY[
+        _artifact_memory_key(schema_version, cache_path, key)
+    ] = (stat.st_mtime_ns, stat.st_size, copy.deepcopy(payload))
 
 
 def _load_cache_payload(*, cache_path: Path, schema_version: str) -> dict[str, Any] | None:

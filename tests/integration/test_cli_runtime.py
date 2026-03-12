@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -15,6 +16,7 @@ from ace_lite.runtime_settings_store import (
     build_runtime_settings_record,
     persist_runtime_settings_record,
 )
+from ace_lite.stage_artifact_cache import StageArtifactCache
 
 
 def _cli_env(root: Path) -> dict[str, str]:
@@ -259,7 +261,50 @@ def test_cli_runtime_doctor_mcp_reports_configuration(tmp_path: Path) -> None:
     assert memory_check["ok"] is False
 
 
-def test_cli_doctor_alias_runs_mcp_doctor(tmp_path: Path) -> None:
+def test_cli_runtime_doctor_groups_settings_stats_cache_and_integration(
+    tmp_path: Path,
+) -> None:
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    cache = StageArtifactCache(repo_root=tmp_path)
+    cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+        query_hash="1111222233334444",
+        fingerprint="fingerprint",
+        payload={"value": "ok"},
+        write_token="seed",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "doctor",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(skills_dir),
+            "--no-probe-endpoints",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["event"] == "runtime_doctor"
+    assert payload["ok"] is True
+    assert "settings" in payload
+    assert "stats" in payload
+    assert "cache" in payload
+    assert "integration" in payload
+    assert payload["cache"]["ok"] is True
+    assert payload["integration"]["event"] == "mcp_doctor"
+
+
+def test_cli_doctor_alias_runs_grouped_runtime_doctor(tmp_path: Path) -> None:
     (tmp_path / "skills").mkdir(parents=True, exist_ok=True)
 
     runner = CliRunner()
@@ -279,7 +324,7 @@ def test_cli_doctor_alias_runs_mcp_doctor(tmp_path: Path) -> None:
     assert result.exit_code == 0
     lines = [line for line in result.output.splitlines() if line.strip()]
     payload = json.loads(lines[-1])
-    assert payload["event"] == "mcp_doctor"
+    assert payload["event"] == "runtime_doctor"
     assert payload["ok"] is True
 
 
@@ -333,6 +378,121 @@ def test_cli_runtime_doctor_mcp_uses_snapshot_when_available(tmp_path: Path) -> 
     checks = payload.get("checks", [])
     memory_check = next(item for item in checks if item.get("name") == "memory_configured")
     assert memory_check["ok"] is True
+
+
+def test_cli_runtime_doctor_cache_reports_clean_cache(tmp_path: Path) -> None:
+    cache = StageArtifactCache(repo_root=tmp_path)
+    cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+        query_hash="1111222233334444",
+        fingerprint="fingerprint",
+        payload={"value": "ok"},
+        write_token="seed",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        ["runtime", "doctor-cache", "--root", str(tmp_path)],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip().startswith("{")]
+    payload = json.loads(lines[-1])
+    assert payload["event"] == "runtime_doctor_cache"
+    assert payload["ok"] is True
+    assert payload["summary"]["severe_issue_count"] == 0
+
+
+def test_cli_runtime_doctor_cache_warning_only_stays_zero_exit(tmp_path: Path) -> None:
+    cache = StageArtifactCache(repo_root=tmp_path)
+    orphan_path = cache.payload_root / "source_plan" / "ff" / "ffffffffffffffff.json"
+    orphan_path.parent.mkdir(parents=True, exist_ok=True)
+    orphan_path.write_text('{"orphan": true}\n', encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        ["runtime", "doctor-cache", "--root", str(tmp_path)],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip().startswith("{")]
+    payload = json.loads(lines[-1])
+    assert payload["ok"] is True
+    assert payload["summary"]["severe_issue_count"] == 0
+    assert payload["summary"]["warning_issue_count"] == 1
+    assert len(payload["orphan_payload_files"]) == 1
+
+
+def test_cli_runtime_doctor_cache_fails_on_severe_corruption(tmp_path: Path) -> None:
+    cache = StageArtifactCache(repo_root=tmp_path)
+    entry = cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+        query_hash="1111222233334444",
+        fingerprint="fingerprint",
+        payload={"value": "ok"},
+        write_token="seed",
+    )
+    payload_path = cache.payload_root / Path(*Path(entry.payload_relpath).parts)
+    payload_path.unlink()
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        ["runtime", "doctor-cache", "--root", str(tmp_path)],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code != 0
+    lines = [line for line in result.output.splitlines() if line.strip().startswith("{")]
+    payload = json.loads(lines[-1])
+    assert payload["event"] == "runtime_doctor_cache"
+    assert payload["ok"] is False
+    assert payload["summary"]["severe_issue_count"] == 1
+    assert len(payload["missing_payload_rows"]) == 1
+
+
+def test_cli_runtime_cache_vacuum_apply_removes_expired_and_orphan_payloads(
+    tmp_path: Path,
+) -> None:
+    cache = StageArtifactCache(repo_root=tmp_path)
+    entry = cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+        query_hash="1111222233334444",
+        fingerprint="expired",
+        payload={"value": "expired"},
+        ttl_seconds=3600,
+        write_token="seed",
+    )
+    cache.store.upsert_entry(replace(entry, expires_at="2000-01-01T00:00:00+00:00"))
+    orphan_path = cache.payload_root / "source_plan" / "ff" / "ffffffffffffffff.json"
+    orphan_path.parent.mkdir(parents=True, exist_ok=True)
+    orphan_path.write_text('{"orphan": true}\n', encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        ["runtime", "cache", "vacuum", "--root", str(tmp_path), "--apply"],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip().startswith("{")]
+    payload = json.loads(lines[-1])
+    assert payload["event"] == "runtime_cache_vacuum"
+    assert payload["ok"] is True
+    assert payload["dry_run"] is False
+    assert payload["deleted_expired_rows"] == 1
+    assert payload["deleted_expired_payload_files"] == 1
+    assert payload["deleted_orphan_payload_files"] == 1
+    assert cache.store.load_entry(stage_name="source_plan", cache_key="aaaaaaaaaaaaaaaa") is None
+    assert orphan_path.exists() is False
 
 
 def test_cli_runtime_setup_codex_mcp_dry_run_defaults(tmp_path: Path) -> None:
@@ -649,6 +809,70 @@ def test_cli_runtime_settings_show_uses_last_known_good_snapshot(tmp_path: Path)
     assert payload["selected_profile"] == "team-default"
 
 
+def test_cli_runtime_settings_show_reports_resolved_runtime_profile_and_stats_tags(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        "plan:\n  runtime_profile: bugfix\n",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "settings",
+            "show",
+            "--root",
+            str(tmp_path),
+            "--no-use-snapshot",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["selected_profile"] == "bugfix"
+    assert payload["settings"]["plan"]["retrieval"]["retrieval_policy"] == "bugfix_test"
+    assert payload["stats_tags"]["profile_key"] == "bugfix"
+    assert payload["stats_tags"]["settings_fingerprint"] == payload["fingerprint"]
+    assert payload["metadata"]["selected_profile_source"] == "repo_config"
+
+
+def test_cli_runtime_settings_show_runtime_profile_flag_overrides_repo_default(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        "plan:\n  runtime_profile: bugfix\n",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "settings",
+            "show",
+            "--root",
+            str(tmp_path),
+            "--runtime-profile",
+            "fast_path",
+            "--no-use-snapshot",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["selected_profile"] == "fast_path"
+    assert payload["settings"]["plan"]["retrieval"]["top_k_files"] == 5
+    assert payload["metadata"]["selected_profile_source"] == "cli"
+
+
 def test_cli_runtime_settings_show_matches_runtime_settings_manager(tmp_path: Path) -> None:
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir(parents=True, exist_ok=True)
@@ -816,3 +1040,100 @@ def test_cli_runtime_stats_uses_default_user_scope_db_path(tmp_path: Path) -> No
     payload = json.loads(lines[-1])
     assert payload["db_path"] == str(db_path.resolve())
     assert payload["latest_match"]["repo_key"] == "repo-alpha"
+
+
+def test_cli_runtime_status_reports_service_health_and_cache_paths(tmp_path: Path) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  plan_replay_cache:\n"
+            "    enabled: true\n"
+            "    cache_path: context-map/runtime-cache/replay.json\n"
+            "  trace:\n"
+            "    export_enabled: true\n"
+            "    export_path: context-map/traces/runtime-status.jsonl\n"
+        ),
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "runtime-stats.db"
+    _seed_runtime_stats_db(db_path)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "status",
+            "--root",
+            str(tmp_path),
+            "--db-path",
+            str(db_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    service_health = {item["name"]: item for item in payload["service_health"]}
+    assert payload["event"] == "runtime_status"
+    assert len(payload["settings_fingerprint"]) == 64
+    assert (
+        payload["cache_paths"]["plan_replay_cache"]
+        == str((tmp_path / "context-map" / "runtime-cache" / "replay.json").resolve())
+    )
+    assert (
+        payload["cache_paths"]["trace_export"]
+        == str((tmp_path / "context-map" / "traces" / "runtime-status.jsonl").resolve())
+    )
+    assert service_health["memory"]["status"] == "disabled"
+    assert service_health["plan_replay_cache"]["status"] == "ok"
+    assert service_health["trace_export"]["status"] == "ok"
+    assert service_health["durable_stats"]["status"] == "ok"
+    assert payload["latest_runtime"]["latest_match"]["session_id"] == "session-gamma"
+
+
+def test_cli_runtime_help_lists_runtime_profile_flags() -> None:
+    runner = CliRunner()
+
+    settings_help = runner.invoke(cli_module.cli, ["runtime", "settings", "show", "--help"])
+    status_help = runner.invoke(cli_module.cli, ["runtime", "status", "--help"])
+
+    assert settings_help.exit_code == 0
+    assert "--runtime-profile" in settings_help.output
+    assert status_help.exit_code == 0
+    assert "--runtime-profile" in status_help.output
+
+
+def test_cli_runtime_status_reports_degraded_services_for_bad_lsp_config(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  lsp:\n"
+            "    enabled: true\n"
+        ),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "status",
+            "--root",
+            str(tmp_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    service_health = {item["name"]: item for item in payload["service_health"]}
+    assert service_health["lsp"]["status"] == "degraded"
+    assert any(
+        item["name"] == "lsp" and item["reason"] == "enabled_without_commands"
+        for item in payload["degraded_services"]
+    )

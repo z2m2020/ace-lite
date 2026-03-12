@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -1078,3 +1079,275 @@ def test_run_index_delegates_chunk_selection_runtime_config(
     assert runtime_config.chunk_guard_mode == "off"
     assert runtime_config.embedding_enabled is False
     assert captured["candidates"] == [{"path": "src/alpha.py", "score": 6.0}]
+
+
+def test_run_index_reuses_candidate_cache_and_preserves_order_and_scores(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    import ace_lite.pipeline.stages.index as index_stage
+
+    files_map = {
+        "src/alpha.py": {"module": "src.alpha", "language": "python"},
+        "src/beta.py": {"module": "src.beta", "language": "python"},
+    }
+    call_counts = {"gather": 0, "refine": 0, "chunks": 0}
+
+    monkeypatch.setattr(
+        index_stage,
+        "load_retrieval_index_snapshot",
+        lambda **kwargs: _make_snapshot(files_map),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "extract_retrieval_terms",
+        lambda **kwargs: ["alpha", "beta"],
+    )
+    monkeypatch.setattr(index_stage, "extract_memory_paths", lambda **kwargs: [])
+    monkeypatch.setattr(
+        index_stage,
+        "resolve_retrieval_policy",
+        lambda **kwargs: {
+            "name": "general",
+            "version": "v1",
+            "docs_enabled": False,
+            "index_parallel_enabled": False,
+        },
+    )
+
+    def fake_gather_initial_candidates(**kwargs):  # type: ignore[no-untyped-def]
+        _ = kwargs
+        call_counts["gather"] += 1
+        return InitialCandidateGenerationResult(
+            requested_ranker="hybrid_re2",
+            selected_ranker="hybrid_re2",
+            ranker_fallbacks=[],
+            min_score_used=2,
+            candidates=[
+                {
+                    "path": "src/beta.py",
+                    "module": "src.beta",
+                    "score": 7.0,
+                    "score_breakdown": {"heuristic": 7.0},
+                },
+                {
+                    "path": "src/alpha.py",
+                    "module": "src.alpha",
+                    "score": 6.0,
+                    "score_breakdown": {"heuristic": 6.0},
+                },
+            ],
+            exact_search_payload={"enabled": False, "applied": False},
+            docs_payload={"enabled": False, "reason": "disabled", "section_count": 0},
+            worktree_prior=_base_worktree_prior(),
+            parallel_payload={"enabled": False},
+            prior_payload={"docs_hint_paths": 0},
+            docs_elapsed_ms=0.0,
+            worktree_elapsed_ms=0.0,
+            raw_worktree=None,
+        )
+
+    def fake_refine_candidate_pool(**kwargs):  # type: ignore[no-untyped-def]
+        _ = kwargs
+        call_counts["refine"] += 1
+        return CandidateFusionResult(
+            candidates=[
+                {
+                    "path": "src/beta.py",
+                    "module": "src.beta",
+                    "score": 7.0,
+                    "score_breakdown": {"heuristic": 7.0},
+                },
+                {
+                    "path": "src/alpha.py",
+                    "module": "src.alpha",
+                    "score": 6.0,
+                    "score_breakdown": {"heuristic": 6.0},
+                },
+            ],
+            second_pass_payload={
+                "triggered": False,
+                "applied": False,
+                "reason": "n/a",
+                "retry_ranker": "",
+            },
+            refine_pass_payload={
+                "enabled": True,
+                "trigger_condition_met": False,
+                "triggered": False,
+                "applied": False,
+                "reason": "",
+                "retry_ranker": "",
+                "candidate_count_before": 2,
+                "candidate_count_after": 2,
+                "max_passes": 1,
+            },
+            cochange_payload={"enabled": False, "neighbors_added": 0},
+            scip_payload={"enabled": False, "loaded": False},
+            graph_lookup_payload={"enabled": False, "boosted_count": 0, "query_hit_paths": 0},
+            embeddings_payload={
+                "enabled": False,
+                "reason": "disabled",
+                "runtime_provider": "",
+                "runtime_model": "",
+                "runtime_dimension": 0,
+                "auto_normalized": False,
+                "normalized_fields": [],
+                "normalization_notes": [],
+            },
+            feedback_payload={
+                "enabled": False,
+                "reason": "disabled",
+                "boosted_candidate_count": 0,
+                "boosted_unique_paths": 0,
+                "matched_event_count": 0,
+                "event_count": 0,
+            },
+            multi_channel_fusion_payload={
+                "enabled": False,
+                "applied": False,
+                "reason": "disabled",
+                "rrf_k": 0,
+                "caps": {"pool": 0, "code": 0, "docs": 0, "memory": 0},
+                "channels": {
+                    "code": {"count": 0, "cap": 0, "top": []},
+                    "docs": {"count": 0, "cap": 0, "top": []},
+                    "memory": {"count": 0, "cap": 0, "top": []},
+                },
+                "fused": {"scored_count": 0, "pool_size": 0, "top": []},
+                "warning": None,
+            },
+            semantic_embedding_provider_impl=None,
+            semantic_cross_encoder_provider=None,
+        )
+
+    def fake_select_index_chunks(**kwargs):  # type: ignore[no-untyped-def]
+        _ = kwargs
+        call_counts["chunks"] += 1
+        return ChunkSelectionResult(
+            candidate_chunks=[
+                {
+                    "path": "src/beta.py",
+                    "qualified_name": "src.beta.answer",
+                    "kind": "function",
+                    "lineno": 12,
+                    "score_breakdown": {"candidate": 7.0},
+                    "score_embedding": 0.0,
+                }
+            ],
+            chunk_metrics={"candidate_chunk_count": 1.0, "chunk_budget_used": 32.0},
+            chunk_semantic_rerank_payload={"enabled": False, "reason": "disabled"},
+            topological_shield_payload={"enabled": False, "mode": "off"},
+            chunk_guard_payload={"enabled": False, "mode": "off", "reason": "disabled"},
+        )
+
+    monkeypatch.setattr(index_stage, "gather_initial_candidates", fake_gather_initial_candidates)
+    monkeypatch.setattr(index_stage, "refine_candidate_pool", fake_refine_candidate_pool)
+    monkeypatch.setattr(index_stage, "select_index_chunks", fake_select_index_chunks)
+
+    first = run_index(
+        ctx=StageContext(query="find beta", repo="demo", root=str(tmp_path)),
+        config=_make_config(tmp_path),
+    )
+    second = run_index(
+        ctx=StageContext(query="find beta", repo="demo", root=str(tmp_path)),
+        config=_make_config(tmp_path),
+    )
+
+    assert first["candidate_cache"]["hit"] is False
+    assert first["candidate_cache"]["store_written"] is True
+    assert Path(first["candidate_cache"]["path"]).exists()
+    marker = json.loads(
+        Path(first["candidate_cache"]["path"]).read_text(encoding="utf-8")
+    )
+    assert marker["backend"] == "stage_artifact_cache"
+    assert (
+        tmp_path / "context-map" / "index_candidates" / "stage-artifact-cache.db"
+    ).exists()
+
+    assert second["candidate_cache"]["hit"] is True
+    assert second["candidate_cache"]["store_written"] is False
+    assert call_counts == {"gather": 1, "refine": 1, "chunks": 1}
+    assert [row["path"] for row in second["candidate_files"]] == [
+        "src/beta.py",
+        "src/alpha.py",
+    ]
+    assert [row["score"] for row in second["candidate_files"]] == [7.0, 6.0]
+    assert second["candidate_files"] == first["candidate_files"]
+    assert second["candidate_chunks"] == first["candidate_chunks"]
+    assert (
+        second["metadata"]["selection_fingerprint"]
+        == first["metadata"]["selection_fingerprint"]
+    )
+
+
+def test_run_index_candidate_cache_invalidates_when_policy_version_changes(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    import ace_lite.pipeline.stages.index as index_stage
+
+    files_map = {
+        "src/alpha.py": {"module": "src.alpha", "language": "python"},
+    }
+    call_count = {"gather": 0}
+    policy_version = {"value": "v1"}
+
+    monkeypatch.setattr(
+        index_stage,
+        "load_retrieval_index_snapshot",
+        lambda **kwargs: _make_snapshot(files_map),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "extract_retrieval_terms",
+        lambda **kwargs: ["alpha"],
+    )
+    monkeypatch.setattr(index_stage, "extract_memory_paths", lambda **kwargs: [])
+    monkeypatch.setattr(
+        index_stage,
+        "resolve_retrieval_policy",
+        lambda **kwargs: {
+            "name": "general",
+            "version": policy_version["value"],
+            "docs_enabled": False,
+            "index_parallel_enabled": False,
+        },
+    )
+
+    def fake_gather_initial_candidates(**kwargs):  # type: ignore[no-untyped-def]
+        _ = kwargs
+        call_count["gather"] += 1
+        return InitialCandidateGenerationResult(
+            requested_ranker="heuristic",
+            selected_ranker="heuristic",
+            ranker_fallbacks=[],
+            min_score_used=2,
+            candidates=[{"path": "src/alpha.py", "module": "src.alpha", "score": 6.0}],
+            exact_search_payload={"enabled": False, "applied": False},
+            docs_payload={"enabled": False, "reason": "disabled", "section_count": 0},
+            worktree_prior=_base_worktree_prior(),
+            parallel_payload={"enabled": False},
+            prior_payload={"docs_hint_paths": 0},
+            docs_elapsed_ms=0.0,
+            worktree_elapsed_ms=0.0,
+            raw_worktree=None,
+        )
+
+    monkeypatch.setattr(index_stage, "gather_initial_candidates", fake_gather_initial_candidates)
+    _stub_pipeline_after_generation(monkeypatch, index_stage)
+
+    first = run_index(
+        ctx=StageContext(query="alpha", repo="demo", root=str(tmp_path)),
+        config=_make_config(tmp_path),
+    )
+    policy_version["value"] = "v2"
+    second = run_index(
+        ctx=StageContext(query="alpha", repo="demo", root=str(tmp_path)),
+        config=_make_config(tmp_path),
+    )
+
+    assert first["candidate_cache"]["hit"] is False
+    assert second["candidate_cache"]["hit"] is False
+    assert second["candidate_cache"]["store_written"] is True
+    assert call_count["gather"] == 2

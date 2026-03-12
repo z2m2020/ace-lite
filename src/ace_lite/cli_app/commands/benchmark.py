@@ -317,6 +317,7 @@ def benchmark_replay_rewards_command(input_path: str, output_dir: str) -> None:
 def benchmark_run_command(
     ctx: click.Context,
     cases_path: str,
+    runtime_profile: str | None,
     repo: str,
     root: str,
     skills_dir: str,
@@ -487,6 +488,7 @@ def benchmark_run_command(
         config=config,
         namespace="benchmark",
         config_pack=config_pack,
+        runtime_profile=runtime_profile,
         retrieval_preset=retrieval_preset,
         adaptive_router_enabled=adaptive_router_enabled,
         adaptive_router_mode=adaptive_router_mode,

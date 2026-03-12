@@ -662,6 +662,7 @@ class RuntimeConfig(_StrictModel):
 
 
 class SharedPlanConfig(_StrictModel):
+    runtime_profile: str | None = None
     retrieval_preset: str | None = None
     precomputed_skills_routing_enabled: bool | None = None
     retrieval: RetrievalGroupConfig | None = None
@@ -811,6 +812,14 @@ class SharedPlanConfig(_StrictModel):
                 f"Unsupported candidate_ranker: {normalized}. Expected one of: {choices}"
             )
         return normalized
+
+    @field_validator("runtime_profile")
+    @classmethod
+    def _normalize_runtime_profile(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        normalized = str(value).strip().lower()
+        return normalized or None
 
     @field_validator("hybrid_re2_fusion_mode")
     @classmethod

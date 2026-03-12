@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from urllib.request import Request
 
 from ace_lite.http_utils import safe_urlopen
+from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.pipeline.types import StageEvent
 
 DEFAULT_MOCK_ENDPOINT = "mock://mcp"
@@ -21,6 +22,7 @@ def make_mcp_hooks(
     timeout_seconds: float = 0.3,
     retries: int = 0,
     headers: dict[str, str] | None = None,
+    integration_manager: PluginIntegrationManager | None = None,
 ) -> tuple[Callable[[StageEvent], bool], Callable[[StageEvent], dict[str, Any]]]:
     """Create MCP-style hooks for an untrusted plugin.
 
@@ -41,6 +43,20 @@ def make_mcp_hooks(
     endpoint = (endpoint or DEFAULT_MOCK_ENDPOINT).strip() or DEFAULT_MOCK_ENDPOINT
     timeout_seconds = max(0.05, float(timeout_seconds))
     retries = max(0, int(retries))
+    integration_id = _build_integration_id(plugin_name=plugin_name, endpoint=endpoint)
+
+    if integration_manager is not None:
+        parsed = urlparse(endpoint)
+        if parsed.scheme in {"http", "https"}:
+            integration_manager.register_endpoint(
+                integration_id,
+                endpoint=endpoint,
+                transport="http_jsonrpc",
+                plugin_name=plugin_name,
+                timeout_seconds=timeout_seconds,
+                retries=retries,
+                metadata={"source": "runtime_mcp"},
+            )
 
     before_outcomes: dict[str, dict[str, Any]] = {}
 
@@ -52,6 +68,8 @@ def make_mcp_hooks(
             timeout_seconds=timeout_seconds,
             retries=retries,
             headers=headers,
+            integration_manager=integration_manager,
+            integration_id=integration_id,
         )
         return True
 
@@ -63,12 +81,15 @@ def make_mcp_hooks(
             timeout_seconds=timeout_seconds,
             retries=retries,
             headers=headers,
+            integration_manager=integration_manager,
+            integration_id=integration_id,
         )
         before_outcome = before_outcomes.get(event.stage)
 
         value: dict[str, Any] = {
             "name": plugin_name,
             "endpoint": endpoint,
+            "integration_id": integration_id,
             "stage": event.stage,
             "when": event.when,
             "timeout_seconds": float(timeout_seconds),
@@ -78,6 +99,8 @@ def make_mcp_hooks(
             "error": after_outcome.get("error"),
             "attempts": after_outcome.get("attempts"),
             "transport": after_outcome.get("transport"),
+            "integration_state": after_outcome.get("integration_state"),
+            "decision_reason": after_outcome.get("decision_reason"),
         }
 
         if before_outcome is not None:
@@ -87,6 +110,8 @@ def make_mcp_hooks(
                     "before_latency_ms": before_outcome.get("latency_ms"),
                     "before_error": before_outcome.get("error"),
                     "before_attempts": before_outcome.get("attempts"),
+                    "before_integration_state": before_outcome.get("integration_state"),
+                    "before_decision_reason": before_outcome.get("decision_reason"),
                 }
             )
 
@@ -114,6 +139,8 @@ def _call_mcp_hook(
     timeout_seconds: float,
     retries: int,
     headers: dict[str, str] | None,
+    integration_manager: PluginIntegrationManager | None,
+    integration_id: str | None,
 ) -> dict[str, Any]:
     parsed = urlparse(endpoint)
     if parsed.scheme == "mock":
@@ -123,6 +150,8 @@ def _call_mcp_hook(
             "error": None,
             "attempts": 0,
             "transport": "mock",
+            "integration_state": None,
+            "decision_reason": None,
             "response": None,
         }
 
@@ -133,8 +162,27 @@ def _call_mcp_hook(
             "error": f"unsupported_endpoint:{parsed.scheme or 'none'}",
             "attempts": 0,
             "transport": "unknown",
+            "integration_state": None,
+            "decision_reason": None,
             "response": None,
         }
+
+    if integration_manager is not None and integration_id:
+        decision = integration_manager.start_call(integration_id)
+        if not decision.allowed:
+            status = integration_manager.get_status(integration_id)
+            return {
+                "status": "degraded",
+                "latency_ms": 0.0,
+                "error": decision.reason,
+                "attempts": 0,
+                "transport": "http_jsonrpc",
+                "integration_state": status.state,
+                "decision_reason": decision.reason,
+                "response": None,
+            }
+    else:
+        decision = None
 
     arguments = {
         "plugin": plugin_name,
@@ -172,12 +220,21 @@ def _call_mcp_hook(
                 headers=headers,
             )
             latency_ms = (perf_counter() - started) * 1000.0
+            status = None
+            if integration_manager is not None and integration_id:
+                status = integration_manager.finish_call(
+                    integration_id,
+                    success=True,
+                    latency_ms=latency_ms,
+                )
             return {
                 "status": "ok",
                 "latency_ms": round(latency_ms, 3),
                 "error": None,
                 "attempts": attempts,
                 "transport": "http_jsonrpc",
+                "integration_state": status.state if status is not None else None,
+                "decision_reason": None if decision is None else decision.reason,
                 "response": response_payload,
             }
         except (
@@ -191,12 +248,22 @@ def _call_mcp_hook(
             latency_ms = (perf_counter() - started) * 1000.0
             last_error = f"{exc.__class__.__name__}:{exc}"
             if attempt >= retries:
+                status = None
+                if integration_manager is not None and integration_id:
+                    status = integration_manager.finish_call(
+                        integration_id,
+                        success=False,
+                        error=last_error,
+                        latency_ms=latency_ms,
+                    )
                 return {
                     "status": "error",
                     "latency_ms": round(latency_ms, 3),
                     "error": last_error,
                     "attempts": attempts,
                     "transport": "http_jsonrpc",
+                    "integration_state": status.state if status is not None else None,
+                    "decision_reason": None if decision is None else decision.reason,
                     "response": None,
                 }
 
@@ -206,6 +273,8 @@ def _call_mcp_hook(
         "error": last_error or "unknown",
         "attempts": attempts,
         "transport": "http_jsonrpc",
+        "integration_state": None,
+        "decision_reason": None if decision is None else decision.reason,
         "response": None,
     }
 
@@ -296,6 +365,12 @@ def _with_remote_source(item: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(item)
     normalized["source"] = "mcp_remote"
     return normalized
+
+
+def _build_integration_id(*, plugin_name: str, endpoint: str) -> str:
+    normalized_name = str(plugin_name or "").strip() or "unknown"
+    normalized_endpoint = str(endpoint or "").strip() or DEFAULT_MOCK_ENDPOINT
+    return f"plugin_mcp:{normalized_name}:{normalized_endpoint}"
 
 
 __all__ = ["make_mcp_hooks"]

@@ -77,3 +77,109 @@ def test_stage_artifact_cache_keeps_existing_payload_immutable(tmp_path: Path) -
     assert second.payload_sha256 == first.payload_sha256
     assert loaded is not None
     assert loaded.payload == {"version": 1}
+
+
+def test_stage_artifact_cache_hot_tier_enforces_max_entries(tmp_path: Path) -> None:
+    cache = StageArtifactCache(
+        repo_root=tmp_path,
+        hot_max_entries=2,
+        hot_max_tokens=100,
+    )
+
+    cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+        query_hash="1111222233334444",
+        fingerprint="fp-a",
+        payload={"value": "a"},
+        token_weight=10,
+    )
+    cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="bbbbbbbbbbbbbbbb",
+        query_hash="1111222233334444",
+        fingerprint="fp-b",
+        payload={"value": "b"},
+        token_weight=10,
+    )
+    cache.get_artifact(stage_name="source_plan", cache_key="aaaaaaaaaaaaaaaa")
+    cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="cccccccccccccccc",
+        query_hash="1111222233334444",
+        fingerprint="fp-c",
+        payload={"value": "c"},
+        token_weight=10,
+    )
+
+    snapshot = cache.hot_tier_snapshot()
+
+    assert snapshot["entry_count"] == 2
+    assert snapshot["token_total"] == 20
+    assert [item["cache_key"] for item in snapshot["entries"]] == [
+        "aaaaaaaaaaaaaaaa",
+        "cccccccccccccccc",
+    ]
+
+
+def test_stage_artifact_cache_hot_tier_enforces_max_tokens(tmp_path: Path) -> None:
+    cache = StageArtifactCache(
+        repo_root=tmp_path,
+        hot_max_entries=8,
+        hot_max_tokens=7,
+    )
+
+    cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+        query_hash="1111222233334444",
+        fingerprint="fp-a",
+        payload={"value": "a"},
+        token_weight=4,
+    )
+    cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="bbbbbbbbbbbbbbbb",
+        query_hash="1111222233334444",
+        fingerprint="fp-b",
+        payload={"value": "b"},
+        token_weight=4,
+    )
+    cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="cccccccccccccccc",
+        query_hash="1111222233334444",
+        fingerprint="fp-c",
+        payload={"value": "c"},
+        token_weight=3,
+    )
+
+    snapshot = cache.hot_tier_snapshot()
+
+    assert snapshot["entry_count"] == 2
+    assert snapshot["token_total"] == 7
+    assert [item["cache_key"] for item in snapshot["entries"]] == [
+        "bbbbbbbbbbbbbbbb",
+        "cccccccccccccccc",
+    ]
+
+
+def test_stage_artifact_cache_estimates_token_weight_when_missing(tmp_path: Path) -> None:
+    cache = StageArtifactCache(
+        repo_root=tmp_path,
+        hot_max_entries=4,
+        hot_max_tokens=100,
+    )
+
+    entry = cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+        query_hash="1111222233334444",
+        fingerprint="fp-a",
+        payload={"source_plan": {"steps": [{"id": 1, "stage": "index"}]}},
+    )
+    snapshot = cache.hot_tier_snapshot()
+
+    assert entry.token_weight > 0
+    assert snapshot["entry_count"] == 1
+    assert snapshot["token_total"] == entry.token_weight

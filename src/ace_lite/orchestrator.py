@@ -7,14 +7,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Callable
-from uuid import uuid4
 
 from ace_lite.conventions import load_conventions
 from ace_lite.exceptions import StageContractError
-from ace_lite.lsp.broker import LspDiagnosticsBroker
 from ace_lite.memory import (
     MemoryProvider,
-    NullMemoryProvider,
 )
 from ace_lite.memory.local_notes import append_capture_note
 from ace_lite.orchestrator_config import OrchestratorConfig
@@ -40,12 +37,7 @@ from ace_lite.orchestrator_runtime_support import (
 )
 from ace_lite.pipeline.contracts import validate_stage_output
 from ace_lite.pipeline.hooks import HookBus
-from ace_lite.pipeline.plugin_runtime import (
-    PluginRuntime,
-    PluginRuntimeConfig,
-    normalize_remote_slot_allowlist,
-    normalize_remote_slot_policy_mode,
-)
+from ace_lite.pipeline.plugin_runtime import PluginRuntime
 from ace_lite.pipeline.registry import StageRegistry
 from ace_lite.pipeline.stage_tags import build_stage_tags
 from ace_lite.pipeline.stages.augment import run_diagnostics_augment
@@ -57,6 +49,8 @@ from ace_lite.pipeline.stages.source_plan import run_source_plan
 from ace_lite.pipeline.types import StageContext, StageMetric
 from ace_lite.plugins.loader import PluginLoader
 from ace_lite.profile_store import ProfileStore
+from ace_lite.runtime_manager import RuntimeManager
+from ace_lite.runtime_state import RuntimeState
 from ace_lite.schema import SCHEMA_VERSION, validate_context_plan
 from ace_lite.scoring_config import (
     BM25_B,
@@ -70,14 +64,11 @@ from ace_lite.scoring_config import (
     HYBRID_HEURISTIC_WEIGHT,
     HYBRID_RRF_K_DEFAULT,
 )
-from ace_lite.signal_extractor import SignalExtractor
-from ace_lite.skills import build_skill_manifest
 from ace_lite.token_estimator import (
     estimate_tokens,
 )
 from ace_lite.tracing import export_stage_trace_jsonl, export_stage_trace_otlp
 from ace_lite.runtime_stats import RuntimeInvocationStats
-from ace_lite.runtime_stats_store import DurableStatsStore
 
 logger = logging.getLogger(__name__)
 
@@ -116,58 +107,54 @@ class AceOrchestrator:
         config: OrchestratorConfig | None = None,
         plugin_loader: PluginLoader | None = None,
         durable_stats_store_factory: Callable[[], Any] | None = None,
+        runtime_state: RuntimeState | None = None,
+        runtime_manager: RuntimeManager | None = None,
     ) -> None:
-        self._config = config or OrchestratorConfig()
-        self._memory_provider = memory_provider or NullMemoryProvider()
-        self._durable_stats_store_factory = (
-            durable_stats_store_factory or DurableStatsStore
-        )
-        self._durable_stats_session_id = f"session-{uuid4().hex[:12]}"
+        self._runtime_manager = runtime_manager
+        if runtime_state is None:
+            if self._runtime_manager is None:
+                self._runtime_manager = RuntimeManager(
+                    config=config,
+                    memory_provider=memory_provider,
+                    plugin_loader=plugin_loader,
+                    durable_stats_store_factory=durable_stats_store_factory,
+                )
+            runtime_state = self._runtime_manager.startup()
 
+        self._runtime_state = runtime_state
+        self._config = runtime_state.config
+        self._memory_provider = runtime_state.services.memory_provider
+        self._durable_stats_store_factory = (
+            runtime_state.services.durable_stats_store_factory
+        )
+        self._durable_stats_session_id = runtime_state.durable_stats_session_id
         self._conventions_files = (
-            list(self._config.index.conventions_files)
-            if self._config.index.conventions_files
+            list(runtime_state.conventions_files)
+            if runtime_state.conventions_files
             else None
         )
-        self._conventions_hashes: dict[str, str] = {}
-
-        self._plugin_loader = plugin_loader or PluginLoader(
-            default_untrusted_runtime="mcp"
-        )
-        self._plugin_runtime = PluginRuntime(
-            config=PluginRuntimeConfig(
-                remote_slot_allowlist=normalize_remote_slot_allowlist(
-                    self._config.plugins.remote_slot_allowlist
-                ),
-                remote_slot_policy_mode=normalize_remote_slot_policy_mode(
-                    self._config.plugins.remote_slot_policy_mode
-                ),
-            )
-        )
-
-        self._lsp_broker: LspDiagnosticsBroker | None
-        if self._config.lsp.commands or self._config.lsp.xref_commands:
-            self._lsp_broker = LspDiagnosticsBroker(
-                commands=self._config.lsp.commands,
-                xref_commands=self._config.lsp.xref_commands,
-            )
-        else:
-            self._lsp_broker = None
-
+        self._conventions_hashes = runtime_state.conventions_hashes
+        self._plugin_loader = runtime_state.services.plugin_loader
+        self._plugin_runtime = runtime_state.services.plugin_runtime
+        self._lsp_broker = runtime_state.services.lsp_broker
         self._tokenizer_model = self._config.tokenizer.model
-        self._signal_extractor = SignalExtractor(
-            keywords=self._config.memory.capture.keywords,
-            min_query_length=self._config.memory.capture.min_query_length,
-        )
-        if self._config.skills.manifest is not None:
-            self._skill_manifest = self._config.skills.manifest
-        else:
-            skill_root = Path(self._config.skills.dir or "skills")
-            self._skill_manifest = build_skill_manifest(skill_root)
+        self._signal_extractor = runtime_state.services.signal_extractor
+        self._skill_manifest = runtime_state.services.skill_manifest
 
     @property
     def config(self) -> OrchestratorConfig:
         return self._config
+
+    def shutdown(self) -> dict[str, Any]:
+        if self._runtime_manager is None:
+            return {
+                "started": False,
+                "shutdown": False,
+                "executed_count": 0,
+                "errors": [],
+                "results": [],
+            }
+        return self._runtime_manager.shutdown()
 
     def plan(
         self,
@@ -185,10 +172,9 @@ class AceOrchestrator:
             files=self._conventions_files,
             previous_hashes=self._conventions_hashes,
         )
-        self._conventions_hashes = {
-            str(path): str(sha)
-            for path, sha in conventions.get("file_hashes", {}).items()
-        }
+        self._runtime_state.update_conventions_hashes(
+            conventions.get("file_hashes", {})
+        )
         hook_bus, plugins_loaded = self._load_plugins(root=root_path)
 
         registry = self._build_registry()
@@ -283,6 +269,12 @@ class AceOrchestrator:
             replay_cache_info=replay_cache_info,
             trace_export=trace_export,
         )
+        self._runtime_state.note_plan_root(root_path)
+        self._runtime_state.note_durable_stats(
+            payload["observability"]["durable_stats"]
+        )
+        if self._runtime_manager is not None:
+            self._runtime_manager.ensure_shutdown_hooks()
 
         return payload
 

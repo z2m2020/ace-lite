@@ -65,6 +65,7 @@ from ace_lite.cli_app.params_option_groups import (
     _build_option_decorators,
 )
 from ace_lite.repomap.ranking import RANKING_PROFILES
+from ace_lite.runtime_profiles import RUNTIME_PROFILE_NAMES
 
 
 def _apply_click_options(
@@ -315,6 +316,17 @@ def _with_shared_trace_options(func: Callable[..., Any]) -> Callable[..., Any]:
 
 def _with_shared_plan_options(func: Callable[..., Any]) -> Callable[..., Any]:
     return _compose_click_decorators(
+        _apply_click_options(
+            click.option(
+                "--runtime-profile",
+                default=None,
+                type=click.Choice(list(RUNTIME_PROFILE_NAMES), case_sensitive=False),
+                help=(
+                    "High-level runtime profile to seed retrieval, cache, and budget "
+                    "knobs before expert overrides are applied."
+                ),
+            ),
+        ),
         _with_shared_target_options,
         _with_shared_candidate_options,
         _with_shared_index_options,

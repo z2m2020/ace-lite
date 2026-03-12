@@ -404,10 +404,236 @@ def load_runtime_stats_summary(
     }
 
 
+def _resolve_repo_relative_path(*, root: str | Path, configured_path: str | Path | None) -> str | None:
+    if configured_path is None:
+        return None
+    raw = str(configured_path).strip()
+    if not raw:
+        return None
+    path = Path(raw)
+    if not path.is_absolute():
+        path = Path(root).resolve() / path
+    return str(path.resolve())
+
+
+def build_runtime_status_payload(
+    *,
+    root: str | Path,
+    settings: dict[str, Any],
+    fingerprint: str,
+    selected_profile: str | None,
+    stats_tags: dict[str, Any] | None,
+    snapshot_loaded: bool,
+    snapshot_path: str | Path,
+    memory_state: dict[str, Any],
+    runtime_stats: dict[str, Any],
+) -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    plan = settings.get("plan", {}) if isinstance(settings.get("plan"), dict) else {}
+    mcp = settings.get("mcp", {}) if isinstance(settings.get("mcp"), dict) else {}
+    plan_index = plan.get("index", {}) if isinstance(plan.get("index"), dict) else {}
+    plan_embeddings = (
+        plan.get("embeddings", {})
+        if isinstance(plan.get("embeddings"), dict)
+        else {}
+    )
+    plan_replay = (
+        plan.get("plan_replay_cache", {})
+        if isinstance(plan.get("plan_replay_cache"), dict)
+        else {}
+    )
+    plan_trace = plan.get("trace", {}) if isinstance(plan.get("trace"), dict) else {}
+    plan_lsp = plan.get("lsp", {}) if isinstance(plan.get("lsp"), dict) else {}
+    plan_skills = (
+        plan.get("skills", {}) if isinstance(plan.get("skills"), dict) else {}
+    )
+    plan_plugins = (
+        plan.get("plugins", {}) if isinstance(plan.get("plugins"), dict) else {}
+    )
+    plan_cochange = (
+        plan.get("cochange", {}) if isinstance(plan.get("cochange"), dict) else {}
+    )
+
+    cache_paths = {
+        "index": _resolve_repo_relative_path(
+            root=root_path,
+            configured_path=plan_index.get("cache_path"),
+        ),
+        "embeddings": _resolve_repo_relative_path(
+            root=root_path,
+            configured_path=plan_embeddings.get("index_path"),
+        ),
+        "plan_replay_cache": _resolve_repo_relative_path(
+            root=root_path,
+            configured_path=plan_replay.get("cache_path"),
+        ),
+        "trace_export": _resolve_repo_relative_path(
+            root=root_path,
+            configured_path=plan_trace.get("export_path"),
+        )
+        if bool(plan_trace.get("export_enabled"))
+        else None,
+        "memory_notes": _resolve_repo_relative_path(
+            root=root_path,
+            configured_path=mcp.get("notes_path"),
+        ),
+        "cochange": _resolve_repo_relative_path(
+            root=root_path,
+            configured_path=plan_cochange.get("cache_path"),
+        ),
+        "runtime_stats_db": str(Path(runtime_stats.get("db_path", "")).resolve()),
+        "skills_dir": _resolve_repo_relative_path(
+            root=root_path,
+            configured_path=plan_skills.get("dir"),
+        ),
+    }
+
+    skills_dir_path = (
+        Path(cache_paths["skills_dir"]) if isinstance(cache_paths["skills_dir"], str) else None
+    )
+    lsp_commands = plan_lsp.get("commands")
+    lsp_xref_commands = plan_lsp.get("xref_commands")
+    lsp_has_commands = bool(lsp_commands) or bool(lsp_xref_commands)
+
+    service_health = [
+        {
+            "name": "memory",
+            "status": "disabled" if bool(memory_state.get("memory_disabled")) else "ok",
+            "primary": memory_state.get("primary"),
+            "secondary": memory_state.get("secondary"),
+            "warnings": list(memory_state.get("warnings", [])),
+            "recommendations": list(memory_state.get("recommendations", [])),
+        },
+        {
+            "name": "embeddings",
+            "status": "ok" if bool(mcp.get("embedding_enabled")) else "disabled",
+            "provider": mcp.get("embedding_provider"),
+            "model": mcp.get("embedding_model"),
+            "index_path": cache_paths["embeddings"],
+        },
+        {
+            "name": "plugins",
+            "status": "ok" if bool(plan_plugins.get("enabled", True)) else "disabled",
+            "remote_slot_policy_mode": plan_plugins.get("remote_slot_policy_mode"),
+        },
+        {
+            "name": "lsp",
+            "status": (
+                "disabled"
+                if not bool(plan_lsp.get("enabled"))
+                else ("ok" if lsp_has_commands else "degraded")
+            ),
+            "enabled": bool(plan_lsp.get("enabled")),
+            "commands_configured": lsp_has_commands,
+            "reason": "enabled_without_commands"
+            if bool(plan_lsp.get("enabled")) and not lsp_has_commands
+            else "",
+        },
+        {
+            "name": "skills",
+            "status": (
+                "ok"
+                if skills_dir_path is not None and skills_dir_path.exists()
+                else "degraded"
+            ),
+            "skills_dir": cache_paths["skills_dir"],
+            "precomputed_routing_enabled": bool(
+                plan_skills.get("precomputed_routing_enabled")
+            ),
+            "reason": ""
+            if skills_dir_path is not None and skills_dir_path.exists()
+            else "skills_dir_missing",
+        },
+        {
+            "name": "trace_export",
+            "status": (
+                "ok"
+                if bool(plan_trace.get("export_enabled") or plan_trace.get("otlp_enabled"))
+                else "disabled"
+            ),
+            "export_enabled": bool(plan_trace.get("export_enabled")),
+            "otlp_enabled": bool(plan_trace.get("otlp_enabled")),
+            "export_path": cache_paths["trace_export"],
+            "otlp_endpoint": plan_trace.get("otlp_endpoint"),
+        },
+        {
+            "name": "plan_replay_cache",
+            "status": "ok" if bool(plan_replay.get("enabled")) else "disabled",
+            "enabled": bool(plan_replay.get("enabled")),
+            "cache_path": cache_paths["plan_replay_cache"],
+        },
+        {
+            "name": "durable_stats",
+            "status": (
+                "ok"
+                if runtime_stats.get("latest_match") is not None
+                or Path(runtime_stats.get("db_path", "")).exists()
+                else "idle"
+            ),
+            "db_path": runtime_stats.get("db_path"),
+            "latest_session_id": (
+                runtime_stats.get("latest_match", {}) or {}
+            ).get("session_id"),
+        },
+    ]
+
+    degraded_services = [
+        {
+            "name": item["name"],
+            "reason": item.get("reason") or item.get("status"),
+            "source": "service_health",
+        }
+        for item in service_health
+        if item.get("status") == "degraded"
+    ]
+
+    latest_session = runtime_stats.get("summary", {}).get("session")
+    if isinstance(latest_session, dict):
+        degraded_states = latest_session.get("degraded_states", [])
+        reason_map = {
+            "memory_fallback": "memory",
+            "memory_namespace_fallback": "memory",
+            "trace_export_failed": "trace_export",
+            "plan_replay_invalid_cached_payload": "plan_replay_cache",
+            "plan_replay_store_failed": "plan_replay_cache",
+            "candidate_ranker_fallback": "retrieval",
+            "embedding_time_budget_exceeded": "embeddings",
+            "embedding_fallback": "embeddings",
+        }
+        for item in degraded_states if isinstance(degraded_states, list) else []:
+            reason_code = str(item.get("reason_code", "")).strip()
+            if not reason_code:
+                continue
+            degraded_services.append(
+                {
+                    "name": reason_map.get(reason_code, "runtime"),
+                    "reason": reason_code,
+                    "source": "latest_runtime_stats",
+                }
+            )
+
+    return {
+        "settings_fingerprint": fingerprint,
+        "selected_profile": selected_profile,
+        "stats_tags": dict(stats_tags or {}),
+        "snapshot_loaded": bool(snapshot_loaded),
+        "snapshot_path": str(snapshot_path),
+        "cache_paths": cache_paths,
+        "service_health": service_health,
+        "degraded_services": degraded_services,
+        "latest_runtime": {
+            "latest_match": runtime_stats.get("latest_match"),
+            "session": runtime_stats.get("summary", {}).get("session"),
+            "all_time": runtime_stats.get("summary", {}).get("all_time"),
+        },
+    }
+
+
 __all__ = [
     "build_codex_mcp_setup_plan",
     "DEFAULT_RUNTIME_STATS_DB_PATH",
     "evaluate_runtime_memory_state",
+    "build_runtime_status_payload",
     "load_latest_runtime_stats_match",
     "load_runtime_snapshot",
     "load_runtime_stats_summary",

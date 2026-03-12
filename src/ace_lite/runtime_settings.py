@@ -20,6 +20,7 @@ from ace_lite.config import DEFAULT_CONFIG_FILE
 from ace_lite.config_models import RuntimeConfig, validate_cli_config
 from ace_lite.config_pack import load_config_pack
 from ace_lite.orchestrator_config import OrchestratorConfig
+from ace_lite.runtime_profiles import RUNTIME_PROFILE_NAMES, get_runtime_profile
 from ace_lite.runtime_settings_store import (
     RUNTIME_SETTINGS_SCHEMA_VERSION,
     build_runtime_settings_fingerprint,
@@ -377,6 +378,66 @@ def _prepare_config_pack_overrides(
     return _normalize_mapping(result.overrides)
 
 
+def _normalize_runtime_profile_name(value: Any) -> str | None:
+    normalized = str(value or "").strip().lower()
+    return normalized or None
+
+
+def _resolve_runtime_profile_metadata(
+    *,
+    explicit_profile: str | None,
+    user_root: dict[str, Any],
+    repo_root: dict[str, Any],
+    cwd_root: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    requested_profile: str | None = None
+    selected_source = "default"
+    for label, raw in (
+        ("cli", explicit_profile),
+        ("cwd_config", _extract_path(_normalize_mapping(cwd_root.get("plan")), ("runtime_profile",))),
+        ("repo_config", _extract_path(_normalize_mapping(repo_root.get("plan")), ("runtime_profile",))),
+        ("user_config", _extract_path(_normalize_mapping(user_root.get("plan")), ("runtime_profile",))),
+    ):
+        if raw is _MISSING:
+            continue
+        normalized = _normalize_runtime_profile_name(raw)
+        if normalized is None:
+            continue
+        requested_profile = normalized
+        selected_source = label
+        break
+
+    if requested_profile is None:
+        return {}, {}
+
+    resolved_profile = get_runtime_profile(requested_profile)
+    metadata = {
+        "requested_profile": requested_profile,
+        "selected_profile_source": selected_source,
+        "available_profiles": list(RUNTIME_PROFILE_NAMES),
+    }
+    if resolved_profile is None:
+        metadata["profile_resolution"] = "unknown_profile"
+        return {}, metadata
+
+    metadata.update(
+        {
+            "selected_profile": resolved_profile.name,
+            "selected_profile_summary": resolved_profile.summary,
+            "profile_resolution": "selected",
+            "profile_knob_paths": {
+                key: list(value)
+                for key, value in resolved_profile.knob_paths().items()
+                if value
+            },
+            "stats_tags": {
+                "profile_key": resolved_profile.name,
+            },
+        }
+    )
+    return resolved_profile.plan_overrides(), metadata
+
+
 def _normalize_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
     index_payload = payload.get("index")
     if isinstance(index_payload, dict):
@@ -411,10 +472,11 @@ def _build_plan_snapshot(
     repo_root: dict[str, Any],
     cwd_root: dict[str, Any],
     cli_overrides: Mapping[str, Any] | None,
+    runtime_profile: str | None,
     retrieval_preset: str | Mapping[str, Any] | None,
     config_pack_path: str | Path | None,
     config_pack_overrides: Mapping[str, Any] | None,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
     user_plan = _normalize_mapping(user_root.get("plan"))
     repo_plan = _normalize_mapping(repo_root.get("plan"))
     cwd_plan = _normalize_mapping(cwd_root.get("plan"))
@@ -429,13 +491,20 @@ def _build_plan_snapshot(
     for payload in (user_root, repo_root, cwd_root):
         _deep_merge(merged_root, payload)
     validated_root = _validate_root_payload(merged_root)
+    profile_plan, profile_metadata = _resolve_runtime_profile_metadata(
+        explicit_profile=runtime_profile,
+        user_root=user_root,
+        repo_root=repo_root,
+        cwd_root=cwd_root,
+    )
     merged_plan = _normalize_mapping(validated_root.get("plan"))
-    for payload in (preset_plan, pack_plan, cli_plan):
+    for payload in (profile_plan, preset_plan, pack_plan, cli_plan):
         _deep_merge(merged_plan, payload)
     layers = [
         ("cli", cli_plan),
         ("config_pack", pack_plan),
         ("retrieval_preset", preset_plan),
+        ("runtime_profile", profile_plan),
         ("cwd_config", cwd_plan),
         ("repo_config", repo_plan),
         ("user_config", user_plan),
@@ -444,7 +513,7 @@ def _build_plan_snapshot(
     normalized = OrchestratorConfig.model_validate(
         _normalize_plan_payload(payload)
     ).model_dump(exclude_none=False, by_alias=True)
-    return normalized, provenance, validated_root
+    return normalized, provenance, validated_root, profile_metadata
 
 
 def _build_runtime_snapshot(
@@ -630,6 +699,7 @@ class RuntimeSettingsManager:
         cwd: str | Path | None = None,
         config_file: str = DEFAULT_CONFIG_FILE,
         plan_cli_overrides: Mapping[str, Any] | None = None,
+        plan_runtime_profile: str | None = None,
         plan_retrieval_preset: str | Mapping[str, Any] | None = None,
         plan_config_pack_path: str | Path | None = None,
         plan_config_pack_overrides: Mapping[str, Any] | None = None,
@@ -643,11 +713,12 @@ class RuntimeSettingsManager:
             cwd=cwd,
             filename=config_file,
         )
-        plan_snapshot, plan_provenance, validated_root = _build_plan_snapshot(
+        plan_snapshot, plan_provenance, validated_root, plan_metadata = _build_plan_snapshot(
             user_root=user_root,
             repo_root=repo_root,
             cwd_root=cwd_root,
             cli_overrides=plan_cli_overrides,
+            runtime_profile=plan_runtime_profile,
             retrieval_preset=plan_retrieval_preset,
             config_pack_path=plan_config_pack_path,
             config_pack_overrides=plan_config_pack_overrides,
@@ -681,10 +752,24 @@ class RuntimeSettingsManager:
             "loaded_files": loaded_files,
             "validated_meta": validated_root.get("_meta", {}),
         }
+        metadata.update(plan_metadata)
+        fingerprint = build_runtime_settings_fingerprint(snapshot)
+        stats_tags = (
+            dict(metadata.get("stats_tags", {}))
+            if isinstance(metadata.get("stats_tags"), dict)
+            else {}
+        )
+        if metadata.get("selected_profile"):
+            stats_tags.setdefault(
+                "profile_key",
+                str(metadata.get("selected_profile")).strip().lower(),
+            )
+        stats_tags["settings_fingerprint"] = fingerprint
+        metadata["stats_tags"] = stats_tags
         return RuntimeSettingsSnapshot(
             snapshot=snapshot,
             provenance=provenance,
-            fingerprint=build_runtime_settings_fingerprint(snapshot),
+            fingerprint=fingerprint,
             metadata=metadata,
         )
 

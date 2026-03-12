@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path
+from urllib.error import URLError
 
+from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.pipeline.types import StageContext, StageEvent
 from ace_lite.plugins import runtime_mcp
 from ace_lite.plugins.loader import PluginLoader
@@ -230,12 +232,14 @@ def test_plugin_loader_threads_mcp_timeout_retries_and_auth_env(
         timeout_seconds: float = 0.3,
         retries: int = 0,
         headers: dict[str, str] | None = None,
+        integration_manager: PluginIntegrationManager | None = None,
     ):
         captured["name"] = plugin_name
         captured["endpoint"] = endpoint
         captured["timeout_seconds"] = timeout_seconds
         captured["retries"] = retries
         captured["headers"] = headers
+        captured["integration_manager"] = integration_manager
 
         def before_stage(_event: StageEvent) -> bool:
             return True
@@ -255,6 +259,66 @@ def test_plugin_loader_threads_mcp_timeout_retries_and_auth_env(
     assert float(captured["timeout_seconds"]) == 0.7
     assert int(captured["retries"]) == 2
     assert captured["headers"] == {"Authorization": "Bearer secret-token"}
+    assert captured["integration_manager"] is None
+
+
+def test_plugin_loader_threads_integration_manager_into_mcp_hooks(
+    tmp_path: Path, tmp_plugin_dir: Path, monkeypatch
+) -> None:
+    plugin_dir = tmp_plugin_dir / "mcp-with-manager"
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+
+    (plugin_dir / "plugin.yaml").write_text(
+        textwrap.dedent(
+            """
+            name: mcp-with-manager
+            version: 1.0.0
+            runtime: mcp
+            trusted: true
+            priority: 1
+            mcp_endpoint: http://localhost:9000/mcp
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    captured: dict[str, object] = {}
+    manager = PluginIntegrationManager()
+
+    def fake_make_mcp_hooks(
+        plugin_name: str,
+        *,
+        endpoint: str | None = None,
+        timeout_seconds: float = 0.3,
+        retries: int = 0,
+        headers: dict[str, str] | None = None,
+        integration_manager: PluginIntegrationManager | None = None,
+    ):
+        captured["plugin_name"] = plugin_name
+        captured["endpoint"] = endpoint
+        captured["integration_manager"] = integration_manager
+
+        def before_stage(_event: StageEvent) -> bool:
+            return True
+
+        def after_stage(_event: StageEvent) -> dict[str, object]:
+            return {}
+
+        return before_stage, after_stage
+
+    monkeypatch.setattr("ace_lite.plugins.loader.make_mcp_hooks", fake_make_mcp_hooks)
+
+    loader = PluginLoader(
+        default_untrusted_runtime="mcp",
+        integration_manager=manager,
+    )
+    _hook_bus, loaded = loader.load_hooks(repo_root=tmp_path)
+
+    assert loaded == ["mcp-with-manager"]
+    assert captured["plugin_name"] == "mcp-with-manager"
+    assert captured["endpoint"] == "http://localhost:9000/mcp"
+    assert captured["integration_manager"] is manager
 
 
 def test_runtime_mcp_extract_slot_contributions_sets_remote_source() -> None:
@@ -302,6 +366,42 @@ def test_runtime_mcp_post_json_includes_extra_headers(monkeypatch) -> None:
 
     headers = {str(k).lower(): str(v) for k, v in dict(captured["headers"]).items()}
     assert headers.get("authorization") == "Bearer secret-token"
+
+
+def test_runtime_mcp_repeated_failure_degrades_via_integration_manager(
+    monkeypatch,
+) -> None:
+    calls: list[str] = []
+
+    def fake_urlopen(*_args, **_kwargs):
+        calls.append("attempt")
+        raise URLError("down")
+
+    monkeypatch.setattr(runtime_mcp, "safe_urlopen", fake_urlopen)
+
+    manager = PluginIntegrationManager(default_failure_threshold=1)
+    before_hook, after_hook = runtime_mcp.make_mcp_hooks(
+        "remote-plugin",
+        endpoint="http://localhost:9000/mcp",
+        integration_manager=manager,
+    )
+    event = StageEvent(
+        stage="augment",
+        when="after",
+        context=StageContext(query="q", repo="r", root=".", state={}),
+        payload={},
+    )
+
+    assert before_hook(event) is True
+    result = after_hook(event)
+
+    plugin_row = result["slots"][0]["value"]
+    assert plugin_row["before_status"] == "error"
+    assert plugin_row["before_integration_state"] == "open"
+    assert plugin_row["status"] == "degraded"
+    assert plugin_row["integration_state"] == "open"
+    assert plugin_row["decision_reason"] == "circuit_open"
+    assert len(calls) == 1
 
 
 def test_plan_post_processor_plugin_patches_source_plan(

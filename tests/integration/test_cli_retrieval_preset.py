@@ -119,6 +119,62 @@ plan:
     assert captured["repomap_config"]["signal_weights"] == explicit_weights
 
 
+def test_cli_runtime_profile_seeds_defaults_but_cli_overrides_still_win(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        "plan:\n  runtime_profile: wide_search\n",
+        encoding="utf-8",
+    )
+
+    captured: dict[str, Any] = {}
+
+    def fake_run_plan(**kwargs: Any) -> dict[str, Any]:
+        captured["retrieval_config"] = kwargs["retrieval_config"]
+        captured["repomap_config"] = kwargs["repomap_config"]
+        captured["plan_replay_cache_config"] = kwargs["plan_replay_cache_config"]
+        captured["retrieval_policy"] = kwargs["retrieval_policy"]
+        return {"ok": True}
+
+    monkeypatch.setattr(cli_module, "run_plan", fake_run_plan)
+
+    runner = CliRunner()
+    base_args = [
+        "plan",
+        "--query",
+        "q",
+        "--repo",
+        "demo",
+        "--root",
+        str(tmp_path),
+        "--languages",
+        "python",
+        "--memory-primary",
+        "none",
+        "--memory-secondary",
+        "none",
+    ]
+
+    result = runner.invoke(cli_module.cli, base_args, env=_cli_env(tmp_path))
+    assert result.exit_code == 0
+    assert captured["retrieval_policy"] == "feature"
+    assert captured["retrieval_config"]["top_k_files"] == 18
+    assert captured["repomap_config"]["top_k"] == 16
+    assert captured["plan_replay_cache_config"]["enabled"] is True
+
+    result = runner.invoke(
+        cli_module.cli,
+        [*base_args, "--runtime-profile", "fast_path", "--top-k-files", "9"],
+        env=_cli_env(tmp_path),
+    )
+    assert result.exit_code == 0
+    assert captured["retrieval_policy"] == "general"
+    assert captured["retrieval_config"]["top_k_files"] == 9
+    assert captured["repomap_config"]["top_k"] == 4
+    assert captured["plan_replay_cache_config"]["enabled"] is True
+
+
 
 def test_cli_reads_scip_provider_and_fallback_from_config(
     tmp_path: Path,

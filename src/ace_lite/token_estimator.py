@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import json
 import logging
 from functools import lru_cache
 from typing import Any
@@ -66,7 +67,16 @@ def estimate_tokens(text: str, *, model: str | None = None) -> int:
     return max(1, len(encoded))
 
 
+def estimate_payload_tokens(payload: Any, *, model: str | None = None) -> int:
+    try:
+        text = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    except Exception:
+        text = str(payload)
+    return estimate_tokens(text, model=model)
+
+
 __all__ = [
+    "estimate_payload_tokens",
     "estimate_tokens",
     "normalize_tokenizer_model",
     "resolve_tokenizer_backend",

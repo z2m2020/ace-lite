@@ -763,6 +763,7 @@ def test_cli_help_lists_shared_candidate_options() -> None:
     plan_help = runner.invoke(cli, ["plan", "--help"])
     assert plan_help.exit_code == 0
     assert "--retrieval-preset" in plan_help.output
+    assert "--runtime-profile" in plan_help.output
     assert "--top-k-files" in plan_help.output
     assert "--candidate-ranker" in plan_help.output
     assert "--hybrid-re2-fusion-mode" in plan_help.output
@@ -796,6 +797,7 @@ def test_cli_help_lists_shared_candidate_options() -> None:
     benchmark_help = runner.invoke(cli, ["benchmark", "run", "--help"])
     assert benchmark_help.exit_code == 0
     assert "--retrieval-preset" in benchmark_help.output
+    assert "--runtime-profile" in benchmark_help.output
     assert "--top-k-files" in benchmark_help.output
     assert "--candidate-ranker" in benchmark_help.output
     assert "--hybrid-re2-fusion-mode" in benchmark_help.output
@@ -856,6 +858,7 @@ def test_cli_plan_and_benchmark_share_core_option_defaults() -> None:
     }
 
     shared_option_names = (
+        "runtime_profile",
         "retrieval_preset",
         "top_k_files",
         "min_candidate_score",
@@ -900,6 +903,7 @@ def test_cli_plan_and_benchmark_share_core_option_defaults() -> None:
         assert tuple(plan_options[option_name].opts) == tuple(
             benchmark_options[option_name].opts
         )
+    assert plan_options["runtime_profile"].default is None
     assert plan_options["retrieval_preset"].default == "none"
     assert plan_options["candidate_ranker"].default == "rrf_hybrid"
     assert plan_options["memory_disclosure_mode"].default == "compact"

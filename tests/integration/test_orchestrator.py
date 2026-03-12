@@ -14,6 +14,8 @@ from ace_lite.memory import OpenMemoryMemoryProvider
 from ace_lite.orchestrator import AceOrchestrator
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.rankers.bm25 import rank_candidates_bm25_two_stage
+from ace_lite.runtime_manager import RuntimeManager
+from ace_lite.stage_artifact_cache import StageArtifactCache
 from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.schema import SCHEMA_VERSION
 
@@ -242,6 +244,125 @@ def test_orchestrator_plan_records_durable_runtime_stats(
     assert all_time.to_payload()["counters"]["invocation_count"] == 1
     assert session.to_payload()["counters"]["invocation_count"] == 1
     assert "total" in [item["stage_name"] for item in session.to_payload()["stage_latencies"]]
+
+
+def test_orchestrator_can_reuse_runtime_manager_shared_services(
+    tmp_path: Path,
+    fake_skill_manifest: list[dict[str, Any]],
+) -> None:
+    _seed_repo(tmp_path)
+    client = FakeOpenMemoryClient()
+    provider = OpenMemoryMemoryProvider(
+        client,
+        user_id="u-runtime",
+        app="ace-lite",
+        limit=3,
+        channel_name="mcp",
+    )
+    db_path = tmp_path / "user-runtime" / "runtime-stats.db"
+    config = OrchestratorConfig(
+        skills={"manifest": fake_skill_manifest},
+        index={
+            "languages": ["python"],
+            "cache_path": tmp_path / "context-map" / "index.json",
+        },
+        repomap={"enabled": False},
+    )
+    manager = RuntimeManager(
+        config=config,
+        memory_provider=provider,
+        durable_stats_store_factory=lambda: DurableStatsStore(db_path=db_path),
+    )
+    first = AceOrchestrator(runtime_manager=manager)
+    second = AceOrchestrator(runtime_manager=manager)
+
+    first_payload = first.plan(
+        query="first runtime-managed plan for auth",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+    )
+    second_payload = second.plan(
+        query="second runtime-managed plan for auth",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+    )
+
+    runtime_state = manager.startup()
+    assert first._runtime_state is runtime_state
+    assert second._runtime_state is runtime_state
+    assert first_payload["memory"]["channel_used"] == "mcp"
+    assert second_payload["memory"]["channel_used"] == "mcp"
+    assert (
+        first_payload["observability"]["durable_stats"]["session_id"]
+        == runtime_state.durable_stats_session_id
+    )
+    assert (
+        second_payload["observability"]["durable_stats"]["session_id"]
+        == runtime_state.durable_stats_session_id
+    )
+
+    store = DurableStatsStore(db_path=db_path)
+    session = store.read_scope(
+        scope_kind="session",
+        scope_key=runtime_state.durable_stats_session_id,
+    )
+    assert session is not None
+    assert session.to_payload()["counters"]["invocation_count"] == 2
+
+
+def test_orchestrator_shutdown_runs_inline_gc_and_final_stats_flush(
+    tmp_path: Path,
+    fake_skill_manifest: list[dict[str, Any]],
+) -> None:
+    _seed_repo(tmp_path)
+    db_path = tmp_path / "user-runtime" / "runtime-stats.db"
+    config = OrchestratorConfig(
+        skills={"manifest": fake_skill_manifest},
+        index={
+            "languages": ["python"],
+            "cache_path": tmp_path / "context-map" / "index.json",
+        },
+        repomap={"enabled": False},
+        plan_replay_cache={"enabled": True},
+    )
+    manager = RuntimeManager(
+        config=config,
+        durable_stats_store_factory=lambda: DurableStatsStore(db_path=db_path),
+    )
+    orchestrator = AceOrchestrator(runtime_manager=manager)
+    orchestrator.plan(
+        query="shutdown lifecycle for auth",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+    )
+
+    cache = StageArtifactCache(repo_root=tmp_path)
+    orphan = cache.temp_root / "source_plan" / "ab" / "abcdef.worker.json.tmp"
+    orphan.parent.mkdir(parents=True, exist_ok=True)
+    orphan.write_text('{"orphan": true}\n', encoding="utf-8")
+
+    shutdown_payload = orchestrator.shutdown()
+
+    assert shutdown_payload["shutdown"] is True
+    assert orphan.exists() is False
+    flush_result = next(
+        item
+        for item in shutdown_payload["results"]
+        if item["hook"] == "_flush_runtime_stats_hook"
+    )
+    gc_result = next(
+        item
+        for item in shutdown_payload["results"]
+        if item["hook"] == "_cleanup_stage_artifact_temps_hook"
+    )
+    assert flush_result["ok"] is True
+    assert flush_result["result"]["skipped"] is False
+    assert flush_result["result"]["invocation_count"] == 1
+    assert gc_result["result"]["mode"] == "bounded_opportunistic"
+    assert gc_result["result"]["budget_ms"] == 50.0
+    assert gc_result["result"]["deleted_temp_payloads"] >= 1
+    assert gc_result["ok"] is True
+    assert gc_result["result"]["deleted_temp_payloads"] >= 1
 
 
 def test_orchestrator_plan_replay_cache_hits_on_second_run(

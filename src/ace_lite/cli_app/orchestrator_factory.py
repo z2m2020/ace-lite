@@ -37,6 +37,7 @@ from ace_lite.memory_clients.rest_client import OpenMemoryRestClient
 from ace_lite.orchestrator import AceOrchestrator
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.plugins.loader import PluginLoader
+from ace_lite.runtime_manager import RuntimeManager
 
 
 def _provider_from_channel(
@@ -749,11 +750,12 @@ def create_orchestrator(
         }
     )
 
-    return AceOrchestrator(
-        memory_provider=provider,
+    runtime_manager = RuntimeManager(
         config=config,
+        memory_provider=provider,
         plugin_loader=plugin_loader,
     )
+    return AceOrchestrator(runtime_manager=runtime_manager)
 
 
 def run_plan(

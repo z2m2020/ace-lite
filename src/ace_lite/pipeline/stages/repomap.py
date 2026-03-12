@@ -299,7 +299,12 @@ def run_repomap(
                     cache_path=precompute_cache_path,
                     key=precompute_key,
                     payload=precomputed_payload,
-                    meta=precompute_required_meta,
+                    meta={
+                        **precompute_required_meta,
+                        "ttl_seconds": int(precompute_ttl_seconds),
+                        "policy_name": "repomap_precompute",
+                        "trust_class": "exact",
+                    },
                 )
             )
 
@@ -321,7 +326,12 @@ def run_repomap(
                     cache_path=cache_path,
                     key=cache_key,
                     payload=payload,
-                    meta=cache_required_meta,
+                    meta={
+                        **cache_required_meta,
+                        "ttl_seconds": int(cache_ttl_seconds),
+                        "policy_name": "repomap",
+                        "trust_class": "exact",
+                    },
                 )
             )
         else:

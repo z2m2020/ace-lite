@@ -52,6 +52,12 @@ from ace_lite.index_stage import (
     select_index_chunks,
     select_initial_candidates,
 )
+from ace_lite.index_stage.cache import (
+    build_index_candidate_cache_key,
+    default_index_candidate_cache_path,
+    load_cached_index_candidates_checked,
+    store_cached_index_candidates,
+)
 from ace_lite.index_stage.config_adapter import (
     build_index_stage_config_from_orchestrator,
 )
@@ -68,6 +74,8 @@ from ace_lite.retrieval_shared import (
     extract_retrieval_terms,
     load_retrieval_index_snapshot,
 )
+
+_INDEX_CANDIDATE_CACHE_CONTENT_VERSION = "index-candidates-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -389,6 +397,22 @@ def _resolve_embedding_runtime_config(
         normalized_fields=tuple(dict.fromkeys(normalized_fields)),
         notes=tuple(dict.fromkeys(notes)),
     )
+
+
+def _clone_index_candidate_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    cloned = dict(payload)
+    cloned.pop("candidate_cache", None)
+    return cloned
+
+
+def _attach_index_candidate_cache_info(
+    *,
+    payload: dict[str, Any],
+    cache_info: dict[str, Any],
+) -> dict[str, Any]:
+    materialized = _clone_index_candidate_payload(payload)
+    materialized["candidate_cache"] = dict(cache_info)
+    return materialized
 
 
 def _rerank_cross_encoder_with_time_budget(
@@ -915,6 +939,165 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     ctx.state["__index_files"] = files_map
     index_hash = snapshot.index_hash
     corpus_size = snapshot.corpus_size
+    embedding_runtime = _resolve_embedding_runtime_config(
+        provider=str(config.embedding_provider),
+        model=str(config.embedding_model),
+        dimension=int(config.embedding_dimension),
+    )
+    index_candidate_cache_path = default_index_candidate_cache_path(root=ctx.root)
+    index_candidate_cache_ttl_seconds = max(
+        0, int(policy.get("index_candidate_cache_ttl_seconds", 1800) or 1800)
+    )
+    index_candidate_cache_required_meta = {
+        "policy_name": str(policy.get("name", "general")),
+        "policy_version": str(policy.get("version", retrieval_cfg.policy_version)),
+        "index_hash": str(index_hash or ""),
+        "content_version": _INDEX_CANDIDATE_CACHE_CONTENT_VERSION,
+    }
+    index_candidate_cache_key = build_index_candidate_cache_key(
+        query=ctx.query,
+        terms=terms,
+        memory_paths=memory_paths,
+        index_hash=index_hash,
+        policy=policy,
+        requested_ranker=str(retrieval_cfg.candidate_ranker),
+        top_k_files=int(retrieval_cfg.top_k_files),
+        min_candidate_score=int(retrieval_cfg.min_candidate_score),
+        candidate_relative_threshold=float(retrieval_cfg.candidate_relative_threshold),
+        chunk_top_k=int(chunking_cfg.top_k),
+        chunk_per_file_limit=int(chunking_cfg.per_file_limit),
+        chunk_token_budget=int(chunking_cfg.token_budget),
+        chunk_disclosure=str(chunking_cfg.disclosure),
+        exact_search_enabled=bool(retrieval_cfg.exact_search_enabled),
+        deterministic_refine_enabled=bool(retrieval_cfg.deterministic_refine_enabled),
+        embedding_enabled=bool(config.embedding_enabled),
+        embedding_provider=str(embedding_runtime.provider),
+        embedding_model=str(embedding_runtime.model),
+        embedding_dimension=int(embedding_runtime.dimension),
+        feedback_enabled=bool(config.feedback_enabled),
+        multi_channel_rrf_enabled=bool(retrieval_cfg.multi_channel_rrf_enabled)
+        or str(policy.get("version", "")).strip().lower().startswith("v2"),
+        chunk_guard_mode=str(chunk_guard_cfg.mode),
+        topological_shield_mode=str(topological_shield_cfg.mode),
+        settings_payload={
+            "retrieval": {
+                "exact_search_time_budget_ms": int(
+                    retrieval_cfg.exact_search_time_budget_ms
+                ),
+                "exact_search_max_paths": int(retrieval_cfg.exact_search_max_paths),
+                "hybrid_re2_fusion_mode": str(retrieval_cfg.hybrid_re2_fusion_mode),
+                "hybrid_re2_rrf_k": int(retrieval_cfg.hybrid_re2_rrf_k),
+                "hybrid_re2_bm25_weight": float(retrieval_cfg.hybrid_re2_bm25_weight),
+                "hybrid_re2_heuristic_weight": float(
+                    retrieval_cfg.hybrid_re2_heuristic_weight
+                ),
+                "hybrid_re2_coverage_weight": float(
+                    retrieval_cfg.hybrid_re2_coverage_weight
+                ),
+                "hybrid_re2_combined_scale": float(
+                    retrieval_cfg.hybrid_re2_combined_scale
+                ),
+                "multi_channel_rrf_k": int(retrieval_cfg.multi_channel_rrf_k),
+                "multi_channel_rrf_pool_cap": int(
+                    retrieval_cfg.multi_channel_rrf_pool_cap
+                ),
+                "multi_channel_rrf_code_cap": int(
+                    retrieval_cfg.multi_channel_rrf_code_cap
+                ),
+                "multi_channel_rrf_docs_cap": int(
+                    retrieval_cfg.multi_channel_rrf_docs_cap
+                ),
+                "multi_channel_rrf_memory_cap": int(
+                    retrieval_cfg.multi_channel_rrf_memory_cap
+                ),
+            },
+            "chunking": {
+                "diversity_enabled": bool(chunking_cfg.diversity_enabled),
+                "diversity_path_penalty": float(
+                    chunking_cfg.diversity_path_penalty
+                ),
+                "diversity_symbol_family_penalty": float(
+                    chunking_cfg.diversity_symbol_family_penalty
+                ),
+                "diversity_kind_penalty": float(chunking_cfg.diversity_kind_penalty),
+                "diversity_locality_penalty": float(
+                    chunking_cfg.diversity_locality_penalty
+                ),
+                "diversity_locality_window": int(
+                    chunking_cfg.diversity_locality_window
+                ),
+                "topological_max_attenuation": float(
+                    topological_shield_cfg.max_attenuation
+                ),
+                "topological_shared_parent_attenuation": float(
+                    topological_shield_cfg.shared_parent_attenuation
+                ),
+                "topological_adjacency_attenuation": float(
+                    topological_shield_cfg.adjacency_attenuation
+                ),
+                "guard_lambda_penalty": float(chunk_guard_cfg.lambda_penalty),
+                "guard_min_pool": int(chunk_guard_cfg.min_pool),
+                "guard_max_pool": int(chunk_guard_cfg.max_pool),
+                "guard_min_marginal_utility": float(
+                    chunk_guard_cfg.min_marginal_utility
+                ),
+                "guard_compatibility_min_overlap": float(
+                    chunk_guard_cfg.compatibility_min_overlap
+                ),
+            },
+            "embedding": {
+                "rerank_pool": int(config.embedding_rerank_pool),
+                "lexical_weight": float(config.embedding_lexical_weight),
+                "semantic_weight": float(config.embedding_semantic_weight),
+                "min_similarity": float(config.embedding_min_similarity),
+                "fail_open": bool(config.embedding_fail_open),
+            },
+            "feedback": {
+                "path": str(config.feedback_path),
+                "max_entries": int(config.feedback_max_entries),
+                "boost_per_select": float(config.feedback_boost_per_select),
+                "max_boost": float(config.feedback_max_boost),
+                "decay_days": float(config.feedback_decay_days),
+            },
+            "feature_flags": {
+                "cochange_enabled": bool(config.cochange_enabled),
+                "scip_enabled": bool(config.scip_enabled),
+            },
+            "adaptive_router": {
+                "enabled": bool(router_cfg.enabled),
+                "mode": str(router_cfg.mode),
+                "model_path": str(router_cfg.model_path),
+                "state_path": str(router_cfg.state_path),
+                "arm_set": str(router_cfg.arm_set),
+                "online_bandit_enabled": bool(router_cfg.online_bandit_enabled),
+                "online_bandit_experiment_enabled": bool(
+                    router_cfg.online_bandit_experiment_enabled
+                ),
+            },
+        },
+        content_version=_INDEX_CANDIDATE_CACHE_CONTENT_VERSION,
+    )
+    index_candidate_cache = {
+        "enabled": True,
+        "hit": False,
+        "store_written": False,
+        "cache_key": str(index_candidate_cache_key),
+        "path": str(index_candidate_cache_path),
+        "ttl_seconds": int(index_candidate_cache_ttl_seconds),
+        "content_version": _INDEX_CANDIDATE_CACHE_CONTENT_VERSION,
+    }
+    cached_index_payload = load_cached_index_candidates_checked(
+        cache_path=index_candidate_cache_path,
+        key=index_candidate_cache_key,
+        max_age_seconds=index_candidate_cache_ttl_seconds,
+        required_meta=index_candidate_cache_required_meta,
+    )
+    if cached_index_payload is not None:
+        index_candidate_cache["hit"] = True
+        return _attach_index_candidate_cache_info(
+            payload=cached_index_payload,
+            cache_info=index_candidate_cache,
+        )
 
     fusion_mode = normalize_fusion_mode(retrieval_cfg.hybrid_re2_fusion_mode)
     hybrid_weights = {
@@ -1180,7 +1363,7 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     topological_shield_payload = chunk_selection.topological_shield_payload
     chunk_guard_payload = chunk_selection.chunk_guard_payload
 
-    return build_index_stage_output(
+    payload = build_index_stage_output(
         repo=ctx.repo,
         root=ctx.root,
         terms=terms,
@@ -1226,6 +1409,23 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
         policy_name=str(policy.get("name", "general")),
         policy_version=str(policy.get("version", retrieval_cfg.policy_version)),
         timings_ms=timings_ms,
+    )
+    index_candidate_cache["store_written"] = bool(
+        store_cached_index_candidates(
+            cache_path=index_candidate_cache_path,
+            key=index_candidate_cache_key,
+            payload=_clone_index_candidate_payload(payload),
+            meta={
+                **index_candidate_cache_required_meta,
+                "query": ctx.query,
+                "ttl_seconds": int(index_candidate_cache_ttl_seconds),
+                "trust_class": "exact",
+            },
+        )
+    )
+    return _attach_index_candidate_cache_info(
+        payload=payload,
+        cache_info=index_candidate_cache,
     )
 
 

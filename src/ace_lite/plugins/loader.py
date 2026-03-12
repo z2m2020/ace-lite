@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 import yaml
 
+from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.pipeline.hooks import HookBus
 from ace_lite.plugins.runtime_mcp import make_mcp_hooks
 
@@ -33,11 +34,13 @@ class PluginLoader:
         *,
         default_untrusted_runtime: str = "mcp",
         allow_untrusted_remote_mcp_endpoint: bool = False,
+        integration_manager: PluginIntegrationManager | None = None,
     ) -> None:
         self._default_untrusted_runtime = default_untrusted_runtime
         self._allow_untrusted_remote_mcp_endpoint = bool(
             allow_untrusted_remote_mcp_endpoint
         )
+        self._integration_manager = integration_manager
 
     def load_hooks(self, *, repo_root: str | Path) -> tuple[HookBus, list[str]]:
         root = Path(repo_root)
@@ -89,6 +92,7 @@ class PluginLoader:
                     ),
                     retries=cfg.mcp_retries,
                     headers=headers,
+                    integration_manager=self._integration_manager,
                 )
                 hook_bus.register_before(cfg.name, before_hook)
                 hook_bus.register_after(cfg.name, after_hook)

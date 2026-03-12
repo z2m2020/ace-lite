@@ -71,6 +71,13 @@ def test_run_repomap_uses_cache_with_index_and_worktree_hash(tmp_path: Path) -> 
     assert first["worktree_seed_count"] == 1
     assert Path(first["cache"]["path"]).exists()
     assert Path(first["precompute"]["path"]).exists()
+    cache_marker = json.loads(Path(first["cache"]["path"]).read_text(encoding="utf-8"))
+    precompute_marker = json.loads(
+        Path(first["precompute"]["path"]).read_text(encoding="utf-8")
+    )
+    assert cache_marker["backend"] == "stage_artifact_cache"
+    assert precompute_marker["backend"] == "stage_artifact_cache"
+    assert (tmp_path / "context-map" / "repomap" / "stage-artifact-cache.db").exists()
 
     assert second["enabled"] is True
     assert second["cache"]["hit"] is True

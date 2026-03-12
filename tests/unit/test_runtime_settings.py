@@ -129,6 +129,40 @@ def test_runtime_settings_manager_resolves_runtime_and_mcp_sources(tmp_path: Pat
     assert snapshot.provenance["mcp"]["user_id"] == "identity_fallback"
 
 
+def test_runtime_settings_manager_applies_runtime_profile_and_exposes_stats_tags(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    fake_home = tmp_path / "home"
+    repo_root = tmp_path / "repo"
+    cwd_dir = repo_root / "workspace"
+
+    fake_home.mkdir(parents=True, exist_ok=True)
+    cwd_dir.mkdir(parents=True, exist_ok=True)
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
+    (repo_root / ".ace-lite.yml").write_text(
+        "plan:\n  runtime_profile: bugfix\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("USERPROFILE", str(fake_home))
+
+    snapshot = RuntimeSettingsManager().resolve(
+        root=repo_root,
+        cwd=cwd_dir,
+    )
+
+    assert snapshot.snapshot["plan"]["retrieval"]["retrieval_policy"] == "bugfix_test"
+    assert snapshot.snapshot["plan"]["plan_replay_cache"]["enabled"] is True
+    assert snapshot.snapshot["plan"]["retrieval"]["top_k_files"] == 10
+    assert snapshot.provenance["plan"]["retrieval"]["retrieval_policy"] == "runtime_profile"
+    assert snapshot.metadata["selected_profile"] == "bugfix"
+    assert snapshot.metadata["selected_profile_source"] == "repo_config"
+    assert snapshot.metadata["stats_tags"]["profile_key"] == "bugfix"
+    assert snapshot.metadata["stats_tags"]["settings_fingerprint"] == snapshot.fingerprint
+
+
 def test_runtime_settings_store_round_trip(tmp_path: Path) -> None:
     payload = build_runtime_settings_record(
         snapshot={"plan": {"retrieval": {"top_k_files": 8}}},

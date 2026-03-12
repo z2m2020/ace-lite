@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections import OrderedDict
 from dataclasses import dataclass
 from dataclasses import replace
 from datetime import datetime
@@ -10,6 +11,7 @@ from datetime import timedelta
 from datetime import timezone
 from pathlib import Path
 from pathlib import PurePosixPath
+from threading import Lock
 from typing import Any
 from typing import Callable
 
@@ -23,15 +25,106 @@ from ace_lite.stage_artifact_cache_store import (
     resolve_stage_artifact_payload_root,
     resolve_stage_artifact_temp_root,
 )
+from ace_lite.token_estimator import estimate_payload_tokens, normalize_tokenizer_model
 
 
 WriteStepRecorder = Callable[[str], None]
+_HOT_TIER_DEFAULT_MAX_ENTRIES = 32
+_HOT_TIER_DEFAULT_MAX_TOKENS = 16_384
+_HOT_TIER_REGISTRY: dict[tuple[str, str, int, int, str], "_StageArtifactHotTier"] = {}
+_HOT_TIER_REGISTRY_LOCK = Lock()
 
 
 @dataclass(frozen=True, slots=True)
 class StageArtifactCacheHit:
     entry: StageArtifactCacheEntry
     payload: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class _StageArtifactHotEntry:
+    stage_name: str
+    cache_key: str
+    payload: dict[str, Any]
+    token_weight: int
+
+
+class _StageArtifactHotTier:
+    def __init__(self, *, max_entries: int, max_tokens: int) -> None:
+        self._max_entries = max(0, int(max_entries))
+        self._max_tokens = max(0, int(max_tokens))
+        self._entries: OrderedDict[tuple[str, str], _StageArtifactHotEntry] = OrderedDict()
+        self._token_total = 0
+        self._lock = Lock()
+
+    def get(self, *, stage_name: str, cache_key: str) -> dict[str, Any] | None:
+        key = (str(stage_name), str(cache_key))
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is None:
+                return None
+            self._entries.move_to_end(key)
+            return json.loads(json.dumps(entry.payload, ensure_ascii=False))
+
+    def put(
+        self,
+        *,
+        stage_name: str,
+        cache_key: str,
+        payload: dict[str, Any],
+        token_weight: int,
+    ) -> None:
+        key = (str(stage_name), str(cache_key))
+        normalized_weight = max(1, int(token_weight))
+        with self._lock:
+            existing = self._entries.pop(key, None)
+            if existing is not None:
+                self._token_total = max(
+                    0,
+                    self._token_total - max(1, int(existing.token_weight)),
+                )
+
+            if self._max_entries <= 0 or self._max_tokens <= 0:
+                return
+            if normalized_weight > self._max_tokens:
+                return
+
+            self._entries[key] = _StageArtifactHotEntry(
+                stage_name=str(stage_name),
+                cache_key=str(cache_key),
+                payload=json.loads(json.dumps(payload, ensure_ascii=False)),
+                token_weight=normalized_weight,
+            )
+            self._token_total += normalized_weight
+            self._evict_locked()
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                "max_entries": int(self._max_entries),
+                "max_tokens": int(self._max_tokens),
+                "entry_count": len(self._entries),
+                "token_total": int(self._token_total),
+                "entries": [
+                    {
+                        "stage_name": entry.stage_name,
+                        "cache_key": entry.cache_key,
+                        "token_weight": int(entry.token_weight),
+                    }
+                    for entry in self._entries.values()
+                ],
+            }
+
+    def _evict_locked(self) -> None:
+        while (
+            len(self._entries) > self._max_entries
+            or self._token_total > self._max_tokens
+        ):
+            _key, entry = self._entries.popitem(last=False)
+            self._token_total = max(
+                0,
+                self._token_total - max(1, int(entry.token_weight)),
+            )
 
 
 def _utc_now() -> datetime:
@@ -89,6 +182,50 @@ def _is_expired(expires_at: str, *, now: datetime) -> bool:
     return parsed <= now
 
 
+def _hot_tier_namespace_key(
+    *,
+    repo_root: Path,
+    payload_root: Path,
+    max_entries: int,
+    max_tokens: int,
+    tokenizer_model: str,
+) -> tuple[str, str, int, int, str]:
+    return (
+        str(repo_root.resolve()),
+        str(payload_root.resolve()),
+        max(0, int(max_entries)),
+        max(0, int(max_tokens)),
+        normalize_tokenizer_model(tokenizer_model),
+    )
+
+
+def _get_or_create_hot_tier(
+    *,
+    repo_root: Path,
+    payload_root: Path,
+    max_entries: int,
+    max_tokens: int,
+    tokenizer_model: str,
+) -> _StageArtifactHotTier:
+    key = _hot_tier_namespace_key(
+        repo_root=repo_root,
+        payload_root=payload_root,
+        max_entries=max_entries,
+        max_tokens=max_tokens,
+        tokenizer_model=tokenizer_model,
+    )
+    with _HOT_TIER_REGISTRY_LOCK:
+        existing = _HOT_TIER_REGISTRY.get(key)
+        if existing is not None:
+            return existing
+        created = _StageArtifactHotTier(
+            max_entries=max_entries,
+            max_tokens=max_tokens,
+        )
+        _HOT_TIER_REGISTRY[key] = created
+        return created
+
+
 class StageArtifactCache:
     def __init__(
         self,
@@ -98,6 +235,9 @@ class StageArtifactCache:
         configured_db_path: str | Path | None = None,
         payload_root: str | Path | None = None,
         temp_root: str | Path | None = None,
+        hot_max_entries: int = _HOT_TIER_DEFAULT_MAX_ENTRIES,
+        hot_max_tokens: int = _HOT_TIER_DEFAULT_MAX_TOKENS,
+        hot_tokenizer_model: str | None = None,
         write_step_recorder: WriteStepRecorder | None = None,
     ) -> None:
         self._repo_root = Path(repo_root).resolve()
@@ -114,6 +254,14 @@ class StageArtifactCache:
             root_path=self._repo_root,
             configured_path=temp_root,
         )
+        self._hot_tokenizer_model = normalize_tokenizer_model(hot_tokenizer_model)
+        self._hot_tier = _get_or_create_hot_tier(
+            repo_root=self._repo_root,
+            payload_root=self._payload_root,
+            max_entries=max(0, int(hot_max_entries)),
+            max_tokens=max(0, int(hot_max_tokens)),
+            tokenizer_model=self._hot_tokenizer_model,
+        )
         self._write_step_recorder = write_step_recorder
 
     @property
@@ -127,6 +275,9 @@ class StageArtifactCache:
     @property
     def temp_root(self) -> Path:
         return self._temp_root
+
+    def hot_tier_snapshot(self) -> dict[str, Any]:
+        return self._hot_tier.snapshot()
 
     def put_artifact(
         self,
@@ -155,6 +306,16 @@ class StageArtifactCache:
         now_iso = now.isoformat()
         payload_bytes = _serialize_payload(payload)
         payload_sha256 = hashlib.sha256(payload_bytes).hexdigest()
+        explicit_token_weight = max(0, int(token_weight))
+        effective_token_weight = max(
+            1,
+            explicit_token_weight
+            if explicit_token_weight > 0
+            else estimate_payload_tokens(
+                payload,
+                model=self._hot_tokenizer_model,
+            ),
+        )
         payload_relpath = build_stage_artifact_payload_relpath(
             stage_name=stage_name,
             cache_key=cache_key,
@@ -185,7 +346,7 @@ class StageArtifactCache:
                 payload_tmp_relpath=temp_relpath,
                 payload_sha256=payload_sha256,
                 payload_bytes=len(payload_bytes),
-                token_weight=token_weight,
+                token_weight=effective_token_weight,
                 ttl_seconds=ttl_seconds,
                 soft_ttl_seconds=soft_ttl_seconds,
                 created_at=existing.created_at if existing is not None else now_iso,
@@ -200,7 +361,14 @@ class StageArtifactCache:
             )
         )
         self._record_step("commit_metadata")
-        return self._store.upsert_entry(entry)
+        committed = self._store.upsert_entry(entry)
+        self._hot_tier.put(
+            stage_name=committed.stage_name,
+            cache_key=committed.cache_key,
+            payload=payload,
+            token_weight=committed.token_weight,
+        )
+        return committed
 
     def get_artifact(
         self,
@@ -215,6 +383,19 @@ class StageArtifactCache:
         now = _utc_now()
         if _is_expired(entry.expires_at, now=now):
             return None
+
+        hot_payload = self._hot_tier.get(
+            stage_name=entry.stage_name,
+            cache_key=entry.cache_key,
+        )
+        if hot_payload is not None:
+            refreshed = replace(
+                entry,
+                last_accessed_at=now.isoformat(),
+                updated_at=entry.updated_at,
+            )
+            self._store.upsert_entry(refreshed)
+            return StageArtifactCacheHit(entry=refreshed, payload=hot_payload)
 
         payload_path = self._payload_root / _coerce_relpath(entry.payload_relpath)
         if not payload_path.is_file():
@@ -246,6 +427,12 @@ class StageArtifactCache:
             updated_at=entry.updated_at,
         )
         self._store.upsert_entry(refreshed)
+        self._hot_tier.put(
+            stage_name=refreshed.stage_name,
+            cache_key=refreshed.cache_key,
+            payload=payload,
+            token_weight=refreshed.token_weight,
+        )
         return StageArtifactCacheHit(entry=refreshed, payload=payload)
 
     def cleanup_temp_payloads(self) -> int:

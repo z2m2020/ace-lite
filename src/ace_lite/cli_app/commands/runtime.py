@@ -26,6 +26,7 @@ from ace_lite.cli_app.runtime_mcp_ops import (
 )
 from ace_lite.cli_app.runtime_command_support import (
     DEFAULT_RUNTIME_STATS_DB_PATH,
+    build_runtime_status_payload,
     build_codex_mcp_setup_plan,
     evaluate_runtime_memory_state,
     load_runtime_snapshot,
@@ -42,6 +43,11 @@ from ace_lite.runtime_settings_store import (
     load_runtime_settings_with_fallback,
     resolve_user_runtime_settings_last_known_good_path,
     resolve_user_runtime_settings_path,
+)
+from ace_lite.runtime_profiles import RUNTIME_PROFILE_NAMES
+from ace_lite.stage_artifact_cache_gc import (
+    vacuum_stage_artifact_cache,
+    verify_stage_artifact_cache,
 )
 
 
@@ -86,6 +92,134 @@ def _runtime_scheduler_section(config: dict[str, Any]) -> dict[str, Any]:
     return scheduler if isinstance(scheduler, dict) else {}
 
 
+def _selected_profile_from_resolved_settings(
+    *,
+    resolved: Any,
+    persisted_record: dict[str, Any] | None,
+) -> str | None:
+    selected_profile = resolved.metadata.get("selected_profile")
+    if selected_profile is None and isinstance(persisted_record, dict):
+        metadata = persisted_record.get("metadata", {})
+        if isinstance(metadata, dict):
+            selected_profile = metadata.get("selected_profile")
+    return str(selected_profile) if selected_profile is not None else None
+
+
+def _collect_runtime_mcp_doctor_payload(
+    *,
+    root: str,
+    skills_dir: str,
+    python_executable: str,
+    timeout_seconds: float,
+    mcp_name: str,
+    use_snapshot: bool,
+    require_memory: bool,
+    probe_endpoints: bool,
+) -> dict[str, Any]:
+    snapshot_env, snapshot_path = load_runtime_snapshot(
+        root=root,
+        mcp_name=mcp_name,
+        use_snapshot=use_snapshot,
+        snapshot_path_fn=_mcp_env_snapshot_path,
+        load_snapshot_fn=_load_mcp_env_snapshot,
+    )
+    payload = _run_mcp_self_test(
+        root=root,
+        skills_dir=skills_dir,
+        python_executable=python_executable,
+        timeout_seconds=timeout_seconds,
+        env_overrides=snapshot_env if snapshot_env else None,
+    )
+    memory_state = evaluate_runtime_memory_state(
+        payload=payload,
+        root=root,
+        skills_dir=skills_dir,
+        extract_memory_channels_fn=_extract_memory_channels,
+        memory_channels_disabled_fn=_memory_channels_disabled,
+        memory_config_recommendations_fn=_memory_config_recommendations,
+    )
+    primary = str(memory_state["primary"])
+    secondary = str(memory_state["secondary"])
+    memory_disabled = bool(memory_state["memory_disabled"])
+
+    checks: list[dict[str, Any]] = [
+        {
+            "name": "self_test",
+            "ok": True,
+        }
+    ]
+    warnings = list(memory_state["warnings"])
+    recommendations = list(memory_state["recommendations"])
+    endpoint_checks: list[dict[str, Any]] = []
+    ok = True
+
+    if memory_disabled:
+        checks.append(
+            {
+                "name": "memory_configured",
+                "ok": False,
+                "detail": "memory_primary and memory_secondary are both none",
+            }
+        )
+        warnings.append("Remote memory is disabled (none/none).")
+        if require_memory:
+            ok = False
+    else:
+        checks.append(
+            {
+                "name": "memory_configured",
+                "ok": True,
+                "primary": primary,
+                "secondary": secondary,
+            }
+        )
+
+    if probe_endpoints and not memory_disabled:
+        timeout = max(0.5, float(timeout_seconds))
+        channels = {primary, secondary}
+        if "mcp" in channels:
+            mcp_result = _probe_mcp_memory_endpoint(
+                base_url=str(payload.get("mcp_base_url") or "http://localhost:8765"),
+                timeout_seconds=timeout,
+            )
+            endpoint_checks.append({"name": "mcp_endpoint", **mcp_result})
+        if "rest" in channels:
+            rest_result = _probe_rest_memory_endpoint(
+                base_url=str(payload.get("rest_base_url") or "http://localhost:8765"),
+                timeout_seconds=timeout,
+                user_id=str(payload.get("user_id") or "codex"),
+                app=str(payload.get("app") or "ace-lite"),
+            )
+            endpoint_checks.append({"name": "rest_endpoint", **rest_result})
+
+        checks.extend(endpoint_checks)
+        if (
+            require_memory
+            and endpoint_checks
+            and not any(bool(item.get("ok")) for item in endpoint_checks)
+        ):
+            ok = False
+            warnings.append(
+                "All configured memory endpoints failed probing in require-memory mode."
+            )
+        for item in endpoint_checks:
+            if not bool(item.get("ok")):
+                warnings.append(
+                    f"{item.get('name')}: probe failed ({item.get('error') or item.get('fallback_error') or item.get('primary_error') or 'unknown'})"
+                )
+
+    return {
+        "ok": ok,
+        "event": "mcp_doctor",
+        "self_test": payload,
+        "checks": checks,
+        "warnings": warnings,
+        "recommendations": recommendations,
+        "snapshot_loaded": bool(snapshot_env),
+        "snapshot_path": str(snapshot_path),
+    }
+
+
 @click.group("runtime", help="Run service-mode utilities (hot-reload, scheduler).")
 def runtime_group() -> None:
     return None
@@ -93,6 +227,11 @@ def runtime_group() -> None:
 
 @runtime_group.group("settings", help="Inspect effective runtime settings.")
 def runtime_settings_group() -> None:
+    return None
+
+
+@runtime_group.group("cache", help="Inspect and clean stage artifact cache data.")
+def runtime_cache_group() -> None:
     return None
 
 
@@ -109,6 +248,12 @@ def runtime_settings_group() -> None:
     default="ace-lite",
     show_default=True,
     help="MCP server name for loading saved env snapshot.",
+)
+@click.option(
+    "--runtime-profile",
+    default=None,
+    type=click.Choice(list(RUNTIME_PROFILE_NAMES), case_sensitive=False),
+    help="Apply a first-party runtime profile before explicit runtime settings overrides.",
 )
 @click.option(
     "--use-snapshot/--no-use-snapshot",
@@ -132,6 +277,7 @@ def runtime_settings_show_command(
     root: str,
     config_file: str,
     mcp_name: str,
+    runtime_profile: str | None,
     use_snapshot: bool,
     current_path: str,
     last_known_good_path: str,
@@ -148,6 +294,7 @@ def runtime_settings_show_command(
         root=root,
         cwd=Path.cwd(),
         config_file=config_file,
+        plan_runtime_profile=runtime_profile,
         mcp_env=dict(os.environ),
         mcp_snapshot_env=snapshot_env if snapshot_env else None,
     )
@@ -161,8 +308,8 @@ def runtime_settings_show_command(
         current_path=resolved_current_path,
         last_known_good_path=resolved_lkg_path,
     )
-    selected_profile = None
-    if isinstance(persisted_record, dict):
+    selected_profile = resolved.metadata.get("selected_profile")
+    if selected_profile is None and isinstance(persisted_record, dict):
         metadata = persisted_record.get("metadata", {})
         if isinstance(metadata, dict):
             selected_profile = metadata.get("selected_profile")
@@ -180,6 +327,7 @@ def runtime_settings_show_command(
             "last_known_good_path": str(resolved_lkg_path),
             "snapshot_loaded": bool(snapshot_env),
             "snapshot_path": str(snapshot_path),
+            "stats_tags": resolved.metadata.get("stats_tags", {}),
             "metadata": resolved.metadata,
         }
     )
@@ -214,6 +362,134 @@ def runtime_stats_command(repo: str, profile: str, db_path: str) -> None:
                 home_path=os.environ.get("HOME")
                 or os.environ.get("USERPROFILE")
                 or Path.home(),
+            ),
+        }
+    )
+
+
+@runtime_group.command("status")
+@click.option("--root", default=".", show_default=True, help="Repository root path.")
+@click.option(
+    "--config-file",
+    default=".ace-lite.yml",
+    show_default=True,
+    help="Config filename in layered lookup.",
+)
+@click.option(
+    "--mcp-name",
+    default="ace-lite",
+    show_default=True,
+    help="MCP server name for loading saved env snapshot.",
+)
+@click.option(
+    "--runtime-profile",
+    default=None,
+    type=click.Choice(list(RUNTIME_PROFILE_NAMES), case_sensitive=False),
+    help="Apply a first-party runtime profile before explicit runtime settings overrides.",
+)
+@click.option(
+    "--use-snapshot/--no-use-snapshot",
+    default=True,
+    show_default=True,
+    help="Load env snapshot from context-map/mcp/<name>.env.json when present.",
+)
+@click.option(
+    "--current-path",
+    default=DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH,
+    show_default=True,
+    help="User-scope persisted runtime settings snapshot path.",
+)
+@click.option(
+    "--last-known-good-path",
+    default=DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH,
+    show_default=True,
+    help="User-scope last-known-good runtime settings snapshot path.",
+)
+@click.option(
+    "--db-path",
+    default=DEFAULT_RUNTIME_STATS_DB_PATH,
+    show_default=True,
+    help="User-scope durable runtime stats SQLite path.",
+)
+def runtime_status_command(
+    root: str,
+    config_file: str,
+    mcp_name: str,
+    runtime_profile: str | None,
+    use_snapshot: bool,
+    current_path: str,
+    last_known_good_path: str,
+    db_path: str,
+) -> None:
+    snapshot_env, snapshot_path = load_runtime_snapshot(
+        root=root,
+        mcp_name=mcp_name,
+        use_snapshot=use_snapshot,
+        snapshot_path_fn=_mcp_env_snapshot_path,
+        load_snapshot_fn=_load_mcp_env_snapshot,
+    )
+    resolved = RuntimeSettingsManager().resolve(
+        root=root,
+        cwd=Path.cwd(),
+        config_file=config_file,
+        plan_runtime_profile=runtime_profile,
+        mcp_env=dict(os.environ),
+        mcp_snapshot_env=snapshot_env if snapshot_env else None,
+    )
+    resolved_current_path = resolve_user_runtime_settings_path(
+        configured_path=current_path,
+    )
+    resolved_lkg_path = resolve_user_runtime_settings_last_known_good_path(
+        configured_path=last_known_good_path,
+    )
+    persisted_record, _ = load_runtime_settings_with_fallback(
+        current_path=resolved_current_path,
+        last_known_good_path=resolved_lkg_path,
+    )
+    selected_profile = _selected_profile_from_resolved_settings(
+        resolved=resolved,
+        persisted_record=persisted_record if isinstance(persisted_record, dict) else None,
+    )
+
+    skills_dir = str(
+        (
+            resolved.snapshot.get("plan", {})
+            if isinstance(resolved.snapshot.get("plan"), dict)
+            else {}
+        )
+        .get("skills", {})
+        .get("dir", "skills")
+    )
+    memory_state = evaluate_runtime_memory_state(
+        payload=resolved.snapshot.get("mcp", {})
+        if isinstance(resolved.snapshot.get("mcp"), dict)
+        else {},
+        root=root,
+        skills_dir=skills_dir,
+        extract_memory_channels_fn=_extract_memory_channels,
+        memory_channels_disabled_fn=_memory_channels_disabled,
+        memory_config_recommendations_fn=_memory_config_recommendations,
+    )
+    runtime_stats = load_runtime_stats_summary(
+        db_path=db_path,
+        home_path=os.environ.get("HOME")
+        or os.environ.get("USERPROFILE")
+        or Path.home(),
+    )
+    echo_json(
+        {
+            "ok": True,
+            "event": "runtime_status",
+            **build_runtime_status_payload(
+                root=root,
+                settings=resolved.snapshot,
+                fingerprint=resolved.fingerprint,
+                selected_profile=selected_profile,
+                stats_tags=resolved.metadata.get("stats_tags", {}),
+                snapshot_loaded=bool(snapshot_env),
+                snapshot_path=snapshot_path,
+                memory_state=memory_state,
+                runtime_stats=runtime_stats,
             ),
         }
     )
@@ -610,6 +886,224 @@ def runtime_doctor_mcp_command(
     require_memory: bool,
     probe_endpoints: bool,
 ) -> None:
+    payload = _collect_runtime_mcp_doctor_payload(
+        root=root,
+        skills_dir=skills_dir,
+        python_executable=python_executable,
+        timeout_seconds=timeout_seconds,
+        mcp_name=mcp_name,
+        use_snapshot=use_snapshot,
+        require_memory=require_memory,
+        probe_endpoints=probe_endpoints,
+    )
+    echo_json(payload)
+    if not bool(payload.get("ok")):
+        raise click.ClickException("MCP doctor checks failed")
+
+
+@runtime_group.command("doctor-cache")
+@click.option("--root", default=".", show_default=True, help="Repository root path.")
+@click.option(
+    "--db-path",
+    default="",
+    help="Optional stage artifact cache SQLite override path.",
+)
+@click.option(
+    "--payload-root",
+    default="",
+    help="Optional stage artifact payload root override path.",
+)
+@click.option(
+    "--temp-root",
+    default="",
+    help="Optional stage artifact temp payload root override path.",
+)
+def runtime_doctor_cache_command(
+    root: str,
+    db_path: str,
+    payload_root: str,
+    temp_root: str,
+) -> None:
+    report = verify_stage_artifact_cache(
+        repo_root=root,
+        db_path=db_path or None,
+        payload_root=payload_root or None,
+        temp_root=temp_root or None,
+    )
+    severe_issue_count = int(report.get("severe_issue_count", 0) or 0)
+    warning_issue_count = int(report.get("warning_issue_count", 0) or 0)
+    echo_json(
+        {
+            "ok": severe_issue_count == 0,
+            "event": "runtime_doctor_cache",
+            "summary": {
+                "severe_issue_count": severe_issue_count,
+                "warning_issue_count": warning_issue_count,
+            },
+            **report,
+        }
+    )
+    if severe_issue_count > 0:
+        raise click.ClickException(
+            "Stage artifact cache integrity check found severe corruption"
+        )
+
+
+@runtime_cache_group.command("vacuum")
+@click.option("--root", default=".", show_default=True, help="Repository root path.")
+@click.option(
+    "--db-path",
+    default="",
+    help="Optional stage artifact cache SQLite override path.",
+)
+@click.option(
+    "--payload-root",
+    default="",
+    help="Optional stage artifact payload root override path.",
+)
+@click.option(
+    "--temp-root",
+    default="",
+    help="Optional stage artifact temp payload root override path.",
+)
+@click.option(
+    "--apply/--dry-run",
+    default=False,
+    show_default=True,
+    help="Delete expired rows and orphan payloads instead of only reporting them.",
+)
+def runtime_cache_vacuum_command(
+    root: str,
+    db_path: str,
+    payload_root: str,
+    temp_root: str,
+    apply: bool,
+) -> None:
+    result = vacuum_stage_artifact_cache(
+        repo_root=root,
+        db_path=db_path or None,
+        payload_root=payload_root or None,
+        temp_root=temp_root or None,
+        apply=apply,
+    )
+    echo_json(
+        {
+            "ok": bool(result.get("ok", False)),
+            "event": "runtime_cache_vacuum",
+            **result,
+        }
+    )
+    if not bool(result.get("ok", False)):
+        raise click.ClickException("Stage artifact cache vacuum failed")
+
+
+@runtime_group.command("doctor")
+@click.option("--root", default=".", show_default=True, help="Repository root path.")
+@click.option(
+    "--config-file",
+    default=".ace-lite.yml",
+    show_default=True,
+    help="Config filename in layered lookup.",
+)
+@click.option(
+    "--skills-dir",
+    default="",
+    help="Optional skills directory passed to MCP self-test.",
+)
+@click.option(
+    "--python-executable",
+    default=sys.executable,
+    show_default=True,
+    help="Python executable used to launch MCP self-test.",
+)
+@click.option(
+    "--timeout-seconds",
+    default=15.0,
+    type=float,
+    show_default=True,
+    help="Timeout for MCP self-test and endpoint probes.",
+)
+@click.option(
+    "--mcp-name",
+    default="ace-lite",
+    show_default=True,
+    help="MCP server name for loading saved env snapshot.",
+)
+@click.option(
+    "--runtime-profile",
+    default=None,
+    type=click.Choice(list(RUNTIME_PROFILE_NAMES), case_sensitive=False),
+    help="Apply a first-party runtime profile before explicit runtime settings overrides.",
+)
+@click.option(
+    "--use-snapshot/--no-use-snapshot",
+    default=True,
+    show_default=True,
+    help="Load env snapshot from context-map/mcp/<name>.env.json when present.",
+)
+@click.option(
+    "--require-memory/--allow-no-memory",
+    default=False,
+    show_default=True,
+    help="Fail when memory is not configured or all configured endpoints fail.",
+)
+@click.option(
+    "--probe-endpoints/--no-probe-endpoints",
+    default=True,
+    show_default=True,
+    help="Probe configured MCP/REST memory endpoints.",
+)
+@click.option(
+    "--current-path",
+    default=DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH,
+    show_default=True,
+    help="User-scope persisted runtime settings snapshot path.",
+)
+@click.option(
+    "--last-known-good-path",
+    default=DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH,
+    show_default=True,
+    help="User-scope last-known-good runtime settings snapshot path.",
+)
+@click.option(
+    "--stats-db-path",
+    default=DEFAULT_RUNTIME_STATS_DB_PATH,
+    show_default=True,
+    help="User-scope durable runtime stats SQLite path.",
+)
+@click.option(
+    "--cache-db-path",
+    default="",
+    help="Optional stage artifact cache SQLite override path.",
+)
+@click.option(
+    "--payload-root",
+    default="",
+    help="Optional stage artifact payload root override path.",
+)
+@click.option(
+    "--temp-root",
+    default="",
+    help="Optional stage artifact temp payload root override path.",
+)
+def runtime_doctor_command(
+    root: str,
+    config_file: str,
+    skills_dir: str,
+    python_executable: str,
+    timeout_seconds: float,
+    mcp_name: str,
+    runtime_profile: str | None,
+    use_snapshot: bool,
+    require_memory: bool,
+    probe_endpoints: bool,
+    current_path: str,
+    last_known_good_path: str,
+    stats_db_path: str,
+    cache_db_path: str,
+    payload_root: str,
+    temp_root: str,
+) -> None:
     snapshot_env, snapshot_path = load_runtime_snapshot(
         root=root,
         mcp_name=mcp_name,
@@ -617,105 +1111,94 @@ def runtime_doctor_mcp_command(
         snapshot_path_fn=_mcp_env_snapshot_path,
         load_snapshot_fn=_load_mcp_env_snapshot,
     )
-    payload = _run_mcp_self_test(
+    resolved = RuntimeSettingsManager().resolve(
         root=root,
-        skills_dir=skills_dir,
+        cwd=Path.cwd(),
+        config_file=config_file,
+        plan_runtime_profile=runtime_profile,
+        mcp_env=dict(os.environ),
+        mcp_snapshot_env=snapshot_env if snapshot_env else None,
+    )
+    resolved_current_path = resolve_user_runtime_settings_path(
+        configured_path=current_path,
+    )
+    resolved_lkg_path = resolve_user_runtime_settings_last_known_good_path(
+        configured_path=last_known_good_path,
+    )
+    persisted_record, persisted_source = load_runtime_settings_with_fallback(
+        current_path=resolved_current_path,
+        last_known_good_path=resolved_lkg_path,
+    )
+    selected_profile = _selected_profile_from_resolved_settings(
+        resolved=resolved,
+        persisted_record=persisted_record if isinstance(persisted_record, dict) else None,
+    )
+    runtime_stats = load_runtime_stats_summary(
+        db_path=stats_db_path,
+        home_path=os.environ.get("HOME")
+        or os.environ.get("USERPROFILE")
+        or Path.home(),
+    )
+    cache_report = verify_stage_artifact_cache(
+        repo_root=root,
+        db_path=cache_db_path or None,
+        payload_root=payload_root or None,
+        temp_root=temp_root or None,
+    )
+    effective_skills_dir = skills_dir or str(
+        (
+            resolved.snapshot.get("plan", {})
+            if isinstance(resolved.snapshot.get("plan"), dict)
+            else {}
+        )
+        .get("skills", {})
+        .get("dir", "skills")
+    )
+    integration = _collect_runtime_mcp_doctor_payload(
+        root=root,
+        skills_dir=effective_skills_dir,
         python_executable=python_executable,
         timeout_seconds=timeout_seconds,
-        env_overrides=snapshot_env if snapshot_env else None,
+        mcp_name=mcp_name,
+        use_snapshot=use_snapshot,
+        require_memory=require_memory,
+        probe_endpoints=probe_endpoints,
     )
-    memory_state = evaluate_runtime_memory_state(
-        payload=payload,
-        root=root,
-        skills_dir=skills_dir,
-        extract_memory_channels_fn=_extract_memory_channels,
-        memory_channels_disabled_fn=_memory_channels_disabled,
-        memory_config_recommendations_fn=_memory_config_recommendations,
+    plugins_payload = (
+        resolved.snapshot.get("plan", {}).get("plugins", {})
+        if isinstance(resolved.snapshot.get("plan"), dict)
+        and isinstance(resolved.snapshot.get("plan", {}).get("plugins"), dict)
+        else {}
     )
-    primary = str(memory_state["primary"])
-    secondary = str(memory_state["secondary"])
-    memory_disabled = bool(memory_state["memory_disabled"])
-
-    checks: list[dict[str, Any]] = [
-        {
-            "name": "self_test",
-            "ok": True,
-        }
-    ]
-    warnings = list(memory_state["warnings"])
-    recommendations = list(memory_state["recommendations"])
-    endpoint_checks: list[dict[str, Any]] = []
-    ok = True
-
-    if memory_disabled:
-        checks.append(
-            {
-                "name": "memory_configured",
-                "ok": False,
-                "detail": "memory_primary and memory_secondary are both none",
-            }
-        )
-        warnings.append("Remote memory is disabled (none/none).")
-        if require_memory:
-            ok = False
-    else:
-        checks.append(
-            {
-                "name": "memory_configured",
-                "ok": True,
-                "primary": primary,
-                "secondary": secondary,
-            }
-        )
-
-    if probe_endpoints and not memory_disabled:
-        timeout = max(0.5, float(timeout_seconds))
-        channels = {primary, secondary}
-        if "mcp" in channels:
-            mcp_result = _probe_mcp_memory_endpoint(
-                base_url=str(payload.get("mcp_base_url") or "http://localhost:8765"),
-                timeout_seconds=timeout,
-            )
-            endpoint_checks.append({"name": "mcp_endpoint", **mcp_result})
-        if "rest" in channels:
-            rest_result = _probe_rest_memory_endpoint(
-                base_url=str(payload.get("rest_base_url") or "http://localhost:8765"),
-                timeout_seconds=timeout,
-                user_id=str(payload.get("user_id") or "codex"),
-                app=str(payload.get("app") or "ace-lite"),
-            )
-            endpoint_checks.append({"name": "rest_endpoint", **rest_result})
-
-        checks.extend(endpoint_checks)
-        if (
-            require_memory
-            and endpoint_checks
-            and not any(bool(item.get("ok")) for item in endpoint_checks)
-        ):
-            ok = False
-            warnings.append(
-                "All configured memory endpoints failed probing in require-memory mode."
-            )
-        for item in endpoint_checks:
-            if not bool(item.get("ok")):
-                warnings.append(
-                    f"{item.get('name')}: probe failed ({item.get('error') or item.get('fallback_error') or item.get('primary_error') or 'unknown'})"
-                )
-
-    echo_json(
-        {
-            "ok": ok,
-            "event": "mcp_doctor",
-            "self_test": payload,
-            "checks": checks,
-            "warnings": warnings,
-            "recommendations": recommendations,
+    payload = {
+        "ok": bool(integration.get("ok")) and bool(cache_report.get("ok")),
+        "event": "runtime_doctor",
+        "settings": {
+            "snapshot": resolved.snapshot,
+            "provenance": resolved.provenance,
+            "fingerprint": resolved.fingerprint,
+            "selected_profile": selected_profile,
+            "persisted_source": persisted_source,
+            "current_path": str(resolved_current_path),
+            "last_known_good_path": str(resolved_lkg_path),
             "snapshot_loaded": bool(snapshot_env),
             "snapshot_path": str(snapshot_path),
-        }
-    )
-    if not ok:
-        raise click.ClickException("MCP doctor checks failed")
+            "stats_tags": resolved.metadata.get("stats_tags", {}),
+            "metadata": resolved.metadata,
+        },
+        "stats": runtime_stats,
+        "cache": cache_report,
+        "integration": {
+            **integration,
+            "plugin_policy": {
+                "remote_slot_policy_mode": plugins_payload.get("remote_slot_policy_mode"),
+                "remote_slot_allowlist": plugins_payload.get("remote_slot_allowlist"),
+            },
+        },
+    }
+    echo_json(payload)
+    if not bool(payload.get("ok")):
+        raise click.ClickException("Runtime doctor checks failed")
 
 
 @runtime_group.command("setup-codex-mcp")
