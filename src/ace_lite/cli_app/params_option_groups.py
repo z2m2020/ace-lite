@@ -8,6 +8,7 @@ from typing import Any
 
 import click
 
+from ace_lite.chunking.disclosure_policy import CHUNK_DISCLOSURE_CHOICES
 from ace_lite.repomap.ranking import RANKING_PROFILES
 from ace_lite.scip import SCIP_PROVIDERS
 
@@ -28,7 +29,6 @@ MEMORY_AUTO_TAG_MODE_CHOICES = ("repo", "user", "global")
 MEMORY_GATE_MODE_CHOICES = ("auto", "always", "never")
 REMOTE_SLOT_POLICY_CHOICES = ("strict", "warn", "off")
 SBFL_METRIC_CHOICES = ("ochiai", "dstar")
-CHUNK_DISCLOSURE_CHOICES = ("refs", "signature", "snippet")
 SCIP_PROVIDER_CHOICES = tuple(SCIP_PROVIDERS)
 EMBEDDING_PROVIDER_CHOICES = (
     "hash",

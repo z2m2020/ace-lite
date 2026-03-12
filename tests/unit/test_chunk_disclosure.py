@@ -3,6 +3,7 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+from ace_lite.chunking.disclosure_policy import normalize_chunk_disclosure
 from ace_lite.orchestrator import AceOrchestrator
 from ace_lite.orchestrator_config import OrchestratorConfig
 
@@ -125,6 +126,122 @@ def test_chunk_disclosure_controls_signature_and_snippet_payload(
     assert refs_used <= sig_used <= snippet_used
     assert refs["index"]["chunk_metrics"]["robust_signature_count"] >= 1.0
     assert refs["index"]["metadata"]["robust_signature_count"] >= 1
+
+
+def test_chunk_disclosure_accepts_year2_skeleton_modes_and_emits_contract(
+    tmp_path: Path,
+    fake_skill_manifest,
+) -> None:
+    _seed_repo(tmp_path)
+
+    base_config = {
+        "skills": {"manifest": fake_skill_manifest},
+        "index": {
+            "languages": ["python"],
+            "cache_path": tmp_path / "context-map" / "index.json",
+        },
+        "repomap": {"enabled": False},
+        "cochange": {"enabled": False},
+        "scip": {"enabled": False},
+        "chunking": {
+            "top_k": 6,
+            "per_file_limit": 3,
+            "token_budget": 99999,
+        },
+    }
+
+    assert normalize_chunk_disclosure("skeleton_light") == "skeleton_light"
+    assert normalize_chunk_disclosure("skeleton_full") == "skeleton_full"
+
+    skeleton_light = AceOrchestrator(
+        config=OrchestratorConfig(
+            **{
+                **base_config,
+                "chunking": {
+                    **base_config["chunking"],
+                    "disclosure": "skeleton_light",
+                },
+            }
+        ),
+    ).plan(
+        query="validate token behavior",
+        repo="demo",
+        root=str(tmp_path),
+    )
+    skeleton_full = AceOrchestrator(
+        config=OrchestratorConfig(
+            **{
+                **base_config,
+                "chunking": {
+                    **base_config["chunking"],
+                    "disclosure": "skeleton_full",
+                },
+            }
+        ),
+    ).plan(
+        query="validate token behavior",
+        repo="demo",
+        root=str(tmp_path),
+    )
+
+    light_chunk = skeleton_light["index"]["candidate_chunks"][0]
+    full_chunk = skeleton_full["index"]["candidate_chunks"][0]
+
+    assert light_chunk["disclosure"] == "skeleton_light"
+    assert light_chunk["skeleton"]["mode"] == "skeleton_light"
+    assert light_chunk["skeleton"]["schema_version"]
+    assert light_chunk["skeleton"]["symbol"]["qualified_name"]
+    assert light_chunk["skeleton"]["span"]["line_count"] >= 1
+    assert "metadata" not in light_chunk["skeleton"]
+    assert "signature" not in light_chunk
+    assert "snippet" not in light_chunk
+
+    assert full_chunk["disclosure"] == "skeleton_full"
+    assert full_chunk["skeleton"]["mode"] == "skeleton_full"
+    assert full_chunk["skeleton"]["metadata"]["size_bytes"] >= 0
+    assert full_chunk["skeleton"]["metadata"]["imports_count"] >= 0
+    assert "signature" not in full_chunk
+    assert "snippet" not in full_chunk
+
+
+def test_chunk_skeleton_disclosure_fails_open_for_unsupported_languages(
+    tmp_path: Path,
+    fake_skill_manifest,
+) -> None:
+    (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "guide.md").write_text(
+        "# Auth\n\n## Validate Token\n\nCheck token handling.\n",
+        encoding="utf-8",
+    )
+
+    result = AceOrchestrator(
+        config=OrchestratorConfig(
+            skills={"manifest": fake_skill_manifest},
+            index={
+                "languages": ["markdown"],
+                "cache_path": tmp_path / "context-map" / "index.json",
+            },
+            repomap={"enabled": False},
+            cochange={"enabled": False},
+            scip={"enabled": False},
+            chunking={
+                "top_k": 6,
+                "per_file_limit": 3,
+                "token_budget": 99999,
+                "disclosure": "skeleton_light",
+            },
+        ),
+    ).plan(
+        query="validate token docs",
+        repo="demo",
+        root=str(tmp_path),
+    )
+
+    chunk = result["index"]["candidate_chunks"][0]
+    assert chunk["disclosure"] == "refs"
+    assert chunk["disclosure_requested"] == "skeleton_light"
+    assert chunk["disclosure_fallback_reason"] == "unsupported_language"
+    assert "skeleton" not in chunk
 
 def test_snippet_context_expansion_includes_class_and_imports(
     tmp_path: Path,

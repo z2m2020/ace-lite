@@ -11,6 +11,12 @@ from pathlib import Path
 from typing import Any
 
 from ace_lite.chunking.diversity import calculate_diversity_penalty, chunk_symbol_family
+from ace_lite.chunking.disclosure_policy import (
+    CHUNK_DISCLOSURE_CHOICES,
+    is_skeleton_disclosure,
+    normalize_chunk_disclosure,
+    resolve_chunk_disclosure,
+)
 from ace_lite.chunking.graph_closure import apply_graph_closure_bonus
 from ace_lite.chunking.graph_prior import apply_query_aware_graph_prior
 from ace_lite.chunking.robust_signature import (
@@ -18,11 +24,11 @@ from ace_lite.chunking.robust_signature import (
     summarize_robust_signature,
 )
 from ace_lite.chunking.scoring import score_chunk_candidate
+from ace_lite.chunking.skeleton import build_chunk_skeleton
 from ace_lite.chunking.topological_shield import compute_topological_shield
 from ace_lite.chunking.types import ChunkMetrics
 from ace_lite.token_estimator import estimate_tokens
 
-CHUNK_DISCLOSURE_CHOICES = ("refs", "signature", "snippet")
 _REFERENCE_HITS_CACHE: OrderedDict[str, dict[str, int]] = OrderedDict()
 _REFERENCE_HITS_CACHE_CAP = 8
 _TOKEN_ESTIMATE_CACHE: OrderedDict[tuple[str, str, str, str, str], int] = OrderedDict()
@@ -84,10 +90,9 @@ def read_signature_line(*, root: str, path: str, lineno: int) -> str:
 
 
 def normalize_chunk_disclosure(value: str) -> str:
-    normalized = str(value or "refs").strip().lower() or "refs"
-    if normalized not in CHUNK_DISCLOSURE_CHOICES:
-        return "refs"
-    return normalized
+    from ace_lite.chunking.disclosure_policy import normalize_chunk_disclosure as _normalize
+
+    return _normalize(value)
 
 
 def _read_file_lines(*, root: str, path: str) -> list[str]:
@@ -328,7 +333,7 @@ def build_candidate_chunks(
     raw_chunk_candidates: list[dict[str, Any]] = []
     policy_chunk_weight = max(0.1, float(policy.get("chunk_weight", 1.0) or 1.0))
     disclosure = normalize_chunk_disclosure(disclosure_mode)
-    needs_source_lines = disclosure in {"signature", "snippet"}
+    needs_source_lines = disclosure in {"signature", "snippet", "skeleton_full"}
     snippet_lines_limit = max(1, int(snippet_max_lines))
     snippet_chars_limit = max(0, int(snippet_max_chars))
 
@@ -348,6 +353,18 @@ def build_candidate_chunks(
         file_lines: list[str] = []
         if needs_source_lines:
             file_lines = _read_file_lines(root=root, path=path)
+
+        language = str(file_entry.get("language") or "").strip().lower()
+        imports = (
+            file_entry.get("imports", [])
+            if isinstance(file_entry.get("imports"), list)
+            else []
+        )
+        references = (
+            file_entry.get("references", [])
+            if isinstance(file_entry.get("references"), list)
+            else []
+        )
 
         for symbol in symbols:
             if not isinstance(symbol, dict):
@@ -371,9 +388,14 @@ def build_candidate_chunks(
             if not qualified_name and not name:
                 continue
 
+            resolved_disclosure, fallback_reason = resolve_chunk_disclosure(
+                requested_mode=disclosure,
+                path=path,
+                file_entry=file_entry,
+            )
             signature = _extract_signature(lines=file_lines, lineno=lineno) if file_lines else ""
             snippet = ""
-            if disclosure == "snippet" and file_lines:
+            if resolved_disclosure == "snippet" and file_lines:
                 snippet = _extract_snippet(
                     lines=file_lines,
                     lineno=lineno,
@@ -385,11 +407,11 @@ def build_candidate_chunks(
                     file_entry=file_entry,
                 )
             score, breakdown = score_chunk_candidate(
-                path=path,
-                module=str(file_entry.get("module") or ""),
-                qualified_name=qualified_name,
-                name=name,
-                signature=signature,
+                    path=path,
+                    module=str(file_entry.get("module") or ""),
+                    qualified_name=qualified_name,
+                    name=name,
+                    signature=signature,
                 terms=terms,
                 file_score=float(file_candidate.get("score") or 0.0),
                 reference_hits=reference_hits,
@@ -405,24 +427,26 @@ def build_candidate_chunks(
                     "kind": kind,
                     "lineno": lineno,
                     "end_lineno": end_lineno,
+                    "language": language,
+                    "module": str(file_entry.get("module") or ""),
+                    "sha256": str(file_entry.get("sha256") or ""),
+                    "size_bytes": int(file_entry.get("size_bytes") or 0),
+                    "generated": bool(file_entry.get("generated", False)),
+                    "imports_count": len(imports),
+                    "references_count": len(references),
                     "signature": signature,
                     "snippet": snippet,
+                    "_requested_disclosure": disclosure,
+                    "_resolved_disclosure": resolved_disclosure,
+                    "_disclosure_fallback_reason": fallback_reason,
                     "_robust_signature_lite": build_robust_signature_lite(
                         path=path,
                         qualified_name=qualified_name or name,
                         name=name,
                         kind=kind,
                         signature=signature,
-                        imports=(
-                            file_entry.get("imports", [])
-                            if isinstance(file_entry.get("imports"), list)
-                            else []
-                        ),
-                        references=(
-                            file_entry.get("references", [])
-                            if isinstance(file_entry.get("references"), list)
-                            else []
-                        ),
+                        imports=imports,
+                        references=references,
                     ),
                     "score": round(float(score), 6),
                     "score_breakdown": dict(breakdown),
@@ -472,14 +496,18 @@ def build_candidate_chunks(
     )
     preselected = raw_chunk_candidates[:preselect_limit]
 
-    include_signature = disclosure in {"signature", "snippet"}
-    include_snippet = disclosure == "snippet"
     remaining: list[dict[str, Any]] = []
     for item in preselected:
         path = str(item.get("path") or "")
         qualified_name = str(item.get("qualified_name") or "")
         signature = str(item.get("signature") or "")
         snippet = str(item.get("snippet") or "")
+        resolved_disclosure = normalize_chunk_disclosure(
+            str(item.get("_resolved_disclosure") or disclosure)
+        )
+        requested_disclosure = normalize_chunk_disclosure(
+            str(item.get("_requested_disclosure") or disclosure)
+        )
         estimated_tokens = estimate_chunk_tokens(
             path=path,
             qualified_name=qualified_name,
@@ -503,17 +531,29 @@ def build_candidate_chunks(
             "lineno": int(item.get("lineno") or 0),
             "end_lineno": int(item.get("end_lineno") or int(item.get("lineno") or 0)),
             "score": round(float(item.get("score") or 0.0), 6),
+            "disclosure": resolved_disclosure,
             "score_breakdown": {
                 **score_breakdown,
                 "estimated_tokens": estimated_tokens,
             },
         }
+        if requested_disclosure != resolved_disclosure:
+            payload["disclosure_requested"] = requested_disclosure
+        fallback_reason = str(item.get("_disclosure_fallback_reason") or "").strip()
+        if fallback_reason:
+            payload["disclosure_fallback_reason"] = fallback_reason
         if robust_signature_summary.get("available", False):
             payload["robust_signature_summary"] = robust_signature_summary
             payload["_robust_signature_lite"] = robust_signature
-        if include_signature:
+        if is_skeleton_disclosure(resolved_disclosure):
+            payload["skeleton"] = build_chunk_skeleton(
+                chunk=item,
+                disclosure_mode=resolved_disclosure,
+                robust_signature=robust_signature,
+            )
+        if resolved_disclosure in {"signature", "snippet"}:
             payload["signature"] = signature
-        if include_snippet:
+        if resolved_disclosure == "snippet":
             payload["snippet"] = snippet
         remaining.append(payload)
     remaining.sort(

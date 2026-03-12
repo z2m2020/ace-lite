@@ -3,12 +3,14 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from ace_lite.chunking.skeleton import summarize_chunk_contract
 from ace_lite.explainability import attach_selection_why
 from ace_lite.index_stage.result_payload_sections import (
     build_candidate_ranking_payload,
     build_result_metadata,
 )
 from ace_lite.retrieval_shared import build_selection_observability
+from ace_lite.scip.subgraph import build_subgraph_payload
 
 
 def _build_context_budget(
@@ -40,6 +42,8 @@ def _compute_selection_fingerprint(
     *,
     candidate_files: list[dict[str, Any]],
     candidate_chunks: list[dict[str, Any]],
+    chunk_contract: dict[str, Any],
+    subgraph_payload: dict[str, Any],
     context_budget: dict[str, Any],
     candidate_ranker: str,
     retrieval_policy: str,
@@ -79,6 +83,23 @@ def _compute_selection_fingerprint(
         lineno = int(item.get("lineno") or 0)
         if path and (qualified or lineno > 0):
             parts.append(f"chunk:{path}|{lineno}|{qualified}|{kind}")
+
+    parts.append(
+        "chunk_contract:"
+        f"{str(chunk_contract.get('schema_version') or '')}"
+        f"|{str(chunk_contract.get('requested_disclosure') or '')}"
+        f"|{','.join(str(item) for item in chunk_contract.get('observed_disclosures', []))}"
+        f"|fallbacks={int(chunk_contract.get('fallback_count', 0) or 0)}"
+        f"|skeletons={int(chunk_contract.get('skeleton_chunk_count', 0) or 0)}"
+    )
+    parts.append(
+        "subgraph_payload:"
+        f"{str(subgraph_payload.get('payload_version') or '')}"
+        f"|{str(subgraph_payload.get('taxonomy_version') or '')}"
+        f"|enabled={int(bool(subgraph_payload.get('enabled', False)))}"
+        f"|seeds={','.join(str(item) for item in subgraph_payload.get('seed_paths', []))}"
+        f"|edges={','.join(f'{key}:{value}' for key, value in sorted((subgraph_payload.get('edge_counts') or {}).items()))}"
+    )
 
     source = "\n".join(parts).encode("utf-8", errors="ignore")
     return hashlib.sha256(source).hexdigest()[:16]
@@ -198,6 +219,19 @@ def build_index_stage_result(
     )
 
     limited_candidate_files = candidates[: max(1, int(top_k_files))]
+    candidate_chunks_with_why = attach_selection_why(
+        candidate_chunks,
+        default_reason="ranked_chunk_candidate",
+    )
+    chunk_contract = summarize_chunk_contract(
+        candidate_chunks=candidate_chunks_with_why,
+        requested_disclosure=chunk_disclosure,
+    )
+    subgraph_payload = build_subgraph_payload(
+        candidate_files=limited_candidate_files,
+        candidate_chunks=candidate_chunks_with_why,
+        graph_lookup_payload=graph_lookup_payload,
+    )
     context_budget = _build_context_budget(
         top_k_files=top_k_files,
         min_candidate_score=min_score_used,
@@ -211,7 +245,9 @@ def build_index_stage_result(
     )
     selection_fingerprint = _compute_selection_fingerprint(
         candidate_files=limited_candidate_files,
-        candidate_chunks=candidate_chunks,
+        candidate_chunks=candidate_chunks_with_why,
+        chunk_contract=chunk_contract,
+        subgraph_payload=subgraph_payload,
         context_budget=context_budget,
         candidate_ranker=str(selected_ranker),
         retrieval_policy=str(policy_name),
@@ -224,10 +260,6 @@ def build_index_stage_result(
     limited_candidate_files_with_why = attach_selection_why(
         limited_candidate_files,
         default_reason="ranked_file_candidate",
-    )
-    candidate_chunks_with_why = attach_selection_why(
-        candidate_chunks,
-        default_reason="ranked_chunk_candidate",
     )
 
     metadata = build_result_metadata(
@@ -254,6 +286,31 @@ def build_index_stage_result(
         selection_fingerprint=selection_fingerprint,
         timings_ms=timings_ms,
     )
+    metadata["chunk_contract_schema_version"] = str(
+        chunk_contract.get("schema_version") or ""
+    )
+    metadata["chunk_contract_requested_disclosure"] = str(
+        chunk_contract.get("requested_disclosure") or ""
+    )
+    metadata["chunk_contract_observed_disclosures"] = list(
+        chunk_contract.get("observed_disclosures", [])
+    )
+    metadata["chunk_contract_fallback_count"] = int(
+        chunk_contract.get("fallback_count", 0) or 0
+    )
+    metadata["chunk_contract_skeleton_chunk_count"] = int(
+        chunk_contract.get("skeleton_chunk_count", 0) or 0
+    )
+    metadata["subgraph_payload_version"] = str(
+        subgraph_payload.get("payload_version") or ""
+    )
+    metadata["subgraph_taxonomy_version"] = str(
+        subgraph_payload.get("taxonomy_version") or ""
+    )
+    metadata["subgraph_enabled"] = bool(subgraph_payload.get("enabled", False))
+    metadata["subgraph_seed_path_count"] = len(
+        subgraph_payload.get("seed_paths", [])
+    )
 
     return {
         "repo": repo,
@@ -271,6 +328,8 @@ def build_index_stage_result(
         "candidate_ranking": candidate_ranking,
         "candidate_files": limited_candidate_files_with_why,
         "candidate_chunks": candidate_chunks_with_why,
+        "chunk_contract": chunk_contract,
+        "subgraph_payload": subgraph_payload,
         "chunk_metrics": chunk_metrics,
         "context_budget": context_budget,
         "chunk_semantic_rerank": chunk_semantic_rerank_payload,

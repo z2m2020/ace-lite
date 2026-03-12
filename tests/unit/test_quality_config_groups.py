@@ -180,6 +180,20 @@ def test_resolve_quality_config_reads_grouped_chunk_fields_and_emits_grouped_pay
     }
 
 
+def test_validate_cli_config_accepts_year2_skeleton_disclosure_choice() -> None:
+    payload = validate_cli_config(
+        {
+            "plan": {
+                "chunk": {
+                    "disclosure": "skeleton_light",
+                }
+            }
+        }
+    )
+
+    assert payload["plan"]["chunk"]["disclosure"] == "skeleton_light"
+
+
 def test_validate_cli_config_accepts_grouped_trace_fields() -> None:
     payload = validate_cli_config(
         {

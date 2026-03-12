@@ -625,6 +625,24 @@ def load_baseline_metrics(path: str | Path) -> dict[str, float] | None:
         "chunk_hit_at_k": float(metrics.get("chunk_hit_at_k", 0.0)),
         "chunks_per_file_mean": float(metrics.get("chunks_per_file_mean", 0.0)),
         "chunk_budget_used": float(metrics.get("chunk_budget_used", 0.0)),
+        "chunk_contract_fallback_count_mean": float(
+            metrics.get("chunk_contract_fallback_count_mean", 0.0)
+        ),
+        "chunk_contract_skeleton_chunk_count_mean": float(
+            metrics.get("chunk_contract_skeleton_chunk_count_mean", 0.0)
+        ),
+        "chunk_contract_fallback_ratio": float(
+            metrics.get("chunk_contract_fallback_ratio", 0.0)
+        ),
+        "chunk_contract_skeleton_ratio": float(
+            metrics.get("chunk_contract_skeleton_ratio", 0.0)
+        ),
+        "unsupported_language_fallback_count_mean": float(
+            metrics.get("unsupported_language_fallback_count_mean", 0.0)
+        ),
+        "unsupported_language_fallback_ratio": float(
+            metrics.get("unsupported_language_fallback_ratio", 0.0)
+        ),
         "validation_test_count": float(metrics.get("validation_test_count", 0.0)),
         "evidence_insufficient_rate": float(
             metrics.get("evidence_insufficient_rate", 0.0)

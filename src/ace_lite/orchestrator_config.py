@@ -12,6 +12,7 @@ from typing import Any, Literal, cast
 
 from pydantic import Field, field_validator, model_validator
 
+from ace_lite.chunking.disclosure_policy import CHUNK_DISCLOSURE_CHOICES
 from ace_lite.pipeline.plugin_runtime import (
     normalize_remote_slot_allowlist,
     normalize_remote_slot_policy_mode,
@@ -741,7 +742,7 @@ class ChunkingConfig(_StrictModel):
     @classmethod
     def _normalize_disclosure(cls, value: Any) -> str:
         normalized = str(value or "refs").strip().lower() or "refs"
-        if normalized not in {"refs", "signature", "snippet"}:
+        if normalized not in CHUNK_DISCLOSURE_CHOICES:
             return "refs"
         return normalized
 

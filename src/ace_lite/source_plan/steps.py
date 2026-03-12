@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ace_lite.chunking import build_chunk_step_reason
+from ace_lite.prompt_rendering.renderer import build_prompt_rendering_boundary
 
 
 def build_chunk_steps(
@@ -34,6 +35,8 @@ def build_chunk_steps(
                     "evidence": dict(item.get("evidence"))
                     if isinstance(item.get("evidence"), dict)
                     else {},
+                    "disclosure": str(item.get("disclosure") or "refs"),
+                    "skeleton_available": isinstance(item.get("skeleton"), dict),
                 },
                 "reason": build_chunk_step_reason(item),
                 "score": float(item.get("score") or 0.0),
@@ -57,6 +60,7 @@ def build_source_plan_steps(
     xref: dict[str, Any],
     tests: dict[str, Any],
     validation_tests: list[str],
+    subgraph_payload: dict[str, Any],
 ) -> list[dict[str, Any]]:
     """Build the high-level stage plan steps list for source_plan output."""
     vcs_history = (
@@ -144,6 +148,8 @@ def build_source_plan_steps(
             "action": "Read repomap skeleton first, then open prioritized symbol chunks before full files.",
             "candidate_files": focused_files,
             "candidate_chunks": prioritized_chunks[:24],
+            "subgraph_payload": subgraph_payload,
+            "prompt_rendering_boundary": build_prompt_rendering_boundary(),
         },
         {
             "id": 7,

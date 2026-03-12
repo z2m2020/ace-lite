@@ -137,6 +137,28 @@ def test_validate_context_plan_accepts_chunk_references() -> None:
             "kind": "method",
             "lineno": 10,
             "end_lineno": 20,
+            "disclosure": "skeleton_light",
+            "skeleton": {
+                "schema_version": "y2-freeze-v1",
+                "mode": "skeleton_light",
+                "language": "python",
+                "module": "src.app",
+                "symbol": {
+                    "name": "validate",
+                    "qualified_name": "Auth.validate",
+                    "kind": "method",
+                },
+                "span": {
+                    "start_line": 10,
+                    "end_line": 20,
+                    "line_count": 11,
+                },
+                "anchors": {
+                    "path": "src/app.py",
+                    "signature": "def validate(token: str) -> bool:",
+                    "robust_signature_available": True,
+                },
+            },
         }
     ]
     payload["source_plan"]["candidate_chunks"] = list(payload["index"]["candidate_chunks"])

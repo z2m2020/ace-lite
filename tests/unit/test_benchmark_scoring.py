@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+from ace_lite.benchmark.case_evaluation_payloads import count_unique_paths, safe_ratio
 from ace_lite.benchmark.scoring import (
     aggregate_metrics,
     build_comparison_lane_summary,
@@ -219,6 +220,32 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "neighbor_context_ratio": 0.0,
         "hint_only_ratio": 0.0,
     }
+    assert row["skills_budget"] == {
+        "selected_count": 1,
+        "token_budget": 600.0,
+        "token_budget_used": 250.0,
+        "utilization_ratio": round(250.0 / 600.0, 6),
+        "budget_exhausted": True,
+        "skipped_for_budget_count": 1,
+    }
+    assert row["graph_prior"] == {
+        "chunk_count": 1,
+        "coverage_ratio": 0.5,
+        "total": 0.18,
+        "seeded_chunk_count": 1,
+        "transfer_count": 2,
+        "transfer_per_seed_ratio": 2.0,
+        "hub_suppressed_chunk_count": 1,
+        "hub_penalty_total": 0.08,
+    }
+    assert row["topological_shield"] == {
+        "enabled": True,
+        "report_only": True,
+        "attenuated_chunk_count": 1,
+        "coverage_ratio": 0.5,
+        "attenuation_total": 0.22,
+        "attenuation_per_chunk": 0.22,
+    }
     assert row["graph_closure"] == {
         "enabled": True,
         "boosted_chunk_count": 2,
@@ -233,7 +260,25 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "graph_closure_preferred_count": 1,
         "focused_file_promoted_count": 1,
         "packed_path_count": 2,
+        "packed_path_ratio": 1.0,
+        "chunk_retention_ratio": 0.0,
         "reason": "graph_closure_preferred",
+    }
+    assert row["chunk_contract"] == {
+        "fallback_count": 0,
+        "skeleton_chunk_count": 0,
+        "fallback_ratio": 0.0,
+        "skeleton_ratio": 0.0,
+        "unsupported_language_fallback_count": 0,
+        "unsupported_language_fallback_ratio": 0.0,
+    }
+    assert row["year2_normalized_kpis"] == {
+        "skills_token_budget_utilization_ratio": round(250.0 / 600.0, 6),
+        "source_plan_chunk_retention_ratio": 0.0,
+        "source_plan_packed_path_ratio": 1.0,
+        "graph_transfer_per_seed_ratio": 2.0,
+        "chunk_guard_pairwise_conflict_density": 0.0,
+        "topological_shield_attenuation_per_chunk": 0.22,
     }
 
     metrics = aggregate_metrics([row])
@@ -263,6 +308,12 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "chunk_hit_at_k",
         "chunks_per_file_mean",
         "chunk_budget_used",
+        "chunk_contract_fallback_count_mean",
+        "chunk_contract_skeleton_chunk_count_mean",
+        "chunk_contract_fallback_ratio",
+        "chunk_contract_skeleton_ratio",
+        "unsupported_language_fallback_count_mean",
+        "unsupported_language_fallback_ratio",
         "robust_signature_count_mean",
         "robust_signature_coverage_ratio",
         "graph_prior_chunk_count_mean",
@@ -342,6 +393,12 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["repomap_latency_median_ms"] == 4.5
     assert metrics["memory_latency_p95_ms"] == 0.0
     assert metrics["index_latency_p95_ms"] == 0.0
+    assert metrics["chunk_contract_fallback_count_mean"] == 0.0
+    assert metrics["chunk_contract_skeleton_chunk_count_mean"] == 0.0
+    assert metrics["chunk_contract_fallback_ratio"] == 0.0
+    assert metrics["chunk_contract_skeleton_ratio"] == 0.0
+    assert metrics["unsupported_language_fallback_count_mean"] == 0.0
+    assert metrics["unsupported_language_fallback_ratio"] == 0.0
     assert metrics["skills_selected_count_mean"] == 1.0
     assert metrics["skills_token_budget_mean"] == 600.0
     assert metrics["skills_token_budget_used_mean"] == 250.0
@@ -1281,3 +1338,193 @@ def test_detect_regression_for_embedding_metric_drop() -> None:
     assert "embedding_rerank_ratio" in regression["failed_checks"]
     assert "embedding_cache_hit_ratio" in regression["failed_checks"]
     assert "embedding_fallback_ratio" in regression["failed_checks"]
+
+
+def test_evaluate_case_result_reports_year2_normalized_kpis() -> None:
+    case = {
+        "case_id": "c-year2-kpis",
+        "query": "where auth validation lives",
+        "expected_keys": ["auth", "validate_token"],
+        "top_k": 4,
+    }
+    payload = {
+        "index": {
+            "candidate_files": [
+                {"path": "src/auth.py", "module": "src.auth"},
+                {"path": "src/token.py", "module": "src.token"},
+                {"path": "src/helper.py", "module": "src.helper"},
+            ],
+            "candidate_chunks": [
+                {
+                    "path": "src/auth.py",
+                    "qualified_name": "validate_token",
+                    "signature": "def validate_token",
+                },
+                {
+                    "path": "src/token.py",
+                    "qualified_name": "load_token",
+                    "signature": "def load_token",
+                },
+                {
+                    "path": "src/helper.py",
+                    "qualified_name": "helper",
+                    "signature": "def helper",
+                },
+                {
+                    "path": "src/helper.py",
+                    "qualified_name": "helper_alt",
+                    "signature": "def helper_alt",
+                },
+            ],
+            "chunk_metrics": {
+                "graph_seeded_chunk_count": 2.0,
+                "graph_transfer_count": 3.0,
+                "topological_shield_attenuated_chunk_count": 2.0,
+                "topological_shield_attenuation_total": 0.5,
+            },
+            "topological_shield": {
+                "enabled": True,
+                "report_only": False,
+                "attenuated_chunk_count": 2,
+                "coverage_ratio": 0.5,
+                "attenuation_total": 0.5,
+            },
+            "chunk_guard": {
+                "enabled": True,
+                "candidate_pool": 4,
+                "pairwise_conflict_count": 3,
+            },
+        },
+        "skills": {
+            "selected": [{"name": "skill-a"}],
+            "token_budget": 200,
+            "token_budget_used": 50,
+        },
+        "source_plan": {
+            "candidate_chunks": [
+                {
+                    "path": "src/auth.py",
+                    "qualified_name": "validate_token",
+                    "signature": "def validate_token",
+                },
+                {
+                    "path": "src/token.py",
+                    "qualified_name": "load_token",
+                    "signature": "def load_token",
+                },
+            ],
+            "packing": {
+                "packed_path_count": 2,
+            },
+            "validation_tests": [],
+        },
+        "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+    }
+
+    row = evaluate_case_result(case=case, plan_payload=payload, latency_ms=5.0)
+
+    assert row["skills_token_budget_utilization_ratio"] == 0.25
+    assert row["source_plan_chunk_retention_ratio"] == 0.5
+    assert row["source_plan_packed_path_ratio"] == 2.0 / 3.0
+    assert row["graph_transfer_per_seed_ratio"] == 1.5
+    assert row["chunk_guard_pairwise_conflict_density"] == 0.75
+    assert row["topological_shield_attenuation_per_chunk"] == 0.25
+    assert row["skills_budget"]["utilization_ratio"] == 0.25
+    assert row["graph_prior"]["transfer_per_seed_ratio"] == 1.5
+    assert row["topological_shield"]["attenuation_per_chunk"] == 0.25
+    assert row["source_plan_packing"]["packed_path_ratio"] == round(2.0 / 3.0, 6)
+    assert row["source_plan_packing"]["chunk_retention_ratio"] == 0.5
+    assert row["year2_normalized_kpis"] == {
+        "skills_token_budget_utilization_ratio": 0.25,
+        "source_plan_chunk_retention_ratio": 0.5,
+        "source_plan_packed_path_ratio": round(2.0 / 3.0, 6),
+        "graph_transfer_per_seed_ratio": 1.5,
+        "chunk_guard_pairwise_conflict_density": 0.75,
+        "topological_shield_attenuation_per_chunk": 0.25,
+    }
+
+
+def test_case_evaluation_payload_helpers_guard_zero_denominators() -> None:
+    assert safe_ratio(5, 0) == 0.0
+    assert safe_ratio(-2, 4) == 0.0
+    assert count_unique_paths(
+        [
+            {"path": "src/auth.py"},
+            {"path": "src/auth.py"},
+            {"path": "src/token.py"},
+            {"path": ""},
+        ]
+    ) == 2
+
+
+def test_evaluate_case_result_reports_chunk_contract_fallback_kpis() -> None:
+    case = {
+        "case_id": "c-chunk-contract",
+        "query": "find markdown auth docs",
+        "expected_keys": ["guide", "auth"],
+        "top_k": 3,
+    }
+    payload = {
+        "index": {
+            "candidate_files": [
+                {"path": "docs/guide.md", "module": "docs.guide"},
+                {"path": "docs/ops.md", "module": "docs.ops"},
+            ],
+            "candidate_chunks": [
+                {
+                    "path": "docs/guide.md",
+                    "qualified_name": "guide",
+                    "disclosure": "refs",
+                    "disclosure_fallback_reason": "unsupported_language",
+                },
+                {
+                    "path": "docs/ops.md",
+                    "qualified_name": "ops",
+                    "disclosure": "refs",
+                    "disclosure_fallback_reason": "unsupported_language",
+                },
+                {
+                    "path": "src/auth.py",
+                    "qualified_name": "validate_token",
+                    "disclosure": "skeleton_light",
+                },
+                {
+                    "path": "src/token.py",
+                    "qualified_name": "load_token",
+                    "disclosure": "refs",
+                    "disclosure_fallback_reason": "budget_guard",
+                },
+            ],
+            "chunk_contract": {
+                "fallback_count": 3,
+                "skeleton_chunk_count": 1,
+            },
+        },
+        "source_plan": {"validation_tests": []},
+        "repomap": {"dependency_recall": {"hit_rate": 0.0}},
+    }
+
+    row = evaluate_case_result(case=case, plan_payload=payload, latency_ms=7.0)
+
+    assert row["chunk_contract_fallback_count"] == 3.0
+    assert row["chunk_contract_skeleton_chunk_count"] == 1.0
+    assert row["chunk_contract_fallback_ratio"] == 0.75
+    assert row["chunk_contract_skeleton_ratio"] == 0.25
+    assert row["unsupported_language_fallback_count"] == 2.0
+    assert row["unsupported_language_fallback_ratio"] == 0.5
+    assert row["chunk_contract"] == {
+        "fallback_count": 3,
+        "skeleton_chunk_count": 1,
+        "fallback_ratio": 0.75,
+        "skeleton_ratio": 0.25,
+        "unsupported_language_fallback_count": 2,
+        "unsupported_language_fallback_ratio": 0.5,
+    }
+
+    metrics = aggregate_metrics([row])
+    assert metrics["chunk_contract_fallback_count_mean"] == 3.0
+    assert metrics["chunk_contract_skeleton_chunk_count_mean"] == 1.0
+    assert metrics["chunk_contract_fallback_ratio"] == 0.75
+    assert metrics["chunk_contract_skeleton_ratio"] == 0.25
+    assert metrics["unsupported_language_fallback_count_mean"] == 2.0
+    assert metrics["unsupported_language_fallback_ratio"] == 0.5

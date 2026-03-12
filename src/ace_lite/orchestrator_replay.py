@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from ace_lite.chunking.skeleton import CHUNK_SKELETON_SCHEMA_VERSION
 from ace_lite.plan_replay_cache import (
     build_plan_component_fingerprint,
     build_plan_replay_cache_key,
@@ -11,6 +12,7 @@ from ace_lite.plan_replay_cache import (
     content_version as plan_replay_content_version,
     normalize_plan_query,
 )
+from ace_lite.prompt_rendering.renderer import build_prompt_rendering_boundary
 
 
 def build_memory_replay_fingerprint(*, memory_payload: dict[str, Any]) -> str:
@@ -44,6 +46,8 @@ def build_index_replay_fingerprint(*, index_payload: dict[str, Any]) -> str:
     stable_payload = {
         "candidate_files": index_payload.get("candidate_files", []),
         "candidate_chunks": index_payload.get("candidate_chunks", []),
+        "chunk_contract": index_payload.get("chunk_contract", {}),
+        "subgraph_payload": index_payload.get("subgraph_payload", {}),
         "module_hint": str(index_payload.get("module_hint", "")),
         "policy_name": str(index_payload.get("policy_name", "")),
         "policy_version": str(index_payload.get("policy_version", "")),
@@ -149,6 +153,22 @@ def build_skills_replay_fingerprint(*, skills_payload: dict[str, Any]) -> str:
     return build_plan_component_fingerprint(stable_payload)
 
 
+def build_source_plan_contract_replay_fingerprint(
+    *,
+    chunk_disclosure: str,
+    graph_payload_version: str,
+    graph_taxonomy_version: str,
+) -> str:
+    stable_payload = {
+        "chunk_contract_schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+        "chunk_disclosure": str(chunk_disclosure or "refs"),
+        "prompt_rendering_boundary": build_prompt_rendering_boundary(),
+        "graph_payload_version": str(graph_payload_version or ""),
+        "graph_taxonomy_version": str(graph_taxonomy_version or ""),
+    }
+    return build_plan_component_fingerprint(stable_payload)
+
+
 def build_orchestrator_plan_replay_key(
     *,
     query: str,
@@ -165,7 +185,13 @@ def build_orchestrator_plan_replay_key(
     retrieval_policy_version: str,
     candidate_ranker_default: str,
     budget_knobs: dict[str, Any],
+    chunk_disclosure: str,
 ) -> str:
+    subgraph_payload = (
+        index_payload.get("subgraph_payload", {})
+        if isinstance(index_payload.get("subgraph_payload"), dict)
+        else {}
+    )
     worktree_prior = (
         index_payload.get("worktree_prior", {})
         if isinstance(index_payload.get("worktree_prior"), dict)
@@ -211,6 +237,13 @@ def build_orchestrator_plan_replay_key(
             "skills": build_skills_replay_fingerprint(
                 skills_payload=skills_payload
             ),
+            "source_plan_contracts": build_source_plan_contract_replay_fingerprint(
+                chunk_disclosure=chunk_disclosure,
+                graph_payload_version=str(subgraph_payload.get("payload_version") or ""),
+                graph_taxonomy_version=str(
+                    subgraph_payload.get("taxonomy_version") or ""
+                ),
+            ),
         },
         content_version=plan_replay_content_version(),
     )
@@ -224,4 +257,5 @@ __all__ = [
     "build_repomap_replay_fingerprint",
     "build_repo_inputs_replay_fingerprint",
     "build_skills_replay_fingerprint",
+    "build_source_plan_contract_replay_fingerprint",
 ]

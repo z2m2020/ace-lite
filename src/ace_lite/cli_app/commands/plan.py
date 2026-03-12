@@ -23,6 +23,7 @@ from ace_lite.cli_app.params import (
     _to_retrieval_policy,
     _with_shared_plan_options,
 )
+from ace_lite.plan_contract_summary import build_plan_contract_summary
 from ace_lite.plan_quick import build_plan_quick
 from ace_lite.plan_timeout import (
     build_plan_timeout_fallback_payload,
@@ -625,6 +626,15 @@ def plan_command(
         )
     else:
         payload = outcome.payload or {}
+    if (
+        isinstance(payload, dict)
+        and isinstance(payload.get("index"), dict)
+        and isinstance(payload.get("source_plan"), dict)
+    ):
+        payload["contract_summary"] = build_plan_contract_summary(
+            index_payload=payload.get("index"),
+            source_plan_payload=payload.get("source_plan"),
+        )
     if output_json:
         target = Path(str(output_json)).expanduser()
         if not target.is_absolute():

@@ -11,7 +11,7 @@ from typing import Any, cast
 
 from pydantic import Field, ValidationError, field_validator
 
-from ace_lite.chunking.builder import CHUNK_DISCLOSURE_CHOICES
+from ace_lite.chunking.disclosure_policy import CHUNK_DISCLOSURE_CHOICES
 from ace_lite.pydantic_utils import StrictModel as _StrictModel
 from ace_lite.repomap.ranking import RANKING_PROFILES
 from ace_lite.runtime.scheduler import CronSchedule

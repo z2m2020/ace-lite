@@ -56,6 +56,58 @@ CHUNK_REF_REQUIRED_KEYS = (
 )
 
 
+def _validate_chunk_skeleton(skeleton: Any, *, prefix: str) -> None:
+    if not isinstance(skeleton, dict):
+        raise ValueError(f"{prefix} must be a dictionary")
+
+    for key in ("schema_version", "mode", "symbol", "span", "anchors"):
+        if key not in skeleton:
+            raise ValueError(f"{prefix}.{key} is required")
+
+    if not isinstance(skeleton.get("schema_version"), str):
+        raise ValueError(f"{prefix}.schema_version must be a string")
+    if not isinstance(skeleton.get("mode"), str):
+        raise ValueError(f"{prefix}.mode must be a string")
+    if not isinstance(skeleton.get("language"), str):
+        raise ValueError(f"{prefix}.language must be a string")
+    if not isinstance(skeleton.get("module"), str):
+        raise ValueError(f"{prefix}.module must be a string")
+
+    symbol = skeleton.get("symbol")
+    if not isinstance(symbol, dict):
+        raise ValueError(f"{prefix}.symbol must be a dictionary")
+    for key in ("name", "qualified_name", "kind"):
+        if not isinstance(symbol.get(key), str):
+            raise ValueError(f"{prefix}.symbol.{key} must be a string")
+
+    span = skeleton.get("span")
+    if not isinstance(span, dict):
+        raise ValueError(f"{prefix}.span must be a dictionary")
+    for key in ("start_line", "end_line", "line_count"):
+        if not isinstance(span.get(key), (int, float)):
+            raise ValueError(f"{prefix}.span.{key} must be numeric")
+
+    anchors = skeleton.get("anchors")
+    if not isinstance(anchors, dict):
+        raise ValueError(f"{prefix}.anchors must be a dictionary")
+    if not isinstance(anchors.get("path"), str):
+        raise ValueError(f"{prefix}.anchors.path must be a string")
+    if not isinstance(anchors.get("signature"), str):
+        raise ValueError(f"{prefix}.anchors.signature must be a string")
+    if not isinstance(anchors.get("robust_signature_available"), bool):
+        raise ValueError(
+            f"{prefix}.anchors.robust_signature_available must be a boolean"
+        )
+
+    metadata = skeleton.get("metadata")
+    if metadata is not None and not isinstance(metadata, dict):
+        raise ValueError(f"{prefix}.metadata must be a dictionary")
+
+    robust_summary = skeleton.get("robust_signature_summary")
+    if robust_summary is not None and not isinstance(robust_summary, dict):
+        raise ValueError(f"{prefix}.robust_signature_summary must be a dictionary")
+
+
 def _validate_plugin_policy_summary(summary: dict[str, Any]) -> None:
     if not isinstance(summary, dict):
         raise ValueError("observability.plugin_policy_summary must be a dictionary")
@@ -124,6 +176,22 @@ def _validate_chunk_ref(chunk: dict[str, Any], *, prefix: str) -> None:
         raise ValueError(f"{prefix}.lineno must be numeric")
     if not isinstance(chunk.get("end_lineno"), (int, float)):
         raise ValueError(f"{prefix}.end_lineno must be numeric")
+    if "disclosure" in chunk and not isinstance(chunk.get("disclosure"), str):
+        raise ValueError(f"{prefix}.disclosure must be a string")
+    if "disclosure_requested" in chunk and not isinstance(
+        chunk.get("disclosure_requested"), str
+    ):
+        raise ValueError(f"{prefix}.disclosure_requested must be a string")
+    if "disclosure_fallback_reason" in chunk and not isinstance(
+        chunk.get("disclosure_fallback_reason"), str
+    ):
+        raise ValueError(f"{prefix}.disclosure_fallback_reason must be a string")
+    if "skeleton_available" in chunk and not isinstance(
+        chunk.get("skeleton_available"), bool
+    ):
+        raise ValueError(f"{prefix}.skeleton_available must be a boolean")
+    if "skeleton" in chunk:
+        _validate_chunk_skeleton(chunk.get("skeleton"), prefix=f"{prefix}.skeleton")
 
 
 def _validate_chunk_list(chunks: Any, *, prefix: str) -> None:

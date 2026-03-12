@@ -63,6 +63,15 @@ def coerce_chunk_refs(value: Any) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)]
 
 
+def count_unique_paths(items: list[dict[str, Any]]) -> int:
+    paths: set[str] = set()
+    for item in items:
+        path = str(item.get("path") or "").strip()
+        if path:
+            paths.add(path)
+    return len(paths)
+
+
 def compute_chunks_per_file_mean(candidate_chunks: list[dict[str, Any]]) -> float:
     counts: dict[str, int] = {}
     for item in candidate_chunks:
@@ -73,6 +82,14 @@ def compute_chunks_per_file_mean(candidate_chunks: list[dict[str, Any]]) -> floa
     if not counts:
         return 0.0
     return float(sum(counts.values())) / float(len(counts))
+
+
+def safe_ratio(numerator: Any, denominator: Any) -> float:
+    numerator_value = max(0.0, float(numerator or 0.0))
+    denominator_value = float(denominator or 0.0)
+    if denominator_value <= 0.0:
+        return 0.0
+    return numerator_value / denominator_value
 
 
 def normalize_source_plan_evidence_summary(value: Any) -> dict[str, float]:
@@ -93,8 +110,10 @@ def normalize_source_plan_evidence_summary(value: Any) -> dict[str, float]:
 
 __all__ = [
     "coerce_chunk_refs",
+    "count_unique_paths",
     "compute_chunks_per_file_mean",
     "extract_stage_latency_ms",
     "extract_stage_observability",
     "normalize_source_plan_evidence_summary",
+    "safe_ratio",
 ]

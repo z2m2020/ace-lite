@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from ace_lite.config_pack import load_config_pack
+from ace_lite.plan_contract_summary import build_plan_contract_summary
 from ace_lite.plan_timeout import (
     PLAN_TIMEOUT_RECOMMENDATIONS,
     execute_with_timeout,
@@ -201,6 +202,23 @@ def handle_plan_request(
             else 0.0
         ),
     }
+    if isinstance(outcome.payload, dict):
+        index_payload = (
+            outcome.payload.get("index", {})
+            if isinstance(outcome.payload.get("index"), dict)
+            else {}
+        )
+        source_plan_payload = (
+            outcome.payload.get("source_plan", {})
+            if isinstance(outcome.payload.get("source_plan"), dict)
+            else {}
+        )
+        summary.update(
+            build_plan_contract_summary(
+                index_payload=index_payload,
+                source_plan_payload=source_plan_payload,
+            )
+        )
     if include_full_payload:
         summary["plan"] = outcome.payload
     return summary

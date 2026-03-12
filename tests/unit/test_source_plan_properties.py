@@ -4,6 +4,7 @@ import copy
 import random
 from itertools import pairwise
 
+from ace_lite.chunking.skeleton import CHUNK_SKELETON_SCHEMA_VERSION
 from ace_lite.pipeline.stages.source_plan import run_source_plan
 from ace_lite.pipeline.types import StageContext
 from ace_lite.source_plan import pack_source_plan_chunks, rank_source_plan_chunks
@@ -145,6 +146,106 @@ def test_run_source_plan_is_deterministic_for_same_context() -> None:
     assert first["policy_version"] == "v1"
     assert len(first["candidate_chunks"]) <= 12
     assert len(first["chunk_steps"]) == len(first["candidate_chunks"])
+
+
+def test_run_source_plan_preserves_mixed_chunk_disclosure_contracts() -> None:
+    ctx = StageContext(query="trace mixed disclosure flow", repo="demo", root=".")
+    ctx.state = {
+        "memory": {},
+        "index": {
+            "candidate_files": [
+                {"path": "src/auth.py"},
+                {"path": "docs/guide.md"},
+            ],
+            "candidate_chunks": [
+                {
+                    "path": "src/auth.py",
+                    "qualified_name": "validate_token",
+                    "kind": "function",
+                    "lineno": 10,
+                    "end_lineno": 20,
+                    "score": 10.0,
+                    "disclosure": "skeleton_light",
+                    "skeleton": {
+                        "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+                        "mode": "skeleton_light",
+                        "language": "python",
+                        "module": "src.auth",
+                        "symbol": {
+                            "name": "validate_token",
+                            "qualified_name": "validate_token",
+                            "kind": "function",
+                        },
+                        "span": {
+                            "start_line": 10,
+                            "end_line": 20,
+                            "line_count": 11,
+                        },
+                        "anchors": {
+                            "path": "src/auth.py",
+                            "signature": "def validate_token(raw: str) -> bool:",
+                            "robust_signature_available": True,
+                        },
+                    },
+                },
+                {
+                    "path": "docs/guide.md",
+                    "qualified_name": "guide",
+                    "kind": "heading",
+                    "lineno": 1,
+                    "end_lineno": 4,
+                    "score": 8.0,
+                    "disclosure": "refs",
+                    "disclosure_requested": "skeleton_light",
+                    "disclosure_fallback_reason": "unsupported_language",
+                },
+            ],
+            "chunk_metrics": {"chunk_budget_used": 64.0},
+        },
+        "repomap": {"focused_files": ["src/auth.py", "docs/guide.md"]},
+        "augment": {
+            "diagnostics": [],
+            "xref": {"count": 0, "results": []},
+            "tests": {"suspicious_chunks": [], "suggested_tests": []},
+        },
+        "skills": {"selected": []},
+        "__policy": {"name": "general", "version": "v1", "test_signal_weight": 1.0},
+    }
+
+    result = run_source_plan(
+        ctx=ctx,
+        pipeline_order=["memory", "index", "repomap", "augment", "skills", "source_plan"],
+        chunk_top_k=4,
+        chunk_per_file_limit=2,
+        chunk_token_budget=256,
+        chunk_disclosure="skeleton_light",
+        policy_version="v1",
+    )
+
+    assert [item["disclosure"] for item in result["candidate_chunks"]] == [
+        "skeleton_light",
+        "refs",
+    ]
+    assert result["candidate_chunks"][0]["skeleton"]["mode"] == "skeleton_light"
+    assert result["candidate_chunks"][1]["disclosure_requested"] == "skeleton_light"
+    assert (
+        result["candidate_chunks"][1]["disclosure_fallback_reason"]
+        == "unsupported_language"
+    )
+    assert "skeleton" not in result["candidate_chunks"][1]
+    assert result["chunk_contract"] == {
+        "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+        "requested_disclosure": "skeleton_light",
+        "observed_disclosures": ["skeleton_light", "refs"],
+        "fallback_count": 1,
+        "chunk_count": 2,
+        "skeleton_chunk_count": 1,
+        "skeleton_modes": ["skeleton_light"],
+        "skeleton_schema_versions": [CHUNK_SKELETON_SCHEMA_VERSION],
+    }
+    assert [
+        item["chunk_ref"]["skeleton_available"] for item in result["chunk_steps"]
+    ] == [True, False]
 
 
 def test_run_source_plan_promotes_focused_file_coverage() -> None:

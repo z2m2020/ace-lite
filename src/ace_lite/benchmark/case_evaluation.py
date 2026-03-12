@@ -15,10 +15,12 @@ from ace_lite.benchmark.case_evaluation_expectations import (
 )
 from ace_lite.benchmark.case_evaluation_payloads import (
     coerce_chunk_refs as _coerce_chunk_refs_impl,
+    count_unique_paths as _count_unique_paths_impl,
     compute_chunks_per_file_mean as _compute_chunks_per_file_mean_impl,
     extract_stage_latency_ms as _extract_stage_latency_ms_impl,
     extract_stage_observability as _extract_stage_observability_impl,
     normalize_source_plan_evidence_summary as _normalize_source_plan_evidence_summary_impl,
+    safe_ratio as _safe_ratio_impl,
 )
 
 
@@ -41,6 +43,14 @@ def _coerce_chunk_refs(value: Any) -> list[dict[str, Any]]:
 
 def _compute_chunks_per_file_mean(candidate_chunks: list[dict[str, Any]]) -> float:
     return _compute_chunks_per_file_mean_impl(candidate_chunks)
+
+
+def _count_unique_paths(items: list[dict[str, Any]]) -> int:
+    return _count_unique_paths_impl(items)
+
+
+def _safe_ratio(numerator: Any, denominator: Any) -> float:
+    return _safe_ratio_impl(numerator, denominator)
 
 
 def _classify_chunk_stage_miss(
@@ -227,6 +237,11 @@ def evaluate_case_result(
         if isinstance(index_payload.get("chunk_guard"), dict)
         else {}
     )
+    chunk_contract_payload = (
+        index_payload.get("chunk_contract", {})
+        if isinstance(index_payload.get("chunk_contract"), dict)
+        else {}
+    )
     parallel_payload = (
         index_payload.get("parallel", {})
         if isinstance(index_payload.get("parallel"), dict)
@@ -396,6 +411,33 @@ def evaluate_case_result(
     chunk_tokens = _tokenize(chunk_text)
     chunk_hits = [key for key in expected if any(tok in chunk_tokens for tok in _tokenize(key))]
     chunk_hit_at_k = 1.0 if expected and chunk_hits else 0.0
+    raw_candidate_chunk_count = len(raw_candidate_chunks)
+    chunk_contract_fallback_count = max(
+        0,
+        int(chunk_contract_payload.get("fallback_count", 0) or 0),
+    )
+    chunk_contract_skeleton_chunk_count = max(
+        0,
+        int(chunk_contract_payload.get("skeleton_chunk_count", 0) or 0),
+    )
+    chunk_contract_fallback_ratio = _safe_ratio(
+        chunk_contract_fallback_count,
+        raw_candidate_chunk_count,
+    )
+    chunk_contract_skeleton_ratio = _safe_ratio(
+        chunk_contract_skeleton_chunk_count,
+        raw_candidate_chunk_count,
+    )
+    unsupported_language_fallback_count = sum(
+        1
+        for item in raw_candidate_chunks
+        if str(item.get("disclosure_fallback_reason") or "").strip()
+        == "unsupported_language"
+    )
+    unsupported_language_fallback_ratio = _safe_ratio(
+        unsupported_language_fallback_count,
+        raw_candidate_chunk_count,
+    )
 
     dependency = repomap_payload.get("dependency_recall", {})
     dependency_recall = float(dependency.get("hit_rate", 0.0)) if isinstance(dependency, dict) else 0.0
@@ -897,6 +939,42 @@ def evaluate_case_result(
         )
         or ""
     )
+    candidate_file_path_count = _count_unique_paths(
+        [item for item in candidate_files if isinstance(item, dict)]
+    )
+    effective_packed_path_count = (
+        source_plan_packed_path_count
+        if source_plan_packed_path_count > 0
+        else (
+            _count_unique_paths(candidate_chunks)
+            if source_plan_has_candidate_chunks
+            else candidate_file_path_count
+        )
+    )
+    source_plan_chunk_retention_ratio = _safe_ratio(
+        len(candidate_chunks),
+        len(raw_candidate_chunks),
+    )
+    source_plan_packed_path_ratio = _safe_ratio(
+        effective_packed_path_count,
+        candidate_file_path_count,
+    )
+    skills_token_budget_utilization_ratio = _safe_ratio(
+        skills_token_budget_used,
+        skills_token_budget,
+    )
+    graph_transfer_per_seed_ratio = _safe_ratio(
+        graph_transfer_count,
+        graph_seeded_chunk_count,
+    )
+    chunk_guard_pairwise_conflict_density = _safe_ratio(
+        chunk_guard_pairwise_conflict_count,
+        chunk_guard_candidate_pool,
+    )
+    topological_shield_attenuation_per_chunk = _safe_ratio(
+        topological_shield_attenuation_total,
+        topological_shield_attenuated_chunk_count,
+    )
     router_enabled = bool(
         adaptive_router_payload.get(
             "enabled",
@@ -1148,6 +1226,18 @@ def evaluate_case_result(
         "chunk_hit_at_k": chunk_hit_at_k,
         "chunks_per_file_mean": chunks_per_file_mean,
         "chunk_budget_used": chunk_budget_used,
+        "chunk_contract_fallback_count": float(chunk_contract_fallback_count),
+        "chunk_contract_skeleton_chunk_count": float(
+            chunk_contract_skeleton_chunk_count
+        ),
+        "chunk_contract_fallback_ratio": chunk_contract_fallback_ratio,
+        "chunk_contract_skeleton_ratio": chunk_contract_skeleton_ratio,
+        "unsupported_language_fallback_count": float(
+            unsupported_language_fallback_count
+        ),
+        "unsupported_language_fallback_ratio": (
+            unsupported_language_fallback_ratio
+        ),
         "robust_signature_count": float(robust_signature_count),
         "robust_signature_coverage_ratio": robust_signature_coverage_ratio,
         "graph_prior_chunk_count": float(graph_prior_chunk_count),
@@ -1180,9 +1270,15 @@ def evaluate_case_result(
         "topological_shield_attenuation_total": float(
             topological_shield_attenuation_total
         ),
+        "topological_shield_attenuation_per_chunk": (
+            topological_shield_attenuation_per_chunk
+        ),
         "skills_selected_count": skills_selected_count,
         "skills_token_budget": skills_token_budget,
         "skills_token_budget_used": skills_token_budget_used,
+        "skills_token_budget_utilization_ratio": (
+            skills_token_budget_utilization_ratio
+        ),
         "skills_budget_exhausted": 1.0 if skills_budget_exhausted else 0.0,
         "skills_skipped_for_budget_count": skills_skipped_for_budget_count,
         "skills_route_latency_ms": skills_route_latency_ms,
@@ -1222,10 +1318,13 @@ def evaluate_case_result(
             source_plan_focused_file_promoted_count
         ),
         "source_plan_packed_path_count": float(source_plan_packed_path_count),
+        "source_plan_chunk_retention_ratio": source_plan_chunk_retention_ratio,
+        "source_plan_packed_path_ratio": source_plan_packed_path_ratio,
         "notes_hit_ratio": notes_hit_ratio,
         "profile_selected_count": float(profile_selected_count),
         "capture_triggered": 1.0 if capture_triggered else 0.0,
         "policy_profile": policy_profile,
+        "graph_transfer_per_seed_ratio": graph_transfer_per_seed_ratio,
         "router_enabled": 1.0 if router_enabled else 0.0,
         "router_mode": router_mode,
         "router_arm_set": router_arm_set,
@@ -1276,6 +1375,9 @@ def evaluate_case_result(
         "chunk_guard_filter_ratio": float(chunk_guard_filter_ratio),
         "chunk_guard_pairwise_conflict_count": float(
             chunk_guard_pairwise_conflict_count
+        ),
+        "chunk_guard_pairwise_conflict_density": (
+            chunk_guard_pairwise_conflict_density
         ),
         "chunk_guard_fallback": 1.0 if chunk_guard_fallback else 0.0,
         "chunk_guard_expectation_applicable": (
@@ -1330,10 +1432,24 @@ def evaluate_case_result(
             "skills": round(skills_latency_ms, 3),
             "source_plan": round(source_plan_latency_ms, 3),
         }
+        payload["chunk_contract"] = {
+            "fallback_count": chunk_contract_fallback_count,
+            "skeleton_chunk_count": chunk_contract_skeleton_chunk_count,
+            "fallback_ratio": round(chunk_contract_fallback_ratio, 6),
+            "skeleton_ratio": round(chunk_contract_skeleton_ratio, 6),
+            "unsupported_language_fallback_count": (
+                unsupported_language_fallback_count
+            ),
+            "unsupported_language_fallback_ratio": round(
+                unsupported_language_fallback_ratio,
+                6,
+            ),
+        }
         payload["skills_budget"] = {
             "selected_count": int(skills_selected_count),
             "token_budget": round(skills_token_budget, 3),
             "token_budget_used": round(skills_token_budget_used, 3),
+            "utilization_ratio": round(skills_token_budget_utilization_ratio, 6),
             "budget_exhausted": bool(skills_budget_exhausted),
             "skipped_for_budget_count": int(skills_skipped_for_budget_count),
         }
@@ -1390,6 +1506,9 @@ def evaluate_case_result(
             "filtered_count": chunk_guard_filtered_count,
             "retained_count": chunk_guard_retained_count,
             "pairwise_conflict_count": chunk_guard_pairwise_conflict_count,
+            "pairwise_conflict_density": round(
+                chunk_guard_pairwise_conflict_density, 6
+            ),
             "max_conflict_penalty": round(chunk_guard_max_conflict_penalty, 6),
             "retained_refs": list(chunk_guard_payload.get("retained_refs", []))
             if isinstance(chunk_guard_payload.get("retained_refs"), list)
@@ -1434,8 +1553,19 @@ def evaluate_case_result(
             "total": round(graph_prior_total, 6),
             "seeded_chunk_count": graph_seeded_chunk_count,
             "transfer_count": graph_transfer_count,
+            "transfer_per_seed_ratio": round(graph_transfer_per_seed_ratio, 6),
             "hub_suppressed_chunk_count": graph_hub_suppressed_chunk_count,
             "hub_penalty_total": round(graph_hub_penalty_total, 6),
+        }
+        payload["topological_shield"] = {
+            "enabled": topological_shield_enabled,
+            "report_only": topological_shield_report_only,
+            "attenuated_chunk_count": topological_shield_attenuated_chunk_count,
+            "coverage_ratio": round(topological_shield_coverage_ratio, 6),
+            "attenuation_total": round(topological_shield_attenuation_total, 6),
+            "attenuation_per_chunk": round(
+                topological_shield_attenuation_per_chunk, 6
+            ),
         }
         payload["graph_closure"] = {
             "enabled": graph_closure_enabled,
@@ -1457,7 +1587,29 @@ def evaluate_case_result(
             ),
             "focused_file_promoted_count": source_plan_focused_file_promoted_count,
             "packed_path_count": source_plan_packed_path_count,
+            "packed_path_ratio": round(source_plan_packed_path_ratio, 6),
+            "chunk_retention_ratio": round(source_plan_chunk_retention_ratio, 6),
             "reason": source_plan_packing_reason,
+        }
+        payload["year2_normalized_kpis"] = {
+            "skills_token_budget_utilization_ratio": round(
+                skills_token_budget_utilization_ratio, 6
+            ),
+            "source_plan_chunk_retention_ratio": round(
+                source_plan_chunk_retention_ratio, 6
+            ),
+            "source_plan_packed_path_ratio": round(
+                source_plan_packed_path_ratio, 6
+            ),
+            "graph_transfer_per_seed_ratio": round(
+                graph_transfer_per_seed_ratio, 6
+            ),
+            "chunk_guard_pairwise_conflict_density": round(
+                chunk_guard_pairwise_conflict_density, 6
+            ),
+            "topological_shield_attenuation_per_chunk": round(
+                topological_shield_attenuation_per_chunk, 6
+            ),
         }
     return payload
 

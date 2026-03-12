@@ -48,6 +48,12 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
             "chunk_hit_at_k": 0.0,
             "chunks_per_file_mean": 0.0,
             "chunk_budget_used": 0.0,
+            "chunk_contract_fallback_count_mean": 0.0,
+            "chunk_contract_skeleton_chunk_count_mean": 0.0,
+            "chunk_contract_fallback_ratio": 0.0,
+            "chunk_contract_skeleton_ratio": 0.0,
+            "unsupported_language_fallback_count_mean": 0.0,
+            "unsupported_language_fallback_ratio": 0.0,
             "robust_signature_count_mean": 0.0,
             "robust_signature_coverage_ratio": 0.0,
             "graph_prior_chunk_count_mean": 0.0,
@@ -156,6 +162,30 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     chunk_hits = [float(item.get("chunk_hit_at_k", 0.0)) for item in case_results]
     chunks_per_file = [float(item.get("chunks_per_file_mean", 0.0)) for item in case_results]
     chunk_budget = [float(item.get("chunk_budget_used", 0.0)) for item in case_results]
+    chunk_contract_fallback_counts = [
+        float(item.get("chunk_contract_fallback_count", 0.0))
+        for item in case_results
+    ]
+    chunk_contract_skeleton_chunk_counts = [
+        float(item.get("chunk_contract_skeleton_chunk_count", 0.0))
+        for item in case_results
+    ]
+    chunk_contract_fallback_ratios = [
+        float(item.get("chunk_contract_fallback_ratio", 0.0))
+        for item in case_results
+    ]
+    chunk_contract_skeleton_ratios = [
+        float(item.get("chunk_contract_skeleton_ratio", 0.0))
+        for item in case_results
+    ]
+    unsupported_language_fallback_counts = [
+        float(item.get("unsupported_language_fallback_count", 0.0))
+        for item in case_results
+    ]
+    unsupported_language_fallback_ratios = [
+        float(item.get("unsupported_language_fallback_ratio", 0.0))
+        for item in case_results
+    ]
     robust_signature_counts = [
         float(item.get("robust_signature_count", 0.0)) for item in case_results
     ]
@@ -419,6 +449,20 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "chunk_hit_at_k": mean(chunk_hits),
         "chunks_per_file_mean": mean(chunks_per_file),
         "chunk_budget_used": mean(chunk_budget),
+        "chunk_contract_fallback_count_mean": mean(
+            chunk_contract_fallback_counts
+        ),
+        "chunk_contract_skeleton_chunk_count_mean": mean(
+            chunk_contract_skeleton_chunk_counts
+        ),
+        "chunk_contract_fallback_ratio": mean(chunk_contract_fallback_ratios),
+        "chunk_contract_skeleton_ratio": mean(chunk_contract_skeleton_ratios),
+        "unsupported_language_fallback_count_mean": mean(
+            unsupported_language_fallback_counts
+        ),
+        "unsupported_language_fallback_ratio": mean(
+            unsupported_language_fallback_ratios
+        ),
         "robust_signature_count_mean": mean(robust_signature_counts),
         "robust_signature_coverage_ratio": mean(robust_signature_coverage),
         "graph_prior_chunk_count_mean": mean(graph_prior_chunk_counts),
@@ -570,6 +614,34 @@ def compare_metrics(
         "chunk_hit_at_k": float(current.get("chunk_hit_at_k", 0.0)) - float(baseline.get("chunk_hit_at_k", 0.0)),
         "chunks_per_file_mean": float(current.get("chunks_per_file_mean", 0.0)) - float(baseline.get("chunks_per_file_mean", 0.0)),
         "chunk_budget_used": float(current.get("chunk_budget_used", 0.0)) - float(baseline.get("chunk_budget_used", 0.0)),
+        "chunk_contract_fallback_count_mean": float(
+            current.get("chunk_contract_fallback_count_mean", 0.0)
+        )
+        - float(baseline.get("chunk_contract_fallback_count_mean", 0.0)),
+        "chunk_contract_skeleton_chunk_count_mean": float(
+            current.get("chunk_contract_skeleton_chunk_count_mean", 0.0)
+        )
+        - float(
+            baseline.get("chunk_contract_skeleton_chunk_count_mean", 0.0)
+        ),
+        "chunk_contract_fallback_ratio": float(
+            current.get("chunk_contract_fallback_ratio", 0.0)
+        )
+        - float(baseline.get("chunk_contract_fallback_ratio", 0.0)),
+        "chunk_contract_skeleton_ratio": float(
+            current.get("chunk_contract_skeleton_ratio", 0.0)
+        )
+        - float(baseline.get("chunk_contract_skeleton_ratio", 0.0)),
+        "unsupported_language_fallback_count_mean": float(
+            current.get("unsupported_language_fallback_count_mean", 0.0)
+        )
+        - float(
+            baseline.get("unsupported_language_fallback_count_mean", 0.0)
+        ),
+        "unsupported_language_fallback_ratio": float(
+            current.get("unsupported_language_fallback_ratio", 0.0)
+        )
+        - float(baseline.get("unsupported_language_fallback_ratio", 0.0)),
         "robust_signature_count_mean": float(
             current.get("robust_signature_count_mean", 0.0)
         )

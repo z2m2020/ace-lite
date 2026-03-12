@@ -63,6 +63,24 @@ def rank_source_plan_chunks(
         qualified_name = str(item.get("qualified_name") or "").strip()
         key = (path, lineno, end_lineno, qualified_name)
 
+        def _copy_contract_fields(target: dict[str, Any], source: dict[str, Any]) -> None:
+            for field in (
+                "disclosure",
+                "disclosure_requested",
+                "disclosure_fallback_reason",
+                "skeleton",
+                "robust_signature_summary",
+            ):
+                value = source.get(field)
+                if field == "skeleton":
+                    if isinstance(value, dict):
+                        target[field] = dict(value)
+                elif field == "robust_signature_summary":
+                    if isinstance(value, dict):
+                        target[field] = dict(value)
+                elif isinstance(value, str) and value.strip():
+                    target[field] = value
+
         entry = merged.get(key)
         if entry is None:
             preserved_breakdown = _coerce_breakdown(item.get("score_breakdown"))
@@ -82,6 +100,7 @@ def rank_source_plan_chunks(
             signature = str(item.get("signature") or "").strip()
             if signature:
                 entry["signature"] = signature
+            _copy_contract_fields(entry, item)
             merged[key] = entry
         else:
             if not str(entry.get("kind") or "").strip():
@@ -89,6 +108,7 @@ def rank_source_plan_chunks(
             signature = str(item.get("signature") or "").strip()
             if signature and not str(entry.get("signature") or "").strip():
                 entry["signature"] = signature
+            _copy_contract_fields(entry, item)
             breakdown = entry.get("score_breakdown")
             if isinstance(breakdown, dict):
                 for name, value in _coerce_breakdown(item.get("score_breakdown")).items():

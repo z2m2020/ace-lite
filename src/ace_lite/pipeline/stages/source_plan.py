@@ -10,7 +10,10 @@ from collections.abc import Iterable
 from typing import Any
 
 from ace_lite.explainability import attach_selection_why
+from ace_lite.chunking.skeleton import summarize_chunk_contract
 from ace_lite.pipeline.types import StageContext
+from ace_lite.prompt_rendering.renderer import build_prompt_rendering_boundary
+from ace_lite.scip.subgraph import build_subgraph_payload
 from ace_lite.source_plan import (
     annotate_source_plan_grounding,
     build_chunk_steps,
@@ -204,6 +207,19 @@ def run_source_plan(
         prioritized_chunks=grounded_chunks,
         chunk_top_k=max(1, int(chunk_top_k)),
     )
+    subgraph_payload = build_subgraph_payload(
+        candidate_files=[
+            item
+            for item in index_stage.get("candidate_files", [])
+            if isinstance(item, dict)
+        ],
+        candidate_chunks=grounded_chunks[: max(1, int(chunk_top_k))],
+        graph_lookup_payload=(
+            index_stage.get("graph_lookup", {})
+            if isinstance(index_stage.get("graph_lookup"), dict)
+            else {}
+        ),
+    )
 
     steps = build_source_plan_steps(
         index_stage=index_stage,
@@ -218,6 +234,12 @@ def run_source_plan(
         xref=xref,
         tests=tests,
         validation_tests=validation_tests,
+        subgraph_payload=subgraph_payload,
+    )
+    prompt_rendering_boundary = build_prompt_rendering_boundary()
+    chunk_contract = summarize_chunk_contract(
+        candidate_chunks=grounded_chunks[: max(1, int(chunk_top_k))],
+        requested_disclosure=str(chunk_disclosure or "refs"),
     )
 
     return {
@@ -235,6 +257,9 @@ def run_source_plan(
         "chunk_budget_used": float(chunk_metrics.get("chunk_budget_used", 0.0) or 0.0),
         "chunk_budget_limit": int(chunk_token_budget),
         "chunk_disclosure": str(chunk_disclosure or "refs"),
+        "chunk_contract": chunk_contract,
+        "subgraph_payload": subgraph_payload,
+        "prompt_rendering_boundary": prompt_rendering_boundary,
         "packing": packing,
         "evidence_summary": evidence_summary,
         "policy_name": str(policy.get("name", "general")),

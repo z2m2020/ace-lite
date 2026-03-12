@@ -563,6 +563,7 @@ class AceOrchestrator:
             skills_payload=skills_payload,
             retrieval_policy_version=str(self._config.retrieval.policy_version),
             candidate_ranker_default=str(self._config.retrieval.candidate_ranker),
+            chunk_disclosure=str(self._config.chunking.disclosure),
             budget_knobs={
                 "top_k_files": int(self._config.retrieval.top_k_files),
                 "repomap_top_k": int(self._config.repomap.top_k),

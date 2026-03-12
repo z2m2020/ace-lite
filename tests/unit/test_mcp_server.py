@@ -186,6 +186,60 @@ def test_mcp_service_plan_smoke_returns_summary(tmp_path: Path) -> None:
     assert "plan" not in result
 
 
+def test_mcp_service_plan_summary_surfaces_contract_versions(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _write_sample_repo(tmp_path)
+    service = _make_service(tmp_path)
+
+    def _fake_run_plan(**kwargs):
+        return {
+            "index": {
+                "chunk_contract": {
+                    "schema_version": "y2-freeze-v1",
+                },
+                "subgraph_payload": {
+                    "payload_version": "subgraph_payload_v1",
+                    "taxonomy_version": "subgraph_edge_taxonomy_v1",
+                },
+            },
+            "source_plan": {
+                "steps": [],
+                "chunk_contract": {
+                    "schema_version": "y2-freeze-v1",
+                },
+                "subgraph_payload": {
+                    "payload_version": "subgraph_payload_v1",
+                    "taxonomy_version": "subgraph_edge_taxonomy_v1",
+                },
+                "prompt_rendering_boundary": {
+                    "boundary_version": "prompt_rendering_boundary_v1",
+                },
+            },
+            "observability": {"total_ms": 1.0},
+        }
+
+    monkeypatch.setattr(mcp_service_module, "run_plan", _fake_run_plan)
+
+    result = service.plan(
+        query="summary contract",
+        repo="demo-repo",
+        root=str(tmp_path),
+        skills_dir=str(tmp_path / "skills"),
+        memory_primary="none",
+        memory_secondary="none",
+        include_full_payload=False,
+    )
+
+    assert result["ok"] is True
+    assert result["index_chunk_contract_version"] == "y2-freeze-v1"
+    assert result["source_plan_chunk_contract_version"] == "y2-freeze-v1"
+    assert result["prompt_rendering_boundary_version"] == "prompt_rendering_boundary_v1"
+    assert result["index_subgraph_payload_version"] == "subgraph_payload_v1"
+    assert result["source_plan_subgraph_payload_version"] == "subgraph_payload_v1"
+    assert result["subgraph_taxonomy_version"] == "subgraph_edge_taxonomy_v1"
+
+
 def test_mcp_service_plan_config_pack_overrides_defaults(tmp_path: Path, monkeypatch) -> None:
     _write_sample_repo(tmp_path)
     service = _make_service(tmp_path)

@@ -40,6 +40,7 @@ def _build_key(*, root: Path) -> str:
         skills_payload={},
         retrieval_policy_version="v1",
         candidate_ranker_default="rrf_hybrid",
+        chunk_disclosure="refs",
         budget_knobs=_budget_knobs(),
     )
 
@@ -56,5 +57,123 @@ def test_build_orchestrator_plan_replay_key_changes_when_relevant_file_changes(
     demo_file.write_text("print('second')\n", encoding="utf-8")
 
     second = _build_key(root=tmp_path)
+
+    assert first != second
+
+
+def test_build_orchestrator_plan_replay_key_changes_when_contract_version_salt_changes(
+    tmp_path: Path,
+) -> None:
+    demo_file = tmp_path / "src" / "demo.py"
+    demo_file.parent.mkdir(parents=True, exist_ok=True)
+    demo_file.write_text("print('first')\n", encoding="utf-8")
+
+    first = build_orchestrator_plan_replay_key(
+        query="fix replay cache invalidation",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+        temporal_input={},
+        plugins_loaded=[],
+        conventions_hashes={},
+        memory_payload={"count": 0, "hits": []},
+        index_payload={
+            "candidate_files": [{"path": "src/demo.py"}],
+            "candidate_chunks": [],
+            "policy_name": "auto",
+            "metadata": {"selection_fingerprint": "selection-v1"},
+        },
+        repomap_payload={},
+        augment_payload={},
+        skills_payload={},
+        retrieval_policy_version="v1",
+        candidate_ranker_default="rrf_hybrid",
+        chunk_disclosure="refs",
+        budget_knobs=_budget_knobs(),
+    )
+    second = build_orchestrator_plan_replay_key(
+        query="fix replay cache invalidation",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+        temporal_input={},
+        plugins_loaded=[],
+        conventions_hashes={},
+        memory_payload={"count": 0, "hits": []},
+        index_payload={
+            "candidate_files": [{"path": "src/demo.py"}],
+            "candidate_chunks": [],
+            "policy_name": "auto",
+            "metadata": {"selection_fingerprint": "selection-v1"},
+        },
+        repomap_payload={},
+        augment_payload={},
+        skills_payload={},
+        retrieval_policy_version="v1",
+        candidate_ranker_default="rrf_hybrid",
+        chunk_disclosure="skeleton_light",
+        budget_knobs=_budget_knobs(),
+    )
+
+    assert first != second
+
+
+def test_build_orchestrator_plan_replay_key_changes_when_graph_payload_contract_changes(
+    tmp_path: Path,
+) -> None:
+    demo_file = tmp_path / "src" / "demo.py"
+    demo_file.parent.mkdir(parents=True, exist_ok=True)
+    demo_file.write_text("print('first')\n", encoding="utf-8")
+
+    first = build_orchestrator_plan_replay_key(
+        query="fix replay cache invalidation",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+        temporal_input={},
+        plugins_loaded=[],
+        conventions_hashes={},
+        memory_payload={"count": 0, "hits": []},
+        index_payload={
+            "candidate_files": [{"path": "src/demo.py"}],
+            "candidate_chunks": [],
+            "policy_name": "auto",
+            "metadata": {"selection_fingerprint": "selection-v1"},
+            "subgraph_payload": {
+                "payload_version": "subgraph_payload_v1",
+                "taxonomy_version": "subgraph_edge_taxonomy_v1",
+            },
+        },
+        repomap_payload={},
+        augment_payload={},
+        skills_payload={},
+        retrieval_policy_version="v1",
+        candidate_ranker_default="rrf_hybrid",
+        chunk_disclosure="refs",
+        budget_knobs=_budget_knobs(),
+    )
+    second = build_orchestrator_plan_replay_key(
+        query="fix replay cache invalidation",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+        temporal_input={},
+        plugins_loaded=[],
+        conventions_hashes={},
+        memory_payload={"count": 0, "hits": []},
+        index_payload={
+            "candidate_files": [{"path": "src/demo.py"}],
+            "candidate_chunks": [],
+            "policy_name": "auto",
+            "metadata": {"selection_fingerprint": "selection-v1"},
+            "subgraph_payload": {
+                "payload_version": "subgraph_payload_v2",
+                "taxonomy_version": "subgraph_edge_taxonomy_v1",
+            },
+        },
+        repomap_payload={},
+        augment_payload={},
+        skills_payload={},
+        retrieval_policy_version="v1",
+        candidate_ranker_default="rrf_hybrid",
+        chunk_disclosure="refs",
+        budget_knobs=_budget_knobs(),
+    )
 
     assert first != second

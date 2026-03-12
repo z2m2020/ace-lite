@@ -14,7 +14,7 @@ from typing import Any
 from ace_lite.stage_artifact_cache import StageArtifactCache
 
 _SCHEMA_VERSION = "plan-replay-cache-v1"
-_CONTENT_VERSION = "plan-replay-v1"
+_CONTENT_VERSION = "plan-replay-v2"
 _MAX_ENTRIES = 64
 
 _PLAN_REPLAY_CACHE_MEMORY: dict[tuple[str, str], tuple[int, int, dict[str, Any]]] = {}

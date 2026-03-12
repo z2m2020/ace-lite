@@ -6,6 +6,7 @@ from ace_lite.index_stage import build_index_stage_output as exported_build_inde
 from ace_lite.index_stage import build_index_stage_result as exported_build_index_stage_result
 from ace_lite.index_stage.result_payload import build_index_stage_output
 from ace_lite.index_stage.result_payload import build_index_stage_result
+from ace_lite.chunking.skeleton import CHUNK_SKELETON_SCHEMA_VERSION
 
 
 def _base_inputs() -> dict:
@@ -227,6 +228,33 @@ def test_build_index_stage_result_limits_files_and_attaches_why() -> None:
     assert payload["metadata"]["robust_signature_coverage_ratio"] == 1.0
     assert payload["metadata"]["topological_shield_enabled"] is True
     assert payload["metadata"]["topological_shield_attenuation_total"] == 0.4
+    assert payload["chunk_contract"] == {
+        "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+        "requested_disclosure": "snippet",
+        "observed_disclosures": ["snippet"],
+        "fallback_count": 0,
+        "chunk_count": 1,
+        "skeleton_chunk_count": 0,
+        "skeleton_modes": [],
+        "skeleton_schema_versions": [],
+    }
+    assert payload["metadata"]["chunk_contract_schema_version"] == CHUNK_SKELETON_SCHEMA_VERSION
+    assert payload["metadata"]["chunk_contract_requested_disclosure"] == "snippet"
+    assert payload["metadata"]["chunk_contract_observed_disclosures"] == ["snippet"]
+    assert payload["metadata"]["chunk_contract_fallback_count"] == 0
+    assert payload["metadata"]["chunk_contract_skeleton_chunk_count"] == 0
+    assert payload["subgraph_payload"] == {
+        "payload_version": "subgraph_payload_v1",
+        "taxonomy_version": "subgraph_edge_taxonomy_v1",
+        "enabled": False,
+        "reason": "disabled",
+        "seed_paths": [],
+        "edge_counts": {},
+    }
+    assert payload["metadata"]["subgraph_payload_version"] == "subgraph_payload_v1"
+    assert payload["metadata"]["subgraph_taxonomy_version"] == "subgraph_edge_taxonomy_v1"
+    assert payload["metadata"]["subgraph_enabled"] is False
+    assert payload["metadata"]["subgraph_seed_path_count"] == 0
 
 
 def test_build_index_stage_result_fingerprint_is_stable() -> None:
@@ -234,6 +262,56 @@ def test_build_index_stage_result_fingerprint_is_stable() -> None:
     payload2 = build_index_stage_result(**deepcopy(_base_inputs()))
 
     assert payload1["metadata"]["selection_fingerprint"] == payload2["metadata"][
+        "selection_fingerprint"
+    ]
+
+
+def test_build_index_stage_result_fingerprint_changes_when_chunk_contract_changes() -> None:
+    baseline_inputs = _base_inputs()
+    baseline = build_index_stage_result(**baseline_inputs)
+
+    changed_inputs = deepcopy(_base_inputs())
+    changed_inputs["chunk_disclosure"] = "skeleton_light"
+    changed_inputs["candidate_chunks"][0]["disclosure"] = "skeleton_light"
+    changed_inputs["candidate_chunks"][0]["skeleton"] = {
+        "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+        "mode": "skeleton_light",
+        "language": "python",
+        "module": "src.auth",
+        "symbol": {
+            "name": "validate_token",
+            "qualified_name": "validate_token",
+            "kind": "function",
+        },
+        "span": {"start_line": 10, "end_line": 12, "line_count": 3},
+        "anchors": {
+            "path": "src/auth.py",
+            "signature": "def validate_token(raw: str) -> bool:",
+            "robust_signature_available": True,
+        },
+    }
+    changed = build_index_stage_result(**changed_inputs)
+
+    assert baseline["metadata"]["selection_fingerprint"] != changed["metadata"][
+        "selection_fingerprint"
+    ]
+
+
+def test_build_index_stage_result_fingerprint_changes_when_subgraph_contract_changes() -> None:
+    baseline_inputs = _base_inputs()
+    baseline = build_index_stage_result(**baseline_inputs)
+
+    changed_inputs = deepcopy(_base_inputs())
+    changed_inputs["graph_lookup_payload"] = {
+        "enabled": True,
+        "reason": "ok",
+        "boosted_count": 1,
+        "query_hit_paths": 1,
+    }
+    changed_inputs["candidates"][0]["score_breakdown"]["graph_lookup"] = 0.3
+    changed = build_index_stage_result(**changed_inputs)
+
+    assert baseline["metadata"]["selection_fingerprint"] != changed["metadata"][
         "selection_fingerprint"
     ]
 
@@ -286,6 +364,7 @@ def test_build_index_stage_result_preserves_payload_contract() -> None:
         "boosted_count": 0,
         "query_hit_paths": 0,
     }
+    assert payload["subgraph_payload"]["payload_version"] == "subgraph_payload_v1"
     assert payload["cochange"] == {"neighbors_added": 0}
     assert payload["embeddings"]["runtime_provider"] == "hash_cross"
     assert payload["feedback"]["reason"] == "disabled"
@@ -468,6 +547,31 @@ def test_build_index_stage_result_surfaces_refine_metadata() -> None:
     assert payload["metadata"]["refine_pass_enabled"] is False
     assert payload["metadata"]["refine_pass_trigger_condition_met"] is True
     assert payload["metadata"]["refine_pass_retry_ranker"] == "hybrid_re2"
+
+
+def test_build_index_stage_result_builds_consumer_facing_subgraph_payload() -> None:
+    inputs = _base_inputs()
+    inputs["graph_lookup_payload"] = {
+        "enabled": True,
+        "reason": "ok",
+        "boosted_count": 2,
+        "query_hit_paths": 1,
+    }
+    inputs["candidates"][0]["score_breakdown"]["graph_lookup"] = 0.3
+    inputs["candidate_chunks"][0]["score_breakdown"]["graph_lookup"] = 0.25
+    inputs["candidate_chunks"][0]["score_breakdown"]["graph_prior"] = 0.15
+    inputs["candidate_chunks"][0]["score_breakdown"]["graph_closure_bonus"] = 0.1
+
+    payload = build_index_stage_result(**inputs)
+
+    assert payload["subgraph_payload"]["enabled"] is True
+    assert payload["subgraph_payload"]["reason"] == "ok"
+    assert payload["subgraph_payload"]["seed_paths"] == ["src/auth.py"]
+    assert payload["subgraph_payload"]["edge_counts"] == {
+        "graph_lookup": 1,
+        "graph_prior": 1,
+        "graph_closure_bonus": 1,
+    }
 
 
 def test_index_stage_package_exports_result_builder() -> None:
