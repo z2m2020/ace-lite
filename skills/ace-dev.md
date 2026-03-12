@@ -1,27 +1,29 @@
 ---
 name: ace-dev
-description: ACE-Lite MCP operations workflow for repository indexing, retrieval config, diagnostics artifacts, and feedback-driven planning loops.
+description: ACE-Lite MCP operations workflow for repository indexing, retrieval config, validation diagnostics, upgrade drift recovery, and feedback-driven planning loops.
 argument-hint: "<your ACE-Lite task>"
 intents: [implement, troubleshoot]
-modules: [ace-lite, ace_plan, ace_plan_quick, ace_index, ace_repomap_build, feedback, memory, repomap, embeddings, scip, adaptive_router, plan_replay_cache, trace_export, chunk_guard]
-error_keywords: [timeout, 404, 405, 429, 500, 503]
-default_sections: [Workflow, Context Recovery, Planning, Config Surfaces, Command Templates, Scenario Templates, Execution and Feedback, Memory Notes]
-topics: [ace-lite, ace_plan, ace_plan_quick, ace_index, ace_repomap_build, ace_feedback_record, ace_feedback_stats, ace_memory_search, ace_memory_store, context-map, embedding_rerank_pool, scip_provider, adaptive_router_mode, adaptive_router_arm_set, plan_replay_cache_enabled, plan_replay_cache_path, trace_export_enabled, trace_export_path, trace_otlp_endpoint, junit_xml, failed_test_report, sbfl_metric, chunk_guard_mode, chunk_diversity_path_penalty, topological_shield]
+modules: [ace-lite, ace_plan, ace_plan_quick, ace_index, ace_repomap_build, feedback, memory, repomap, embeddings, scip, adaptive_router, plan_replay_cache, trace_export, chunk_guard, validation, agent_loop, doctor, version, mcp]
+error_keywords: [timeout, 404, 405, 429, 500, 503, version drift, install drift, editable install]
+default_sections: [Workflow, Context Recovery, Planning, Config Surfaces, Command Templates, Scenario Templates, Upgrade and Drift Recovery, Execution and Feedback, Memory Notes]
+topics: [ace-lite, ace_plan, ace_plan_quick, ace_index, ace_repomap_build, ace_feedback_record, ace_feedback_stats, ace_memory_search, ace_memory_store, context-map, embedding_rerank_pool, scip_provider, adaptive_router_mode, adaptive_router_arm_set, plan_replay_cache_enabled, plan_replay_cache_path, trace_export_enabled, trace_export_path, trace_otlp_endpoint, junit_xml, failed_test_report, sbfl_metric, chunk_guard_mode, chunk_diversity_path_penalty, topological_shield, validation, validation_result_v1, validation_tests, agent_loop_action_v1, agent_loop_summary_v1, runtime_doctor, mcp_self_test, verify_version_install_sync, install_sync]
 priority: 5
-token_estimate: 760
+token_estimate: 900
 ---
 
 # Workflow
 
-Use this skill when the task is specifically about ACE-Lite MCP operations, index freshness, retrieval tuning, diagnostics artifacts, or memory workflows.
+Use this skill when the task is specifically about ACE-Lite MCP operations, index freshness, retrieval tuning, validation diagnostics, or memory workflows.
 
 1. Confirm the local ACE-Lite service is healthy before planning.
 2. Reload prior constraints with `ace_memory_search` when the task looks iterative.
 3. Start with `ace_plan_quick`; escalate to `ace_plan` only when symbol-level guidance or broader source planning is needed.
-4. Pin the relevant config surface before comparing runs: embeddings, SCIP, chunking, adaptive router, replay cache, or trace export.
+4. Pin the relevant config surface before comparing runs: embeddings, SCIP, chunking, adaptive router, replay cache, validation, or trace export.
 5. Use `ace_repomap_build` when adjacency or symbol-neighbor context matters before changing retrieval logic.
-6. Refresh retrieval artifacts with `ace_index` after relevant code changes.
-7. Record useful file hits with `ace_feedback_record` and review ranking drift with `ace_feedback_stats`.
+6. If the task includes an upgrade, reinstall, or branch switch, verify version/install sync before debugging behavior.
+7. Refresh retrieval artifacts with `ace_index` after relevant code changes.
+8. Run MCP self-test or `ace-lite doctor` when the observed behavior may come from runtime wiring rather than source code.
+9. Record useful file hits with `ace_feedback_record` and review ranking drift with `ace_feedback_stats`.
 
 # Context Recovery
 
@@ -61,10 +63,11 @@ When the task is about ACE-Lite behavior rather than one bug, state which config
 
 - Retrieval: `embedding_provider`, `embedding_model`, `embedding_dimension`, `embedding_index_path`, `embedding_rerank_pool`, `embedding_lexical_weight`, `embedding_semantic_weight`, `embedding_min_similarity`, `embedding_fail_open`.
 - Structure and routing: `scip_provider`, `scip_generate_fallback`, `adaptive_router_mode`, `adaptive_router_arm_set`, `plan_replay_cache_enabled`, `plan_replay_cache_path`.
+- Validation and runtime wiring: `validation.enabled`, `validation.include_xref`, sandbox timeouts, `agent_loop` limits, `runtime doctor`, MCP self-test behavior.
 - Diagnostics: `junit_xml` or `failed_test_report`, `coverage_json`, `sbfl_json`, `sbfl_metric`, `trace_export_enabled`, `trace_export_path`, `trace_otlp_endpoint`.
 - Chunking: `chunk_guard_mode`, `chunk_guard_lambda_penalty`, `chunk_diversity_*`, `topological_shield`.
 
-Use exact option names in notes and handoffs so future runs stay reproducible.
+Use exact config keys or exact CLI flags in notes and handoffs so future runs stay reproducible.
 
 # Command Templates
 
@@ -79,13 +82,20 @@ ace-lite plan \
   --embedding-model hash-v2 \
   --embedding-rerank-pool 24 \
   --scip-provider auto \
-  --plan-replay-cache-enabled \
-  --trace-export-enabled \
+  --plan-replay-cache \
+  --trace-export \
   --trace-export-path context-map/traces/plan.jsonl \
   --output-json context-map/plan-output.json
 ```
 
 For retrieval-sensitive diffs, keep the output JSON, trace path, and replay-cache path together in the same note or handoff.
+
+For runtime wiring or upgrade drift checks, prefer an explicit doctor/self-test command:
+
+```bash
+ace-lite doctor --root . --skills-dir skills
+python -m ace_lite.mcp_server --self-test --root . --skills-dir skills
+```
 
 # Scenario Templates
 
@@ -97,15 +107,39 @@ For retrieval-sensitive diffs, keep the output JSON, trace path, and replay-cach
 
 ## Trace-only diagnosis
 
-- Goal: inspect stage tags, router decisions, or replay-cache behavior without claiming retrieval quality changed.
-- Turn on `trace_export_enabled` and keep the query fixed; do not mix this run with unrelated config edits.
-- Record the exact `trace_export_path` and whether `plan_replay_cache_enabled` was on during capture.
+- Goal: inspect stage tags, router decisions, replay-cache behavior, validation status, or agent-loop summaries without claiming retrieval quality changed.
+- Turn on `--trace-export` and keep the query fixed; do not mix this run with unrelated config edits.
+- Record the exact `trace_export_path` and whether replay cache was enabled during capture.
 
 ## Failed-test triage
 
 - Goal: connect a failing test or flaky run back to ACE-Lite config surfaces before touching ranking logic.
 - Pair `failed_test_report` or `junit_xml` with `sbfl_metric`, then narrow candidate files with `ace_plan_quick`.
 - Refresh `context-map/index.json` only after the code fix lands so the post-fix retrieval evidence is current.
+
+## Upgrade or drift recovery
+
+- Goal: confirm the running CLI/MCP matches the working tree after a pull, branch switch, or editable reinstall.
+- Required evidence: `get_version_info()` output, `python -m pip show ace-lite-engine`, and MCP self-test payload from the same checkout.
+- Exit rule: do not debug retrieval or routing behavior until version/install drift is ruled out.
+
+# Upgrade and Drift Recovery
+
+When the task mentions upgrade, reinstall, version mismatch, or stale MCP behavior, verify the runtime before changing code:
+
+```python
+from ace_lite.version import get_version_info, verify_version_install_sync
+
+print(get_version_info())
+verify_version_install_sync()
+```
+
+Pair that with:
+
+```bash
+python -m pip show ace-lite-engine
+python -m ace_lite.mcp_server --self-test --root . --skills-dir skills
+```
 
 # Execution and Feedback
 
@@ -143,4 +177,4 @@ ace_memory_store(
 )
 ```
 
-Good candidates include ranking heuristics, tool boundary rules, known recovery procedures, and stable config invariants.
+Good candidates include ranking heuristics, tool boundary rules, known recovery procedures, validation-stage expectations, and stable config invariants.

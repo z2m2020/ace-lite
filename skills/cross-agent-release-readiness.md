@@ -2,12 +2,12 @@
 name: cross-agent-release-readiness
 description: Release candidate and freeze-week checklist for go-no-go decisions.
 intents: [release, review]
-modules: [benchmark, ci, docs, release, changelog, tests, scip, trace_export]
-error_keywords: [release blocker, compatibility regression, incompatible]
+modules: [benchmark, ci, docs, release, changelog, tests, scip, trace_export, validation, agent_loop, mcp, version]
+error_keywords: [release blocker, compatibility regression, incompatible, version drift, install drift]
 default_sections: [Workflow, Prompt Template, Evidence Artifacts, Command Template, Scenario Templates, Go-NoGo Contract]
-topics: [release, rc, freeze, gate, compatibility, changelog, go-no-go, failed_test_report, junit_xml, sbfl_metric, scip_provider, trace_export_path, embedding_index_path, 发布, 发版, 冻结, 兼容性, 候选版本]
+topics: [release, rc, freeze, gate, compatibility, changelog, go-no-go, failed_test_report, junit_xml, sbfl_metric, scip_provider, trace_export_path, embedding_index_path, validation_result_v1, validation_tests, agent_loop_summary_v1, runtime_doctor, mcp_self_test, install_sync, 发布, 发版, 冻结, 兼容性, 候选版本]
 priority: 4
-token_estimate: 360
+token_estimate: 420
 ---
 
 # Workflow
@@ -16,16 +16,17 @@ token_estimate: 360
 2. Run full test suite and smoke commands, capturing machine-readable artifacts when available.
 3. Run benchmark matrix and threshold gates.
 4. Verify diagnostics and structure artifacts: `failed_test_report` or `junit_xml`, `sbfl_metric`, trace export settings, and SCIP provider/index assumptions.
-5. Verify config/schema compatibility and migration notes, including embeddings index and replay-cache-sensitive workflows if they affect release evidence.
-6. Ensure governance docs/changelog are updated.
-7. Produce go/no-go decision with blocking items.
+5. Verify config/schema compatibility and migration notes, including embeddings index, validation payload expectations, and replay-cache-sensitive workflows if they affect release evidence.
+6. Verify local install/runtime consistency for the candidate build: version metadata, MCP self-test, and doctor output.
+7. Ensure governance docs/changelog are updated.
+8. Produce go/no-go decision with blocking items.
 
 # Prompt Template
 
 - Release target: <version/tag>
 - Scope: <features/fixes included>
 - Required gates: <tests, smoke, benchmark thresholds>
-- Compatibility checks: <schema/config/CLI>
+- Compatibility checks: <schema/config/CLI/runtime>
 - Evidence location: <artifacts paths for tests, benchmark, traces, failed-test reports>
 - Decision deadline: <date/time>
 
@@ -39,12 +40,15 @@ Prefer explicit release evidence over prose:
 - benchmark result JSON/markdown
 - `trace_export_path` or OTLP endpoint used during release verification
 - `scip_provider` and index path if structural retrieval is part of the release surface
+- MCP self-test payload or `ace-lite doctor` output from the candidate environment
+- validation status/diagnostic summary and `agent_loop` summary when the candidate depends on orchestrator post-validation behavior
 
 # Command Template
 
 Use one machine-readable release check command per candidate build:
 
 ```bash
+ace-lite doctor --root . --skills-dir skills
 ace-lite plan \
   --query "<release readiness review>" \
   --repo ace-lite-engine \
@@ -52,7 +56,7 @@ ace-lite plan \
   --junit-xml reports/junit.xml \
   --sbfl-metric ochiai \
   --scip-provider auto \
-  --trace-export-enabled \
+  --trace-export \
   --trace-export-path context-map/traces/release.jsonl
 ```
 
@@ -71,6 +75,12 @@ Record the benchmark artifact path beside this command so the go/no-go package s
 - Scope: schema, config, CLI, and structural retrieval compatibility for one suspected breakage.
 - Required evidence: failing command, `scip_provider`, embeddings or replay-cache assumptions, and the exact incompatible surface.
 - Exit rule: classify as blocker, accepted risk, or docs-only remediation before the next RC.
+
+## Install or MCP drift triage
+
+- Scope: candidate artifact is built, but CLI/MCP behavior does not match the checked-out version.
+- Required evidence: `python -m pip show ace-lite-engine`, self-test payload, and the exact checkout or editable project location under review.
+- Exit rule: no GO decision until version/install drift is eliminated or explicitly accepted as packaging scope.
 
 ## Freeze-week rerun
 

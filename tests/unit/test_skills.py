@@ -574,6 +574,8 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "trace_export_enabled" in benchmark_text
     assert "plan_replay_cache" in benchmark_text
     assert "Artifact Checklist" in benchmark_text
+    assert "validation_result_v1" in benchmark_text
+    assert "agent_loop_summary_v1" in benchmark_text
 
     release_text = (
         repo_root / "skills" / "cross-agent-release-readiness.md"
@@ -598,6 +600,14 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     ).read_text(encoding="utf-8")
     assert "Artifact Checklist" in intake_text
     assert "trace_export_path" in intake_text
+
+    refactor_text = (
+        repo_root / "skills" / "cross-agent-refactor-safeguards.md"
+    ).read_text(encoding="utf-8")
+    assert "pipeline_order" in refactor_text
+    assert "validation_result_v1" in refactor_text
+    assert "agent_loop_summary_v1" in refactor_text
+    assert "doctor-mcp" in refactor_text
 
     mem0_iteration_text = (
         repo_root / "skills" / "mem0-iteration-loop.md"
@@ -641,6 +651,8 @@ def test_cross_agent_benchmark_routes_feedback_queries() -> None:
         "Use benchmark tuning to compare precision and noise before rollout",
         "Run benchmark loop and record ace_feedback_record for selected paths",
         "Tune embedding rerank pool and scip provider, then capture trace_export evidence for latency regression review",
+        "Benchmark前先固定validation和agent_loop状态，并记录validation_result_v1与agent_loop_summary_v1",
+        "Benchmark比较前先固定validation_tests和agent_loop stop_reason，再对照precision、noise和latency",
     ]
 
     for query in cases:
@@ -654,6 +666,27 @@ def test_cross_agent_benchmark_routes_feedback_queries() -> None:
         assert selected, f"no skill selected for query: {query}"
         assert (
             selected[0]["name"] == "cross-agent-benchmark-tuning-loop"
+        ), f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
+
+
+def test_cross_agent_refactor_routes_runtime_contract_queries() -> None:
+    manifest = _repo_skill_manifest()
+    cases = [
+        "重构 orchestrator 但保持 validation_result_v1、agent_loop_summary_v1 和 pipeline_order 不变",
+        "Refactor runtime CLI without changing doctor output shape or version drift checks",
+    ]
+
+    for query in cases:
+        query_ctx = {
+            "query": query,
+            "intent": infer_intent(query),
+            "module": "",
+            "error_keywords": extract_error_keywords(query),
+        }
+        selected = select_skills(query_ctx, manifest, top_n=1)
+        assert selected, f"no skill selected for query: {query}"
+        assert (
+            selected[0]["name"] == "cross-agent-refactor-safeguards"
         ), f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
 
 

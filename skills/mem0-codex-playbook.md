@@ -14,9 +14,10 @@ token_estimate: 260
 
 1. Search memory before edits so you do not paper over a known constraint.
 2. Keep repo, user, app, namespace, and profile scope stable while debugging retrieval quality.
-3. Verify bridge mode, embedding model, and vector dimension before changing prompts.
-4. Stabilize memory lifecycle knobs before tuning prompts: profile budget, postprocess filters, capture policy, notes mode, and feedback store.
-5. Write back only durable architectural constraints, not one-off debugging notes.
+3. Verify bridge mode, embedding model, vector dimension, and MCP wiring before changing prompts.
+4. Prefer `ace-lite runtime doctor-mcp` or `ace-lite runtime test-mcp` over ad hoc probing when the issue looks like endpoint or transport drift.
+5. Stabilize memory lifecycle knobs before tuning prompts: profile budget, postprocess filters, capture policy, notes mode, and feedback store.
+6. Write back only durable architectural constraints, not one-off debugging notes.
 
 # Config Checklist
 
@@ -44,6 +45,14 @@ ace-lite plan \
 
 Keep repo, user, app, namespace, and embedding dimension constant across comparisons unless one of them is the variable under test.
 
+For Codex-side wiring or endpoint checks, use:
+
+```bash
+ace-lite runtime doctor-mcp --root . --skills-dir skills
+ace-lite runtime test-mcp --root . --skills-dir skills
+ace-lite runtime setup-codex-mcp --root . --skills-dir skills --enable-memory --apply
+```
+
 # Scenario Templates
 
 ## Bridge or SSE incident
@@ -70,3 +79,4 @@ Keep repo, user, app, namespace, and embedding dimension constant across compari
 - `dimension mismatch`: align embedding dimensions with the target collection before re-indexing.
 - empty or sparse results: re-check user, app, namespace, repo filters, and profile token budget before retuning retrieval.
 - stale or duplicated memories: inspect collection scope, postprocess filtering, notes/capture policy, and writeback behavior before wiping data.
+- MCP drift or wrong endpoint: run `ace-lite runtime doctor-mcp` or `ace-lite runtime test-mcp` before changing memory prompts or bridge code.

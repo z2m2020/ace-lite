@@ -34,7 +34,7 @@ _HANDOFF_TOKENS = (
     "onboarding",
     "交接",
     "续接",
-    "接力",
+    "接手",
     "上下文同步",
 )
 _RELEASE_TOKENS = (
@@ -242,7 +242,10 @@ def run_skills(
         if isinstance(routed.get("selected"), list)
         else []
     )
-    available_count = max(0, int(routed.get("available_count", len(skill_manifest)) or 0))
+    available_count = max(
+        0,
+        int(routed.get("available_count", len(skill_manifest)) or 0),
+    )
     routing_source = "precomputed" if isinstance(routed_payload, dict) else "same_stage"
     resolved_budget = _normalize_skill_token_budget(token_budget)
     route_latency_ms = float(routed.get("route_latency_ms", 0.0) or 0.0)

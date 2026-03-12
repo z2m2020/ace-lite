@@ -5,9 +5,9 @@ intents: [handoff, memory]
 modules: [docs, context, session, pipeline, plan_replay_cache, trace_export]
 error_keywords: [stale context, context drift, context mismatch]
 default_sections: [Workflow, Handoff Template, Artifact Contract, Resume Commands, Validation Checklist]
-topics: [handoff, context, sync, onboarding, resume, session, plan_replay_cache_path, trace_export_path, junit_xml, sbfl_metric, 交接, 上下文同步, 续接, 接手]
+topics: [handoff, context, sync, onboarding, resume, session, plan_replay_cache_path, trace_export_path, junit_xml, sbfl_metric, validation_result_v1, agent_loop_summary_v1, runtime_doctor, 交接, 上下文同步, 续接, 接手]
 priority: 3
-token_estimate: 470
+token_estimate: 500
 ---
 
 # Workflow
@@ -16,7 +16,7 @@ token_estimate: 470
 2. List exact modified files and unresolved risks.
 3. Capture reproducible validation commands and latest results.
 4. Add memory lifecycle status: what was searched, what was stored, what must never be wiped.
-5. Persist artifact paths that make the next run reproducible: replay cache, trace export, failed-test reports, benchmark outputs.
+5. Persist artifact paths and structured summaries that make the next run reproducible: replay cache, trace export, failed-test reports, benchmark outputs, validation status, and agent-loop stop reason when present.
 6. Document next actions with priority and owner hints.
 7. Sync key facts into session context docs before ending the turn.
 8. Start next session by reloading the handoff package and verifying repo state.
@@ -26,6 +26,7 @@ token_estimate: 470
 - Goal completed: <done/not done + scope>
 - Changed files: <file list>
 - Validation evidence: <commands + pass/fail>
+- Validation summary: <validation status / diagnostic count / sandbox or xref note if relevant>
 - Open risks: <blocking/non-blocking>
 - Feedback summary: <ace_feedback_stats key observations>
 - Memory namespace status: <searched/stored/wipe-needed?>
@@ -42,6 +43,7 @@ If the previous agent used any of these, carry them forward explicitly:
 - `failed_test_report` or `junit_xml`
 - `sbfl_json` and `sbfl_metric`
 - benchmark result JSON or markdown paths
+- `validation.result.summary` or `agent_loop` summary when the orchestrator emitted them
 
 # Resume Commands
 
@@ -50,7 +52,7 @@ Prefer a minimal resume bundle that another agent can run without interpretation
 ```bash
 git status --short
 python -m pytest <targeted tests>
-ace-lite plan --query "<resume task>" --repo ace-lite-engine --root . --trace-export-path context-map/traces/resume.jsonl
+ace-lite plan --query "<resume task>" --repo ace-lite-engine --root . --trace-export --trace-export-path context-map/traces/resume.jsonl
 ```
 
 If replay cache or failed-test artifacts were used, include those exact paths on the same line as the resume command set.
