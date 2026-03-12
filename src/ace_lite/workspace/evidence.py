@@ -5,6 +5,7 @@ import math
 import re
 from typing import Any
 
+from ace_lite.validation.patch_artifact import validate_patch_artifact_contract_v1
 from ace_lite.workspace.common import ensure_non_empty_str as _ensure_non_empty_str
 
 _SYMBOL_TOKEN_PATTERN = re.compile(r"[^A-Za-z0-9]+")
@@ -74,6 +75,21 @@ def _normalize_path_list(*, value: Any) -> tuple[str, ...]:
 def _extract_quick_plan(*, selected_repo_payload: dict[str, Any]) -> dict[str, Any] | None:
     quick_plan = selected_repo_payload.get("quick_plan")
     return quick_plan if isinstance(quick_plan, dict) else None
+
+
+def _extract_patch_artifacts(*, selected_repo_payload: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    patch_artifacts = selected_repo_payload.get("patch_artifacts")
+    if not isinstance(patch_artifacts, list):
+        quick_plan = _extract_quick_plan(selected_repo_payload=selected_repo_payload)
+        patch_artifacts = quick_plan.get("patch_artifacts") if isinstance(quick_plan, dict) else []
+    if not isinstance(patch_artifacts, list):
+        return ()
+
+    normalized: list[dict[str, Any]] = []
+    for item in patch_artifacts:
+        if isinstance(item, dict):
+            normalized.append(dict(item))
+    return tuple(normalized)
 
 
 def _symbol_from_path(*, path: str) -> str:
@@ -277,6 +293,7 @@ class WorkspaceEvidenceContractV1:
     impacted_symbols: tuple[dict[str, Any], ...]
     dependency_chain: tuple[dict[str, Any], ...]
     rollback_points: tuple[dict[str, Any], ...]
+    patch_artifacts: tuple[dict[str, Any], ...]
     risks: tuple[str, ...]
     confidence: float
     missing_evidence_flags: tuple[str, ...]
@@ -303,6 +320,7 @@ class WorkspaceEvidenceContractV1:
             "impacted_symbols": [dict(item) for item in self.impacted_symbols],
             "dependency_chain": [dict(item) for item in self.dependency_chain],
             "rollback_points": [dict(item) for item in self.rollback_points],
+            "patch_artifacts": [dict(item) for item in self.patch_artifacts],
         }
 
 
@@ -320,6 +338,7 @@ def build_workspace_evidence_contract_v1(
     impacted_symbols: list[dict[str, Any]] = []
     dependency_chain: list[dict[str, Any]] = []
     rollback_points: list[dict[str, Any]] = []
+    patch_artifacts: list[dict[str, Any]] = []
     repos_with_candidate_files = 0
     repos_with_term_overlap = 0
     repos_with_symbols = 0
@@ -396,6 +415,8 @@ def build_workspace_evidence_contract_v1(
         else:
             risks.append(f"weak_rollback_evidence:{name}")
 
+        patch_artifacts.extend(_extract_patch_artifacts(selected_repo_payload=item))
+
         matched_terms = item.get("matched_terms", [])
         term_overlap = (
             isinstance(matched_terms, list)
@@ -451,6 +472,7 @@ def build_workspace_evidence_contract_v1(
         impacted_symbols=tuple(impacted_symbols),
         dependency_chain=tuple(dependency_chain),
         rollback_points=tuple(rollback_points),
+        patch_artifacts=tuple(patch_artifacts),
         risks=unique_risks,
         confidence=round(float(confidence), 3),
         missing_evidence_flags=unique_missing_flags,
@@ -551,6 +573,7 @@ def validate_workspace_evidence_contract_v1(
     impacted_symbols = payload.get("impacted_symbols")
     dependency_chain = payload.get("dependency_chain")
     rollback_points = payload.get("rollback_points")
+    patch_artifacts = payload.get("patch_artifacts")
     if strict:
         if not isinstance(impacted_symbols, list) or not impacted_symbols:
             _add_violation(
@@ -570,6 +593,40 @@ def validate_workspace_evidence_contract_v1(
                 field="rollback_points",
                 message="rollback_points must be a non-empty list in strict mode",
             )
+
+    if patch_artifacts is not None and not isinstance(patch_artifacts, list):
+        _add_violation(
+            code="patch_artifacts_invalid",
+            field="patch_artifacts",
+            message="patch_artifacts must be a list when present",
+        )
+        patch_artifacts = []
+    if isinstance(patch_artifacts, list):
+        for index, item in enumerate(patch_artifacts):
+            if not isinstance(item, dict):
+                _add_violation(
+                    code="patch_artifact_entry_invalid",
+                    field="patch_artifacts",
+                    message="patch_artifacts entries must be mappings",
+                    context={"index": index},
+                )
+                continue
+            validation = validate_patch_artifact_contract_v1(
+                contract=item,
+                strict=False,
+                fail_closed=False,
+            )
+            if not validation.get("ok", False):
+                codes = validation.get("violations", [])
+                _add_violation(
+                    code="patch_artifact_invalid",
+                    field="patch_artifacts",
+                    message="patch_artifact payload failed validation",
+                    context={
+                        "index": index,
+                        "violations": list(codes) if isinstance(codes, list) else [],
+                    },
+                )
 
     confidence_raw = payload.get("confidence")
     confidence: float = 0.0

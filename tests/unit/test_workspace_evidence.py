@@ -6,6 +6,7 @@ from ace_lite.workspace.evidence import (
     build_workspace_evidence_contract_v1,
     validate_workspace_evidence_contract_v1,
 )
+from ace_lite.validation.patch_artifact import build_patch_artifact_contract_v1
 
 
 def test_workspace_evidence_contract_includes_extended_collections() -> None:
@@ -93,6 +94,71 @@ def test_validate_workspace_evidence_contract_v1_passes_valid_contract() -> None
     assert result["ok"] is True
     assert result["violations"] == []
     assert result["violation_details"] == []
+
+
+def test_workspace_evidence_contract_includes_patch_artifacts_when_available() -> None:
+    patch_artifact = build_patch_artifact_contract_v1(
+        operations=[{"op": "update", "path": "src/billing/service.py", "hunk_count": 1}],
+        rollback_anchors=[
+            {"path": "src/billing/service.py", "strategy": "git_restore", "anchor": "HEAD"}
+        ],
+        patch_text="diff --git a/src/billing/service.py b/src/billing/service.py",
+    ).as_dict()
+
+    contract = build_workspace_evidence_contract_v1(
+        decision_target="billing checkout impact",
+        candidate_repos=[{"name": "billing-api"}],
+        selected_repos=[
+            {
+                "name": "billing-api",
+                "matched_terms": ["billing"],
+                "quick_plan": {
+                    "candidate_files": ["src/billing/service.py"],
+                    "rows": [{"module": "billing.service", "path": "src/billing/service.py"}],
+                    "repomap_stage": {
+                        "seed_paths": ["src/billing/service.py"],
+                        "neighbor_paths": ["src/billing/models.py"],
+                        "focused_files": ["src/billing/service.py"],
+                    },
+                    "patch_artifacts": [patch_artifact],
+                },
+            }
+        ],
+    ).as_dict()
+
+    assert contract["patch_artifacts"] == [patch_artifact]
+
+
+def test_validate_workspace_evidence_contract_v1_surfaces_invalid_patch_artifact() -> None:
+    payload = {
+        "decision_target": "billing impact",
+        "candidate_repos": ["billing-api"],
+        "selected_repos": ["billing-api"],
+        "impacted_files_by_repo": {"billing-api": ["src/billing/service.py"]},
+        "impacted_symbols": [{"repo": "billing-api", "symbol": "billing.service"}],
+        "dependency_chain": [{"repo": "billing-api", "position": 1}],
+        "rollback_points": [{"repo": "billing-api", "paths": ["src/billing/service.py"]}],
+        "patch_artifacts": [
+            {
+                "schema_version": "bad",
+                "patch_format": "unified_diff",
+                "target_file_manifest": ["src/billing/service.py"],
+                "operations": [{"op": "update", "path": "src/billing/service.py"}],
+                "rollback_anchors": [{"path": "src/billing/service.py"}],
+            }
+        ],
+        "confidence": 0.9,
+    }
+
+    result = validate_workspace_evidence_contract_v1(
+        contract=payload,
+        strict=True,
+        min_confidence=0.5,
+        fail_closed=True,
+    )
+
+    assert result["ok"] is False
+    assert "patch_artifact_invalid" in result["violations"]
 
 
 def test_validate_workspace_evidence_contract_v1_fails_when_required_fields_missing() -> None:
