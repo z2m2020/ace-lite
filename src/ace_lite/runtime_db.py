@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
+from time import monotonic, sleep
 from typing import Any, Callable
 
 try:  # pragma: no cover - sqlite3 may be unavailable in minimal runtimes
@@ -52,6 +53,53 @@ def _read_pragma_value(conn: Any, statement: str) -> Any:
         return row
 
 
+def _execute_with_retry(
+    conn: Any,
+    *,
+    statement: str,
+    busy_timeout_ms: int,
+) -> Any:
+    deadline = monotonic() + (max(0, int(busy_timeout_ms)) / 1000.0)
+    delay_seconds = 0.01
+    while True:
+        try:
+            return conn.execute(statement)
+        except Exception as exc:
+            if not _is_retryable_sqlite_lock(exc) or monotonic() >= deadline:
+                raise
+            sleep(delay_seconds)
+            delay_seconds = min(delay_seconds * 2.0, 0.1)
+
+
+def _is_retryable_sqlite_lock(exc: Exception) -> bool:
+    if sqlite3 is None or not isinstance(exc, sqlite3.OperationalError):
+        return False
+    message = str(exc).strip().lower()
+    return (
+        "database is locked" in message
+        or "database table is locked" in message
+        or "database schema is locked" in message
+    )
+
+
+def _read_pragma_value_with_retry(
+    conn: Any,
+    statement: str,
+    *,
+    busy_timeout_ms: int,
+) -> Any:
+    deadline = monotonic() + (max(0, int(busy_timeout_ms)) / 1000.0)
+    delay_seconds = 0.01
+    while True:
+        try:
+            return _read_pragma_value(conn, statement)
+        except Exception as exc:
+            if not _is_retryable_sqlite_lock(exc) or monotonic() >= deadline:
+                raise
+            sleep(delay_seconds)
+            delay_seconds = min(delay_seconds * 2.0, 0.1)
+
+
 def apply_runtime_db_pragmas(
     conn: Any,
     *,
@@ -63,21 +111,50 @@ def apply_runtime_db_pragmas(
     normalized_synchronous = _normalize_synchronous(synchronous)
     normalized_busy_timeout = max(0, int(busy_timeout_ms))
 
-    journal_mode_value = _read_pragma_value(
+    _execute_with_retry(
         conn,
-        f"PRAGMA journal_mode={normalized_journal_mode}",
+        statement=f"PRAGMA busy_timeout={normalized_busy_timeout}",
+        busy_timeout_ms=normalized_busy_timeout,
     )
-    conn.execute(f"PRAGMA synchronous={normalized_synchronous}")
-    conn.execute(f"PRAGMA busy_timeout={normalized_busy_timeout}")
+    current_journal_mode = _normalize_journal_mode(
+        _read_pragma_value_with_retry(
+            conn,
+            "PRAGMA journal_mode",
+            busy_timeout_ms=normalized_busy_timeout,
+        )
+    )
+    journal_mode_value = current_journal_mode
+    if current_journal_mode != normalized_journal_mode:
+        journal_mode_value = _read_pragma_value_with_retry(
+            conn,
+            f"PRAGMA journal_mode={normalized_journal_mode}",
+            busy_timeout_ms=normalized_busy_timeout,
+        )
+    _execute_with_retry(
+        conn,
+        statement=f"PRAGMA synchronous={normalized_synchronous}",
+        busy_timeout_ms=normalized_busy_timeout,
+    )
 
     return RuntimeDbPragmas(
         journal_mode=_normalize_journal_mode(journal_mode_value),
         synchronous=_normalize_synchronous(
-            _read_pragma_value(conn, "PRAGMA synchronous")
+            _read_pragma_value_with_retry(
+                conn,
+                "PRAGMA synchronous",
+                busy_timeout_ms=normalized_busy_timeout,
+            )
         ),
         busy_timeout_ms=max(
             0,
-            int(_read_pragma_value(conn, "PRAGMA busy_timeout") or normalized_busy_timeout),
+            int(
+                _read_pragma_value_with_retry(
+                    conn,
+                    "PRAGMA busy_timeout",
+                    busy_timeout_ms=normalized_busy_timeout,
+                )
+                or normalized_busy_timeout
+            ),
         ),
     )
 
@@ -143,3 +220,4 @@ __all__ = [
     "bootstrap_runtime_db",
     "connect_runtime_db",
 ]
+

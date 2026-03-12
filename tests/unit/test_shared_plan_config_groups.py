@@ -12,6 +12,7 @@ def _resolve_shared_plan(**config: object) -> dict[str, object]:
         config=config,
         namespace="plan",
         config_pack=None,
+        runtime_profile=None,
         retrieval_preset="none",
         adaptive_router_enabled=False,
         adaptive_router_mode="observe",

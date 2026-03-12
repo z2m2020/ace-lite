@@ -183,12 +183,15 @@ def test_runtime_settings_store_paths_and_last_known_good_fallback(tmp_path: Pat
     current_path = resolve_user_runtime_settings_path(home_path=tmp_path)
     lkg_path = resolve_user_runtime_settings_last_known_good_path(home_path=tmp_path)
 
-    assert str(current_path).endswith(
-        DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH.replace("~/", "").replace("/", "\\")
+    expected_current_suffix = Path(
+        DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH.replace("~/", "")
     )
-    assert str(lkg_path).endswith(
-        DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH.replace("~/", "").replace("/", "\\")
+    expected_lkg_suffix = Path(
+        DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH.replace("~/", "")
     )
+
+    assert current_path.parts[-len(expected_current_suffix.parts) :] == expected_current_suffix.parts
+    assert lkg_path.parts[-len(expected_lkg_suffix.parts) :] == expected_lkg_suffix.parts
 
     valid_payload = build_runtime_settings_record(
         snapshot={"plan": {"retrieval": {"top_k_files": 12}}},
