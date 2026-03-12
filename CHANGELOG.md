@@ -8,6 +8,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.40] - 2026-03-12
+
+### Added
+
+- Added a sandbox-aware `validation` stage with a stable top-level contract, timeout fallback payload, and focused regression coverage.
+- Added bounded agent-loop action contracts plus a controller shell that can request one incremental rerun from validation diagnostics.
+
+### Changed
+
+- Extended plan payload observability with `validation` and `agent_loop` runtime summaries while keeping fail-open defaults intact.
+- Enabled post-validation incremental rerun orchestration for the `index -> repomap -> augment -> skills -> source_plan -> validation` path when the bounded loop is explicitly enabled.
+
 ## [0.3.38] - 2026-03-11
 
 ### Added
