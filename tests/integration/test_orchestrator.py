@@ -18,6 +18,7 @@ from ace_lite.runtime_manager import RuntimeManager
 from ace_lite.stage_artifact_cache import StageArtifactCache
 from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.schema import SCHEMA_VERSION
+from ace_lite.validation.result import build_validation_result_v1
 
 
 class FakeOpenMemoryClient:
@@ -619,6 +620,108 @@ def test_orchestrator_augment_replay_fingerprint_ignores_runtime_elapsed_fields(
     second = AceOrchestrator._build_augment_replay_fingerprint(augment_payload=changed)
 
     assert first == second
+
+
+def test_orchestrator_agent_loop_reruns_incremental_retrieval_after_validation_signal(
+    tmp_path: Path,
+    fake_skill_manifest: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_repo(tmp_path)
+    config = OrchestratorConfig(
+        skills={"manifest": fake_skill_manifest},
+        index={
+            "languages": ["python"],
+            "cache_path": tmp_path / "context-map" / "index.json",
+        },
+        repomap={"enabled": False},
+        agent_loop={"enabled": True, "max_iterations": 1},
+    )
+    orchestrator = AceOrchestrator(memory_provider=None, config=config)
+
+    index_queries: list[str] = []
+    original_run_index = orchestrator._run_index
+
+    def wrapped_run_index(*, ctx):
+        index_queries.append(ctx.query)
+        return original_run_index(ctx=ctx)
+
+    def fake_run_validation(*, ctx):
+        return {
+            "enabled": True,
+            "reason": "ok",
+            "sandbox": {
+                "enabled": True,
+                "sandbox_root": str(tmp_path / "sandbox"),
+                "patch_applied": True,
+                "cleanup_ok": True,
+                "restore_ok": False,
+                "apply_result": {"ok": True, "reason": "ok"},
+            },
+            "diagnostics": [
+                {
+                    "path": "src/app/auth.py",
+                    "language": "python",
+                    "severity": "error",
+                    "message": "invalid syntax",
+                    "line": 1,
+                    "column": 1,
+                }
+            ],
+            "diagnostic_count": 1,
+            "xref_enabled": False,
+            "xref": {
+                "count": 0,
+                "results": [],
+                "errors": [],
+                "budget_exhausted": False,
+                "elapsed_ms": 0.0,
+                "time_budget_ms": 0,
+            },
+            "result": build_validation_result_v1(
+                syntax_issues=[
+                    {
+                        "code": "lsp.diagnostic",
+                        "message": "invalid syntax",
+                        "path": "src/app/auth.py",
+                        "severity": "error",
+                        "line": 1,
+                        "column": 1,
+                    }
+                ],
+                replay_key="",
+                status="failed",
+            ).as_dict(),
+            "patch_artifact_present": True,
+            "policy_name": "general",
+            "policy_version": "v1",
+        }
+
+    monkeypatch.setattr(orchestrator, "_run_index", wrapped_run_index)
+    monkeypatch.setattr(orchestrator, "_run_validation", fake_run_validation)
+
+    payload = orchestrator.plan(
+        query="draft auth plan",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+    )
+
+    loop_summary = payload["observability"]["agent_loop"]
+    assert loop_summary["enabled"] is True
+    assert loop_summary["iteration_count"] == 1
+    assert loop_summary["actions_executed"] == 1
+    assert loop_summary["stop_reason"] == "max_iterations"
+    assert len(index_queries) == 2
+    assert index_queries[0] == "draft auth plan"
+    assert "Focus refinement" in index_queries[1]
+
+    rerun_index_metrics = [
+        item
+        for item in payload["observability"]["stage_metrics"]
+        if item["stage"] == "index" and item["tags"].get("agent_loop_iteration") == 1
+    ]
+    assert len(rerun_index_metrics) == 1
+    assert rerun_index_metrics[0]["tags"]["agent_loop_action"] == "request_more_context"
 
 
 def test_multi_channel_rrf_fusion_promotes_memory_paths(

@@ -725,6 +725,12 @@ class SharedPlanConfig(_StrictModel):
     validation_sandbox_timeout_seconds: float | None = None
     validation: dict[str, Any] | None = None
 
+    agent_loop_enabled: bool | None = None
+    agent_loop_max_iterations: int | None = None
+    agent_loop_max_focus_paths: int | None = None
+    agent_loop_query_hint_max_chars: int | None = None
+    agent_loop: dict[str, Any] | None = None
+
     memory_disclosure_mode: str | None = None
     memory_preview_max_chars: int | None = None
     memory_strategy: str | None = None

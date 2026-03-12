@@ -169,6 +169,48 @@ def build_source_plan_contract_replay_fingerprint(
     return build_plan_component_fingerprint(stable_payload)
 
 
+def build_agent_loop_iteration_replay_fingerprint(
+    *,
+    query: str,
+    action_payload: dict[str, Any],
+    rerun_stages: list[str] | tuple[str, ...],
+    source_plan_payload: dict[str, Any],
+    validation_payload: dict[str, Any],
+) -> str:
+    source_plan_steps = source_plan_payload.get("steps", [])
+    validation_summary = (
+        validation_payload.get("result", {}).get("summary", {})
+        if isinstance(validation_payload.get("result"), dict)
+        else {}
+    )
+    diagnostics = validation_payload.get("diagnostics", [])
+    stable_payload = {
+        "query": str(query or ""),
+        "action": action_payload if isinstance(action_payload, dict) else {},
+        "rerun_stages": [str(item) for item in rerun_stages],
+        "source_plan": {
+            "step_count": len(source_plan_steps) if isinstance(source_plan_steps, list) else 0,
+            "validation_tests": source_plan_payload.get("validation_tests", []),
+            "candidate_files": [
+                str(item.get("path") or "")
+                for item in source_plan_payload.get("candidate_files", [])
+                if isinstance(item, dict)
+            ],
+        },
+        "validation": {
+            "reason": str(validation_payload.get("reason", "")),
+            "diagnostic_count": int(validation_payload.get("diagnostic_count", 0) or 0),
+            "status": str(validation_summary.get("status", "")),
+            "diagnostic_paths": [
+                str(item.get("path") or "")
+                for item in diagnostics
+                if isinstance(item, dict) and str(item.get("path") or "").strip()
+            ],
+        },
+    }
+    return build_plan_component_fingerprint(stable_payload)
+
+
 def build_orchestrator_plan_replay_key(
     *,
     query: str,
@@ -250,6 +292,7 @@ def build_orchestrator_plan_replay_key(
 
 
 __all__ = [
+    "build_agent_loop_iteration_replay_fingerprint",
     "build_augment_replay_fingerprint",
     "build_index_replay_fingerprint",
     "build_memory_replay_fingerprint",

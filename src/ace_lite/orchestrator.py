@@ -32,6 +32,7 @@ from ace_lite.orchestrator_replay import (
     build_skills_replay_fingerprint,
 )
 from ace_lite.orchestrator_runtime_support import (
+    run_post_source_plan_runtime,
     run_pre_source_plan_stages,
     run_source_plan_stage_with_replay,
 )
@@ -217,15 +218,16 @@ class AceOrchestrator:
             stage_metrics=stage_metrics,
             contract_error=contract_error,
         )
-        if contract_error is None:
-            contract_error = self._execute_stage(
-                stage_name="validation",
-                repo=repo,
-                ctx=ctx,
-                registry=registry,
-                hook_bus=hook_bus,
-                stage_metrics=stage_metrics,
-            )
+        contract_error = run_post_source_plan_runtime(
+            orchestrator=self,
+            query=query,
+            repo=repo,
+            ctx=ctx,
+            registry=registry,
+            hook_bus=hook_bus,
+            stage_metrics=stage_metrics,
+            contract_error=contract_error,
+        )
 
         total_ms = (perf_counter() - started) * 1000.0
 
@@ -375,6 +377,8 @@ class AceOrchestrator:
         }
         if isinstance(replay_cache_info, dict):
             observability["plan_replay_cache"] = dict(replay_cache_info)
+        if isinstance(ctx.state.get("_agent_loop"), dict):
+            observability["agent_loop"] = dict(ctx.state.get("_agent_loop", {}))
 
         payload = {
             "schema_version": SCHEMA_VERSION,

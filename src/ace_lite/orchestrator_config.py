@@ -585,6 +585,29 @@ class ValidationConfig(_StrictModel):
             return 5.0
 
 
+class AgentLoopConfig(_StrictModel):
+    enabled: bool = False
+    max_iterations: int = 1
+    max_focus_paths: int = 3
+    query_hint_max_chars: int = 240
+
+    @field_validator("max_iterations", "max_focus_paths", mode="before")
+    @classmethod
+    def _normalize_non_negative_int(cls, value: Any) -> int:
+        try:
+            return max(0, int(value))
+        except Exception:
+            return 0
+
+    @field_validator("query_hint_max_chars", mode="before")
+    @classmethod
+    def _normalize_query_hint_max_chars(cls, value: Any) -> int:
+        try:
+            return max(32, int(value))
+        except Exception:
+            return 240
+
+
 class PluginsConfig(_StrictModel):
     enabled: bool = True
     remote_slot_allowlist: list[str] | tuple[str, ...] | None = None
@@ -946,6 +969,7 @@ class OrchestratorConfig(_StrictModel):
     repomap: RepomapConfig = Field(default_factory=RepomapConfig)
     lsp: LspConfig = Field(default_factory=LspConfig)
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
+    agent_loop: AgentLoopConfig = Field(default_factory=AgentLoopConfig)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     tokenizer: TokenizerConfig = Field(default_factory=TokenizerConfig)

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ace_lite.orchestrator_replay import build_orchestrator_plan_replay_key
+from ace_lite.orchestrator_replay import (
+    build_agent_loop_iteration_replay_fingerprint,
+    build_orchestrator_plan_replay_key,
+)
 
 
 def _budget_knobs() -> dict[str, int]:
@@ -174,6 +177,51 @@ def test_build_orchestrator_plan_replay_key_changes_when_graph_payload_contract_
         candidate_ranker_default="rrf_hybrid",
         chunk_disclosure="refs",
         budget_knobs=_budget_knobs(),
+    )
+
+    assert first != second
+
+
+def test_build_agent_loop_iteration_replay_fingerprint_changes_when_action_changes() -> None:
+    first = build_agent_loop_iteration_replay_fingerprint(
+        query="draft auth plan",
+        action_payload={
+            "schema_version": "agent_loop_action_v1",
+            "action_type": "request_more_context",
+            "reason": "validation_diagnostics",
+            "query_hint": "focus auth module",
+            "focus_paths": ["src/app/auth.py"],
+            "selected_tests": [],
+            "metadata": {},
+        },
+        rerun_stages=["index", "source_plan", "validation"],
+        source_plan_payload={"steps": [{"stage": "source_plan"}]},
+        validation_payload={
+            "reason": "ok",
+            "diagnostic_count": 1,
+            "diagnostics": [{"path": "src/app/auth.py", "message": "invalid syntax"}],
+            "result": {"summary": {"status": "failed"}},
+        },
+    )
+    second = build_agent_loop_iteration_replay_fingerprint(
+        query="draft auth plan",
+        action_payload={
+            "schema_version": "agent_loop_action_v1",
+            "action_type": "request_more_context",
+            "reason": "validation_diagnostics",
+            "query_hint": "focus session module",
+            "focus_paths": ["src/app/session.py"],
+            "selected_tests": [],
+            "metadata": {},
+        },
+        rerun_stages=["index", "source_plan", "validation"],
+        source_plan_payload={"steps": [{"stage": "source_plan"}]},
+        validation_payload={
+            "reason": "ok",
+            "diagnostic_count": 1,
+            "diagnostics": [{"path": "src/app/auth.py", "message": "invalid syntax"}],
+            "result": {"summary": {"status": "failed"}},
+        },
     )
 
     assert first != second

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ace_lite.agent_loop.controller import BoundedLoopController
 from ace_lite.exceptions import StageContractError
 from ace_lite.pipeline.hooks import HookBus
 from ace_lite.pipeline.registry import StageRegistry
@@ -125,7 +126,143 @@ def run_source_plan_stage_with_replay(
     return contract_error, replay_cache_info
 
 
+def run_post_source_plan_runtime(
+    *,
+    orchestrator: Any,
+    query: str,
+    repo: str,
+    ctx: StageContext,
+    registry: StageRegistry,
+    hook_bus: HookBus,
+    stage_metrics: list[StageMetric],
+    contract_error: StageContractError | None,
+) -> StageContractError | None:
+    if contract_error is not None:
+        return contract_error
+
+    contract_error = orchestrator._execute_stage(
+        stage_name="validation",
+        repo=repo,
+        ctx=ctx,
+        registry=registry,
+        hook_bus=hook_bus,
+        stage_metrics=stage_metrics,
+    )
+    if contract_error is not None:
+        return contract_error
+
+    if not bool(orchestrator._config.agent_loop.enabled):
+        return None
+
+    controller = BoundedLoopController(
+        enabled=orchestrator._config.agent_loop.enabled,
+        max_iterations=orchestrator._config.agent_loop.max_iterations,
+        max_focus_paths=orchestrator._config.agent_loop.max_focus_paths,
+        query_hint_max_chars=orchestrator._config.agent_loop.query_hint_max_chars,
+    )
+    current_query = str(query or "")
+    pending_action = controller.select_action(
+        source_plan_stage=(
+            ctx.state.get("source_plan", {})
+            if isinstance(ctx.state.get("source_plan"), dict)
+            else {}
+        ),
+        validation_stage=(
+            ctx.state.get("validation", {})
+            if isinstance(ctx.state.get("validation"), dict)
+            else {}
+        ),
+    )
+    if pending_action is None:
+        ctx.state["_agent_loop"] = controller.default_summary(final_query=current_query)
+        return None
+
+    last_action = dict(pending_action)
+    while pending_action is not None and controller.can_continue():
+        last_action = dict(pending_action)
+        action_type = str(last_action.get("action_type") or "")
+        rerun_stages = (
+            ["validation"]
+            if action_type == "request_validation_retry"
+            else ["index", "repomap", "augment", "skills", "source_plan", "validation"]
+        )
+        current_query = controller.build_incremental_query(
+            base_query=current_query,
+            action=last_action,
+        )
+        iteration_index = controller.iteration_count + 1
+        iteration_ctx = StageContext(
+            query=current_query,
+            repo=ctx.repo,
+            root=ctx.root,
+            state=ctx.state,
+        )
+
+        for stage_name in rerun_stages:
+            contract_error = orchestrator._execute_stage(
+                stage_name=stage_name,
+                repo=repo,
+                ctx=iteration_ctx,
+                registry=registry,
+                hook_bus=hook_bus,
+                stage_metrics=stage_metrics,
+            )
+            if contract_error is not None:
+                ctx.state["_agent_loop"] = controller.finalize(
+                    stop_reason="stage_contract_error",
+                    last_action=last_action,
+                    final_query=current_query,
+                )
+                return contract_error
+            if stage_metrics:
+                stage_metrics[-1].tags["agent_loop_iteration"] = iteration_index
+                stage_metrics[-1].tags["agent_loop_action"] = action_type
+
+        controller.record_iteration(
+            action=last_action,
+            query=current_query,
+            rerun_stages=rerun_stages,
+            source_plan_stage=(
+                ctx.state.get("source_plan", {})
+                if isinstance(ctx.state.get("source_plan"), dict)
+                else {}
+            ),
+            validation_stage=(
+                ctx.state.get("validation", {})
+                if isinstance(ctx.state.get("validation"), dict)
+                else {}
+            ),
+        )
+        pending_action = controller.select_action(
+            source_plan_stage=(
+                ctx.state.get("source_plan", {})
+                if isinstance(ctx.state.get("source_plan"), dict)
+                else {}
+            ),
+            validation_stage=(
+                ctx.state.get("validation", {})
+                if isinstance(ctx.state.get("validation"), dict)
+                else {}
+            ),
+        )
+        if pending_action is None:
+            ctx.state["_agent_loop"] = controller.finalize(
+                stop_reason="completed",
+                last_action=last_action,
+                final_query=current_query,
+            )
+            return None
+
+    ctx.state["_agent_loop"] = controller.finalize(
+        stop_reason="max_iterations",
+        last_action=last_action,
+        final_query=current_query,
+    )
+    return None
+
+
 __all__ = [
+    "run_post_source_plan_runtime",
     "run_pre_source_plan_stages",
     "run_source_plan_stage_with_replay",
 ]
