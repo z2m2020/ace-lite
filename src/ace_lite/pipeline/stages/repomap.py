@@ -20,7 +20,7 @@ from ace_lite.repomap.cache import (
     store_cached_repomap_precompute,
 )
 
-_REPOMAP_CACHE_CONTENT_VERSION = "stage-repomap-v3"
+_REPOMAP_CACHE_CONTENT_VERSION = "stage-repomap-v4"
 _REPOMAP_PRECOMPUTE_CONTENT_VERSION = "stage-precompute-v2"
 
 
@@ -29,6 +29,43 @@ def _normalize_path(value: str) -> str:
     while path.startswith("./"):
         path = path[2:]
     return path
+
+
+def _build_subgraph_contract_salt(index_stage: dict[str, Any]) -> str:
+    payload = (
+        index_stage.get("subgraph_payload", {})
+        if isinstance(index_stage.get("subgraph_payload"), dict)
+        else {}
+    )
+    if not payload:
+        return ""
+    seed_paths_raw = payload.get("seed_paths")
+    seed_paths = (
+        [_normalize_path(str(item or "")) for item in seed_paths_raw]
+        if isinstance(seed_paths_raw, list)
+        else []
+    )
+    seed_paths = [item for item in seed_paths if item]
+    edge_counts_raw = payload.get("edge_counts")
+    edge_counts = (
+        {
+            str(key).strip(): max(0, int(value or 0))
+            for key, value in edge_counts_raw.items()
+            if str(key).strip()
+        }
+        if isinstance(edge_counts_raw, dict)
+        else {}
+    )
+    return "|".join(
+        [
+            str(payload.get("payload_version") or ""),
+            str(payload.get("taxonomy_version") or ""),
+            str(bool(payload.get("enabled", False))).lower(),
+            str(payload.get("reason") or ""),
+            ",".join(seed_paths),
+            ",".join(f"{key}:{edge_counts[key]}" for key in sorted(edge_counts)),
+        ]
+    )
 
 
 def _inject_worktree_seed_candidates(
@@ -209,6 +246,7 @@ def run_repomap(
         if isinstance(worktree_prior, dict)
         else ""
     )
+    subgraph_contract_salt = _build_subgraph_contract_salt(index_stage)
     index_fingerprint = str(index_hash).strip()
     if not index_fingerprint:
         sample_paths = sorted(str(path) for path in index_files)[:2048]
@@ -225,6 +263,7 @@ def run_repomap(
         "policy_version": str(policy.get("version", policy_version)),
         "ranking_profile": str(effective_ranking_profile),
         "index_fingerprint": index_fingerprint,
+        "subgraph_contract_salt": subgraph_contract_salt,
         "tokenizer_model": str(tokenizer_model or ""),
         "content_version": _REPOMAP_CACHE_CONTENT_VERSION,
         "precompute_content_version": _REPOMAP_PRECOMPUTE_CONTENT_VERSION,
@@ -245,6 +284,7 @@ def run_repomap(
         neighbor_depth=int(neighbor_depth),
         budget_tokens=int(scaled_budget_tokens),
         seed_paths=seed_paths_for_cache,
+        subgraph_contract_salt=subgraph_contract_salt,
         tokenizer_model=tokenizer_model,
         content_version=_REPOMAP_CACHE_CONTENT_VERSION,
         precompute_content_version=_REPOMAP_PRECOMPUTE_CONTENT_VERSION,
@@ -318,6 +358,12 @@ def run_repomap(
                 neighbor_limit=scaled_neighbor_limit,
                 neighbor_depth=neighbor_depth,
                 budget_tokens=scaled_budget_tokens,
+                subgraph_payload=(
+                    index_stage.get("subgraph_payload", {})
+                    if isinstance(index_stage, dict)
+                    and isinstance(index_stage.get("subgraph_payload"), dict)
+                    else {}
+                ),
                 precomputed_payload=precomputed_payload,
                 tokenizer_model=tokenizer_model,
             )

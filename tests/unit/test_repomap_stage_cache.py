@@ -276,12 +276,90 @@ def test_run_repomap_invalidates_full_cache_when_content_version_changes(
 
     assert first["cache"]["hit"] is False
     assert first["precompute"]["hit"] is False
-    assert first["cache"]["content_version"] == "stage-repomap-v3"
+    assert first["cache"]["content_version"] == "stage-repomap-v4"
     assert second["cache"]["hit"] is False
     assert second["cache"]["store_written"] is True
     assert second["cache"]["content_version"] == "stage-repomap-vNEXT"
     assert second["precompute"]["hit"] is True
     assert second["precompute"]["store_written"] is False
+
+
+def test_run_repomap_invalidates_cache_when_subgraph_contract_changes(
+    tmp_path: Path,
+) -> None:
+    files_map = {
+        "src/a.py": {
+            "language": "python",
+            "module": "src.a",
+            "symbols": [{"name": "a", "qualified_name": "src.a.a"}],
+            "imports": [{"module": "src.b"}],
+        },
+        "src/b.py": {
+            "language": "python",
+            "module": "src.b",
+            "symbols": [{"name": "b", "qualified_name": "src.b.b"}],
+            "imports": [],
+        },
+    }
+    index_payload = {
+        "candidate_files": [{"path": "src/a.py", "score": 1.0}],
+        "index_hash": "idx-hash-subgraph-contract",
+        "subgraph_payload": {
+            "payload_version": "subgraph_payload_v1",
+            "taxonomy_version": "subgraph_edge_taxonomy_v1",
+            "enabled": True,
+            "reason": "ok",
+            "seed_paths": ["src/a.py"],
+            "edge_counts": {"graph_lookup": 1},
+        },
+        "worktree_prior": {
+            "changed_paths": [],
+            "seed_paths": ["src/a.py"],
+            "state_hash": "worktree-hash-subgraph-contract",
+        },
+    }
+    ctx = StageContext(
+        query="trace repomap subgraph cache behavior",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+        state={"index": index_payload, "__index_files": files_map},
+    )
+
+    first = run_repomap(
+        ctx=ctx,
+        repomap_enabled=True,
+        repomap_neighbor_limit=8,
+        repomap_budget_tokens=256,
+        repomap_top_k=4,
+        repomap_ranking_profile="graph_seeded",
+        repomap_signal_weights=None,
+        policy_version="v1",
+    )
+    ctx.state["index"]["subgraph_payload"] = {
+        "payload_version": "subgraph_payload_v1",
+        "taxonomy_version": "subgraph_edge_taxonomy_v1",
+        "enabled": True,
+        "reason": "ok",
+        "seed_paths": ["src/a.py", "src/b.py"],
+        "edge_counts": {"graph_lookup": 2, "graph_prior": 1},
+    }
+    second = run_repomap(
+        ctx=ctx,
+        repomap_enabled=True,
+        repomap_neighbor_limit=8,
+        repomap_budget_tokens=256,
+        repomap_top_k=4,
+        repomap_ranking_profile="graph_seeded",
+        repomap_signal_weights=None,
+        policy_version="v1",
+    )
+
+    assert first["cache"]["hit"] is False
+    assert second["precompute"]["hit"] is True
+    assert second["cache"]["hit"] is False
+    assert second["cache"]["cache_key"] != first["cache"]["cache_key"]
+    assert "## Graph Context" in second["markdown"]
+    assert "src/b.py" in second["markdown"]
 
 
 def test_run_repomap_ttl_expiry_invalidates_cache(tmp_path: Path) -> None:

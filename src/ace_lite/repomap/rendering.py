@@ -11,6 +11,7 @@ def _render_skeleton_markdown(
     files: dict[str, dict[str, Any]],
     seed_paths: list[str],
     neighbor_paths: list[str],
+    subgraph_payload: dict[str, Any] | None = None,
     budget_tokens: int,
     neighbor_depth: int,
     tokenizer_model: str | None,
@@ -59,6 +60,20 @@ def _render_skeleton_markdown(
         included_seeds.append(path)
         render_levels[level] = int(render_levels.get(level, 0)) + 1
 
+    graph_context_lines = _build_graph_context_section(
+        subgraph_payload=subgraph_payload
+    )
+    if graph_context_lines:
+        graph_context_text = "\n".join(graph_context_lines)
+        graph_context_tokens = estimate_tokens_fn(
+            graph_context_text,
+            model=tokenizer_model,
+        )
+        if used_tokens + graph_context_tokens <= max(1, int(budget_tokens)):
+            lines.extend(graph_context_lines)
+            lines.append("")
+            used_tokens += graph_context_tokens
+
     if max(1, int(neighbor_depth)) <= 1:
         neighbor_header = "## One-Hop Neighbors"
     else:
@@ -94,6 +109,56 @@ def _render_skeleton_markdown(
 
     markdown = "\n".join(line for line in lines).strip() + "\n"
     return markdown, used_tokens, included_neighbors, render_levels
+
+
+def _build_graph_context_section(
+    *,
+    subgraph_payload: dict[str, Any] | None,
+) -> list[str]:
+    payload = subgraph_payload if isinstance(subgraph_payload, dict) else {}
+    if not payload:
+        return []
+
+    edge_counts_raw = payload.get("edge_counts")
+    edge_counts = (
+        {
+            str(key).strip(): max(0, int(value or 0))
+            for key, value in edge_counts_raw.items()
+            if str(key).strip()
+        }
+        if isinstance(edge_counts_raw, dict)
+        else {}
+    )
+    seed_paths_raw = payload.get("seed_paths")
+    seed_paths = (
+        [str(item).strip() for item in seed_paths_raw if str(item).strip()]
+        if isinstance(seed_paths_raw, list)
+        else []
+    )
+    enabled = bool(payload.get("enabled", False))
+    reason = str(payload.get("reason") or "").strip()
+    if not enabled and not seed_paths and not edge_counts:
+        return []
+
+    edge_total_count = sum(edge_counts.values())
+    edge_type_count = len([key for key, value in edge_counts.items() if value > 0])
+    lines = [
+        "## Graph Context",
+        "",
+        f"- enabled: {enabled}",
+        f"- reason: {reason or '(none)'}",
+        f"- seed_paths: {', '.join(seed_paths) if seed_paths else '(none)'}",
+        f"- edge_type_count: {edge_type_count}",
+        f"- edge_total_count: {edge_total_count}",
+    ]
+    if edge_counts:
+        lines.append(
+            "- edge_counts: "
+            + ", ".join(f"{key}={value}" for key, value in edge_counts.items())
+        )
+    else:
+        lines.append("- edge_counts: (none)")
+    return lines
 
 
 def _estimate_neighbor_reserve_tokens(

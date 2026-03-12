@@ -459,6 +459,43 @@ def test_build_stage_repo_map_collects_tags_and_render_levels() -> None:
     assert payload["files"][0]["tags"][0]["signature"]
 
 
+def test_build_stage_repo_map_renders_graph_context_summary() -> None:
+    files = {
+        "src/a.py": {
+            "module": "src.a",
+            "language": "python",
+            "symbols": [{"name": "A"}],
+            "imports": [],
+        },
+        "src/b.py": {
+            "module": "src.b",
+            "language": "python",
+            "symbols": [{"name": "B"}],
+            "imports": [],
+        },
+    }
+
+    payload = build_stage_repo_map(
+        index_files=files,
+        seed_candidates=[{"path": "src/a.py", "score": 2.0}],
+        subgraph_payload={
+            "enabled": True,
+            "reason": "ok",
+            "seed_paths": ["src/a.py", "src/b.py"],
+            "edge_counts": {"graph_lookup": 2, "graph_prior": 1},
+        },
+        top_k=1,
+        neighbor_limit=0,
+        budget_tokens=128,
+    )
+
+    assert "## Graph Context" in payload["markdown"]
+    assert "- seed_paths: src/a.py, src/b.py" in payload["markdown"]
+    assert "- edge_type_count: 2" in payload["markdown"]
+    assert "- edge_total_count: 3" in payload["markdown"]
+    assert "- edge_counts: graph_lookup=2, graph_prior=1" in payload["markdown"]
+
+
 def test_build_stage_repo_map_neighbor_depth_two_hops() -> None:
     files = {
         "src/a.py": {
