@@ -54,6 +54,10 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
             "chunk_contract_skeleton_ratio": 0.0,
             "unsupported_language_fallback_count_mean": 0.0,
             "unsupported_language_fallback_ratio": 0.0,
+            "subgraph_payload_enabled_ratio": 0.0,
+            "subgraph_seed_path_count_mean": 0.0,
+            "subgraph_edge_type_count_mean": 0.0,
+            "subgraph_edge_total_count_mean": 0.0,
             "robust_signature_count_mean": 0.0,
             "robust_signature_coverage_ratio": 0.0,
             "graph_prior_chunk_count_mean": 0.0,
@@ -185,6 +189,18 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     unsupported_language_fallback_ratios = [
         float(item.get("unsupported_language_fallback_ratio", 0.0))
         for item in case_results
+    ]
+    subgraph_payload_enabled = [
+        float(item.get("subgraph_payload_enabled", 0.0)) for item in case_results
+    ]
+    subgraph_seed_path_counts = [
+        float(item.get("subgraph_seed_path_count", 0.0)) for item in case_results
+    ]
+    subgraph_edge_type_counts = [
+        float(item.get("subgraph_edge_type_count", 0.0)) for item in case_results
+    ]
+    subgraph_edge_total_counts = [
+        float(item.get("subgraph_edge_total_count", 0.0)) for item in case_results
     ]
     robust_signature_counts = [
         float(item.get("robust_signature_count", 0.0)) for item in case_results
@@ -463,6 +479,10 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "unsupported_language_fallback_ratio": mean(
             unsupported_language_fallback_ratios
         ),
+        "subgraph_payload_enabled_ratio": mean(subgraph_payload_enabled),
+        "subgraph_seed_path_count_mean": mean(subgraph_seed_path_counts),
+        "subgraph_edge_type_count_mean": mean(subgraph_edge_type_counts),
+        "subgraph_edge_total_count_mean": mean(subgraph_edge_total_counts),
         "robust_signature_count_mean": mean(robust_signature_counts),
         "robust_signature_coverage_ratio": mean(robust_signature_coverage),
         "graph_prior_chunk_count_mean": mean(graph_prior_chunk_counts),
@@ -642,6 +662,22 @@ def compare_metrics(
             current.get("unsupported_language_fallback_ratio", 0.0)
         )
         - float(baseline.get("unsupported_language_fallback_ratio", 0.0)),
+        "subgraph_payload_enabled_ratio": float(
+            current.get("subgraph_payload_enabled_ratio", 0.0)
+        )
+        - float(baseline.get("subgraph_payload_enabled_ratio", 0.0)),
+        "subgraph_seed_path_count_mean": float(
+            current.get("subgraph_seed_path_count_mean", 0.0)
+        )
+        - float(baseline.get("subgraph_seed_path_count_mean", 0.0)),
+        "subgraph_edge_type_count_mean": float(
+            current.get("subgraph_edge_type_count_mean", 0.0)
+        )
+        - float(baseline.get("subgraph_edge_type_count_mean", 0.0)),
+        "subgraph_edge_total_count_mean": float(
+            current.get("subgraph_edge_total_count_mean", 0.0)
+        )
+        - float(baseline.get("subgraph_edge_total_count_mean", 0.0)),
         "robust_signature_count_mean": float(
             current.get("robust_signature_count_mean", 0.0)
         )

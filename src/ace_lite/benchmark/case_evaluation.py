@@ -320,6 +320,11 @@ def evaluate_case_result(
         if isinstance(source_plan_payload.get("packing"), dict)
         else {}
     )
+    source_plan_subgraph_payload = (
+        source_plan_payload.get("subgraph_payload", {})
+        if isinstance(source_plan_payload.get("subgraph_payload"), dict)
+        else {}
+    )
     source_plan_evidence_summary = _normalize_source_plan_evidence_summary(
         source_plan_payload.get("evidence_summary", {})
     )
@@ -351,6 +356,16 @@ def evaluate_case_result(
         plan_payload.get("repomap", {})
         if isinstance(plan_payload.get("repomap"), dict)
         else {}
+    )
+    index_subgraph_payload = (
+        index_payload.get("subgraph_payload", {})
+        if isinstance(index_payload.get("subgraph_payload"), dict)
+        else {}
+    )
+    subgraph_payload = (
+        source_plan_subgraph_payload
+        if source_plan_subgraph_payload
+        else index_subgraph_payload
     )
 
     top_candidates = candidate_files[:top_k] if isinstance(candidate_files, list) else []
@@ -438,6 +453,26 @@ def evaluate_case_result(
         unsupported_language_fallback_count,
         raw_candidate_chunk_count,
     )
+    subgraph_edge_counts = (
+        subgraph_payload.get("edge_counts", {})
+        if isinstance(subgraph_payload.get("edge_counts"), dict)
+        else {}
+    )
+    subgraph_seed_paths = (
+        subgraph_payload.get("seed_paths", [])
+        if isinstance(subgraph_payload.get("seed_paths"), list)
+        else []
+    )
+    subgraph_seed_path_count = len(
+        [item for item in subgraph_seed_paths if str(item).strip()]
+    )
+    subgraph_edge_type_count = len(
+        [key for key, value in subgraph_edge_counts.items() if str(key).strip() and int(value or 0) > 0]
+    )
+    subgraph_edge_total_count = sum(
+        max(0, int(value or 0)) for value in subgraph_edge_counts.values()
+    )
+    subgraph_payload_enabled = bool(subgraph_payload.get("enabled", False))
 
     dependency = repomap_payload.get("dependency_recall", {})
     dependency_recall = float(dependency.get("hit_rate", 0.0)) if isinstance(dependency, dict) else 0.0
@@ -1238,6 +1273,10 @@ def evaluate_case_result(
         "unsupported_language_fallback_ratio": (
             unsupported_language_fallback_ratio
         ),
+        "subgraph_payload_enabled": 1.0 if subgraph_payload_enabled else 0.0,
+        "subgraph_seed_path_count": float(subgraph_seed_path_count),
+        "subgraph_edge_type_count": float(subgraph_edge_type_count),
+        "subgraph_edge_total_count": float(subgraph_edge_total_count),
         "robust_signature_count": float(robust_signature_count),
         "robust_signature_coverage_ratio": robust_signature_coverage_ratio,
         "graph_prior_chunk_count": float(graph_prior_chunk_count),
@@ -1444,6 +1483,21 @@ def evaluate_case_result(
                 unsupported_language_fallback_ratio,
                 6,
             ),
+        }
+        payload["subgraph_payload"] = {
+            "enabled": subgraph_payload_enabled,
+            "reason": str(subgraph_payload.get("reason") or ""),
+            "seed_path_count": subgraph_seed_path_count,
+            "edge_type_count": subgraph_edge_type_count,
+            "edge_total_count": subgraph_edge_total_count,
+            "seed_paths": [
+                str(item).strip() for item in subgraph_seed_paths if str(item).strip()
+            ],
+            "edge_counts": {
+                str(key): max(0, int(value or 0))
+                for key, value in subgraph_edge_counts.items()
+                if str(key).strip()
+            },
         }
         payload["skills_budget"] = {
             "selected_count": int(skills_selected_count),

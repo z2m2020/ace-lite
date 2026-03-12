@@ -314,6 +314,10 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "chunk_contract_skeleton_ratio",
         "unsupported_language_fallback_count_mean",
         "unsupported_language_fallback_ratio",
+        "subgraph_payload_enabled_ratio",
+        "subgraph_seed_path_count_mean",
+        "subgraph_edge_type_count_mean",
+        "subgraph_edge_total_count_mean",
         "robust_signature_count_mean",
         "robust_signature_coverage_ratio",
         "graph_prior_chunk_count_mean",
@@ -399,6 +403,10 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["chunk_contract_skeleton_ratio"] == 0.0
     assert metrics["unsupported_language_fallback_count_mean"] == 0.0
     assert metrics["unsupported_language_fallback_ratio"] == 0.0
+    assert metrics["subgraph_payload_enabled_ratio"] == 0.0
+    assert metrics["subgraph_seed_path_count_mean"] == 0.0
+    assert metrics["subgraph_edge_type_count_mean"] == 0.0
+    assert metrics["subgraph_edge_total_count_mean"] == 0.0
     assert metrics["skills_selected_count_mean"] == 1.0
     assert metrics["skills_token_budget_mean"] == 600.0
     assert metrics["skills_token_budget_used_mean"] == 250.0
@@ -1528,3 +1536,70 @@ def test_evaluate_case_result_reports_chunk_contract_fallback_kpis() -> None:
     assert metrics["chunk_contract_skeleton_ratio"] == 0.25
     assert metrics["unsupported_language_fallback_count_mean"] == 2.0
     assert metrics["unsupported_language_fallback_ratio"] == 0.5
+
+
+def test_evaluate_case_result_reports_subgraph_payload_kpis() -> None:
+    case = {
+        "case_id": "c-subgraph",
+        "query": "trace auth graph neighborhood",
+        "expected_keys": ["auth", "token"],
+        "top_k": 4,
+    }
+    payload = {
+        "index": {
+            "candidate_files": [{"path": "src/auth.py", "module": "src.auth"}],
+            "candidate_chunks": [
+                {
+                    "path": "src/auth.py",
+                    "qualified_name": "validate_token",
+                    "signature": "def validate_token",
+                }
+            ],
+            "subgraph_payload": {
+                "enabled": True,
+                "reason": "ok",
+                "seed_paths": ["src/auth.py"],
+                "edge_counts": {"graph_lookup": 1},
+            },
+        },
+        "source_plan": {
+            "validation_tests": [],
+            "subgraph_payload": {
+                "enabled": True,
+                "reason": "ok",
+                "seed_paths": ["src/auth.py", "src/session.py"],
+                "edge_counts": {
+                    "graph_lookup": 2,
+                    "graph_prior": 1,
+                    "graph_closure_bonus": 1,
+                },
+            },
+        },
+        "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+    }
+
+    row = evaluate_case_result(case=case, plan_payload=payload, latency_ms=6.0)
+
+    assert row["subgraph_payload_enabled"] == 1.0
+    assert row["subgraph_seed_path_count"] == 2.0
+    assert row["subgraph_edge_type_count"] == 3.0
+    assert row["subgraph_edge_total_count"] == 4.0
+    assert row["subgraph_payload"] == {
+        "enabled": True,
+        "reason": "ok",
+        "seed_path_count": 2,
+        "edge_type_count": 3,
+        "edge_total_count": 4,
+        "seed_paths": ["src/auth.py", "src/session.py"],
+        "edge_counts": {
+            "graph_lookup": 2,
+            "graph_prior": 1,
+            "graph_closure_bonus": 1,
+        },
+    }
+
+    metrics = aggregate_metrics([row])
+    assert metrics["subgraph_payload_enabled_ratio"] == 1.0
+    assert metrics["subgraph_seed_path_count_mean"] == 2.0
+    assert metrics["subgraph_edge_type_count_mean"] == 3.0
+    assert metrics["subgraph_edge_total_count_mean"] == 4.0

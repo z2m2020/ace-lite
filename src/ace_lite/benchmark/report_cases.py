@@ -175,6 +175,7 @@ def _append_case_section(
     _append_chunk_guard_details(lines, case=case)
     _append_chunk_guard_expectation(lines, case=case)
     _append_robust_signature_details(lines, case=case)
+    _append_subgraph_payload_details(lines, case=case)
     _append_graph_prior_details(lines, case=case)
     _append_graph_closure_details(lines, case=case)
     _append_source_plan_packing_details(lines, case=case)
@@ -280,6 +281,35 @@ def _append_robust_signature_details(lines: list[str], *, case: dict[str, Any]) 
                 ]
             )
         )
+
+
+def _append_subgraph_payload_details(lines: list[str], *, case: dict[str, Any]) -> None:
+    subgraph_payload = case.get("subgraph_payload")
+    if not isinstance(subgraph_payload, dict) or not subgraph_payload:
+        return
+    edge_counts = (
+        subgraph_payload.get("edge_counts")
+        if isinstance(subgraph_payload.get("edge_counts"), dict)
+        else {}
+    )
+    lines.append(
+        "- subgraph_payload: "
+        + ", ".join(
+            [
+                f"enabled={bool(subgraph_payload.get('enabled', False))}",
+                f"reason={str(subgraph_payload.get('reason', '') or '(none)')}",
+                f"seed_path_count={int(subgraph_payload.get('seed_path_count', 0) or 0)}",
+                f"edge_type_count={int(subgraph_payload.get('edge_type_count', 0) or 0)}",
+                f"edge_total_count={int(subgraph_payload.get('edge_total_count', 0) or 0)}",
+                "edge_counts={value}".format(
+                    value=";".join(
+                        f"{str(key)}={int(value or 0)}" for key, value in edge_counts.items()
+                    )
+                    or "(none)"
+                ),
+            ]
+        )
+    )
 
 
 def _append_graph_prior_details(lines: list[str], *, case: dict[str, Any]) -> None:

@@ -643,6 +643,18 @@ def load_baseline_metrics(path: str | Path) -> dict[str, float] | None:
         "unsupported_language_fallback_ratio": float(
             metrics.get("unsupported_language_fallback_ratio", 0.0)
         ),
+        "subgraph_payload_enabled_ratio": float(
+            metrics.get("subgraph_payload_enabled_ratio", 0.0)
+        ),
+        "subgraph_seed_path_count_mean": float(
+            metrics.get("subgraph_seed_path_count_mean", 0.0)
+        ),
+        "subgraph_edge_type_count_mean": float(
+            metrics.get("subgraph_edge_type_count_mean", 0.0)
+        ),
+        "subgraph_edge_total_count_mean": float(
+            metrics.get("subgraph_edge_total_count_mean", 0.0)
+        ),
         "validation_test_count": float(metrics.get("validation_test_count", 0.0)),
         "evidence_insufficient_rate": float(
             metrics.get("evidence_insufficient_rate", 0.0)
