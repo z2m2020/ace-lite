@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ace_lite.validation.result import validate_validation_result_v1
+
 SCHEMA_VERSION = "3.2"
 EXPECTED_PIPELINE_ORDER = [
     "memory",
@@ -201,6 +203,29 @@ def _validate_chunk_list(chunks: Any, *, prefix: str) -> None:
         _validate_chunk_ref(chunk, prefix=f"{prefix}[{index}]")
 
 
+def validate_validation_result_payload(payload: Any, *, prefix: str) -> None:
+    if not isinstance(payload, dict):
+        raise ValueError(f"{prefix} must be a dictionary")
+    result = validate_validation_result_v1(
+        contract=payload,
+        strict=True,
+        fail_closed=True,
+    )
+    if result.get("ok", False):
+        return
+    violation_details = result.get("violation_details", [])
+    first = (
+        violation_details[0]
+        if isinstance(violation_details, list) and violation_details
+        else {}
+    )
+    field = str(first.get("field") or "").strip()
+    message = str(first.get("message") or "").strip() or "invalid validation result payload"
+    if field:
+        raise ValueError(f"{prefix}.{field} {message}")
+    raise ValueError(f"{prefix} {message}")
+
+
 def validate_context_plan(payload: dict[str, Any]) -> None:
     if not isinstance(payload, dict):
         raise ValueError("context plan must be a dictionary")
@@ -243,6 +268,11 @@ def validate_context_plan(payload: dict[str, Any]) -> None:
             _validate_chunk_list(
                 source_plan.get("candidate_chunks"),
                 prefix="source_plan.candidate_chunks",
+            )
+        if "validation_result" in source_plan:
+            validate_validation_result_payload(
+                source_plan.get("validation_result"),
+                prefix="source_plan.validation_result",
             )
 
         chunk_steps = source_plan.get("chunk_steps")

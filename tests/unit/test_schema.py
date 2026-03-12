@@ -4,7 +4,12 @@ from typing import Any
 
 import pytest
 
-from ace_lite.schema import SCHEMA_VERSION, validate_context_plan
+from ace_lite.schema import (
+    SCHEMA_VERSION,
+    validate_context_plan,
+    validate_validation_result_payload,
+)
+from ace_lite.validation.result import build_validation_result_v1
 
 
 def _valid_payload() -> dict[str, Any]:
@@ -189,3 +194,25 @@ def test_validate_context_plan_rejects_invalid_validation_tests() -> None:
 
     with pytest.raises(ValueError, match=r"source_plan\.validation_tests"):
         validate_context_plan(payload)
+
+
+def test_validate_context_plan_accepts_optional_validation_result_payload() -> None:
+    payload = _valid_payload()
+    payload["source_plan"]["validation_result"] = build_validation_result_v1(
+        replay_key="validation-run-001",
+        selected_tests=["tests/test_auth.py::test_token"],
+        executed_tests=["tests/test_auth.py::test_token"],
+    ).as_dict()
+
+    validate_context_plan(payload)
+
+
+def test_validate_validation_result_payload_rejects_invalid_summary_status() -> None:
+    payload = build_validation_result_v1(replay_key="validation-run-001").as_dict()
+    payload["summary"]["status"] = "mystery"
+
+    with pytest.raises(
+        ValueError,
+        match=r"validation_result\.summary\.status",
+    ):
+        validate_validation_result_payload(payload, prefix="validation_result")
