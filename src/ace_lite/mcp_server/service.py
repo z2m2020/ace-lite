@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
+from time import perf_counter
 from typing import Any
 
 from ace_lite.cli_app.orchestrator_factory import create_memory_provider, run_plan
@@ -49,10 +52,47 @@ logger = logging.getLogger(__name__)
 class AceLiteMcpService:
     def __init__(self, *, config: AceLiteMcpConfig) -> None:
         self._config = config
+        self._stats_lock = Lock()
+        self._active_request_count = 0
+        self._total_request_count = 0
+        self._last_request_started_at = ""
+        self._last_request_finished_at = ""
+        self._last_request_tool = ""
+        self._last_request_elapsed_ms = 0.0
 
     @property
     def config(self) -> AceLiteMcpConfig:
         return self._config
+
+    @contextmanager
+    def _track_request(self, tool_name: str):
+        started = perf_counter()
+        started_at = datetime.now(timezone.utc).isoformat()
+        with self._stats_lock:
+            self._active_request_count += 1
+            self._total_request_count += 1
+            self._last_request_tool = str(tool_name or "").strip()
+            self._last_request_started_at = started_at
+        try:
+            yield
+        finally:
+            finished_at = datetime.now(timezone.utc).isoformat()
+            elapsed_ms = round((perf_counter() - started) * 1000.0, 3)
+            with self._stats_lock:
+                self._active_request_count = max(0, self._active_request_count - 1)
+                self._last_request_finished_at = finished_at
+                self._last_request_elapsed_ms = elapsed_ms
+
+    def _request_stats_payload(self) -> dict[str, Any]:
+        with self._stats_lock:
+            return {
+                "active_request_count": int(self._active_request_count),
+                "total_request_count": int(self._total_request_count),
+                "last_request_tool": str(self._last_request_tool or "").strip(),
+                "last_request_started_at": str(self._last_request_started_at or "").strip(),
+                "last_request_finished_at": str(self._last_request_finished_at or "").strip(),
+                "last_request_elapsed_ms": float(self._last_request_elapsed_ms),
+            }
 
     def health(self) -> dict[str, Any]:
         memory_primary = str(self._config.memory_primary or "none").strip().lower() or "none"
@@ -109,6 +149,7 @@ class AceLiteMcpService:
             or "http://localhost:11434",
             "user_id": self._config.user_id,
             "app": self._config.app,
+            "request_stats": self._request_stats_payload(),
             "warnings": warnings,
             "recommendations": recommendations,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -130,27 +171,28 @@ class AceLiteMcpService:
         subprocess_batch_timeout_seconds: float | None = None,
         include_payload: bool = False,
     ) -> dict[str, Any]:
-        root_path = self._resolve_root(root)
-        language_csv = str(languages or self._config.default_languages).strip()
-        enabled_languages = parse_language_csv(language_csv)
-        return handle_index_request(
-            root_path=root_path,
-            language_csv=language_csv,
-            enabled_languages=enabled_languages,
-            output=output,
-            batch_mode=batch_mode,
-            batch_size=batch_size,
-            timeout_per_file_seconds=timeout_per_file_seconds,
-            resume=resume,
-            resume_state_path=resume_state_path,
-            retry_timeouts=retry_timeouts,
-            subprocess_batch=subprocess_batch,
-            subprocess_batch_timeout_seconds=subprocess_batch_timeout_seconds,
-            include_payload=include_payload,
-            build_index_fn=build_index,
-            build_index_with_resilience_fn=build_index_with_resilience,
-            resolve_output_path_fn=self._resolve_output_path,
-        )
+        with self._track_request("ace_index"):
+            root_path = self._resolve_root(root)
+            language_csv = str(languages or self._config.default_languages).strip()
+            enabled_languages = parse_language_csv(language_csv)
+            return handle_index_request(
+                root_path=root_path,
+                language_csv=language_csv,
+                enabled_languages=enabled_languages,
+                output=output,
+                batch_mode=batch_mode,
+                batch_size=batch_size,
+                timeout_per_file_seconds=timeout_per_file_seconds,
+                resume=resume,
+                resume_state_path=resume_state_path,
+                retry_timeouts=retry_timeouts,
+                subprocess_batch=subprocess_batch,
+                subprocess_batch_timeout_seconds=subprocess_batch_timeout_seconds,
+                include_payload=include_payload,
+                build_index_fn=build_index,
+                build_index_with_resilience_fn=build_index_with_resilience,
+                resolve_output_path_fn=self._resolve_output_path,
+            )
 
     def repomap_build(
         self,
@@ -163,53 +205,54 @@ class AceLiteMcpService:
         output_json: str | None = None,
         output_md: str | None = None,
     ) -> dict[str, Any]:
-        root_path = self._resolve_root(root)
-        language_csv = str(languages or self._config.default_languages).strip()
-        index_payload = build_index(
-            root_dir=str(root_path),
-            languages=parse_language_csv(language_csv),
-        )
-        repo_map = build_repo_map(
-            index_payload=index_payload,
-            budget_tokens=max(1, int(budget_tokens)),
-            top_k=max(1, int(top_k)),
-            ranking_profile=str(ranking_profile or "heuristic").strip().lower()
-            or "heuristic",
-            tokenizer_model=str(self._config.tokenizer_model),
-        )
+        with self._track_request("ace_repomap_build"):
+            root_path = self._resolve_root(root)
+            language_csv = str(languages or self._config.default_languages).strip()
+            index_payload = build_index(
+                root_dir=str(root_path),
+                languages=parse_language_csv(language_csv),
+            )
+            repo_map = build_repo_map(
+                index_payload=index_payload,
+                budget_tokens=max(1, int(budget_tokens)),
+                top_k=max(1, int(top_k)),
+                ranking_profile=str(ranking_profile or "heuristic").strip().lower()
+                or "heuristic",
+                tokenizer_model=str(self._config.tokenizer_model),
+            )
 
-        json_path = self._resolve_output_path(
-            root_path=root_path,
-            output=output_json,
-            default="context-map/repo_map.json",
-        )
-        md_path = self._resolve_output_path(
-            root_path=root_path,
-            output=output_md,
-            default="context-map/repo_map.md",
-        )
-        json_path.parent.mkdir(parents=True, exist_ok=True)
-        md_path.parent.mkdir(parents=True, exist_ok=True)
+            json_path = self._resolve_output_path(
+                root_path=root_path,
+                output=output_json,
+                default="context-map/repo_map.json",
+            )
+            md_path = self._resolve_output_path(
+                root_path=root_path,
+                output=output_md,
+                default="context-map/repo_map.md",
+            )
+            json_path.parent.mkdir(parents=True, exist_ok=True)
+            md_path.parent.mkdir(parents=True, exist_ok=True)
 
-        json_payload = dict(repo_map)
-        markdown = str(json_payload.pop("markdown", "") or "")
-        json_path.write_text(
-            json.dumps(json_payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        md_path.write_text(markdown, encoding="utf-8")
+            json_payload = dict(repo_map)
+            markdown = str(json_payload.pop("markdown", "") or "")
+            json_path.write_text(
+                json.dumps(json_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            md_path.write_text(markdown, encoding="utf-8")
 
-        return {
-            "ok": True,
-            "root": str(root_path),
-            "languages": language_csv,
-            "ranking_profile": str(repo_map.get("ranking_profile", "")),
-            "budget_tokens": int(repo_map.get("budget_tokens", budget_tokens) or 0),
-            "used_tokens": int(repo_map.get("used_tokens", 0) or 0),
-            "selected_count": int(repo_map.get("selected_count", 0) or 0),
-            "output_json": str(json_path),
-            "output_md": str(md_path),
-        }
+            return {
+                "ok": True,
+                "root": str(root_path),
+                "languages": language_csv,
+                "ranking_profile": str(repo_map.get("ranking_profile", "")),
+                "budget_tokens": int(repo_map.get("budget_tokens", budget_tokens) or 0),
+                "used_tokens": int(repo_map.get("used_tokens", 0) or 0),
+                "selected_count": int(repo_map.get("selected_count", 0) or 0),
+                "output_json": str(json_path),
+                "output_md": str(md_path),
+            }
 
     def plan_quick(
         self,
@@ -230,28 +273,29 @@ class AceLiteMcpService:
         ranking_profile: str = "graph",
         include_rows: bool = False,
     ) -> dict[str, Any]:
-        root_path = self._resolve_root(root)
-        language_csv = str(languages or self._config.default_languages).strip()
-        return handle_plan_quick_request(
-            query=query,
-            repo=repo,
-            root_path=root_path,
-            default_repo=self._config.default_repo,
-            language_csv=language_csv,
-            top_k_files=top_k_files,
-            repomap_top_k=repomap_top_k,
-            candidate_ranker=candidate_ranker,
-            index_cache_path=index_cache_path,
-            index_incremental=index_incremental,
-            repomap_expand=repomap_expand,
-            repomap_neighbor_limit=repomap_neighbor_limit,
-            repomap_neighbor_depth=repomap_neighbor_depth,
-            budget_tokens=budget_tokens,
-            ranking_profile=ranking_profile,
-            include_rows=include_rows,
-            tokenizer_model=str(self._config.tokenizer_model),
-            build_plan_quick_fn=build_plan_quick,
-        )
+        with self._track_request("ace_plan_quick"):
+            root_path = self._resolve_root(root)
+            language_csv = str(languages or self._config.default_languages).strip()
+            return handle_plan_quick_request(
+                query=query,
+                repo=repo,
+                root_path=root_path,
+                default_repo=self._config.default_repo,
+                language_csv=language_csv,
+                top_k_files=top_k_files,
+                repomap_top_k=repomap_top_k,
+                candidate_ranker=candidate_ranker,
+                index_cache_path=index_cache_path,
+                index_incremental=index_incremental,
+                repomap_expand=repomap_expand,
+                repomap_neighbor_limit=repomap_neighbor_limit,
+                repomap_neighbor_depth=repomap_neighbor_depth,
+                budget_tokens=budget_tokens,
+                ranking_profile=ranking_profile,
+                include_rows=include_rows,
+                tokenizer_model=str(self._config.tokenizer_model),
+                build_plan_quick_fn=build_plan_quick,
+            )
 
     def plan(
         self,
@@ -274,35 +318,36 @@ class AceLiteMcpService:
         include_full_payload: bool = True,
         timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
-        root_path = self._resolve_root(root)
-        skills_path = self._resolve_skills_dir(root_path=root_path, skills_dir=skills_dir)
-        config_pack_path = self._resolve_config_pack_path(
-            root_path=root_path,
-            config_pack=config_pack,
-        )
-        return handle_plan_request(
-            query=query,
-            repo=repo,
-            root_path=root_path,
-            default_repo=self._config.default_repo,
-            skills_path=skills_path,
-            config_pack_path=config_pack_path,
-            time_range=time_range,
-            start_date=start_date,
-            end_date=end_date,
-            memory_primary=memory_primary,
-            memory_secondary=memory_secondary,
-            lsp_enabled=lsp_enabled,
-            plugins_enabled=plugins_enabled,
-            top_k_files=top_k_files,
-            min_candidate_score=min_candidate_score,
-            retrieval_policy=retrieval_policy,
-            include_full_payload=include_full_payload,
-            timeout_seconds=timeout_seconds,
-            default_timeout_seconds=float(self._config.plan_timeout_seconds),
-            run_plan_payload_fn=self._run_plan_payload,
-            plan_quick_fn=self.plan_quick,
-        )
+        with self._track_request("ace_plan"):
+            root_path = self._resolve_root(root)
+            skills_path = self._resolve_skills_dir(root_path=root_path, skills_dir=skills_dir)
+            config_pack_path = self._resolve_config_pack_path(
+                root_path=root_path,
+                config_pack=config_pack,
+            )
+            return handle_plan_request(
+                query=query,
+                repo=repo,
+                root_path=root_path,
+                default_repo=self._config.default_repo,
+                skills_path=skills_path,
+                config_pack_path=config_pack_path,
+                time_range=time_range,
+                start_date=start_date,
+                end_date=end_date,
+                memory_primary=memory_primary,
+                memory_secondary=memory_secondary,
+                lsp_enabled=lsp_enabled,
+                plugins_enabled=plugins_enabled,
+                top_k_files=top_k_files,
+                min_candidate_score=min_candidate_score,
+                retrieval_policy=retrieval_policy,
+                include_full_payload=include_full_payload,
+                timeout_seconds=timeout_seconds,
+                default_timeout_seconds=float(self._config.plan_timeout_seconds),
+                run_plan_payload_fn=self._run_plan_payload,
+                plan_quick_fn=self.plan_quick,
+            )
 
     def _run_plan_payload(
         self,
@@ -370,15 +415,16 @@ class AceLiteMcpService:
         namespace: str | None = None,
         notes_path: str | None = None,
     ) -> dict[str, Any]:
-        path = self._resolve_notes_path(notes_path=notes_path)
-        notes = self._load_notes(path)
-        return handle_memory_search(
-            query=query,
-            limit=limit,
-            namespace=namespace,
-            path=path,
-            notes=notes,
-        )
+        with self._track_request("ace_memory_search"):
+            path = self._resolve_notes_path(notes_path=notes_path)
+            notes = self._load_notes(path)
+            return handle_memory_search(
+                query=query,
+                limit=limit,
+                namespace=namespace,
+                path=path,
+                notes=notes,
+            )
 
     def memory_store(
         self,
@@ -388,16 +434,17 @@ class AceLiteMcpService:
         tags: dict[str, str] | None = None,
         notes_path: str | None = None,
     ) -> dict[str, Any]:
-        path = self._resolve_notes_path(notes_path=notes_path)
-        rows = self._load_notes(path)
-        return handle_memory_store(
-            text=text,
-            namespace=namespace,
-            tags=tags,
-            path=path,
-            rows=rows,
-            save_notes_fn=self._save_notes,
-        )
+        with self._track_request("ace_memory_store"):
+            path = self._resolve_notes_path(notes_path=notes_path)
+            rows = self._load_notes(path)
+            return handle_memory_store(
+                text=text,
+                namespace=namespace,
+                tags=tags,
+                path=path,
+                rows=rows,
+                save_notes_fn=self._save_notes,
+            )
 
     def memory_wipe(
         self,
@@ -405,14 +452,15 @@ class AceLiteMcpService:
         namespace: str | None = None,
         notes_path: str | None = None,
     ) -> dict[str, Any]:
-        path = self._resolve_notes_path(notes_path=notes_path)
-        rows = self._load_notes(path)
-        return handle_memory_wipe(
-            namespace=namespace,
-            path=path,
-            rows=rows,
-            save_notes_fn=self._save_notes,
-        )
+        with self._track_request("ace_memory_wipe"):
+            path = self._resolve_notes_path(notes_path=notes_path)
+            rows = self._load_notes(path)
+            return handle_memory_wipe(
+                namespace=namespace,
+                path=path,
+                rows=rows,
+                save_notes_fn=self._save_notes,
+            )
 
     def feedback_record(
         self,

@@ -49,6 +49,32 @@ def _matrix_summary(payload_path: Path, *, precision: float, noise: float) -> No
     payload_path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _validation_rich_summary(
+    payload_path: Path,
+    *,
+    task_success: float,
+    precision: float,
+    noise: float,
+    validation_tests: float,
+) -> None:
+    payload_path.write_text(
+        json.dumps(
+            {
+                "metrics": {
+                    "task_success_rate": task_success,
+                    "precision_at_k": precision,
+                    "noise_rate": noise,
+                    "latency_p95_ms": 620.0,
+                    "validation_test_count": validation_tests,
+                    "missing_validation_rate": 0.0,
+                    "evidence_insufficient_rate": 0.0,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_metrics_collector_helpers_detect_regression(tmp_path: Path) -> None:
     module = _load_script("metrics_collector.py")
     current_path = tmp_path / "current.json"
@@ -99,7 +125,148 @@ def test_metrics_collector_main_writes_report(tmp_path: Path, monkeypatch) -> No
     assert exit_code == 0
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["passed"] is True
+    assert payload["matrix_lane"] == {
+        "enabled": True,
+        "loaded": True,
+        "repo_count": 2,
+        "passed": True,
+    }
     assert payload["regressions"] == []
+
+
+def test_metrics_collector_collects_validation_rich_metrics(tmp_path: Path) -> None:
+    module = _load_script("metrics_collector.py")
+    summary_path = tmp_path / "validation-rich.json"
+    _validation_rich_summary(
+        summary_path,
+        task_success=1.0,
+        precision=0.425,
+        noise=0.575,
+        validation_tests=5.0,
+    )
+
+    metrics = module.collect_validation_rich_metrics(summary_path=summary_path)
+    assert metrics == {
+        "task_success_rate": 1.0,
+        "precision_at_k": 0.425,
+        "noise_rate": 0.575,
+        "latency_p95_ms": 620.0,
+        "validation_test_count": 5.0,
+        "missing_validation_rate": 0.0,
+        "evidence_insufficient_rate": 0.0,
+    }
+
+
+def test_metrics_collector_main_writes_validation_rich_section(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = _load_script("metrics_collector.py")
+    current_path = tmp_path / "current.json"
+    previous_path = tmp_path / "previous.json"
+    validation_current = tmp_path / "validation-current.json"
+    validation_previous = tmp_path / "validation-previous.json"
+    _matrix_summary(previous_path, precision=0.72, noise=0.28)
+    _matrix_summary(current_path, precision=0.73, noise=0.27)
+    _validation_rich_summary(
+        validation_previous,
+        task_success=1.0,
+        precision=0.425,
+        noise=0.575,
+        validation_tests=5.0,
+    )
+    _validation_rich_summary(
+        validation_current,
+        task_success=1.0,
+        precision=0.43,
+        noise=0.57,
+        validation_tests=5.0,
+    )
+    output_path = tmp_path / "report.json"
+
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "metrics_collector.py",
+            "--current",
+            str(current_path),
+            "--previous",
+            str(previous_path),
+            "--validation-rich-current",
+            str(validation_current),
+            "--validation-rich-previous",
+            str(validation_previous),
+            "--output",
+            str(output_path),
+            "--fail-on-regression",
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["passed"] is True
+    assert payload["matrix_lane"]["passed"] is True
+    assert payload["validation_rich_lane"] == {
+        "enabled": True,
+        "loaded": True,
+        "metric_count": 7,
+        "passed": True,
+    }
+    assert payload["validation_rich_current_path"] == str(validation_current)
+    assert payload["validation_rich_previous_path"] == str(validation_previous)
+    assert payload["validation_rich_current_metrics"]["precision_at_k"] == 0.43
+    assert payload["validation_rich_previous_metrics"]["precision_at_k"] == 0.425
+    assert payload["validation_rich_regressions"] == []
+
+
+def test_metrics_collector_does_not_fail_validation_rich_only_run_on_missing_matrix(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = _load_script("metrics_collector.py")
+    missing_matrix = tmp_path / "missing-matrix.json"
+    validation_current = tmp_path / "validation-current.json"
+    _validation_rich_summary(
+        validation_current,
+        task_success=1.0,
+        precision=0.43,
+        noise=0.57,
+        validation_tests=5.0,
+    )
+    output_path = tmp_path / "report.json"
+
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "metrics_collector.py",
+            "--current",
+            str(missing_matrix),
+            "--validation-rich-current",
+            str(validation_current),
+            "--output",
+            str(output_path),
+            "--fail-on-regression",
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["passed"] is True
+    assert payload["matrix_lane"] == {
+        "enabled": False,
+        "loaded": False,
+        "repo_count": 0,
+        "passed": True,
+    }
+    assert payload["validation_rich_lane"] == {
+        "enabled": True,
+        "loaded": True,
+        "metric_count": 7,
+        "passed": True,
+    }
+    assert payload["target_failures"] == []
 
 
 def test_metrics_collector_skips_memory_targets_when_memory_disabled(tmp_path: Path) -> None:

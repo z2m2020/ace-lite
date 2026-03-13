@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 from collections.abc import Sequence
 from pathlib import Path
@@ -11,6 +12,74 @@ from ace_lite.subprocess_utils import run_capture_output
 _GIT_TERMINAL_ENV = {"GIT_TERMINAL_PROMPT": "0"}
 _COMMIT_MARKER = "__ACE_COMMIT__"
 _DEFAULT_TIMEOUT_SECONDS = 0.35
+_GIT_COMMIT_HISTORY_MEMORY: dict[
+    tuple[str, str, tuple[str, ...], int], dict[str, Any]
+] = {}
+
+
+def _read_git_ref_sha(*, git_dir: Path, ref: str) -> str:
+    ref_name = str(ref or "").strip()
+    if not ref_name:
+        return ""
+
+    ref_path = git_dir / ref_name
+    if ref_path.exists() and ref_path.is_file():
+        try:
+            return ref_path.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            return ""
+
+    packed_refs = git_dir / "packed-refs"
+    if not packed_refs.exists() or not packed_refs.is_file():
+        return ""
+    try:
+        lines = packed_refs.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    suffix = f" {ref_name}"
+    for line in lines:
+        text = str(line or "").strip()
+        if not text or text.startswith("#") or text.startswith("^"):
+            continue
+        if text.endswith(suffix):
+            return text.split(" ", 1)[0].strip()
+    return ""
+
+
+def _read_git_head_commit_fast(*, repo_root: Path) -> str:
+    git_dir = repo_root / ".git"
+    if not git_dir.exists():
+        return ""
+    head_path = git_dir / "HEAD"
+    if not head_path.exists() or not head_path.is_file():
+        return ""
+    try:
+        head_raw = head_path.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return ""
+    if not head_raw:
+        return ""
+    if head_raw.lower().startswith("ref:"):
+        ref_name = head_raw.split(":", 1)[1].strip()
+        return _read_git_ref_sha(git_dir=git_dir, ref=ref_name)
+    return head_raw
+
+
+def _build_commit_history_cache_key(
+    *,
+    repo_root: Path,
+    normalized_paths: Sequence[str],
+    limit: int,
+) -> tuple[str, str, tuple[str, ...], int] | None:
+    head_commit = _read_git_head_commit_fast(repo_root=repo_root)
+    if not head_commit:
+        return None
+    return (
+        str(repo_root.resolve()),
+        head_commit,
+        tuple(str(item) for item in normalized_paths),
+        int(limit),
+    )
 
 
 def collect_git_head_snapshot(
@@ -137,6 +206,26 @@ def collect_git_commit_history(
         resolved_timeout = _DEFAULT_TIMEOUT_SECONDS
 
     resolved_limit = max(1, int(limit))
+    started = perf_counter()
+    cache_key = _build_commit_history_cache_key(
+        repo_root=root,
+        normalized_paths=normalized_paths,
+        limit=resolved_limit,
+    )
+    if cache_key is not None:
+        cached = _GIT_COMMIT_HISTORY_MEMORY.get(cache_key)
+        if isinstance(cached, dict):
+            materialized = copy.deepcopy(cached)
+            cached_elapsed_ms = max(
+                0.0, float(materialized.get("elapsed_ms", 0.0) or 0.0)
+            )
+            materialized["cache_hit"] = True
+            materialized["cached_elapsed_ms"] = cached_elapsed_ms
+            materialized["elapsed_ms"] = round(
+                (perf_counter() - started) * 1000.0,
+                3,
+            )
+            return materialized
 
     command = [
         "git",
@@ -150,7 +239,6 @@ def collect_git_commit_history(
         *normalized_paths,
     ]
 
-    started = perf_counter()
     returncode, stdout, stderr, timed_out = run_capture_output(
         command,
         cwd=root,
@@ -187,7 +275,7 @@ def collect_git_commit_history(
         }
 
     commits = _parse_git_log_output(str(stdout or ""))
-    return {
+    payload = {
         "enabled": True,
         "reason": "ok" if commits else "no_commits",
         "path_count": len(normalized_paths),
@@ -197,7 +285,11 @@ def collect_git_commit_history(
         "elapsed_ms": round(elapsed_ms, 3),
         "timeout_seconds": float(resolved_timeout),
         "limit": resolved_limit,
+        "cache_hit": False,
     }
+    if cache_key is not None:
+        _GIT_COMMIT_HISTORY_MEMORY[cache_key] = copy.deepcopy(payload)
+    return payload
 
 
 def _parse_git_log_output(stdout: str) -> list[dict[str, Any]]:

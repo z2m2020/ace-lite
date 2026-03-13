@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fnmatch import fnmatchcase
 from typing import Any
 
 from ace_lite.benchmark.case_evaluation_details import (
@@ -27,6 +28,102 @@ from ace_lite.benchmark.case_evaluation_payloads import (
 def _tokenize(text: str) -> set[str]:
     tokens = [item.strip().lower() for item in text.replace("/", " ").replace(".", " ").split()]
     return {token for token in tokens if token}
+
+
+def _coerce_string_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        normalized = value.strip()
+        return [normalized] if normalized else []
+    if not isinstance(value, list):
+        return []
+    output: list[str] = []
+    for item in value:
+        normalized = str(item or "").strip()
+        if normalized:
+            output.append(normalized)
+    return output
+
+
+def _normalize_benchmark_path(value: Any) -> str:
+    return str(value or "").strip().replace("\\", "/")
+
+
+def _resolve_candidate_path_filters(case: dict[str, Any]) -> dict[str, list[str]]:
+    filters = case.get("filters", {}) if isinstance(case.get("filters"), dict) else {}
+    include_paths = [
+        _normalize_benchmark_path(item)
+        for item in _coerce_string_list(filters.get("include_paths"))
+    ]
+    include_globs = [
+        _normalize_benchmark_path(item)
+        for item in _coerce_string_list(filters.get("include_globs"))
+    ]
+    exclude_paths = [
+        _normalize_benchmark_path(item)
+        for item in _coerce_string_list(filters.get("exclude_paths"))
+    ]
+    exclude_globs = [
+        _normalize_benchmark_path(item)
+        for item in _coerce_string_list(filters.get("exclude_globs"))
+    ]
+    return {
+        "include_paths": [item for item in include_paths if item],
+        "include_globs": [item for item in include_globs if item],
+        "exclude_paths": [item for item in exclude_paths if item],
+        "exclude_globs": [item for item in exclude_globs if item],
+    }
+
+
+def _candidate_path_matches_filters(
+    path: Any,
+    *,
+    include_paths: list[str],
+    include_globs: list[str],
+    exclude_paths: list[str],
+    exclude_globs: list[str],
+) -> bool:
+    normalized_path = _normalize_benchmark_path(path)
+    if not normalized_path:
+        return False
+    include_requested = bool(include_paths or include_globs)
+    if include_requested:
+        included = normalized_path in include_paths or any(
+            fnmatchcase(normalized_path, pattern) for pattern in include_globs
+        )
+        if not included:
+            return False
+    if normalized_path in exclude_paths:
+        return False
+    if any(fnmatchcase(normalized_path, pattern) for pattern in exclude_globs):
+        return False
+    return True
+
+
+def _filter_candidate_path_items(
+    items: Any,
+    *,
+    include_paths: list[str],
+    include_globs: list[str],
+    exclude_paths: list[str],
+    exclude_globs: list[str],
+) -> list[Any]:
+    if not isinstance(items, list):
+        return []
+    output: list[Any] = []
+    for item in items:
+        if not isinstance(item, dict):
+            output.append(item)
+            continue
+        if not _candidate_path_matches_filters(
+            item.get("path"),
+            include_paths=include_paths,
+            include_globs=include_globs,
+            exclude_paths=exclude_paths,
+            exclude_globs=exclude_globs,
+        ):
+            continue
+        output.append(item)
+    return output
 
 
 def _extract_stage_latency_ms(*, plan_payload: dict[str, Any], stage: str) -> float:
@@ -209,8 +306,56 @@ def evaluate_case_result(
         if isinstance(index_payload.get("metadata"), dict)
         else {}
     )
-    candidate_files = index_payload.get("candidate_files", [])
-    raw_candidate_chunks = _coerce_chunk_refs(index_payload.get("candidate_chunks", []))
+    index_benchmark_filters = (
+        index_payload.get("benchmark_filters", {})
+        if isinstance(index_payload.get("benchmark_filters"), dict)
+        else {}
+    )
+    candidate_path_filters = (
+        {
+            "include_paths": _coerce_string_list(
+                index_benchmark_filters.get("include_paths")
+            ),
+            "include_globs": _coerce_string_list(
+                index_benchmark_filters.get("include_globs")
+            ),
+            "exclude_paths": _coerce_string_list(
+                index_benchmark_filters.get("exclude_paths")
+            ),
+            "exclude_globs": _coerce_string_list(
+                index_benchmark_filters.get("exclude_globs")
+            ),
+        }
+        if bool(index_benchmark_filters.get("requested", False))
+        else _resolve_candidate_path_filters(case)
+    )
+    included_candidate_paths = candidate_path_filters["include_paths"]
+    included_candidate_globs = candidate_path_filters["include_globs"]
+    excluded_candidate_paths = candidate_path_filters["exclude_paths"]
+    excluded_candidate_globs = candidate_path_filters["exclude_globs"]
+    filters_applied_upstream = bool(index_benchmark_filters.get("requested", False))
+    candidate_files = (
+        index_payload.get("candidate_files", [])
+        if filters_applied_upstream
+        else _filter_candidate_path_items(
+            index_payload.get("candidate_files", []),
+            include_paths=included_candidate_paths,
+            include_globs=included_candidate_globs,
+            exclude_paths=excluded_candidate_paths,
+            exclude_globs=excluded_candidate_globs,
+        )
+    )
+    raw_candidate_chunks = (
+        _coerce_chunk_refs(index_payload.get("candidate_chunks", []))
+        if filters_applied_upstream
+        else _filter_candidate_path_items(
+            _coerce_chunk_refs(index_payload.get("candidate_chunks", [])),
+            include_paths=included_candidate_paths,
+            include_globs=included_candidate_globs,
+            exclude_paths=excluded_candidate_paths,
+            exclude_globs=excluded_candidate_globs,
+        )
+    )
     chunk_metrics = index_payload.get("chunk_metrics", {}) if isinstance(index_payload.get("chunk_metrics"), dict) else {}
     embeddings_payload = (
         index_payload.get("embeddings", {})
@@ -337,8 +482,16 @@ def evaluate_case_result(
         source_plan_payload.get("candidate_chunks"),
         list,
     )
-    source_plan_candidate_chunks = _coerce_chunk_refs(
-        source_plan_payload.get("candidate_chunks", [])
+    source_plan_candidate_chunks = (
+        _coerce_chunk_refs(source_plan_payload.get("candidate_chunks", []))
+        if filters_applied_upstream
+        else _filter_candidate_path_items(
+            _coerce_chunk_refs(source_plan_payload.get("candidate_chunks", [])),
+            include_paths=included_candidate_paths,
+            include_globs=included_candidate_globs,
+            exclude_paths=excluded_candidate_paths,
+            exclude_globs=excluded_candidate_globs,
+        )
     )
     candidate_chunks = (
         source_plan_candidate_chunks
@@ -1449,6 +1602,18 @@ def evaluate_case_result(
         payload["candidate_paths"] = [
             item.get("path") for item in top_candidates if isinstance(item, dict)
         ]
+        if (
+            included_candidate_paths
+            or included_candidate_globs
+            or excluded_candidate_paths
+            or excluded_candidate_globs
+        ):
+            payload["candidate_path_filters"] = {
+                "include_paths": included_candidate_paths,
+                "include_globs": included_candidate_globs,
+                "exclude_paths": excluded_candidate_paths,
+                "exclude_globs": excluded_candidate_globs,
+            }
         payload["relevant_candidate_paths"] = relevant_candidate_paths
         payload["noise_candidate_paths"] = noise_candidate_paths
         payload["candidate_matches"] = candidate_matches

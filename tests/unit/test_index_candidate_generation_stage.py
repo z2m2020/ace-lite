@@ -39,6 +39,7 @@ def _make_config(
     tmp_path: Path,
     *,
     retrieval_overrides: dict[str, Any] | None = None,
+    cochange_enabled: bool = False,
 ) -> IndexStageConfig:
     retrieval = {
         "top_k_files": 3,
@@ -59,7 +60,7 @@ def _make_config(
             },
             "retrieval": retrieval,
             "repomap": {"enabled": False},
-            "cochange": {"enabled": False},
+            "cochange": {"enabled": bool(cochange_enabled)},
             "embeddings": {"enabled": False},
             "lsp": {"enabled": False},
             "scip": {"enabled": False},
@@ -251,6 +252,81 @@ def test_run_index_delegates_initial_candidate_generation(monkeypatch, tmp_path:
     assert payload["candidate_ranking"]["min_score_used"] == 1
     assert payload["metadata"]["timings_ms"]["docs_signals"] == 0.75
     assert payload["metadata"]["timings_ms"]["worktree_prior"] == 0.25
+
+
+def test_run_index_disables_worktree_prior_for_explicit_benchmark_scope(
+    monkeypatch, tmp_path: Path
+) -> None:
+    import ace_lite.pipeline.stages.index as index_stage
+
+    files_map = {
+        "src/runtime.py": {"module": "src.runtime", "language": "python"},
+        "tests/test_runtime.py": {"module": "tests.test_runtime", "language": "python"},
+    }
+    captured: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        index_stage,
+        "load_retrieval_index_snapshot",
+        lambda **kwargs: _make_snapshot(files_map),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "extract_retrieval_terms",
+        lambda **kwargs: ["runtime", "mcp"],
+    )
+    monkeypatch.setattr(index_stage, "extract_memory_paths", lambda **kwargs: [])
+    monkeypatch.setattr(
+        index_stage,
+        "resolve_retrieval_policy",
+        lambda **kwargs: {
+            "name": "general",
+            "version": "v1",
+            "docs_enabled": False,
+            "index_parallel_enabled": False,
+        },
+    )
+
+    def fake_gather_initial_candidates(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return InitialCandidateGenerationResult(
+            requested_ranker="heuristic",
+            selected_ranker="heuristic",
+            ranker_fallbacks=[],
+            min_score_used=2,
+            candidates=[{"path": "src/runtime.py", "score": 5.0}],
+            exact_search_payload={"enabled": False, "applied": False},
+            docs_payload={"enabled": False, "reason": "disabled", "section_count": 0},
+            worktree_prior=_base_worktree_prior(),
+            parallel_payload={"enabled": False},
+            prior_payload={"docs_hint_paths": 0},
+            docs_elapsed_ms=0.0,
+            worktree_elapsed_ms=0.0,
+            raw_worktree=None,
+        )
+
+    monkeypatch.setattr(index_stage, "gather_initial_candidates", fake_gather_initial_candidates)
+    _stub_pipeline_after_generation(monkeypatch, index_stage)
+
+    payload = run_index(
+        ctx=StageContext(
+            query="runtime mcp",
+            repo="demo",
+            root=str(tmp_path),
+            state={
+                "benchmark_filters": {
+                    "include_paths": ["src/runtime.py", "tests/test_runtime.py"],
+                }
+            },
+        ),
+        config=_make_config(tmp_path, cochange_enabled=True),
+    )
+
+    assert captured["worktree_prior_enabled"] is False
+    assert payload["benchmark_filters"]["worktree_policy_enabled"] is False
+    assert payload["benchmark_filters"]["worktree_policy_reason"] == (
+        "benchmark_filter_explicit_scope"
+    )
 
 
 def test_run_index_preserves_candidate_generation_candidate_order(
@@ -1281,6 +1357,569 @@ def test_run_index_reuses_candidate_cache_and_preserves_order_and_scores(
     )
 
 
+def test_run_index_candidate_cache_hit_refreshes_live_index_cache_metadata(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    import ace_lite.pipeline.stages.index as index_stage
+
+    files_map = {
+        "src/alpha.py": {"module": "src.alpha", "language": "python"},
+    }
+    snapshot_holder = {
+        "value": RetrievalIndexSnapshot(
+            index_payload={
+                "files": dict(files_map),
+                "file_count": 1,
+                "indexed_at": "first-build",
+                "languages_covered": ["python"],
+                "parser": {"engine": "tree-sitter"},
+            },
+            cache_info={"cache_hit": False, "mode": "full_build", "changed_files": 0},
+            files_map=dict(files_map),
+            corpus_size=1,
+            index_hash="hash-v1",
+        )
+    }
+
+    monkeypatch.setattr(
+        index_stage,
+        "load_retrieval_index_snapshot",
+        lambda **kwargs: snapshot_holder["value"],
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "extract_retrieval_terms",
+        lambda **kwargs: ["alpha"],
+    )
+    monkeypatch.setattr(index_stage, "extract_memory_paths", lambda **kwargs: [])
+    monkeypatch.setattr(
+        index_stage,
+        "resolve_retrieval_policy",
+        lambda **kwargs: {
+            "name": "general",
+            "version": "v1",
+            "docs_enabled": False,
+            "index_parallel_enabled": False,
+        },
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "gather_initial_candidates",
+        lambda **kwargs: InitialCandidateGenerationResult(
+            requested_ranker="hybrid_re2",
+            selected_ranker="heuristic",
+            ranker_fallbacks=["tiny_corpus"],
+            min_score_used=2,
+            candidates=[
+                {
+                    "path": "src/alpha.py",
+                    "module": "src.alpha",
+                    "score": 6.0,
+                    "score_breakdown": {"heuristic": 6.0},
+                }
+            ],
+            exact_search_payload={"enabled": False, "applied": False},
+            docs_payload={"enabled": False, "reason": "disabled", "section_count": 0},
+            worktree_prior=_base_worktree_prior(),
+            parallel_payload={"enabled": False},
+            prior_payload={"docs_hint_paths": 0},
+            docs_elapsed_ms=0.0,
+            worktree_elapsed_ms=0.0,
+            raw_worktree=None,
+        ),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "refine_candidate_pool",
+        lambda **kwargs: CandidateFusionResult(
+            candidates=[
+                {
+                    "path": "src/alpha.py",
+                    "module": "src.alpha",
+                    "score": 6.0,
+                    "score_breakdown": {"heuristic": 6.0},
+                }
+            ],
+            second_pass_payload={
+                "triggered": False,
+                "applied": False,
+                "reason": "n/a",
+                "retry_ranker": "",
+            },
+            refine_pass_payload={
+                "enabled": True,
+                "trigger_condition_met": False,
+                "triggered": False,
+                "applied": False,
+                "reason": "",
+                "retry_ranker": "",
+                "candidate_count_before": 1,
+                "candidate_count_after": 1,
+                "max_passes": 1,
+            },
+            cochange_payload={"enabled": False, "neighbors_added": 0},
+            scip_payload={"enabled": False, "loaded": False},
+            graph_lookup_payload={
+                "enabled": False,
+                "boosted_count": 0,
+                "query_hit_paths": 0,
+            },
+            embeddings_payload={
+                "enabled": False,
+                "reason": "disabled",
+                "runtime_provider": "",
+                "runtime_model": "",
+                "runtime_dimension": 0,
+                "auto_normalized": False,
+                "normalized_fields": [],
+                "normalization_notes": [],
+            },
+            feedback_payload={
+                "enabled": False,
+                "reason": "disabled",
+                "boosted_candidate_count": 0,
+                "boosted_unique_paths": 0,
+                "matched_event_count": 0,
+                "event_count": 0,
+            },
+            multi_channel_fusion_payload={
+                "enabled": False,
+                "applied": False,
+                "reason": "disabled",
+                "rrf_k": 0,
+                "caps": {"pool": 0, "code": 0, "docs": 0, "memory": 0},
+                "channels": {
+                    "code": {"count": 0, "cap": 0, "top": []},
+                    "docs": {"count": 0, "cap": 0, "top": []},
+                    "memory": {"count": 0, "cap": 0, "top": []},
+                },
+                "fused": {"scored_count": 0, "pool_size": 0, "top": []},
+                "warning": None,
+            },
+            semantic_embedding_provider_impl=None,
+            semantic_cross_encoder_provider=None,
+        ),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "select_index_chunks",
+        lambda **kwargs: ChunkSelectionResult(
+            candidate_chunks=[
+                {
+                    "path": "src/alpha.py",
+                    "qualified_name": "src.alpha.answer",
+                    "kind": "function",
+                    "lineno": 12,
+                    "score_breakdown": {"candidate": 6.0},
+                    "score_embedding": 0.0,
+                }
+            ],
+            chunk_metrics={"candidate_chunk_count": 1.0, "chunk_budget_used": 16.0},
+            chunk_semantic_rerank_payload={"enabled": False, "reason": "disabled"},
+            topological_shield_payload={"enabled": False, "mode": "off"},
+            chunk_guard_payload={"enabled": False, "mode": "off", "reason": "disabled"},
+        ),
+    )
+
+    first = run_index(
+        ctx=StageContext(query="find alpha", repo="demo", root=str(tmp_path)),
+        config=_make_config(tmp_path),
+    )
+
+    snapshot_holder["value"] = RetrievalIndexSnapshot(
+        index_payload={
+            "files": dict(files_map),
+            "file_count": 1,
+            "indexed_at": "second-cache-only",
+            "languages_covered": ["python", "markdown"],
+            "parser": {"engine": "tree-sitter", "version": "test"},
+        },
+        cache_info={"cache_hit": True, "mode": "cache_only", "changed_files": 0},
+        files_map=dict(files_map),
+        corpus_size=1,
+        index_hash="hash-v1",
+    )
+
+    second = run_index(
+        ctx=StageContext(query="find alpha", repo="demo", root=str(tmp_path)),
+        config=_make_config(tmp_path),
+    )
+
+    assert first["candidate_cache"]["hit"] is False
+    assert second["candidate_cache"]["hit"] is True
+    assert second["cache"] == {
+        "cache_hit": True,
+        "mode": "cache_only",
+        "changed_files": 0,
+    }
+    assert second["index_hash"] == "hash-v1"
+    assert second["file_count"] == 1
+    assert second["indexed_at"] == "second-cache-only"
+    assert second["languages_covered"] == ["python", "markdown"]
+    assert second["parser"] == {"engine": "tree-sitter", "version": "test"}
+    assert second["metadata"]["candidate_cache_reused"] is True
+    assert second["metadata"]["cached_payload_timings_ms"] == first["metadata"]["timings_ms"]
+
+
+def test_run_index_candidate_cache_hit_clears_stale_vcs_worktree_override(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    import ace_lite.pipeline.stages.index as index_stage
+
+    files_map = {
+        "src/alpha.py": {"module": "src.alpha", "language": "python"},
+    }
+
+    monkeypatch.setattr(
+        index_stage,
+        "load_retrieval_index_snapshot",
+        lambda **kwargs: _make_snapshot(files_map),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "extract_retrieval_terms",
+        lambda **kwargs: ["alpha"],
+    )
+    monkeypatch.setattr(index_stage, "extract_memory_paths", lambda **kwargs: [])
+    monkeypatch.setattr(
+        index_stage,
+        "resolve_retrieval_policy",
+        lambda **kwargs: {
+            "name": "general",
+            "version": "v1",
+            "docs_enabled": False,
+            "index_parallel_enabled": False,
+        },
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "gather_initial_candidates",
+        lambda **kwargs: InitialCandidateGenerationResult(
+            requested_ranker="hybrid_re2",
+            selected_ranker="heuristic",
+            ranker_fallbacks=[],
+            min_score_used=2,
+            candidates=[
+                {
+                    "path": "src/alpha.py",
+                    "module": "src.alpha",
+                    "score": 6.0,
+                    "score_breakdown": {"heuristic": 6.0},
+                }
+            ],
+            exact_search_payload={"enabled": False, "applied": False},
+            docs_payload={"enabled": False, "reason": "disabled", "section_count": 0},
+            worktree_prior=_base_worktree_prior(),
+            parallel_payload={"enabled": False},
+            prior_payload={"docs_hint_paths": 0},
+            docs_elapsed_ms=0.0,
+            worktree_elapsed_ms=0.0,
+            raw_worktree={"enabled": True, "reason": "ok", "changed_count": 3},
+        ),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "refine_candidate_pool",
+        lambda **kwargs: CandidateFusionResult(
+            candidates=[
+                {
+                    "path": "src/alpha.py",
+                    "module": "src.alpha",
+                    "score": 6.0,
+                    "score_breakdown": {"heuristic": 6.0},
+                }
+            ],
+            second_pass_payload={
+                "triggered": False,
+                "applied": False,
+                "reason": "n/a",
+                "retry_ranker": "",
+            },
+            refine_pass_payload={
+                "enabled": True,
+                "trigger_condition_met": False,
+                "triggered": False,
+                "applied": False,
+                "reason": "",
+                "retry_ranker": "",
+                "candidate_count_before": 1,
+                "candidate_count_after": 1,
+                "max_passes": 1,
+            },
+            cochange_payload={"enabled": False, "neighbors_added": 0},
+            scip_payload={"enabled": False, "loaded": False},
+            graph_lookup_payload={
+                "enabled": False,
+                "boosted_count": 0,
+                "query_hit_paths": 0,
+            },
+            embeddings_payload={
+                "enabled": False,
+                "reason": "disabled",
+                "runtime_provider": "",
+                "runtime_model": "",
+                "runtime_dimension": 0,
+                "auto_normalized": False,
+                "normalized_fields": [],
+                "normalization_notes": [],
+            },
+            feedback_payload={
+                "enabled": False,
+                "reason": "disabled",
+                "boosted_candidate_count": 0,
+                "boosted_unique_paths": 0,
+                "matched_event_count": 0,
+                "event_count": 0,
+            },
+            multi_channel_fusion_payload={
+                "enabled": False,
+                "applied": False,
+                "reason": "disabled",
+                "rrf_k": 0,
+                "caps": {"pool": 0, "code": 0, "docs": 0, "memory": 0},
+                "channels": {
+                    "code": {"count": 0, "cap": 0, "top": []},
+                    "docs": {"count": 0, "cap": 0, "top": []},
+                    "memory": {"count": 0, "cap": 0, "top": []},
+                },
+                "fused": {"scored_count": 0, "pool_size": 0, "top": []},
+                "warning": None,
+            },
+            semantic_embedding_provider_impl=None,
+            semantic_cross_encoder_provider=None,
+        ),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "select_index_chunks",
+        lambda **kwargs: ChunkSelectionResult(
+            candidate_chunks=[
+                {
+                    "path": "src/alpha.py",
+                    "qualified_name": "src.alpha.answer",
+                    "kind": "function",
+                    "lineno": 12,
+                    "score_breakdown": {"candidate": 6.0},
+                    "score_embedding": 0.0,
+                }
+            ],
+            chunk_metrics={"candidate_chunk_count": 1.0, "chunk_budget_used": 16.0},
+            chunk_semantic_rerank_payload={"enabled": False, "reason": "disabled"},
+            topological_shield_payload={"enabled": False, "mode": "off"},
+            chunk_guard_payload={"enabled": False, "mode": "off", "reason": "disabled"},
+        ),
+    )
+
+    first_ctx = StageContext(query="find alpha", repo="demo", root=str(tmp_path))
+    first = run_index(
+        ctx=first_ctx,
+        config=_make_config(tmp_path, cochange_enabled=True),
+    )
+
+    second_ctx = StageContext(
+        query="find alpha",
+        repo="demo",
+        root=str(tmp_path),
+        state={"__vcs_worktree": {"enabled": True, "reason": "stale"}},
+    )
+    second = run_index(
+        ctx=second_ctx,
+        config=_make_config(tmp_path, cochange_enabled=True),
+    )
+
+    assert first["candidate_cache"]["hit"] is False
+    assert first_ctx.state["__vcs_worktree"]["enabled"] is True
+    assert second["candidate_cache"]["hit"] is True
+    assert "__vcs_worktree" not in second_ctx.state
+
+
+def test_run_index_candidate_cache_hit_preserves_disabled_worktree_policy_for_benchmark_scope(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    import ace_lite.pipeline.stages.index as index_stage
+
+    files_map = {
+        "src/alpha.py": {"module": "src.alpha", "language": "python"},
+    }
+    benchmark_filters = {"include_paths": ["src/alpha.py"]}
+
+    monkeypatch.setattr(
+        index_stage,
+        "load_retrieval_index_snapshot",
+        lambda **kwargs: _make_snapshot(files_map),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "extract_retrieval_terms",
+        lambda **kwargs: ["alpha"],
+    )
+    monkeypatch.setattr(index_stage, "extract_memory_paths", lambda **kwargs: [])
+    monkeypatch.setattr(
+        index_stage,
+        "resolve_retrieval_policy",
+        lambda **kwargs: {
+            "name": "general",
+            "version": "v1",
+            "docs_enabled": False,
+            "index_parallel_enabled": False,
+        },
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "gather_initial_candidates",
+        lambda **kwargs: InitialCandidateGenerationResult(
+            requested_ranker="hybrid_re2",
+            selected_ranker="heuristic",
+            ranker_fallbacks=[],
+            min_score_used=2,
+            candidates=[
+                {
+                    "path": "src/alpha.py",
+                    "module": "src.alpha",
+                    "score": 6.0,
+                    "score_breakdown": {"heuristic": 6.0},
+                }
+            ],
+            exact_search_payload={"enabled": False, "applied": False},
+            docs_payload={"enabled": False, "reason": "disabled", "section_count": 0},
+            worktree_prior=_base_worktree_prior(),
+            parallel_payload={"enabled": False},
+            prior_payload={"docs_hint_paths": 0},
+            docs_elapsed_ms=0.0,
+            worktree_elapsed_ms=0.0,
+            raw_worktree=None,
+        ),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "refine_candidate_pool",
+        lambda **kwargs: CandidateFusionResult(
+            candidates=[
+                {
+                    "path": "src/alpha.py",
+                    "module": "src.alpha",
+                    "score": 6.0,
+                    "score_breakdown": {"heuristic": 6.0},
+                }
+            ],
+            second_pass_payload={
+                "triggered": False,
+                "applied": False,
+                "reason": "n/a",
+                "retry_ranker": "",
+            },
+            refine_pass_payload={
+                "enabled": True,
+                "trigger_condition_met": False,
+                "triggered": False,
+                "applied": False,
+                "reason": "",
+                "retry_ranker": "",
+                "candidate_count_before": 1,
+                "candidate_count_after": 1,
+                "max_passes": 1,
+            },
+            cochange_payload={"enabled": False, "neighbors_added": 0},
+            scip_payload={"enabled": False, "loaded": False},
+            graph_lookup_payload={
+                "enabled": False,
+                "boosted_count": 0,
+                "query_hit_paths": 0,
+            },
+            embeddings_payload={
+                "enabled": False,
+                "reason": "disabled",
+                "runtime_provider": "",
+                "runtime_model": "",
+                "runtime_dimension": 0,
+                "auto_normalized": False,
+                "normalized_fields": [],
+                "normalization_notes": [],
+            },
+            feedback_payload={
+                "enabled": False,
+                "reason": "disabled",
+                "boosted_candidate_count": 0,
+                "boosted_unique_paths": 0,
+                "matched_event_count": 0,
+                "event_count": 0,
+            },
+            multi_channel_fusion_payload={
+                "enabled": False,
+                "applied": False,
+                "reason": "disabled",
+                "rrf_k": 0,
+                "caps": {"pool": 0, "code": 0, "docs": 0, "memory": 0},
+                "channels": {
+                    "code": {"count": 0, "cap": 0, "top": []},
+                    "docs": {"count": 0, "cap": 0, "top": []},
+                    "memory": {"count": 0, "cap": 0, "top": []},
+                },
+                "fused": {"scored_count": 0, "pool_size": 0, "top": []},
+                "warning": None,
+            },
+            semantic_embedding_provider_impl=None,
+            semantic_cross_encoder_provider=None,
+        ),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "select_index_chunks",
+        lambda **kwargs: ChunkSelectionResult(
+            candidate_chunks=[
+                {
+                    "path": "src/alpha.py",
+                    "qualified_name": "src.alpha.answer",
+                    "kind": "function",
+                    "lineno": 12,
+                    "score_breakdown": {"candidate": 6.0},
+                    "score_embedding": 0.0,
+                }
+            ],
+            chunk_metrics={"candidate_chunk_count": 1.0, "chunk_budget_used": 16.0},
+            chunk_semantic_rerank_payload={"enabled": False, "reason": "disabled"},
+            topological_shield_payload={"enabled": False, "mode": "off"},
+            chunk_guard_payload={"enabled": False, "mode": "off", "reason": "disabled"},
+        ),
+    )
+
+    first_ctx = StageContext(
+        query="find alpha",
+        repo="demo",
+        root=str(tmp_path),
+        state={"benchmark_filters": dict(benchmark_filters)},
+    )
+    first = run_index(
+        ctx=first_ctx,
+        config=_make_config(tmp_path, cochange_enabled=True),
+    )
+
+    second_ctx = StageContext(
+        query="find alpha",
+        repo="demo",
+        root=str(tmp_path),
+        state={
+            "benchmark_filters": dict(benchmark_filters),
+            "__vcs_worktree": {"enabled": True, "reason": "stale"},
+        },
+    )
+    second = run_index(
+        ctx=second_ctx,
+        config=_make_config(tmp_path, cochange_enabled=True),
+    )
+
+    assert first["candidate_cache"]["hit"] is False
+    assert second["candidate_cache"]["hit"] is True
+    assert second_ctx.state["__vcs_worktree"]["enabled"] is False
+    assert (
+        second_ctx.state["__vcs_worktree"]["reason"]
+        == "benchmark_filter_explicit_scope"
+    )
+
+
 def test_run_index_candidate_cache_invalidates_when_policy_version_changes(
     monkeypatch,
     tmp_path: Path,
@@ -1351,3 +1990,81 @@ def test_run_index_candidate_cache_invalidates_when_policy_version_changes(
     assert second["candidate_cache"]["hit"] is False
     assert second["candidate_cache"]["store_written"] is True
     assert call_count["gather"] == 2
+
+
+def test_run_index_disables_docs_for_code_only_benchmark_include_paths(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    import ace_lite.pipeline.stages.index as index_stage
+
+    files_map = {
+        "src/runtime.py": {"module": "src.runtime", "language": "python"},
+        "tests/test_runtime.py": {"module": "tests.test_runtime", "language": "python"},
+        "docs/guide.md": {"module": "docs.guide", "language": "markdown"},
+    }
+    captured: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        index_stage,
+        "load_retrieval_index_snapshot",
+        lambda **kwargs: _make_snapshot(files_map),
+    )
+    monkeypatch.setattr(
+        index_stage,
+        "extract_retrieval_terms",
+        lambda **kwargs: ["runtime", "doctor"],
+    )
+    monkeypatch.setattr(index_stage, "extract_memory_paths", lambda **kwargs: [])
+    monkeypatch.setattr(
+        index_stage,
+        "resolve_retrieval_policy",
+        lambda **kwargs: {
+            "name": "doc_intent",
+            "version": "v2",
+            "docs_enabled": True,
+            "index_parallel_enabled": False,
+        },
+    )
+
+    def fake_gather_initial_candidates(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return InitialCandidateGenerationResult(
+            requested_ranker="hybrid_re2",
+            selected_ranker="hybrid_re2",
+            ranker_fallbacks=[],
+            min_score_used=2,
+            candidates=[{"path": "src/runtime.py", "score": 7.0}],
+            exact_search_payload={"enabled": False, "applied": False},
+            docs_payload={"enabled": False, "reason": "disabled", "section_count": 0},
+            worktree_prior=_base_worktree_prior(),
+            parallel_payload={"enabled": False},
+            prior_payload={"docs_hint_paths": 0},
+            docs_elapsed_ms=0.0,
+            worktree_elapsed_ms=0.0,
+            raw_worktree=None,
+        )
+
+    monkeypatch.setattr(index_stage, "gather_initial_candidates", fake_gather_initial_candidates)
+    _stub_pipeline_after_generation(monkeypatch, index_stage)
+
+    payload = run_index(
+        ctx=StageContext(
+            query="runtime doctor",
+            repo="demo",
+            root=str(tmp_path),
+            state={
+                "benchmark_filters": {
+                    "include_paths": [
+                        "src/runtime.py",
+                        "tests/test_runtime.py",
+                    ]
+                }
+            },
+        ),
+        config=_make_config(tmp_path, retrieval_overrides={"candidate_ranker": "hybrid_re2"}),
+    )
+
+    assert captured["docs_policy_enabled"] is False
+    assert payload["benchmark_filters"]["docs_policy_enabled"] is False
+    assert payload["benchmark_filters"]["docs_policy_reason"] == "benchmark_include_paths_code_only"

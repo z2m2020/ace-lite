@@ -66,6 +66,91 @@ Minimum checks:
 - `retrieval_policy_summary` does not show a new regression cluster for the candidate policy mix
 - `latency_slo_summary` still matches the expected workload buckets and does not hide downgrade spikes
 
+If the release touches validation planning, `agent_loop`, MCP self-test / doctor,
+or `validation_result` schema contracts, also collect the narrower validation-rich
+lane from the same tree:
+
+```powershell
+./scripts/run_benchmark.ps1 -Lane validation_rich -Repo ace-lite-engine -OutputDir artifacts/benchmark/validation_rich/latest
+```
+
+Review `artifacts/benchmark/validation_rich/latest/results.json` and the paired
+report output to confirm `task_success_rate`, `precision_at_k`, `noise_rate`,
+and `validation_test_count` stay non-regressed on that validation-specific lane.
+If you pass that summary into freeze regression, the generated
+`freeze_regression.json` / `.md` will also carry a report-only
+`validation_rich_benchmark` section for the same evidence set:
+
+```powershell
+python scripts/run_release_freeze_regression.py --matrix-config benchmark/matrix/repos.yaml --output-dir artifacts/release-freeze/latest --validation-rich-summary artifacts/benchmark/validation_rich/latest/summary.json
+```
+
+If a prior dated `validation_rich` artifact exists, pass it as well so freeze
+can surface current-vs-previous delta in the same report-only section:
+
+```powershell
+python scripts/run_release_freeze_regression.py --matrix-config benchmark/matrix/repos.yaml --output-dir artifacts/release-freeze/latest --validation-rich-summary artifacts/benchmark/validation_rich/latest/summary.json --validation-rich-previous-summary artifacts/benchmark/validation_rich/2026-03-11/summary.json
+```
+
+When collecting a release checkpoint for this lane, record these four items
+together so reviewers can interpret the freeze artifact without reopening the
+raw config:
+
+- current summary: `artifacts/benchmark/validation_rich/latest/summary.json`
+- previous summary if available: a dated prior `summary.json` from the same lane
+- gate mode: `disabled`, `report_only`, or `enforced`
+- gate result: passed / failed, plus rollback reason if `enforced` was reverted
+
+If the release candidate depends on more than one dated validation-rich run,
+also build the report-only trend artifact for the same evidence set:
+
+```bash
+python scripts/build_validation_rich_trend_report.py --history-root artifacts/benchmark/validation_rich --latest-report artifacts/benchmark/validation_rich/latest/summary.json --output-dir artifacts/benchmark/validation_rich/trend/latest
+```
+
+Review:
+
+- `artifacts/benchmark/validation_rich/trend/latest/validation_rich_trend_report.json`
+- `artifacts/benchmark/validation_rich/trend/latest/validation_rich_trend_report.md`
+
+Minimum checks:
+
+- latest and previous rows are ordered by `generated_at`, not directory mtime
+- delta stays report-only and is paired with the exact current/previous summary paths used for freeze
+- any `failed_checks` drift is called out in the release checkpoint before discussing `validation_rich_gate.mode=enforced`
+
+If a tuning round also compares a baseline snapshot against the current default
+path and a tuned candidate, attach the three-way comparison artifact:
+
+```bash
+python scripts/build_validation_rich_comparison_report.py --baseline artifacts/benchmark/validation_rich/2026-03-10/summary.json --current artifacts/benchmark/validation_rich/latest/summary.json --tuned artifacts/benchmark/validation_rich/tuned/latest/summary.json --output-dir artifacts/benchmark/validation_rich/comparison/latest
+```
+
+Review:
+
+- `artifacts/benchmark/validation_rich/comparison/latest/validation_rich_comparison_report.json`
+- `artifacts/benchmark/validation_rich/comparison/latest/validation_rich_comparison_report.md`
+
+Minimum checks:
+
+- baseline/current/tuned use the exact dated inputs cited in the release note or tuning review
+- tuned improvements are not hiding worse `noise_rate`, `missing_validation_rate`, or `evidence_insufficient_rate`
+- the comparison artifact is treated as decision support for `VR14`, not as an automatic gate on its own
+
+Before changing `validation_rich_gate.mode`, generate the explicit promotion
+decision artifact:
+
+```bash
+python scripts/evaluate_validation_rich_gate_promotion.py --trend-report artifacts/benchmark/validation_rich/trend/latest/validation_rich_trend_report.json --stability-report artifacts/benchmark/validation_rich/stability/latest/stability_summary.json --comparison-report artifacts/benchmark/validation_rich/comparison/latest/validation_rich_comparison_report.json --output artifacts/benchmark/validation_rich/promotion/latest/promotion_decision.json
+```
+
+Required checks:
+
+- `recommendation` must explicitly say `eligible_for_enforced` before any
+  config proposal moves beyond `report_only`
+- otherwise keep `validation_rich_gate.mode=report_only` and carry the reasons
+  forward into the next checkpoint
+
 ### 3.2 Latency and SLO trend report
 
 Build this whenever the release changes retrieval policy, embedding behavior, repomap behavior, or time-budget logic.
@@ -73,6 +158,27 @@ Build this whenever the release changes retrieval policy, embedding behavior, re
 ```bash
 python scripts/build_latency_slo_trend_report.py --history-root artifacts/benchmark/matrix/h2_2026 --latest-report artifacts/benchmark/matrix/latest/latency_slo_summary.json --output-dir artifacts/benchmark/matrix/latest-latency-slo-trend
 ```
+
+When validation planning or `agent_loop` evidence is also part of the release
+story, include the current validation-rich lane in the lightweight metrics
+collector output so the dated checkpoint carries both matrix-level and
+validation-specific signals in one `metrics.json` artifact:
+
+```powershell
+python scripts/metrics_collector.py --current artifacts/benchmark/matrix/latest/matrix_summary.json --validation-rich-current artifacts/benchmark/validation_rich/latest/summary.json --output artifacts/benchmark/matrix/latest-metrics.json
+```
+
+If the release checkpoint also needs a dated validation-rich trend artifact,
+build it from the same lane before writing release notes:
+
+```powershell
+python scripts/build_validation_rich_trend_report.py --history-root artifacts/benchmark/validation_rich --latest-report artifacts/benchmark/validation_rich/latest/summary.json --output-dir artifacts/benchmark/validation_rich/trend/latest
+```
+
+Required files to inspect for that report-only trend lane:
+
+- `artifacts/benchmark/validation_rich/trend/latest/validation_rich_trend_report.json`
+- `artifacts/benchmark/validation_rich/trend/latest/validation_rich_trend_report.md`
 
 Required checks:
 
@@ -155,6 +261,7 @@ Required gates to review:
 - `tabiv3_gate`
 - `concept_gate`
 - `external_concept_gate`
+- `validation_rich_gate` when the release also ships `validation_rich` evidence
 - `feature_slices_gate`
 - `retrieval_policy_guard`
 - `e2e_success_gate`
@@ -166,6 +273,43 @@ For `retrieval_policy_guard`, review the mode before interpreting failures:
 - `disabled`: ignore the guard for release pass/fail decisions
 - `report_only`: record failures in the artifact, but do not let them flip the overall freeze result
 - `enforced`: failures block the freeze result
+
+Apply the same mode interpretation to `validation_rich_gate`:
+
+- `disabled`: `validation_rich` stays only as report-only benchmark evidence
+- `report_only`: emit `validation_rich_gate` failures into freeze artifacts, but do not block release
+- `enforced`: require the configured `validation_rich` thresholds to stay green before release passes
+
+Recommended config shape for release maintainers:
+
+```yaml
+freeze:
+  validation_rich_gate:
+    mode: report_only
+    thresholds:
+      task_success_rate_min: 0.90
+      precision_at_k_min: 0.40
+      noise_rate_max: 0.60
+      latency_p95_ms_max: 700.0
+      validation_test_count_min: 5.0
+      missing_validation_rate_max: 0.0
+      evidence_insufficient_rate_max: 0.0
+```
+
+Recommended default for the current release workflow:
+
+- keep `freeze.validation_rich_gate.mode: report_only` unless the release is
+  explicitly about validation-specific quality and there is already a stable
+  dated baseline to compare against
+- only switch to `enforced` when the team is prepared to treat missing
+  validation-rich evidence, missing summaries, or threshold regressions as a
+  hard release blocker
+
+Rollback rule for false positives or unstable evidence:
+
+1. change `freeze.validation_rich_gate.mode` from `enforced` back to `report_only`
+2. rerun `./scripts/run_full_validation.ps1 -IncludeValidationRichBenchmark` or rerun freeze with the same `--validation-rich-summary` / `--validation-rich-previous-summary` inputs
+3. record the rollback reason and the failing metrics in the release checkpoint or freeze artifact review comment
 
 When a release candidate changes an adaptive feature, verify that the affected
 path still matches its status in
@@ -187,6 +331,23 @@ Required checks:
 
 - tracked robustness slices stay `stable_pass`
 - treat whole-freeze failures as release-readiness issues, not as evidence that the robustness lane is invalid
+
+If the release candidate changes validation planning, `agent_loop`, validation
+schema contracts, or any path already covered by the validation-rich lane, also
+run the lighter validation-rich stability check:
+
+```bash
+python scripts/run_validation_rich_stability.py --runs 2 --output-dir artifacts/benchmark/validation_rich/stability/latest --max-failure-rate 0.0
+```
+
+Required checks:
+
+- `classification` stays `stable_pass` before discussing stricter
+  `validation_rich_gate.mode`
+- repeated runs do not introduce new `failed_checks` clusters or non-zero
+  `missing_validation_rate` / `evidence_insufficient_rate`
+- the stability artifact is reviewed together with the current
+  `validation_rich_trend_report.*` outputs rather than as a replacement for them
 
 ## 4. Upgrade Validation
 
@@ -217,6 +378,12 @@ Use the following headings in a release checkpoint or PR comment:
 - Candidate version:
 - Evidence date:
 - Benchmark matrix:
+- Validation-rich benchmark (if used):
+  - Current summary:
+  - Previous summary:
+  - Gate mode:
+  - Gate result / rollback note:
+- Validation-rich trend (if used):
 - Latency/SLO trend:
 - Router observability summary:
 - Freeze regression:
@@ -226,6 +393,11 @@ Use the following headings in a release checkpoint or PR comment:
 ## Required Checks
 
 - Benchmark thresholds:
+- Validation-rich task success / validation evidence (if used):
+  - task_success_rate / precision_at_k / noise_rate / validation_test_count:
+  - delta vs previous summary:
+  - gate failures or rollback reason (if any):
+- Validation-rich trend delta (if used):
 - Retrieval policy guard:
 - Router disagreement / fallback review:
 - Latency/SLO drift:
@@ -256,3 +428,6 @@ Primary docs and workflows to cross-check:
 - `.github/workflows/ci.yml`
 - `.github/workflows/release-freeze-regression.yml`
 - `.github/workflows/freeze-stability-nightly.yml`
+
+
+

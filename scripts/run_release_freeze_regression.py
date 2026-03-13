@@ -970,6 +970,26 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
     }
 
 
+def _build_metric_delta(
+    *,
+    current_metrics: dict[str, Any],
+    previous_metrics: dict[str, Any],
+    metric_names: list[str],
+) -> dict[str, dict[str, float]]:
+    delta: dict[str, dict[str, float]] = {}
+    for metric in metric_names:
+        if metric not in current_metrics or metric not in previous_metrics:
+            continue
+        current_value = float(current_metrics.get(metric, 0.0) or 0.0)
+        previous_value = float(previous_metrics.get(metric, 0.0) or 0.0)
+        delta[str(metric)] = {
+            "current": current_value,
+            "previous": previous_value,
+            "delta": current_value - previous_value,
+        }
+    return delta
+
+
 def _resolve_concept_gate_config(*, matrix_config_path: Path) -> dict[str, Any]:
     config = _load_yaml_config(path=matrix_config_path)
     freeze_raw = config.get("freeze")
@@ -1487,6 +1507,109 @@ def _evaluate_retrieval_policy_guard(
     return failures
 
 
+def _resolve_validation_rich_gate_config(*, matrix_config_path: Path) -> dict[str, Any]:
+    config = _load_yaml_config(path=matrix_config_path)
+    freeze_raw = config.get("freeze")
+    freeze = freeze_raw if isinstance(freeze_raw, dict) else {}
+    gate_raw = freeze.get("validation_rich_gate", config.get("validation_rich_gate", {}))
+    gate = gate_raw if isinstance(gate_raw, dict) else {}
+
+    configured_mode_raw = str(gate.get("mode") or "").strip().lower()
+    configured_mode = configured_mode_raw.replace("-", "_")
+    if configured_mode not in {"disabled", "report_only", "enforced"}:
+        configured_mode = ""
+
+    if configured_mode:
+        mode = configured_mode
+        enabled = mode != "disabled"
+        report_only = mode == "report_only"
+        enforced = mode == "enforced"
+        source = "config_mode"
+    else:
+        enabled = bool(gate.get("enabled", False))
+        report_only = False
+        enforced = enabled
+        mode = "enforced" if enabled else "disabled"
+        source = "config_flag" if enabled else "disabled"
+
+    thresholds = _coerce_threshold_mapping(gate.get("thresholds"))
+    return {
+        "enabled": enabled,
+        "mode": mode,
+        "report_only": report_only,
+        "enforced": enforced,
+        "source": source,
+        "thresholds": {
+            "task_success_rate_min": _metric_threshold_from_mapping(
+                thresholds, "task_success_rate_min"
+            ),
+            "precision_at_k_min": _metric_threshold_from_mapping(
+                thresholds, "precision_at_k_min"
+            ),
+            "noise_rate_max": _metric_threshold_from_mapping(
+                thresholds, "noise_rate_max"
+            ),
+            "latency_p95_ms_max": _metric_threshold_from_mapping(
+                thresholds, "latency_p95_ms_max"
+            ),
+            "validation_test_count_min": _metric_threshold_from_mapping(
+                thresholds, "validation_test_count_min"
+            ),
+            "missing_validation_rate_max": _metric_threshold_from_mapping(
+                thresholds, "missing_validation_rate_max"
+            ),
+            "evidence_insufficient_rate_max": _metric_threshold_from_mapping(
+                thresholds, "evidence_insufficient_rate_max"
+            ),
+        },
+    }
+
+
+def _evaluate_validation_rich_gate(
+    *,
+    benchmark_summary: dict[str, Any],
+    thresholds: dict[str, float],
+) -> list[dict[str, Any]]:
+    enabled_thresholds = {
+        key: float(value)
+        for key, value in thresholds.items()
+        if isinstance(value, (int, float)) and float(value) >= 0.0
+    }
+    if not enabled_thresholds:
+        return []
+    if not benchmark_summary:
+        return [
+            {
+                "repo": "validation_rich_gate",
+                "metric": "summary",
+                "actual": "missing",
+                "operator": "==",
+                "expected": "present",
+                "reason": "summary_missing",
+            }
+        ]
+
+    metrics_raw = benchmark_summary.get("metrics")
+    metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
+    repo_name = str(benchmark_summary.get("repo", "") or "").strip() or "validation_rich_gate"
+    failures = _evaluate_metric_thresholds(
+        metrics=metrics,
+        thresholds=enabled_thresholds,
+        repo_name=repo_name,
+    )
+    if int(benchmark_summary.get("case_count", 0) or 0) <= 0:
+        failures.append(
+            {
+                "repo": repo_name,
+                "metric": "case_count",
+                "actual": 0.0,
+                "operator": ">=",
+                "expected": 1.0,
+            }
+        )
+    return failures
+
+
 def _policy_guard_blocks_release(
     *,
     config: dict[str, Any],
@@ -1826,6 +1949,194 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         remote=max(0, int(item.get("remote_applied", 0) or 0)),
                     )
                 )
+        lines.append("")
+
+    validation_rich_raw = payload.get("validation_rich_benchmark")
+    validation_rich = (
+        validation_rich_raw if isinstance(validation_rich_raw, dict) else {}
+    )
+    if bool(validation_rich.get("enabled", False)):
+        lines.append("## Validation-Rich Benchmark")
+        lines.append("")
+        lines.append(
+            f"- Report only: {bool(validation_rich.get('report_only', True))}"
+        )
+        summary_path = str(validation_rich.get("summary_path", "") or "").strip()
+        if summary_path:
+            lines.append(f"- Summary: {summary_path}")
+        previous_summary_path = str(
+            validation_rich.get("previous_summary_path", "") or ""
+        ).strip()
+        if previous_summary_path:
+            lines.append(f"- Previous summary: {previous_summary_path}")
+        lines.append(
+            f"- Loaded summary: {bool(validation_rich.get('loaded', False))}"
+        )
+        if previous_summary_path:
+            lines.append(
+                "- Loaded previous summary: {loaded}".format(
+                    loaded=bool(validation_rich.get("previous_loaded", False))
+                )
+            )
+        if bool(validation_rich.get("loaded", False)):
+            repo_name = str(validation_rich.get("repo", "") or "").strip()
+            if repo_name:
+                lines.append(f"- Repo: {repo_name}")
+            lines.append(
+                f"- Case count: {int(validation_rich.get('case_count', 0) or 0)}"
+            )
+            lines.append(
+                f"- Regressed: {bool(validation_rich.get('regressed', False))}"
+            )
+            failed_checks_raw = validation_rich.get("failed_checks")
+            failed_checks = (
+                failed_checks_raw if isinstance(failed_checks_raw, list) else []
+            )
+            lines.append(
+                "- Failed checks: {checks}".format(
+                    checks=",".join(str(item) for item in failed_checks)
+                    if failed_checks
+                    else "(none)"
+                )
+            )
+            metrics_raw = validation_rich.get("metrics")
+            metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
+            lines.append(
+                "- Metrics: task_success={task_success:.4f}, precision={precision:.4f}, noise={noise:.4f}, validation_test_count={validation_tests:.4f}, latency_p95_ms={latency:.2f}, evidence_insufficient={insufficient:.4f}, missing_validation={missing_validation:.4f}".format(
+                    task_success=float(metrics.get("task_success_rate", 0.0) or 0.0),
+                    precision=float(metrics.get("precision_at_k", 0.0) or 0.0),
+                    noise=float(metrics.get("noise_rate", 0.0) or 0.0),
+                    validation_tests=float(
+                        metrics.get("validation_test_count", 0.0) or 0.0
+                    ),
+                    latency=float(metrics.get("latency_p95_ms", 0.0) or 0.0),
+                    insufficient=float(
+                        metrics.get("evidence_insufficient_rate", 0.0) or 0.0
+                    ),
+                    missing_validation=float(
+                        metrics.get("missing_validation_rate", 0.0) or 0.0
+                    ),
+                )
+            )
+            previous_metrics_raw = validation_rich.get("previous_metrics")
+            previous_metrics = (
+                previous_metrics_raw if isinstance(previous_metrics_raw, dict) else {}
+            )
+            if previous_metrics:
+                lines.append(
+                    "- Previous metrics: task_success={task_success:.4f}, precision={precision:.4f}, noise={noise:.4f}, validation_test_count={validation_tests:.4f}, latency_p95_ms={latency:.2f}, evidence_insufficient={insufficient:.4f}, missing_validation={missing_validation:.4f}".format(
+                        task_success=float(
+                            previous_metrics.get("task_success_rate", 0.0) or 0.0
+                        ),
+                        precision=float(
+                            previous_metrics.get("precision_at_k", 0.0) or 0.0
+                        ),
+                        noise=float(previous_metrics.get("noise_rate", 0.0) or 0.0),
+                        validation_tests=float(
+                            previous_metrics.get("validation_test_count", 0.0) or 0.0
+                        ),
+                        latency=float(
+                            previous_metrics.get("latency_p95_ms", 0.0) or 0.0
+                        ),
+                        insufficient=float(
+                            previous_metrics.get("evidence_insufficient_rate", 0.0)
+                            or 0.0
+                        ),
+                        missing_validation=float(
+                            previous_metrics.get("missing_validation_rate", 0.0)
+                            or 0.0
+                        ),
+                    )
+                )
+            delta_raw = validation_rich.get("delta")
+            delta = delta_raw if isinstance(delta_raw, dict) else {}
+            if delta:
+                lines.append("- Delta summary:")
+                for metric in (
+                    "task_success_rate",
+                    "precision_at_k",
+                    "noise_rate",
+                    "latency_p95_ms",
+                    "validation_test_count",
+                    "evidence_insufficient_rate",
+                    "missing_validation_rate",
+                ):
+                    item = delta.get(metric)
+                    if not isinstance(item, dict):
+                        continue
+                    lines.append(
+                        "  - {metric}: current={current:.4f}, previous={previous:.4f}, delta={delta_value:+.4f}".format(
+                            metric=metric,
+                            current=float(item.get("current", 0.0) or 0.0),
+                            previous=float(item.get("previous", 0.0) or 0.0),
+                            delta_value=float(item.get("delta", 0.0) or 0.0),
+                        )
+                    )
+        else:
+            lines.append("- Summary payload could not be loaded.")
+        lines.append("")
+
+    validation_rich_gate_raw = payload.get("validation_rich_gate")
+    validation_rich_gate = (
+        validation_rich_gate_raw if isinstance(validation_rich_gate_raw, dict) else {}
+    )
+    if bool(validation_rich_gate.get("enabled", False)):
+        lines.append("## Validation-Rich Gate")
+        lines.append("")
+        lines.append(f"- Passed: {bool(validation_rich_gate.get('passed', True))}")
+        lines.append(
+            f"- Mode: {str(validation_rich_gate.get('mode', 'disabled') or 'disabled')}"
+        )
+        lines.append(
+            f"- Enforced: {bool(validation_rich_gate.get('enforced', False))}"
+        )
+        source_name = str(validation_rich_gate.get("source", "") or "").strip()
+        if source_name:
+            lines.append(f"- Source: {source_name}")
+        summary_path = str(validation_rich_gate.get("summary_path", "") or "").strip()
+        if summary_path:
+            lines.append(f"- Summary: {summary_path}")
+        thresholds_raw = validation_rich_gate.get("thresholds")
+        thresholds = thresholds_raw if isinstance(thresholds_raw, dict) else {}
+        lines.append(
+            "- Thresholds: task_success_rate>={task_success:.4f}, precision_at_k>={precision:.4f}, noise_rate<={noise:.4f}, latency_p95_ms<={latency:.2f}, validation_test_count>={validation_tests:.4f}, missing_validation_rate<={missing_validation:.4f}, evidence_insufficient_rate<={insufficient:.4f}".format(
+                task_success=float(thresholds.get("task_success_rate_min", -1.0) or -1.0),
+                precision=float(thresholds.get("precision_at_k_min", -1.0) or -1.0),
+                noise=float(thresholds.get("noise_rate_max", -1.0) or -1.0),
+                latency=float(thresholds.get("latency_p95_ms_max", -1.0) or -1.0),
+                validation_tests=float(
+                    thresholds.get("validation_test_count_min", -1.0) or -1.0
+                ),
+                missing_validation=float(
+                    thresholds.get("missing_validation_rate_max", -1.0) or -1.0
+                ),
+                insufficient=float(
+                    thresholds.get("evidence_insufficient_rate_max", -1.0) or -1.0
+                ),
+            )
+        )
+        failures_raw = validation_rich_gate.get("failures")
+        failures = failures_raw if isinstance(failures_raw, list) else []
+        if failures:
+            lines.append("- Failures:")
+            for item in failures:
+                if not isinstance(item, dict):
+                    continue
+                lines.append(
+                    "  - {metric}: actual={actual}, expected {operator} {expected}{reason}".format(
+                        metric=str(item.get("metric", "")),
+                        actual=item.get("actual"),
+                        operator=str(item.get("operator", "")),
+                        expected=item.get("expected"),
+                        reason=(
+                            f" ({str(item.get('reason', '')).strip()})"
+                            if str(item.get("reason", "")).strip()
+                            else ""
+                        ),
+                    )
+                )
+        else:
+            lines.append("- Failures: (none)")
         lines.append("")
 
     plugin_gate_raw = payload.get("plugin_policy_gate")
@@ -2427,6 +2738,16 @@ def main() -> int:
         default="artifacts/release-freeze/latest",
         help="Output directory for freeze regression report.",
     )
+    parser.add_argument(
+        "--validation-rich-summary",
+        default="",
+        help="Optional validation-rich benchmark summary.json path to include as report-only evidence.",
+    )
+    parser.add_argument(
+        "--validation-rich-previous-summary",
+        default="",
+        help="Optional previous validation-rich benchmark summary.json path used for report-only delta comparison.",
+    )
     parser.add_argument("--cli-bin", default="ace-lite", help="CLI binary name/path.")
     parser.add_argument(
         "--fail-on-thresholds",
@@ -2522,6 +2843,22 @@ def main() -> int:
 
     logs_dir = output_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
+    validation_rich_summary_arg = str(args.validation_rich_summary or "").strip()
+    validation_rich_summary_path = (
+        _resolve_matrix_path(root=root, matrix_config=validation_rich_summary_arg)
+        if validation_rich_summary_arg
+        else None
+    )
+    validation_rich_previous_summary_arg = str(
+        args.validation_rich_previous_summary or ""
+    ).strip()
+    validation_rich_previous_summary_path = (
+        _resolve_matrix_path(
+            root=root, matrix_config=validation_rich_previous_summary_arg
+        )
+        if validation_rich_previous_summary_arg
+        else None
+    )
 
     matrix_output = output_dir / "benchmark-matrix"
     tabiv3_output = output_dir / "benchmark-matrix-tabiv3"
@@ -2913,12 +3250,82 @@ def main() -> int:
     concept_summary = _load_benchmark_summary(
         summary_path=concept_output / "summary.json"
     )
+    validation_rich_summary = (
+        _load_benchmark_summary(summary_path=validation_rich_summary_path)
+        if validation_rich_summary_path is not None
+        else {}
+    )
+    validation_rich_previous_summary = (
+        _load_benchmark_summary(summary_path=validation_rich_previous_summary_path)
+        if validation_rich_previous_summary_path is not None
+        else {}
+    )
+    validation_rich_delta = _build_metric_delta(
+        current_metrics=(
+            validation_rich_summary.get("metrics", {})
+            if isinstance(validation_rich_summary.get("metrics"), dict)
+            else {}
+        ),
+        previous_metrics=(
+            validation_rich_previous_summary.get("metrics", {})
+            if isinstance(validation_rich_previous_summary.get("metrics"), dict)
+            else {}
+        ),
+        metric_names=[
+            "task_success_rate",
+            "precision_at_k",
+            "noise_rate",
+            "latency_p95_ms",
+            "validation_test_count",
+            "evidence_insufficient_rate",
+            "missing_validation_rate",
+        ],
+    )
     external_concept_summary = _load_matrix_summary(
         summary_path=external_concept_output / "matrix_summary.json"
     )
     feature_slices_summary = _load_feature_slices_summary(
         summary_path=feature_slices_output / "feature_slices_summary.json"
     )
+    validation_rich_gate_config = _resolve_validation_rich_gate_config(
+        matrix_config_path=matrix_config_path
+    )
+    validation_rich_gate_thresholds_raw = validation_rich_gate_config.get("thresholds")
+    validation_rich_gate_thresholds = (
+        validation_rich_gate_thresholds_raw
+        if isinstance(validation_rich_gate_thresholds_raw, dict)
+        else {}
+    )
+    validation_rich_gate_enabled = bool(
+        validation_rich_gate_config.get("enabled", False)
+    )
+    validation_rich_gate_failures = (
+        _evaluate_validation_rich_gate(
+            benchmark_summary=validation_rich_summary,
+            thresholds={
+                key: float(value)
+                for key, value in validation_rich_gate_thresholds.items()
+            },
+        )
+        if validation_rich_gate_enabled
+        else []
+    )
+    validation_rich_gate_payload = {
+        "enabled": validation_rich_gate_enabled,
+        "passed": len(validation_rich_gate_failures) == 0,
+        "mode": str(validation_rich_gate_config.get("mode", "disabled") or "disabled"),
+        "report_only": bool(validation_rich_gate_config.get("report_only", False)),
+        "enforced": bool(validation_rich_gate_config.get("enforced", False)),
+        "source": str(validation_rich_gate_config.get("source", "") or "disabled"),
+        "summary_path": str(validation_rich_summary_path)
+        if validation_rich_summary_path is not None
+        else "",
+        "thresholds": {
+            key: float(value)
+            for key, value in validation_rich_gate_thresholds.items()
+        },
+        "failures": validation_rich_gate_failures,
+    }
 
     plugin_gate_config = _resolve_plugin_gate_config(
         matrix_config_path=matrix_config_path,
@@ -3482,6 +3889,12 @@ def main() -> int:
         and (not plugin_gate_enabled or len(plugin_gate_failures) == 0)
         and (
             not _policy_guard_blocks_release(
+                config=validation_rich_gate_config,
+                failures=validation_rich_gate_failures,
+            )
+        )
+        and (
+            not _policy_guard_blocks_release(
                 config=retrieval_policy_guard_config,
                 failures=retrieval_policy_guard_failures,
             )
@@ -3512,6 +3925,58 @@ def main() -> int:
         "benchmark_matrix_summary": matrix_summary,
         "tabiv3_matrix_summary": tabiv3_summary,
         "concept_benchmark_summary": concept_summary,
+        "validation_rich_benchmark": {
+            "enabled": validation_rich_summary_path is not None,
+            "report_only": True,
+            "summary_path": str(validation_rich_summary_path)
+            if validation_rich_summary_path is not None
+            else "",
+            "previous_summary_path": str(validation_rich_previous_summary_path)
+            if validation_rich_previous_summary_path is not None
+            else "",
+            "loaded": bool(validation_rich_summary),
+            "previous_loaded": bool(validation_rich_previous_summary),
+            "repo": str(validation_rich_summary.get("repo", "") or ""),
+            "case_count": int(validation_rich_summary.get("case_count", 0) or 0)
+            if validation_rich_summary
+            else 0,
+            "regressed": bool(validation_rich_summary.get("regressed", False))
+            if validation_rich_summary
+            else False,
+            "previous_repo": str(validation_rich_previous_summary.get("repo", "") or ""),
+            "previous_case_count": int(
+                validation_rich_previous_summary.get("case_count", 0) or 0
+            )
+            if validation_rich_previous_summary
+            else 0,
+            "previous_regressed": bool(
+                validation_rich_previous_summary.get("regressed", False)
+            )
+            if validation_rich_previous_summary
+            else False,
+            "failed_checks": (
+                validation_rich_summary.get("failed_checks", [])
+                if isinstance(validation_rich_summary.get("failed_checks"), list)
+                else []
+            ),
+            "previous_failed_checks": (
+                validation_rich_previous_summary.get("failed_checks", [])
+                if isinstance(validation_rich_previous_summary.get("failed_checks"), list)
+                else []
+            ),
+            "metrics": (
+                validation_rich_summary.get("metrics", {})
+                if isinstance(validation_rich_summary.get("metrics"), dict)
+                else {}
+            ),
+            "previous_metrics": (
+                validation_rich_previous_summary.get("metrics", {})
+                if isinstance(validation_rich_previous_summary.get("metrics"), dict)
+                else {}
+            ),
+            "delta": validation_rich_delta,
+        },
+        "validation_rich_gate": validation_rich_gate_payload,
         "external_concept_matrix_summary": external_concept_summary,
         "feature_slices_summary": feature_slices_summary,
         "e2e_success_summary": e2e_summary,
@@ -3543,6 +4008,57 @@ def main() -> int:
                     matrix_summary.get("benchmark_regression_detected", False)
                 ),
                 count=int(matrix_summary.get("repo_count", 0) or 0),
+            )
+        )
+
+    if validation_rich_summary_path is not None:
+        print(
+            "[freeze] validation-rich benchmark: summary={summary} previous={previous} loaded={loaded} previous_loaded={previous_loaded} regressed={regressed} task_success={task_success:.4f} validation_tests={validation_tests:.4f} precision_delta={precision_delta:+.4f}".format(
+                summary=str(validation_rich_summary_path),
+                previous=(
+                    str(validation_rich_previous_summary_path)
+                    if validation_rich_previous_summary_path is not None
+                    else ""
+                ),
+                loaded=bool(validation_rich_summary),
+                previous_loaded=bool(validation_rich_previous_summary),
+                regressed=bool(validation_rich_summary.get("regressed", False))
+                if validation_rich_summary
+                else False,
+                task_success=float(
+                    (
+                        validation_rich_summary.get("metrics", {})
+                        if isinstance(validation_rich_summary.get("metrics", {}), dict)
+                        else {}
+                    ).get("task_success_rate", 0.0)
+                    or 0.0
+                ),
+                validation_tests=float(
+                    (
+                        validation_rich_summary.get("metrics", {})
+                        if isinstance(validation_rich_summary.get("metrics", {}), dict)
+                        else {}
+                    ).get("validation_test_count", 0.0)
+                    or 0.0
+                ),
+                precision_delta=float(
+                    (
+                        validation_rich_delta.get("precision_at_k", {})
+                        if isinstance(validation_rich_delta.get("precision_at_k", {}), dict)
+                        else {}
+                    ).get("delta", 0.0)
+                    or 0.0
+                ),
+            )
+        )
+    if validation_rich_gate_enabled:
+        print(
+            "[freeze] validation-rich gate: mode={mode} source={source} enforced={enforced} passed={passed} failures={count}".format(
+                mode=str(validation_rich_gate_payload.get("mode", "disabled") or "disabled"),
+                source=str(validation_rich_gate_payload.get("source", "") or "disabled"),
+                enforced=bool(validation_rich_gate_payload.get("enforced", False)),
+                passed=len(validation_rich_gate_failures) == 0,
+                count=len(validation_rich_gate_failures),
             )
         )
 

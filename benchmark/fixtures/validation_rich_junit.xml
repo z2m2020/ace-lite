@@ -1,0 +1,52 @@
+<testsuite tests="5" failures="5">
+  <testcase
+    classname="tests.integration.test_orchestrator_chunk_policy"
+    name="test_source_plan_validation_tests_from_failed_report"
+    file="tests/integration/test_orchestrator_chunk_policy.py"
+    line="398">
+    <failure message="validation tests were not selected from failed report">Traceback
+File "src/ace_lite/pipeline/stages/source_plan.py", line 201
+File "src/ace_lite/source_plan/validation_tests.py", line 35
+</failure>
+  </testcase>
+  <testcase
+    classname="tests.unit.test_validation_stage"
+    name="test_run_validation_stage_collects_diagnostics_in_sandbox"
+    file="tests/unit/test_validation_stage.py"
+    line="109">
+    <failure message="validation sandbox diagnostics mismatch">Traceback
+File "src/ace_lite/pipeline/stages/validation.py", line 84
+File "src/ace_lite/validation/result.py", line 149
+</failure>
+  </testcase>
+  <testcase
+    classname="tests.integration.test_orchestrator"
+    name="test_orchestrator_agent_loop_reruns_incremental_retrieval_after_validation_signal"
+    file="tests/integration/test_orchestrator.py"
+    line="625">
+    <failure message="agent loop did not rerun after validation diagnostics">Traceback
+File "src/ace_lite/agent_loop/controller.py", line 146
+File "src/ace_lite/orchestrator_runtime_support.py", line 218
+</failure>
+  </testcase>
+  <testcase
+    classname="tests.integration.test_cli_runtime"
+    name="test_cli_runtime_doctor_mcp_uses_snapshot_when_available"
+    file="tests/integration/test_cli_runtime.py"
+    line="331">
+    <failure message="runtime doctor snapshot self-test mismatch">Traceback
+File "src/ace_lite/cli_app/commands/runtime.py", line 835
+File "src/ace_lite/cli_app/commands/runtime.py", line 747
+</failure>
+  </testcase>
+  <testcase
+    classname="tests.unit.test_schema"
+    name="test_validate_context_plan_accepts_optional_validation_result_payload"
+    file="tests/unit/test_schema.py"
+    line="233">
+    <failure message="validation schema contract mismatch">Traceback
+File "src/ace_lite/schema.py", line 325
+File "src/ace_lite/validation/result.py", line 221
+</failure>
+  </testcase>
+</testsuite>

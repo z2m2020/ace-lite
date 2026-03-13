@@ -1,0 +1,379 @@
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+METRIC_NAMES = (
+    "task_success_rate",
+    "precision_at_k",
+    "noise_rate",
+    "validation_test_count",
+    "latency_p95_ms",
+    "evidence_insufficient_rate",
+    "missing_validation_rate",
+)
+
+
+def _resolve_path(*, root: Path, value: str) -> Path:
+    candidate = Path(str(value).strip())
+    if candidate.is_absolute():
+        return candidate
+    return (root / candidate).resolve()
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    if not path.exists() or not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return float(default)
+
+
+def _parse_generated_at(value: Any) -> datetime:
+    raw = str(value or "").strip()
+    if not raw:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _iter_summary_paths(*, history_root: Path, latest_report: Path | None, limit: int) -> list[Path]:
+    paths: list[Path] = []
+    if history_root.exists() and history_root.is_dir():
+        for path in history_root.rglob("summary.json"):
+            paths.append(path.resolve())
+    if isinstance(latest_report, Path) and latest_report.exists() and latest_report.is_file():
+        latest_resolved = latest_report.resolve()
+        if latest_resolved not in paths:
+            paths.append(latest_resolved)
+
+    paths.sort(key=lambda item: (item.stat().st_mtime, str(item)))
+    if limit > 0 and len(paths) > limit:
+        paths = paths[-limit:]
+    return paths
+
+
+def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    metrics_raw = payload.get("metrics")
+    metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
+    failed_checks_raw = payload.get("failed_checks")
+    failed_checks = (
+        [str(item) for item in failed_checks_raw if str(item).strip()]
+        if isinstance(failed_checks_raw, list)
+        else []
+    )
+    return {
+        "generated_at": str(payload.get("generated_at", "") or ""),
+        "path": str(path),
+        "repo": str(payload.get("repo", "") or ""),
+        "case_count": int(payload.get("case_count", 0) or 0),
+        "regressed": bool(payload.get("regressed", False)),
+        "failed_checks": failed_checks,
+        "metrics": {
+            metric_name: _safe_float(metrics.get(metric_name), 0.0)
+            for metric_name in METRIC_NAMES
+        },
+    }
+
+
+def _build_delta(*, latest: dict[str, Any], previous: dict[str, Any]) -> dict[str, dict[str, float]]:
+    latest_metrics_raw = latest.get("metrics")
+    latest_metrics = latest_metrics_raw if isinstance(latest_metrics_raw, dict) else {}
+    previous_metrics_raw = previous.get("metrics")
+    previous_metrics = previous_metrics_raw if isinstance(previous_metrics_raw, dict) else {}
+
+    delta: dict[str, dict[str, float]] = {
+        "case_count": {
+            "current": float(latest.get("case_count", 0) or 0),
+            "previous": float(previous.get("case_count", 0) or 0),
+            "delta": float(latest.get("case_count", 0) or 0)
+            - float(previous.get("case_count", 0) or 0),
+        }
+    }
+    for metric_name in METRIC_NAMES:
+        current = _safe_float(latest_metrics.get(metric_name), 0.0)
+        prior = _safe_float(previous_metrics.get(metric_name), 0.0)
+        delta[metric_name] = {
+            "current": current,
+            "previous": prior,
+            "delta": current - prior,
+        }
+    return delta
+
+
+def _collect_suspect_files(*, root: Path, limit: int = 20) -> list[str]:
+    command = ["git", "diff", "--name-only", "HEAD~1", "HEAD"]
+    completed = subprocess.run(
+        command,
+        cwd=str(root),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return []
+    rows = [line.strip().replace("\\", "/") for line in str(completed.stdout or "").splitlines()]
+    filtered = [line for line in rows if line]
+    return filtered[: max(0, int(limit))]
+
+
+def _render_markdown(*, payload: dict[str, Any]) -> str:
+    rows_raw = payload.get("history")
+    rows = rows_raw if isinstance(rows_raw, list) else []
+    latest_raw = payload.get("latest")
+    latest = latest_raw if isinstance(latest_raw, dict) else {}
+    previous_raw = payload.get("previous")
+    previous = previous_raw if isinstance(previous_raw, dict) else {}
+    delta_raw = payload.get("delta")
+    delta = delta_raw if isinstance(delta_raw, dict) else {}
+
+    lines: list[str] = [
+        "# Validation-Rich Trend Report",
+        "",
+        f"- Generated: {payload.get('generated_at', '')}",
+        f"- Report only: {bool(payload.get('report_only', True))}",
+        f"- History count: {int(payload.get('history_count', 0) or 0)}",
+        "",
+    ]
+
+    if latest:
+        latest_metrics_raw = latest.get("metrics")
+        latest_metrics = latest_metrics_raw if isinstance(latest_metrics_raw, dict) else {}
+        lines.extend(
+            [
+                "## Latest",
+                "",
+                f"- Path: `{latest.get('path', '')}`",
+                f"- Repo: {latest.get('repo', '')}",
+                f"- Case count: {int(latest.get('case_count', 0) or 0)}",
+                f"- Regressed: {bool(latest.get('regressed', False))}",
+                "- Metrics: task_success={task_success:.4f}, precision={precision:.4f}, noise={noise:.4f}, validation_test_count={validation_count:.4f}, latency_p95_ms={latency:.2f}, evidence_insufficient={evidence:.4f}, missing_validation={missing:.4f}".format(
+                    task_success=_safe_float(latest_metrics.get("task_success_rate"), 0.0),
+                    precision=_safe_float(latest_metrics.get("precision_at_k"), 0.0),
+                    noise=_safe_float(latest_metrics.get("noise_rate"), 0.0),
+                    validation_count=_safe_float(latest_metrics.get("validation_test_count"), 0.0),
+                    latency=_safe_float(latest_metrics.get("latency_p95_ms"), 0.0),
+                    evidence=_safe_float(latest_metrics.get("evidence_insufficient_rate"), 0.0),
+                    missing=_safe_float(latest_metrics.get("missing_validation_rate"), 0.0),
+                ),
+                "",
+            ]
+        )
+
+    if previous:
+        lines.extend(
+            [
+                "## Delta",
+                "",
+                f"- Previous path: `{previous.get('path', '')}`",
+                "| Metric | Current | Previous | Delta |",
+                "| --- | ---: | ---: | ---: |",
+            ]
+        )
+        for metric_name in ("case_count",) + METRIC_NAMES:
+            row_raw = delta.get(metric_name)
+            row = row_raw if isinstance(row_raw, dict) else {}
+            precision = 0 if metric_name == "case_count" else 4
+            lines.append(
+                "| {metric} | {current} | {previous} | {delta_value} |".format(
+                    metric=metric_name,
+                    current=(
+                        f"{_safe_float(row.get('current'), 0.0):.0f}"
+                        if precision == 0
+                        else f"{_safe_float(row.get('current'), 0.0):.{precision}f}"
+                    ),
+                    previous=(
+                        f"{_safe_float(row.get('previous'), 0.0):.0f}"
+                        if precision == 0
+                        else f"{_safe_float(row.get('previous'), 0.0):.{precision}f}"
+                    ),
+                    delta_value=(
+                        f"{_safe_float(row.get('delta'), 0.0):+.0f}"
+                        if precision == 0
+                        else f"{_safe_float(row.get('delta'), 0.0):+.{precision}f}"
+                    ),
+                )
+            )
+        lines.append("")
+
+    lines.extend(["## Failed Check Top3", ""])
+    top_failures_raw = payload.get("failed_check_top3")
+    top_failures = top_failures_raw if isinstance(top_failures_raw, list) else []
+    if top_failures:
+        for item in top_failures:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                "- {check}: {count}".format(
+                    check=str(item.get("check", "")),
+                    count=int(item.get("count", 0) or 0),
+                )
+            )
+    else:
+        lines.append("- None")
+    lines.append("")
+
+    lines.extend(["## Suspect Files", ""])
+    suspect_files_raw = payload.get("suspect_files")
+    suspect_files = suspect_files_raw if isinstance(suspect_files_raw, list) else []
+    if suspect_files:
+        for item in suspect_files:
+            lines.append(f"- `{item!s}`")
+    else:
+        lines.append("- None")
+    lines.append("")
+
+    lines.extend(
+        [
+            "## History",
+            "",
+            "| Generated | Repo | Cases | Regressed | Task Success | Precision | Noise | Validation Tests | Missing Validation | Evidence Insufficient |",
+            "| --- | --- | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        metrics_raw = row.get("metrics")
+        metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
+        lines.append(
+            "| {generated} | {repo} | {case_count} | {regressed} | {task_success:.4f} | {precision:.4f} | {noise:.4f} | {validation_count:.4f} | {missing:.4f} | {evidence:.4f} |".format(
+                generated=str(row.get("generated_at", "")),
+                repo=str(row.get("repo", "") or ""),
+                case_count=int(row.get("case_count", 0) or 0),
+                regressed="?" if bool(row.get("regressed", False)) else "?",
+                task_success=_safe_float(metrics.get("task_success_rate"), 0.0),
+                precision=_safe_float(metrics.get("precision_at_k"), 0.0),
+                noise=_safe_float(metrics.get("noise_rate"), 0.0),
+                validation_count=_safe_float(metrics.get("validation_test_count"), 0.0),
+                missing=_safe_float(metrics.get("missing_validation_rate"), 0.0),
+                evidence=_safe_float(metrics.get("evidence_insufficient_rate"), 0.0),
+            )
+        )
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Build a report-only validation-rich trend summary from benchmark artifacts."
+    )
+    parser.add_argument(
+        "--history-root",
+        default="artifacts/benchmark/validation_rich",
+        help="Directory containing dated validation-rich summary.json artifacts.",
+    )
+    parser.add_argument(
+        "--latest-report",
+        default="",
+        help="Optional path to a latest validation-rich summary.json artifact.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="artifacts/benchmark/validation_rich/trend/latest",
+        help="Directory to write validation-rich trend report outputs.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Maximum number of history artifacts to include.",
+    )
+    args = parser.parse_args(sys.argv[1:])
+
+    project_root = Path(__file__).resolve().parents[1]
+    history_root = _resolve_path(root=project_root, value=str(args.history_root))
+    latest_report = (
+        _resolve_path(root=project_root, value=str(args.latest_report))
+        if str(args.latest_report).strip()
+        else None
+    )
+    output_dir = _resolve_path(root=project_root, value=str(args.output_dir))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    report_paths = _iter_summary_paths(
+        history_root=history_root,
+        latest_report=latest_report,
+        limit=max(1, int(args.limit)),
+    )
+    if not report_paths:
+        print("[validation-rich-trend] no summary.json artifacts found", file=sys.stderr)
+        return 2
+
+    rows: list[dict[str, Any]] = []
+    failed_check_counter: Counter[str] = Counter()
+    for path in report_paths:
+        payload = _load_json(path)
+        if not payload:
+            continue
+        row = _extract_row(path=path, payload=payload)
+        rows.append(row)
+        failed_check_counter.update([str(item) for item in row.get("failed_checks", [])])
+
+    if not rows:
+        print("[validation-rich-trend] failed to load any summary.json artifacts", file=sys.stderr)
+        return 2
+
+    rows.sort(
+        key=lambda item: (
+            _parse_generated_at(item.get("generated_at")),
+            str(item.get("path", "")),
+        )
+    )
+
+    latest = rows[-1]
+    previous = rows[-2] if len(rows) > 1 else {}
+    delta = _build_delta(latest=latest, previous=previous) if previous else {}
+    suspect_files = _collect_suspect_files(root=project_root)
+    failed_check_top3 = [
+        {"check": str(check), "count": int(count)}
+        for check, count in failed_check_counter.most_common(3)
+    ]
+
+    report_payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "report_only": True,
+        "history_count": len(rows),
+        "latest": latest,
+        "previous": previous,
+        "delta": delta,
+        "failed_check_top3": failed_check_top3,
+        "suspect_files": suspect_files,
+        "history": rows,
+    }
+
+    json_path = output_dir / "validation_rich_trend_report.json"
+    md_path = output_dir / "validation_rich_trend_report.md"
+    json_path.write_text(
+        json.dumps(report_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    md_path.write_text(_render_markdown(payload=report_payload), encoding="utf-8")
+
+    print(f"[validation-rich-trend] report json: {json_path}")
+    print(f"[validation-rich-trend] report md:   {md_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -391,6 +391,8 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "xref_budget_exhausted_ratio",
         "slo_downgrade_case_rate",
     }
+
+
     assert metrics["latency_p95_ms"] == 12.5
     assert metrics["latency_median_ms"] == 12.5
     assert metrics["repomap_latency_p95_ms"] == 4.5
@@ -456,6 +458,141 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["docs_hit_ratio"] == 1.0
     assert metrics["task_success_rate"] == 1.0
     assert metrics["evidence_insufficient_rate"] == 0.0
+
+
+def test_evaluate_case_result_applies_candidate_path_exclusions() -> None:
+    case = {
+        "case_id": "c-filtered",
+        "query": "where does validation stage build result",
+        "expected_keys": ["validation", "result"],
+        "top_k": 4,
+        "filters": {
+            "exclude_paths": ["tests/e2e/test_benchmark_case_files.py"],
+            "exclude_globs": ["tests/e2e/test_*benchmark*.py"],
+        },
+    }
+    payload = {
+        "index": {
+            "candidate_files": [
+                {
+                    "path": "tests/e2e/test_benchmark_case_files.py",
+                    "module": "tests.e2e.test_benchmark_case_files",
+                },
+                {
+                    "path": "src/ace_lite/pipeline/stages/validation.py",
+                    "module": "ace.validation",
+                },
+                {"path": "src/ace_lite/schema.py", "module": "ace.schema"},
+            ],
+            "candidate_chunks": [
+                {
+                    "path": "tests/e2e/test_benchmark_case_files.py",
+                    "qualified_name": "test_validation_rich_cases_cover_validation_and_agent_loop_surfaces",
+                },
+                {
+                    "path": "src/ace_lite/pipeline/stages/validation.py",
+                    "qualified_name": "build_validation_result_v1",
+                },
+            ],
+        },
+        "source_plan": {
+            "candidate_chunks": [
+                {
+                    "path": "tests/e2e/test_benchmark_case_files.py",
+                    "qualified_name": "test_validation_rich_cases_cover_validation_and_agent_loop_surfaces",
+                },
+                {
+                    "path": "src/ace_lite/pipeline/stages/validation.py",
+                    "qualified_name": "build_validation_result_v1",
+                },
+            ],
+            "validation_tests": ["tests.test_validation::test_result"],
+        },
+    }
+
+    row = evaluate_case_result(case=case, plan_payload=payload, latency_ms=9.0)
+
+    assert row["candidate_paths"] == [
+        "src/ace_lite/pipeline/stages/validation.py",
+        "src/ace_lite/schema.py",
+    ]
+    assert row["candidate_chunk_refs"] == ["build_validation_result_v1"]
+    assert row["noise_candidate_paths"] == ["src/ace_lite/schema.py"]
+    assert row["candidate_path_filters"] == {
+        "include_paths": [],
+        "include_globs": [],
+        "exclude_paths": ["tests/e2e/test_benchmark_case_files.py"],
+        "exclude_globs": ["tests/e2e/test_*benchmark*.py"],
+    }
+    assert "tests/e2e/test_benchmark_case_files.py" not in row["candidate_paths"]
+
+
+def test_evaluate_case_result_applies_candidate_path_inclusions() -> None:
+    case = {
+        "case_id": "c-include",
+        "query": "where are maintainer docs",
+        "expected_keys": ["releasing", "benchmarking", "maintainers"],
+        "top_k": 4,
+        "filters": {
+            "include_globs": ["docs/maintainers/*.md"],
+        },
+    }
+    payload = {
+        "index": {
+            "candidate_files": [
+                {
+                    "path": "docs/maintainers/RELEASING.md",
+                    "module": "docs.maintainers.RELEASING",
+                },
+                {
+                    "path": "docs/maintainers/BENCHMARKING.md",
+                    "module": "docs.maintainers.BENCHMARKING",
+                },
+                {
+                    "path": "scripts/run_quality_gate.py",
+                    "module": "scripts.run_quality_gate",
+                },
+            ],
+            "candidate_chunks": [
+                {
+                    "path": "docs/maintainers/RELEASING.md",
+                    "qualified_name": "RELEASING",
+                },
+                {
+                    "path": "scripts/run_quality_gate.py",
+                    "qualified_name": "run_quality_gate",
+                },
+            ],
+        },
+        "source_plan": {
+            "candidate_chunks": [
+                {
+                    "path": "docs/maintainers/RELEASING.md",
+                    "qualified_name": "RELEASING",
+                },
+                {
+                    "path": "scripts/run_quality_gate.py",
+                    "qualified_name": "run_quality_gate",
+                },
+            ],
+            "validation_tests": ["tests.test_docs::test_checkpoint"],
+        },
+    }
+
+    row = evaluate_case_result(case=case, plan_payload=payload, latency_ms=6.0)
+
+    assert row["candidate_paths"] == [
+        "docs/maintainers/RELEASING.md",
+        "docs/maintainers/BENCHMARKING.md",
+    ]
+    assert row["candidate_chunk_refs"] == ["RELEASING"]
+    assert row["candidate_path_filters"] == {
+        "include_paths": [],
+        "include_globs": ["docs/maintainers/*.md"],
+        "exclude_paths": [],
+        "exclude_globs": [],
+    }
+    assert "scripts/run_quality_gate.py" not in row["candidate_paths"]
 
 
 def test_build_comparison_lane_summary_groups_chunk_guard_signals() -> None:

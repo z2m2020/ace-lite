@@ -230,6 +230,7 @@ def test_build_or_refresh_index_full_build_when_aceignore_changes(
     tmp_path: Path, monkeypatch
 ) -> None:
     cache_path = tmp_path / "context-map" / "index.json"
+    (tmp_path / ".aceignore").write_text("artifacts/\n", encoding="utf-8")
     initial = {
         "root_dir": str(tmp_path.resolve()),
         "configured_languages": ["python"],
@@ -270,6 +271,52 @@ def test_build_or_refresh_index_full_build_when_aceignore_changes(
     assert info["cache_hit"] is True
     assert info["mode"] == "full_build"
     assert info.get("reason") == "aceignore_changed"
+
+
+def test_build_or_refresh_index_cache_only_when_aceignore_is_already_indexed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cache_path = tmp_path / "context-map" / "index.json"
+    aceignore_path = tmp_path / ".aceignore"
+    aceignore_path.write_text("artifacts/\n", encoding="utf-8")
+    stat_result = aceignore_path.stat()
+    initial = {
+        "root_dir": str(tmp_path.resolve()),
+        "configured_languages": ["python"],
+        "files": {"old.py": {"path": "old.py"}},
+        "aceignore": {
+            "present": True,
+            "mtime_ns": int(getattr(stat_result, "st_mtime_ns", 0) or 0),
+            "size_bytes": int(getattr(stat_result, "st_size", 0) or 0),
+        },
+    }
+    index_cache.save_index_cache(payload=initial, cache_path=cache_path)
+
+    monkeypatch.setattr(
+        index_cache, "detect_changed_files_from_git", lambda **_: [".aceignore"]
+    )
+
+    def fail_build_index(*_args, **_kwargs):
+        raise AssertionError("build_index should not run when .aceignore is unchanged")
+
+    def fail_update_index(*_args, **_kwargs):
+        raise AssertionError("update_index should not run when .aceignore is unchanged")
+
+    monkeypatch.setattr(index_cache, "build_index", fail_build_index)
+    monkeypatch.setattr(index_cache, "update_index", fail_update_index)
+
+    payload, info = index_cache.build_or_refresh_index(
+        root_dir=tmp_path,
+        cache_path=cache_path,
+        languages=["python"],
+        incremental=True,
+    )
+
+    assert payload["files"] == initial["files"]
+    assert info["cache_hit"] is True
+    assert info["mode"] == "cache_only"
+    assert info["changed_files"] == 0
+    assert info.get("reason") == "aceignore_unchanged"
 
 
 def test_build_or_refresh_index_rebuilds_when_git_head_changes(

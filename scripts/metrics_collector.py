@@ -24,6 +24,16 @@ METRICS_TO_TRACK = {
     },
 }
 
+VALIDATION_RICH_METRICS_TO_TRACK = {
+    "task_success_rate": {"trend": "up"},
+    "precision_at_k": {"trend": "up"},
+    "noise_rate": {"trend": "down"},
+    "latency_p95_ms": {"trend": "down"},
+    "validation_test_count": {"trend": "up"},
+    "missing_validation_rate": {"trend": "down"},
+    "evidence_insufficient_rate": {"trend": "down"},
+}
+
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -46,6 +56,30 @@ def _load_json(path: Path) -> dict[str, Any]:
     except Exception:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _collect_matrix_source_status(*, summary_path: Path) -> dict[str, Any]:
+    payload = _load_json(summary_path)
+    repos_raw = payload.get("repos")
+    repos = [item for item in repos_raw if isinstance(item, dict)] if isinstance(repos_raw, list) else []
+    return {
+        "path": str(summary_path),
+        "exists": summary_path.exists() and summary_path.is_file(),
+        "loaded": bool(repos),
+        "repo_count": len(repos),
+    }
+
+
+def _collect_validation_rich_source_status(*, summary_path: Path) -> dict[str, Any]:
+    payload = _load_json(summary_path)
+    metrics_raw = payload.get("metrics")
+    metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
+    return {
+        "path": str(summary_path),
+        "exists": summary_path.exists() and summary_path.is_file(),
+        "loaded": bool(metrics),
+        "metric_count": len(metrics),
+    }
 
 
 def collect_metrics(*, summary_path: Path) -> dict[str, float]:
@@ -96,6 +130,29 @@ def collect_metrics(*, summary_path: Path) -> dict[str, float]:
     }
 
 
+def collect_validation_rich_metrics(*, summary_path: Path) -> dict[str, float]:
+    payload = _load_json(summary_path)
+    metrics_raw = payload.get("metrics")
+    metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
+    return {
+        "task_success_rate": max(
+            0.0, _safe_float(metrics.get("task_success_rate"), 0.0)
+        ),
+        "precision_at_k": max(0.0, _safe_float(metrics.get("precision_at_k"), 0.0)),
+        "noise_rate": max(0.0, _safe_float(metrics.get("noise_rate"), 0.0)),
+        "latency_p95_ms": max(0.0, _safe_float(metrics.get("latency_p95_ms"), 0.0)),
+        "validation_test_count": max(
+            0.0, _safe_float(metrics.get("validation_test_count"), 0.0)
+        ),
+        "missing_validation_rate": max(
+            0.0, _safe_float(metrics.get("missing_validation_rate"), 0.0)
+        ),
+        "evidence_insufficient_rate": max(
+            0.0, _safe_float(metrics.get("evidence_insufficient_rate"), 0.0)
+        ),
+    }
+
+
 def _is_metric_active(
     *,
     metric: str,
@@ -120,10 +177,12 @@ def check_regressions(
     previous: dict[str, float],
     tolerance_ratio: float = 0.05,
     enforce_memory_metrics: bool = False,
+    metrics_to_track: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     regressions: list[dict[str, Any]] = []
     ratio = max(0.0, float(tolerance_ratio))
-    for metric, config in METRICS_TO_TRACK.items():
+    tracked_metrics = metrics_to_track or METRICS_TO_TRACK
+    for metric, config in tracked_metrics.items():
         if metric not in current or metric not in previous:
             continue
         if not _is_metric_active(
@@ -171,9 +230,11 @@ def _check_targets(
     *,
     metrics: dict[str, float],
     enforce_memory_metrics: bool,
+    metrics_to_track: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     failures: list[dict[str, Any]] = []
-    for metric, config in METRICS_TO_TRACK.items():
+    tracked_metrics = metrics_to_track or METRICS_TO_TRACK
+    for metric, config in tracked_metrics.items():
         if metric not in metrics:
             continue
         if not _is_metric_active(
@@ -227,6 +288,16 @@ def main() -> int:
         help="Previous benchmark matrix summary path (optional).",
     )
     parser.add_argument(
+        "--validation-rich-current",
+        default="",
+        help="Optional current validation-rich benchmark summary path.",
+    )
+    parser.add_argument(
+        "--validation-rich-previous",
+        default="",
+        help="Optional previous validation-rich benchmark summary path.",
+    )
+    parser.add_argument(
         "--tolerance-ratio",
         type=float,
         default=0.05,
@@ -256,31 +327,114 @@ def main() -> int:
         if str(args.previous).strip()
         else None
     )
+    validation_rich_current_path = (
+        _resolve_summary_path(root=project_root, value=str(args.validation_rich_current))
+        if str(args.validation_rich_current).strip()
+        else None
+    )
+    validation_rich_previous_path = (
+        _resolve_summary_path(root=project_root, value=str(args.validation_rich_previous))
+        if str(args.validation_rich_previous).strip()
+        else None
+    )
 
     current_metrics = collect_metrics(summary_path=current_path)
     previous_metrics = (
         collect_metrics(summary_path=previous_path) if isinstance(previous_path, Path) else {}
     )
-    regressions = check_regressions(
-        current=current_metrics,
-        previous=previous_metrics,
-        tolerance_ratio=max(0.0, float(args.tolerance_ratio)),
-        enforce_memory_metrics=bool(args.enforce_memory_metrics),
+    matrix_source = _collect_matrix_source_status(summary_path=current_path)
+    validation_rich_current_metrics = (
+        collect_validation_rich_metrics(summary_path=validation_rich_current_path)
+        if isinstance(validation_rich_current_path, Path)
+        else {}
     )
-    target_failures = _check_targets(
-        metrics=current_metrics,
-        enforce_memory_metrics=bool(args.enforce_memory_metrics),
+    validation_rich_previous_metrics = (
+        collect_validation_rich_metrics(summary_path=validation_rich_previous_path)
+        if isinstance(validation_rich_previous_path, Path)
+        else {}
     )
+    validation_rich_source = (
+        _collect_validation_rich_source_status(summary_path=validation_rich_current_path)
+        if isinstance(validation_rich_current_path, Path)
+        else {"path": "", "exists": False, "loaded": False, "metric_count": 0}
+    )
+    regressions = (
+        check_regressions(
+            current=current_metrics,
+            previous=previous_metrics,
+            tolerance_ratio=max(0.0, float(args.tolerance_ratio)),
+            enforce_memory_metrics=bool(args.enforce_memory_metrics),
+        )
+        if bool(matrix_source.get("loaded", False))
+        else []
+    )
+    target_failures = (
+        _check_targets(
+            metrics=current_metrics,
+            enforce_memory_metrics=bool(args.enforce_memory_metrics),
+        )
+        if bool(matrix_source.get("loaded", False))
+        else []
+    )
+    validation_rich_regressions = (
+        check_regressions(
+            current=validation_rich_current_metrics,
+            previous=validation_rich_previous_metrics,
+            tolerance_ratio=max(0.0, float(args.tolerance_ratio)),
+            enforce_memory_metrics=False,
+            metrics_to_track=VALIDATION_RICH_METRICS_TO_TRACK,
+        )
+        if bool(validation_rich_source.get("loaded", False))
+        else []
+    )
+    matrix_lane = {
+        "enabled": bool(matrix_source.get("exists", False)),
+        "loaded": bool(matrix_source.get("loaded", False)),
+        "repo_count": int(matrix_source.get("repo_count", 0) or 0),
+        "passed": (
+            len(regressions) == 0 and len(target_failures) == 0
+            if bool(matrix_source.get("loaded", False))
+            else True
+        ),
+    }
+    validation_rich_lane = {
+        "enabled": bool(validation_rich_source.get("exists", False)),
+        "loaded": bool(validation_rich_source.get("loaded", False)),
+        "metric_count": int(validation_rich_source.get("metric_count", 0) or 0),
+        "passed": (
+            len(validation_rich_regressions) == 0
+            if bool(validation_rich_source.get("loaded", False))
+            else True
+        ),
+    }
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "current_path": str(current_path),
         "previous_path": str(previous_path) if isinstance(previous_path, Path) else "",
+        "validation_rich_current_path": (
+            str(validation_rich_current_path)
+            if isinstance(validation_rich_current_path, Path)
+            else ""
+        ),
+        "validation_rich_previous_path": (
+            str(validation_rich_previous_path)
+            if isinstance(validation_rich_previous_path, Path)
+            else ""
+        ),
         "current_metrics": current_metrics,
         "previous_metrics": previous_metrics,
+        "matrix_lane": matrix_lane,
+        "validation_rich_current_metrics": validation_rich_current_metrics,
+        "validation_rich_previous_metrics": validation_rich_previous_metrics,
+        "validation_rich_lane": validation_rich_lane,
         "regressions": regressions,
+        "validation_rich_regressions": validation_rich_regressions,
         "target_failures": target_failures,
-        "passed": len(regressions) == 0 and len(target_failures) == 0,
+        "passed": (
+            bool(matrix_lane.get("passed", True))
+            and bool(validation_rich_lane.get("passed", True))
+        ),
     }
 
     output_path = str(args.output).strip()

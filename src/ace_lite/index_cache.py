@@ -376,6 +376,55 @@ def _file_fingerprint(*, path: Path) -> tuple[int, int] | None:
     return max(0, int(mtime_ns)), max(0, int(size_bytes))
 
 
+def _current_aceignore_state(*, root_dir: str | Path) -> dict[str, Any]:
+    aceignore_path = Path(root_dir).resolve() / ".aceignore"
+    fingerprint = _file_fingerprint(path=aceignore_path)
+    if fingerprint is None:
+        return {
+            "present": False,
+            "mtime_ns": 0,
+            "size_bytes": 0,
+        }
+    return {
+        "present": True,
+        "mtime_ns": int(fingerprint[0]),
+        "size_bytes": int(fingerprint[1]),
+    }
+
+
+def _normalize_aceignore_state(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {
+            "present": False,
+            "mtime_ns": 0,
+            "size_bytes": 0,
+        }
+    try:
+        mtime_ns = int(value.get("mtime_ns", 0) or 0)
+    except (TypeError, ValueError):
+        mtime_ns = 0
+    try:
+        size_bytes = int(value.get("size_bytes", 0) or 0)
+    except (TypeError, ValueError):
+        size_bytes = 0
+    return {
+        "present": bool(value.get("present", False)),
+        "mtime_ns": max(0, mtime_ns),
+        "size_bytes": max(0, size_bytes),
+    }
+
+
+def _aceignore_state_changed(*, cache: dict[str, Any], root_dir: str | Path) -> bool:
+    current = _current_aceignore_state(root_dir=root_dir)
+    cached = _normalize_aceignore_state(cache.get("aceignore"))
+    return current != cached
+
+
+def _store_aceignore_state(*, payload: dict[str, Any], root_dir: str | Path) -> dict[str, Any]:
+    payload["aceignore"] = _current_aceignore_state(root_dir=root_dir)
+    return payload
+
+
 def _filter_effective_index_changes(
     *,
     root_dir: Path,
@@ -598,6 +647,7 @@ def build_or_refresh_index(
     incremental: bool,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     current_sha = _get_git_head_sha(root_dir=root_dir)
+    aceignore_state = _current_aceignore_state(root_dir=root_dir)
     cache = load_index_cache(
         cache_path=cache_path,
         root_dir=root_dir,
@@ -607,6 +657,7 @@ def build_or_refresh_index(
 
     if cache is None:
         payload = build_index(root_dir, languages=languages)
+        payload["aceignore"] = dict(aceignore_state)
         if current_sha is not None:
             payload["git_head_sha"] = current_sha
         save_index_cache(payload=payload, cache_path=cache_path)
@@ -623,22 +674,41 @@ def build_or_refresh_index(
         _normalize_changed_path(str(item or "")).lower() == ".aceignore"
         for item in changed_files_detected
     ):
-        payload = build_index(root_dir, languages=languages)
-        if current_sha is not None:
-            payload["git_head_sha"] = current_sha
-        save_index_cache(payload=payload, cache_path=cache_path)
-        return payload, {
-            "cache_hit": True,
-            "mode": "full_build",
-            "changed_files": 0,
-            "changed_files_detected": len(changed_files_detected),
-            "reason": "aceignore_changed",
-        }
+        if _aceignore_state_changed(cache=cache, root_dir=root_dir):
+            payload = build_index(root_dir, languages=languages)
+            payload["aceignore"] = dict(aceignore_state)
+            if current_sha is not None:
+                payload["git_head_sha"] = current_sha
+            save_index_cache(payload=payload, cache_path=cache_path)
+            return payload, {
+                "cache_hit": True,
+                "mode": "full_build",
+                "changed_files": 0,
+                "changed_files_detected": len(changed_files_detected),
+                "reason": "aceignore_changed",
+            }
+        changed_files_detected = [
+            item
+            for item in changed_files_detected
+            if _normalize_changed_path(str(item or "")).lower() != ".aceignore"
+        ]
+        if not changed_files_detected:
+            cache["aceignore"] = dict(aceignore_state)
+            save_index_cache(payload=cache, cache_path=cache_path)
+            return cache, {
+                "cache_hit": True,
+                "mode": "cache_only",
+                "changed_files": 0,
+                "changed_files_detected": 1,
+                "reason": "aceignore_unchanged",
+            }
 
     changed_files_index = _filter_index_changed_files(
         changed_files=changed_files_detected, languages=languages
     )
     if not changed_files_index:
+        cache["aceignore"] = dict(aceignore_state)
+        save_index_cache(payload=cache, cache_path=cache_path)
         return cache, {
             "cache_hit": True,
             "mode": "cache_only",
@@ -654,6 +724,8 @@ def build_or_refresh_index(
         index_files=index_files,
     )
     if not effective_changed_files:
+        cache["aceignore"] = dict(aceignore_state)
+        save_index_cache(payload=cache, cache_path=cache_path)
         return cache, {
             "cache_hit": True,
             "mode": "cache_only",
@@ -674,6 +746,7 @@ def build_or_refresh_index(
         expanded_changed_files,
         languages=languages,
     )
+    refreshed["aceignore"] = dict(aceignore_state)
     if current_sha is not None:
         refreshed["git_head_sha"] = current_sha
     save_index_cache(payload=refreshed, cache_path=cache_path)

@@ -9,6 +9,7 @@ from __future__ import annotations
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from pathlib import Path
 from threading import Lock
 from time import perf_counter
@@ -76,6 +77,164 @@ from ace_lite.retrieval_shared import (
 )
 
 _INDEX_CANDIDATE_CACHE_CONTENT_VERSION = "index-candidates-v1"
+
+
+def _normalize_candidate_filter_path(value: Any) -> str:
+    return str(value or "").strip().replace("\\", "/")
+
+
+def _coerce_candidate_filter_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        normalized = _normalize_candidate_filter_path(value)
+        return [normalized] if normalized else []
+    if not isinstance(value, list):
+        return []
+    output: list[str] = []
+    for item in value:
+        normalized = _normalize_candidate_filter_path(item)
+        if normalized:
+            output.append(normalized)
+    return output
+
+
+def _resolve_benchmark_candidate_filters(ctx: StageContext) -> dict[str, Any]:
+    raw = ctx.state.get("benchmark_filters")
+    filters = raw if isinstance(raw, dict) else {}
+    include_paths = _coerce_candidate_filter_list(filters.get("include_paths"))
+    include_globs = _coerce_candidate_filter_list(filters.get("include_globs"))
+    exclude_paths = _coerce_candidate_filter_list(filters.get("exclude_paths"))
+    exclude_globs = _coerce_candidate_filter_list(filters.get("exclude_globs"))
+    return {
+        "requested": bool(include_paths or include_globs or exclude_paths or exclude_globs),
+        "include_paths": include_paths,
+        "include_globs": include_globs,
+        "exclude_paths": exclude_paths,
+        "exclude_globs": exclude_globs,
+    }
+
+
+def _path_looks_like_docs(path: str) -> bool:
+    normalized = _normalize_candidate_filter_path(path).lower()
+    if not normalized:
+        return False
+    if normalized.endswith(".md"):
+        return True
+    if normalized.startswith("docs/") or "/docs/" in normalized:
+        return True
+    if normalized in {
+        "readme",
+        "readme.md",
+        "changelog",
+        "changelog.md",
+        "contributing",
+        "contributing.md",
+        "security",
+        "security.md",
+    }:
+        return True
+    return False
+
+
+def _resolve_docs_policy_for_benchmark(
+    *,
+    policy_docs_enabled: bool,
+    benchmark_filter_payload: dict[str, Any],
+) -> tuple[bool, str]:
+    if not bool(policy_docs_enabled):
+        return False, "policy_disabled"
+    include_paths = _coerce_candidate_filter_list(benchmark_filter_payload.get("include_paths"))
+    if not include_paths:
+        return True, "policy_enabled"
+    if any(_path_looks_like_docs(path) for path in include_paths):
+        return True, "benchmark_include_paths_contains_docs"
+    return False, "benchmark_include_paths_code_only"
+
+
+def _resolve_worktree_policy_for_benchmark(
+    *,
+    worktree_prior_enabled: bool,
+    benchmark_filter_payload: dict[str, Any],
+) -> tuple[bool, str]:
+    if not bool(worktree_prior_enabled):
+        return False, "policy_disabled"
+    include_paths = _coerce_candidate_filter_list(benchmark_filter_payload.get("include_paths"))
+    include_globs = _coerce_candidate_filter_list(benchmark_filter_payload.get("include_globs"))
+    if include_paths or include_globs:
+        return False, "benchmark_filter_explicit_scope"
+    return True, "policy_enabled"
+
+
+def _candidate_path_matches_filters(
+    path: Any,
+    *,
+    include_paths: list[str],
+    include_globs: list[str],
+    exclude_paths: list[str],
+    exclude_globs: list[str],
+) -> bool:
+    normalized = _normalize_candidate_filter_path(path)
+    if not normalized:
+        return False
+    include_requested = bool(include_paths or include_globs)
+    if include_requested:
+        included = normalized in include_paths or any(
+            fnmatchcase(normalized, pattern) for pattern in include_globs
+        )
+        if not included:
+            return False
+    if normalized in exclude_paths:
+        return False
+    if any(fnmatchcase(normalized, pattern) for pattern in exclude_globs):
+        return False
+    return True
+
+
+def _filter_candidate_rows(
+    rows: list[dict[str, Any]],
+    *,
+    include_paths: list[str],
+    include_globs: list[str],
+    exclude_paths: list[str],
+    exclude_globs: list[str],
+) -> tuple[list[dict[str, Any]], int]:
+    output: list[dict[str, Any]] = []
+    removed = 0
+    for item in rows:
+        if not _candidate_path_matches_filters(
+            item.get("path"),
+            include_paths=include_paths,
+            include_globs=include_globs,
+            exclude_paths=exclude_paths,
+            exclude_globs=exclude_globs,
+        ):
+            removed += 1
+            continue
+        output.append(item)
+    return output, removed
+
+
+def _filter_files_map_for_benchmark(
+    files_map: dict[str, Any],
+    *,
+    include_paths: list[str],
+    include_globs: list[str],
+    exclude_paths: list[str],
+    exclude_globs: list[str],
+) -> tuple[dict[str, Any], int]:
+    output: dict[str, Any] = {}
+    removed = 0
+    for path, payload in files_map.items():
+        if not _candidate_path_matches_filters(
+            path,
+            include_paths=include_paths,
+            include_globs=include_globs,
+            exclude_paths=exclude_paths,
+            exclude_globs=exclude_globs,
+        ):
+            removed += 1
+            continue
+        output[str(path)] = payload
+    return output, removed
 
 
 @dataclass(frozen=True, slots=True)
@@ -412,6 +571,44 @@ def _attach_index_candidate_cache_info(
 ) -> dict[str, Any]:
     materialized = _clone_index_candidate_payload(payload)
     materialized["candidate_cache"] = dict(cache_info)
+    return materialized
+
+
+def _refresh_cached_index_candidate_payload(
+    *,
+    payload: dict[str, Any],
+    index_data: dict[str, Any],
+    cache_info: dict[str, Any],
+    index_hash: str,
+    timings_ms: dict[str, float],
+    benchmark_filter_payload: dict[str, Any],
+) -> dict[str, Any]:
+    materialized = _clone_index_candidate_payload(payload)
+    materialized["index_hash"] = str(index_hash or "")
+    materialized["file_count"] = int(index_data.get("file_count", 0) or 0)
+    materialized["indexed_at"] = index_data.get("indexed_at")
+    materialized["languages_covered"] = list(index_data.get("languages_covered", []))
+    materialized["parser"] = (
+        dict(index_data.get("parser", {}))
+        if isinstance(index_data.get("parser"), dict)
+        else {}
+    )
+    materialized["cache"] = dict(cache_info)
+
+    metadata = (
+        dict(materialized.get("metadata", {}))
+        if isinstance(materialized.get("metadata"), dict)
+        else {}
+    )
+    previous_timings = metadata.get("timings_ms")
+    if isinstance(previous_timings, dict):
+        metadata["cached_payload_timings_ms"] = dict(previous_timings)
+    metadata["timings_ms"] = dict(timings_ms)
+    metadata["candidate_cache_reused"] = True
+    materialized["metadata"] = metadata
+
+    if benchmark_filter_payload.get("requested", False):
+        materialized["benchmark_filters"] = dict(benchmark_filter_payload)
     return materialized
 
 
@@ -936,9 +1133,49 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     mark_timing("index_cache_load", timing_started)
 
     files_map = snapshot.files_map
-    ctx.state["__index_files"] = files_map
     index_hash = snapshot.index_hash
     corpus_size = snapshot.corpus_size
+    benchmark_filter_payload = _resolve_benchmark_candidate_filters(ctx)
+    effective_files_map = files_map
+    effective_corpus_size = corpus_size
+    if benchmark_filter_payload["requested"]:
+        filtered_files_map, removed_file_count = _filter_files_map_for_benchmark(
+            files_map,
+            include_paths=list(benchmark_filter_payload["include_paths"]),
+            include_globs=list(benchmark_filter_payload["include_globs"]),
+            exclude_paths=list(benchmark_filter_payload["exclude_paths"]),
+            exclude_globs=list(benchmark_filter_payload["exclude_globs"]),
+        )
+        benchmark_filter_payload["files_map_count_before"] = len(files_map)
+        benchmark_filter_payload["files_map_count_after"] = len(filtered_files_map)
+        benchmark_filter_payload["dropped_files_map_count"] = int(removed_file_count)
+        if filtered_files_map:
+            effective_files_map = filtered_files_map
+            effective_corpus_size = len(filtered_files_map)
+            benchmark_filter_payload["files_map_applied"] = True
+            benchmark_filter_payload["files_map_fallback_to_unfiltered"] = False
+        else:
+            benchmark_filter_payload["files_map_applied"] = False
+            benchmark_filter_payload["files_map_fallback_to_unfiltered"] = True
+    else:
+        benchmark_filter_payload["files_map_count_before"] = len(files_map)
+        benchmark_filter_payload["files_map_count_after"] = len(files_map)
+        benchmark_filter_payload["dropped_files_map_count"] = 0
+        benchmark_filter_payload["files_map_applied"] = False
+        benchmark_filter_payload["files_map_fallback_to_unfiltered"] = False
+    ctx.state["__index_files"] = effective_files_map
+    docs_policy_enabled, docs_policy_reason = _resolve_docs_policy_for_benchmark(
+        policy_docs_enabled=bool(policy.get("docs_enabled", True)),
+        benchmark_filter_payload=benchmark_filter_payload,
+    )
+    benchmark_filter_payload["docs_policy_enabled"] = bool(docs_policy_enabled)
+    benchmark_filter_payload["docs_policy_reason"] = str(docs_policy_reason)
+    worktree_prior_enabled, worktree_policy_reason = _resolve_worktree_policy_for_benchmark(
+        worktree_prior_enabled=bool(config.cochange_enabled),
+        benchmark_filter_payload=benchmark_filter_payload,
+    )
+    benchmark_filter_payload["worktree_policy_enabled"] = bool(worktree_prior_enabled)
+    benchmark_filter_payload["worktree_policy_reason"] = str(worktree_policy_reason)
     embedding_runtime = _resolve_embedding_runtime_config(
         provider=str(config.embedding_provider),
         model=str(config.embedding_model),
@@ -1074,6 +1311,7 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
                     router_cfg.online_bandit_experiment_enabled
                 ),
             },
+            "benchmark_filters": _resolve_benchmark_candidate_filters(ctx),
         },
         content_version=_INDEX_CANDIDATE_CACHE_CONTENT_VERSION,
     )
@@ -1094,8 +1332,22 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     )
     if cached_index_payload is not None:
         index_candidate_cache["hit"] = True
-        return _attach_index_candidate_cache_info(
+        if bool(config.cochange_enabled) and not worktree_prior_enabled:
+            ctx.state["__vcs_worktree"] = _disabled_worktree_prior(
+                reason=worktree_policy_reason
+            )
+        else:
+            ctx.state.pop("__vcs_worktree", None)
+        refreshed_cached_payload = _refresh_cached_index_candidate_payload(
             payload=cached_index_payload,
+            index_data=index_data,
+            cache_info=cache_info,
+            index_hash=index_hash,
+            timings_ms=timings_ms,
+            benchmark_filter_payload=benchmark_filter_payload,
+        )
+        return _attach_index_candidate_cache_info(
+            payload=refreshed_cached_payload,
             cache_info=index_candidate_cache,
         )
 
@@ -1119,8 +1371,6 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     parallel_time_budget_ms = max(
         0, int(policy.get("index_parallel_time_budget_ms", 0) or 0)
     )
-    docs_policy_enabled = bool(policy.get("docs_enabled", True))
-    worktree_prior_enabled = bool(config.cochange_enabled)
 
     def rank_candidates(
         min_score: int,
@@ -1129,7 +1379,7 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     ) -> list[dict[str, Any]]:
         ranked_terms = terms if candidate_terms is None else candidate_terms
         return runtime_profile.rank_candidates(
-            files_map=files_map,
+            files_map=effective_files_map,
             terms=ranked_terms,
             candidate_ranker=candidate_ranker,
             min_score=min_score,
@@ -1139,8 +1389,8 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
         root=ctx.root,
         query=ctx.query,
         terms=terms,
-        files_map=files_map,
-        corpus_size=corpus_size,
+        files_map=effective_files_map,
+        corpus_size=effective_corpus_size,
         runtime_profile=runtime_profile,
         top_k_files=int(retrieval_cfg.top_k_files),
         exact_search_enabled=bool(retrieval_cfg.exact_search_enabled),
@@ -1205,7 +1455,7 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
         repo=ctx.repo,
         query=ctx.query,
         terms=terms,
-        files_map=files_map,
+        files_map=effective_files_map,
         candidates=candidates,
         memory_paths=memory_paths,
         docs_payload=docs_payload,
@@ -1286,11 +1536,35 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     semantic_cross_encoder_provider = (
         candidate_fusion.semantic_cross_encoder_provider
     )
+    if benchmark_filter_payload["requested"]:
+        filtered_candidates, removed_count = _filter_candidate_rows(
+            candidates,
+            include_paths=list(benchmark_filter_payload["include_paths"]),
+            include_globs=list(benchmark_filter_payload["include_globs"]),
+            exclude_paths=list(benchmark_filter_payload["exclude_paths"]),
+            exclude_globs=list(benchmark_filter_payload["exclude_globs"]),
+        )
+        benchmark_filter_payload["dropped_candidate_count"] = int(removed_count)
+        benchmark_filter_payload["candidate_count_before"] = len(candidates)
+        benchmark_filter_payload["candidate_count_after"] = len(filtered_candidates)
+        if filtered_candidates:
+            candidates = filtered_candidates
+            benchmark_filter_payload["applied"] = True
+            benchmark_filter_payload["fallback_to_unfiltered"] = False
+        else:
+            benchmark_filter_payload["applied"] = False
+            benchmark_filter_payload["fallback_to_unfiltered"] = True
+    else:
+        benchmark_filter_payload["dropped_candidate_count"] = 0
+        benchmark_filter_payload["candidate_count_before"] = len(candidates)
+        benchmark_filter_payload["candidate_count_after"] = len(candidates)
+        benchmark_filter_payload["applied"] = False
+        benchmark_filter_payload["fallback_to_unfiltered"] = False
 
     chunk_selection = select_index_chunks(
         root=ctx.root,
         query=ctx.query,
-        files_map=files_map,
+        files_map=effective_files_map,
         candidates=candidates,
         terms=terms,
         policy=policy,
@@ -1410,6 +1684,8 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
         policy_version=str(policy.get("version", retrieval_cfg.policy_version)),
         timings_ms=timings_ms,
     )
+    if benchmark_filter_payload["requested"]:
+        payload["benchmark_filters"] = benchmark_filter_payload
     index_candidate_cache["store_written"] = bool(
         store_cached_index_candidates(
             cache_path=index_candidate_cache_path,

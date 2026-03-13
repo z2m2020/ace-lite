@@ -127,6 +127,13 @@ class BenchmarkRunner:
             valid.append((case, query))
         return valid
 
+    @staticmethod
+    def _resolve_case_plan_filters(case: dict[str, Any]) -> dict[str, Any] | None:
+        filters = case.get("filters")
+        if not isinstance(filters, dict) or not filters:
+            return None
+        return dict(filters)
+
     def _run_warmups(
         self,
         *,
@@ -143,14 +150,20 @@ class BenchmarkRunner:
 
         warmup_plans = 0
         for _ in range(warmup_runs):
-            for _, query in valid_cases:
+            for case, query in valid_cases:
+                plan_kwargs: dict[str, Any] = {
+                    "query": query,
+                    "repo": repo,
+                    "root": root,
+                    "time_range": time_range,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                }
+                case_filters = self._resolve_case_plan_filters(case)
+                if case_filters is not None:
+                    plan_kwargs["filters"] = case_filters
                 self._orchestrator.plan(
-                    query=query,
-                    repo=repo,
-                    root=root,
-                    time_range=time_range,
-                    start_date=start_date,
-                    end_date=end_date,
+                    **plan_kwargs,
                 )
                 warmup_plans += 1
         return warmup_plans
@@ -447,14 +460,18 @@ class BenchmarkRunner:
         case_results: list[dict[str, Any]] = []
         for case, query in valid_cases:
             started = perf_counter()
-            payload = self._orchestrator.plan(
-                query=query,
-                repo=repo,
-                root=root,
-                time_range=time_range,
-                start_date=start_date,
-                end_date=end_date,
-            )
+            plan_kwargs: dict[str, Any] = {
+                "query": query,
+                "repo": repo,
+                "root": root,
+                "time_range": time_range,
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+            case_filters = self._resolve_case_plan_filters(case)
+            if case_filters is not None:
+                plan_kwargs["filters"] = case_filters
+            payload = self._orchestrator.plan(**plan_kwargs)
             latency_ms = (perf_counter() - started) * 1000.0
 
             case_result = evaluate_case_result(

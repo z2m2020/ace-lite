@@ -1,0 +1,189 @@
+cases:
+  - case_id: ace-validation-source-plan-01
+    query: how does source_plan select validation_tests from failed junit reports and suggested tests
+    expected_keys: [source_plan, validation_tests]
+    filters:
+      include_paths:
+        - src/ace_lite/source_plan/validation_tests.py
+        - src/ace_lite/source_plan/__init__.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_full_validation_script.py
+        - tests/e2e/test_run_benchmark_script.py
+        - scripts/metrics_collector.py
+        - scripts/run_release_freeze_regression.py
+        - src/ace_lite/benchmark/case_evaluation.py
+      exclude_globs:
+        - scripts/*validation_rich*.py
+        - tests/e2e/test_validation_rich*_script.py
+        - tests/e2e/test_archive_validation_rich_evidence_script.py
+    top_k: 8
+    comparison_lane: validation_rich
+    validation_surface: source_plan
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-validation-stage-sandbox-02
+    query: how does the validation stage sandbox patch artifacts and build validation_result_v1 from diagnostics
+    expected_keys: [validation, result]
+    filters:
+      include_paths:
+        - src/ace_lite/pipeline/stages/validation.py
+        - src/ace_lite/validation/sandbox.py
+        - src/ace_lite/validation/patch_artifact.py
+        - src/ace_lite/validation/result.py
+        - tests/unit/test_validation_stage.py
+        - tests/unit/test_validation_sandbox.py
+        - tests/unit/test_validation_result.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_full_validation_script.py
+        - tests/e2e/test_run_benchmark_script.py
+        - scripts/metrics_collector.py
+        - scripts/run_release_freeze_regression.py
+        - src/ace_lite/benchmark/case_evaluation.py
+      exclude_globs:
+        - scripts/*validation_rich*.py
+        - tests/e2e/test_validation_rich*_script.py
+        - tests/e2e/test_archive_validation_rich_evidence_script.py
+    top_k: 8
+    comparison_lane: validation_rich
+    validation_surface: validation_stage
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-agent-loop-validation-03
+    query: how does agent_loop rerun retrieval after validation diagnostics request_more_context
+    expected_keys: [agent_loop, controller]
+    filters:
+      include_paths:
+        - src/ace_lite/agent_loop/controller.py
+        - src/ace_lite/agent_loop/contracts.py
+        - src/ace_lite/orchestrator_runtime_support.py
+        - tests/unit/test_agent_loop_controller.py
+        - tests/unit/test_agent_loop_contracts.py
+        - tests/integration/test_orchestrator.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_full_validation_script.py
+        - tests/e2e/test_run_benchmark_script.py
+        - scripts/metrics_collector.py
+        - scripts/run_release_freeze_regression.py
+        - src/ace_lite/benchmark/case_evaluation.py
+      exclude_globs:
+        - scripts/*validation_rich*.py
+        - tests/e2e/test_validation_rich*_script.py
+        - tests/e2e/test_archive_validation_rich_evidence_script.py
+    top_k: 8
+    comparison_lane: validation_rich
+    validation_surface: agent_loop
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-runtime-mcp-selftest-04
+    query: how do runtime doctor-mcp and test-mcp load snapshot env and self-test memory configuration
+    expected_keys: [runtime, cli_app, commands]
+    filters:
+      include_paths:
+        - src/ace_lite/cli_app/commands/runtime.py
+        - src/ace_lite/runtime_settings.py
+        - tests/integration/test_cli_runtime.py
+        - tests/unit/test_plugins_runtime.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_full_validation_script.py
+        - tests/e2e/test_run_benchmark_script.py
+        - scripts/metrics_collector.py
+        - scripts/run_release_freeze_regression.py
+        - src/ace_lite/benchmark/case_evaluation.py
+      exclude_globs:
+        - scripts/*validation_rich*.py
+        - tests/e2e/test_validation_rich*_script.py
+        - tests/e2e/test_archive_validation_rich_evidence_script.py
+    top_k: 8
+    comparison_lane: validation_rich
+    validation_surface: runtime_mcp
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-validation-schema-contract-05
+    query: where validate_context_plan rejects invalid validation_tests and where validation_result_v1 comparison is implemented
+    expected_keys: [test_schema, validation result]
+    filters:
+      include_paths:
+        - src/ace_lite/schema.py
+        - src/ace_lite/validation/result.py
+        - tests/unit/test_schema.py
+        - tests/unit/test_validation_result.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_full_validation_script.py
+        - tests/e2e/test_run_benchmark_script.py
+        - scripts/metrics_collector.py
+        - scripts/run_release_freeze_regression.py
+        - src/ace_lite/benchmark/case_evaluation.py
+      exclude_globs:
+        - scripts/*validation_rich*.py
+        - tests/e2e/test_validation_rich*_script.py
+        - tests/e2e/test_archive_validation_rich_evidence_script.py
+    top_k: 8
+    comparison_lane: validation_rich
+    validation_surface: schema_contract
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-validation-failure-signals-06
+    query: how does benchmark scoring classify evidence_insufficient_rate and missing_validation_rate for failing positive validation cases
+    expected_keys: [benchmark, validation]
+    filters:
+      include_paths:
+        - src/ace_lite/benchmark/scoring.py
+        - src/ace_lite/benchmark/case_evaluation_details.py
+        - tests/unit/test_benchmark_scoring.py
+        - tests/unit/test_benchmark_runner.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_full_validation_script.py
+        - tests/e2e/test_run_benchmark_script.py
+        - scripts/metrics_collector.py
+        - scripts/run_release_freeze_regression.py
+        - src/ace_lite/benchmark/case_evaluation.py
+      exclude_globs:
+        - scripts/*validation_rich*.py
+        - tests/e2e/test_validation_rich*_script.py
+        - tests/e2e/test_archive_validation_rich_evidence_script.py
+    top_k: 8
+    comparison_lane: validation_rich
+    validation_surface: failure_signals
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-validation-release-docs-negative-control-07
+    query: where are the maintainer docs for validation-rich release checklist and benchmark gate review
+    expected_keys: [releasing, benchmarking, maintainers]
+    filters:
+      include_globs:
+        - docs/maintainers/*.md
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_full_validation_script.py
+        - tests/e2e/test_run_benchmark_script.py
+        - scripts/metrics_collector.py
+        - scripts/run_release_freeze_regression.py
+        - src/ace_lite/benchmark/case_evaluation.py
+      exclude_globs:
+        - scripts/*validation_rich*.py
+        - tests/e2e/test_validation_rich*_script.py
+        - tests/e2e/test_archive_validation_rich_evidence_script.py
+    top_k: 8
+    comparison_lane: validation_rich
+    validation_surface: release_docs_negative_control
+    task_success:
+      mode: negative_control
+      min_validation_tests: 1

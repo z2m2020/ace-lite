@@ -168,6 +168,7 @@ class AceOrchestrator:
         time_range: str | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
+        filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         root_path = str(Path(root).resolve())
         conventions = load_conventions(
@@ -193,6 +194,7 @@ class AceOrchestrator:
             state={
                 "conventions": conventions,
                 "temporal": temporal_input,
+                "benchmark_filters": dict(filters) if isinstance(filters, dict) else {},
             },
         )
 

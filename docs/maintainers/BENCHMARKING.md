@@ -74,6 +74,11 @@ ace-lite benchmark run --cases benchmark/cases/default.yaml --repo mem0 --root .
 ace-lite benchmark report --input artifacts/benchmark/latest/results.json
 ```
 
+```powershell
+./scripts/run_benchmark.ps1
+./scripts/run_benchmark.ps1 -Lane validation_rich -Repo ace-lite-engine
+```
+
 ## Multi-repo matrix (external evidence)
 
 ```bash
@@ -134,6 +139,143 @@ The feature slice matrix now also includes a perturbation slice that checks robu
 
 The provider path stays opt-in through `embeddings.enabled` / `--embedding-enabled`, so local-first default plans continue on the existing path unless a benchmarked provider experiment is explicitly enabled.
 
+## Validation-Rich Lane
+
+Use `benchmark/cases/validation_rich_cases.yaml` when you need a lane that
+explicitly requires non-empty `source_plan.validation_tests` and exercises the
+newer validation / agent-loop / MCP doctor surfaces against the current repo.
+
+```bash
+ace-lite benchmark run \
+  --cases benchmark/cases/validation_rich_cases.yaml \
+  --repo ace-lite-engine \
+  --root . \
+  --junit-xml benchmark/fixtures/validation_rich_junit.xml \
+  --output artifacts/benchmark/validation_rich/latest
+```
+
+```powershell
+./scripts/run_benchmark.ps1 -Lane validation_rich -Repo ace-lite-engine
+./scripts/run_full_validation.ps1 -IncludeValidationRichBenchmark
+```
+
+This lane is intended to answer a narrower question than the default
+`ace_lite_engine` lane: whether retrieval still lands on the correct files while
+the source-plan path also carries forward validation-test evidence.
+Standard artifact contract for this lane:
+- output directory: `artifacts/benchmark/validation_rich/latest`
+- summary: `artifacts/benchmark/validation_rich/latest/summary.json`
+- report: `artifacts/benchmark/validation_rich/latest/report.md`
+- results: `artifacts/benchmark/validation_rich/latest/results.json`
+- junit fixture input: `benchmark/fixtures/validation_rich_junit.xml`
+
+When `scripts/run_full_validation.ps1 -IncludeValidationRichBenchmark` is used,
+the same `summary.json` is also threaded into the freeze artifact as report-only
+context so maintainers can inspect validation-specific quality without turning
+the lane into a default release blocker.
+
+If the same artifact set is later threaded into
+`scripts/run_release_freeze_regression.py`, keep the checkpoint metadata aligned
+across benchmark and freeze review:
+- current summary: `artifacts/benchmark/validation_rich/latest/summary.json`
+- previous summary: a dated prior `summary.json` when delta review is needed
+- gate mode: `freeze.validation_rich_gate.mode`
+
+`validation_rich_gate` mode guidance for the current repo:
+- `disabled`: benchmark evidence is collected, but freeze does not evaluate a
+  validation-rich gate
+- `report_only`: recommended default; freeze records failures without flipping
+  the overall result
+- `enforced`: only use after the lane has a stable dated baseline and the team
+  is willing to fail release freeze on missing summaries or threshold drift
+
+Example gate config:
+
+```yaml
+freeze:
+  validation_rich_gate:
+    mode: report_only
+    thresholds:
+      task_success_rate_min: 0.90
+      precision_at_k_min: 0.40
+      noise_rate_max: 0.60
+      latency_p95_ms_max: 700.0
+      validation_test_count_min: 5.0
+      missing_validation_rate_max: 0.0
+      evidence_insufficient_rate_max: 0.0
+```
+
+If an `enforced` rollout proves noisy, revert `freeze.validation_rich_gate.mode`
+to `report_only`, rerun `./scripts/run_full_validation.ps1 -IncludeValidationRichBenchmark`
+or the equivalent freeze command, and record the rollback reason alongside the
+failing metrics.
+
+Validation-rich dated artifact and trend convention:
+- latest lane output: `artifacts/benchmark/validation_rich/latest`
+- dated checkpoint copy: `artifacts/benchmark/validation_rich/<YYYY-MM-DD>`
+- trend output: `artifacts/benchmark/validation_rich/trend/latest`
+
+```bash
+python scripts/build_validation_rich_trend_report.py \
+  --history-root artifacts/benchmark/validation_rich \
+  --latest-report artifacts/benchmark/validation_rich/latest/summary.json \
+  --output-dir artifacts/benchmark/validation_rich/trend/latest
+```
+
+The trend report is report-only. Use it to review current-vs-previous deltas for
+`task_success_rate`, `precision_at_k`, `noise_rate`, `validation_test_count`,
+`missing_validation_rate`, and `evidence_insufficient_rate` before tightening
+release gating.
+
+When you are comparing a known-good baseline, the current default path, and a
+tuned experiment in one review, build the three-way comparison artifact:
+
+```bash
+python scripts/build_validation_rich_comparison_report.py \
+  --baseline artifacts/benchmark/validation_rich/2026-03-10/summary.json \
+  --current artifacts/benchmark/validation_rich/latest/summary.json \
+  --tuned artifacts/benchmark/validation_rich/tuned/latest/summary.json \
+  --output-dir artifacts/benchmark/validation_rich/comparison/latest
+```
+
+Expected comparison artifacts:
+- `validation_rich_comparison_report.json`
+- `validation_rich_comparison_report.md`
+
+This report is also report-only. Its role is to make `baseline -> current ->
+tuned` tradeoffs explicit before any discussion of gate-mode upgrades.
+
+To make the gate-mode decision explicit, evaluate the accumulated trend and
+stability evidence with the promotion helper:
+
+```bash
+python scripts/evaluate_validation_rich_gate_promotion.py \
+  --trend-report artifacts/benchmark/validation_rich/trend/latest/validation_rich_trend_report.json \
+  --stability-report artifacts/benchmark/validation_rich/stability/latest/stability_summary.json \
+  --comparison-report artifacts/benchmark/validation_rich/comparison/latest/validation_rich_comparison_report.json \
+  --output artifacts/benchmark/validation_rich/promotion/latest/promotion_decision.json
+```
+
+Expected promotion artifacts:
+- `promotion_decision.json`
+- `promotion_decision.md`
+
+If the recommendation still says `stay_report_only`, archive the current
+evidence snapshot and carry the unresolved reasons into the next cycle:
+
+```bash
+python scripts/archive_validation_rich_evidence.py \
+  --date 2026-03-12 \
+  --summary artifacts/benchmark/validation_rich/latest/summary.json \
+  --results artifacts/benchmark/validation_rich/latest/results.json \
+  --report artifacts/benchmark/validation_rich/latest/report.md \
+  --trend-dir artifacts/benchmark/validation_rich/trend/latest \
+  --stability-dir artifacts/benchmark/validation_rich/stability/latest \
+  --comparison-dir artifacts/benchmark/validation_rich/comparison/latest \
+  --promotion-decision artifacts/benchmark/validation_rich/promotion/latest/promotion_decision.json \
+  --output-root artifacts/benchmark/validation_rich/archive
+```
+
 The same promotion rule now applies to future skills-routing architecture experiments:
 - keep `route early, hydrate later` off the default path until a paired benchmark lane shows no task-success, precision, noise, latency, or skills-budget regressions
 - treat `skills_token_budget_used_mean`, `skills_budget_exhausted_ratio`, `skills_route_latency_p95_ms`, and `skills_hydration_latency_p95_ms` as the first maintainer-facing evidence surface before proposing any routing promotion
@@ -180,6 +322,28 @@ Current stability artifact:
 
 - `artifacts/release-freeze/stability/2026-03-06-feature-slice-stability/stability_summary.json`
 - `artifacts/release-freeze/stability/2026-03-06-feature-slice-stability/stability_summary.md`
+
+When validation-specific quality itself is being tuned, run the lighter
+validation-rich repeated-run lane as well:
+
+```bash
+python scripts/run_validation_rich_stability.py \
+  --runs 2 \
+  --output-dir artifacts/benchmark/validation_rich/stability/latest \
+  --max-failure-rate 0.0
+```
+
+Validation-rich stability stays report-oriented for now, but it should answer a
+more focused question than freeze stability: whether repeated validation-rich
+benchmark runs keep passing the current task-success / precision / noise /
+latency / validation-test-count thresholds without drifting into repeated
+`failed_checks`, `missing_validation_rate`, or `evidence_insufficient_rate`
+regressions.
+
+Current validation-rich stability artifacts:
+
+- `artifacts/benchmark/validation_rich/stability/latest/stability_summary.json`
+- `artifacts/benchmark/validation_rich/stability/latest/stability_summary.md`
 
 ## Latency And SLO Trend Reporting
 
@@ -340,3 +504,5 @@ Artifacts:
 
 - Cases: `benchmark/workspace/cases/baseline_cases.json`
 - Baseline thresholds: `benchmark/workspace/baseline/default.json`
+
+

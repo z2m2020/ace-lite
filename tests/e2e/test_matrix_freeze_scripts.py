@@ -2283,6 +2283,603 @@ def test_release_freeze_markdown_includes_feature_slices_gate() -> None:
     assert "precision_delta: slice=feedback actual=0.1, expected >= 0.5 (slice_failed)" in markdown
 
 
+def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
+    module = _load_script("run_release_freeze_regression.py")
+    markdown = module._render_markdown(
+        payload={
+            "generated_at": "2026-03-12T00:00:00Z",
+            "passed": True,
+            "elapsed_seconds": 1.23,
+            "root": ".",
+            "steps": [],
+            "validation_rich_benchmark": {
+                "enabled": True,
+                "report_only": True,
+                "summary_path": "artifacts/benchmark/validation_rich/latest/summary.json",
+                "previous_summary_path": "artifacts/benchmark/validation_rich/previous/summary.json",
+                "loaded": True,
+                "previous_loaded": True,
+                "repo": "ace-lite-engine",
+                "case_count": 5,
+                "regressed": False,
+                "failed_checks": [],
+                "metrics": {
+                    "task_success_rate": 1.0,
+                    "precision_at_k": 0.425,
+                    "noise_rate": 0.575,
+                    "validation_test_count": 5.0,
+                    "latency_p95_ms": 617.66,
+                    "evidence_insufficient_rate": 0.0,
+                    "missing_validation_rate": 0.0,
+                },
+                "previous_metrics": {
+                    "task_success_rate": 0.8,
+                    "precision_at_k": 0.35,
+                    "noise_rate": 0.65,
+                    "validation_test_count": 4.0,
+                    "latency_p95_ms": 692.08,
+                    "evidence_insufficient_rate": 0.2,
+                    "missing_validation_rate": 0.2,
+                },
+                "delta": {
+                    "task_success_rate": {
+                        "current": 1.0,
+                        "previous": 0.8,
+                        "delta": 0.2,
+                    },
+                    "precision_at_k": {
+                        "current": 0.425,
+                        "previous": 0.35,
+                        "delta": 0.075,
+                    },
+                    "noise_rate": {
+                        "current": 0.575,
+                        "previous": 0.65,
+                        "delta": -0.075,
+                    },
+                    "latency_p95_ms": {
+                        "current": 617.66,
+                        "previous": 692.08,
+                        "delta": -74.42,
+                    },
+                    "validation_test_count": {
+                        "current": 5.0,
+                        "previous": 4.0,
+                        "delta": 1.0,
+                    },
+                    "evidence_insufficient_rate": {
+                        "current": 0.0,
+                        "previous": 0.2,
+                        "delta": -0.2,
+                    },
+                    "missing_validation_rate": {
+                        "current": 0.0,
+                        "previous": 0.2,
+                        "delta": -0.2,
+                    },
+                },
+            },
+        }
+    )
+
+    assert "## Validation-Rich Benchmark" in markdown
+    assert "Report only: True" in markdown
+    assert "Summary: artifacts/benchmark/validation_rich/latest/summary.json" in markdown
+    assert "Previous summary: artifacts/benchmark/validation_rich/previous/summary.json" in markdown
+    assert "Loaded previous summary: True" in markdown
+    assert "Repo: ace-lite-engine" in markdown
+    assert "Case count: 5" in markdown
+    assert "Failed checks: (none)" in markdown
+    assert "Metrics: task_success=1.0000, precision=0.4250, noise=0.5750, validation_test_count=5.0000, latency_p95_ms=617.66, evidence_insufficient=0.0000, missing_validation=0.0000" in markdown
+    assert "Previous metrics: task_success=0.8000, precision=0.3500, noise=0.6500, validation_test_count=4.0000, latency_p95_ms=692.08, evidence_insufficient=0.2000, missing_validation=0.2000" in markdown
+    assert "Delta summary:" in markdown
+    assert "precision_at_k: current=0.4250, previous=0.3500, delta=+0.0750" in markdown
+    assert "latency_p95_ms: current=617.6600, previous=692.0800, delta=-74.4200" in markdown
+
+
+def test_release_freeze_validation_rich_gate_config_and_evaluation(tmp_path: Path) -> None:
+    module = _load_script("run_release_freeze_regression.py")
+    matrix_config = tmp_path / "matrix.yaml"
+    matrix_config.write_text(
+        """
+freeze:
+  validation_rich_gate:
+    mode: report_only
+    thresholds:
+      task_success_rate_min: 0.90
+      precision_at_k_min: 0.40
+      noise_rate_max: 0.60
+      latency_p95_ms_max: 700.0
+      validation_test_count_min: 5.0
+      missing_validation_rate_max: 0.0
+      evidence_insufficient_rate_max: 0.0
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    resolved = module._resolve_validation_rich_gate_config(
+        matrix_config_path=matrix_config
+    )
+    assert resolved == {
+        "enabled": True,
+        "mode": "report_only",
+        "report_only": True,
+        "enforced": False,
+        "source": "config_mode",
+        "thresholds": {
+            "task_success_rate_min": 0.9,
+            "precision_at_k_min": 0.4,
+            "noise_rate_max": 0.6,
+            "latency_p95_ms_max": 700.0,
+            "validation_test_count_min": 5.0,
+            "missing_validation_rate_max": 0.0,
+            "evidence_insufficient_rate_max": 0.0,
+        },
+    }
+
+    failures = module._evaluate_validation_rich_gate(
+        benchmark_summary={
+            "repo": "ace-lite-engine",
+            "case_count": 5,
+            "metrics": {
+                "task_success_rate": 0.8,
+                "precision_at_k": 0.35,
+                "noise_rate": 0.65,
+                "latency_p95_ms": 710.0,
+                "validation_test_count": 4.0,
+                "missing_validation_rate": 0.2,
+                "evidence_insufficient_rate": 0.2,
+            },
+        },
+        thresholds=resolved["thresholds"],
+    )
+    assert failures == [
+        {
+            "repo": "ace-lite-engine",
+            "metric": "task_success_rate",
+            "actual": 0.8,
+            "operator": ">=",
+            "expected": 0.9,
+        },
+        {
+            "repo": "ace-lite-engine",
+            "metric": "precision_at_k",
+            "actual": 0.35,
+            "operator": ">=",
+            "expected": 0.4,
+        },
+        {
+            "repo": "ace-lite-engine",
+            "metric": "noise_rate",
+            "actual": 0.65,
+            "operator": "<=",
+            "expected": 0.6,
+        },
+        {
+            "repo": "ace-lite-engine",
+            "metric": "latency_p95_ms",
+            "actual": 710.0,
+            "operator": "<=",
+            "expected": 700.0,
+        },
+        {
+            "repo": "ace-lite-engine",
+            "metric": "validation_test_count",
+            "actual": 4.0,
+            "operator": ">=",
+            "expected": 5.0,
+        },
+        {
+            "repo": "ace-lite-engine",
+            "metric": "missing_validation_rate",
+            "actual": 0.2,
+            "operator": "<=",
+            "expected": 0.0,
+        },
+        {
+            "repo": "ace-lite-engine",
+            "metric": "evidence_insufficient_rate",
+            "actual": 0.2,
+            "operator": "<=",
+            "expected": 0.0,
+        },
+    ]
+
+
+def test_release_freeze_markdown_includes_validation_rich_gate() -> None:
+    module = _load_script("run_release_freeze_regression.py")
+    markdown = module._render_markdown(
+        payload={
+            "generated_at": "2026-03-12T00:00:00Z",
+            "passed": True,
+            "elapsed_seconds": 1.23,
+            "root": ".",
+            "steps": [],
+            "validation_rich_gate": {
+                "enabled": True,
+                "passed": False,
+                "mode": "report_only",
+                "report_only": True,
+                "enforced": False,
+                "source": "config_mode",
+                "summary_path": "artifacts/benchmark/validation_rich/latest/summary.json",
+                "thresholds": {
+                    "task_success_rate_min": 0.9,
+                    "precision_at_k_min": 0.4,
+                    "noise_rate_max": 0.6,
+                    "latency_p95_ms_max": 700.0,
+                    "validation_test_count_min": 5.0,
+                    "missing_validation_rate_max": 0.0,
+                    "evidence_insufficient_rate_max": 0.0,
+                },
+                "failures": [
+                    {
+                        "metric": "precision_at_k",
+                        "actual": 0.35,
+                        "operator": ">=",
+                        "expected": 0.4,
+                    }
+                ],
+            },
+        }
+    )
+
+    assert "## Validation-Rich Gate" in markdown
+    assert "Passed: False" in markdown
+    assert "Mode: report_only" in markdown
+    assert "Enforced: False" in markdown
+    assert "Summary: artifacts/benchmark/validation_rich/latest/summary.json" in markdown
+    assert "task_success_rate>=0.9000" in markdown
+    assert "validation_test_count>=5.0000" in markdown
+    assert "precision_at_k: actual=0.35, expected >= 0.4" in markdown
+
+
+def test_release_freeze_main_includes_validation_rich_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_release_freeze_regression.py")
+
+    matrix_config = tmp_path / "matrix.yaml"
+    matrix_config.write_text(
+        """
+freeze:
+  validation_rich_gate:
+    mode: report_only
+    thresholds:
+      task_success_rate_min: 0.90
+      precision_at_k_min: 0.40
+      noise_rate_max: 0.60
+      latency_p95_ms_max: 700.0
+      validation_test_count_min: 5.0
+      missing_validation_rate_max: 0.0
+      evidence_insufficient_rate_max: 0.0
+""".lstrip(),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "freeze-output"
+    validation_summary = tmp_path / "validation-rich-summary.json"
+    validation_summary.write_text(
+        json.dumps(
+            {
+                "repo": "ace-lite-engine",
+                "case_count": 5,
+                "regressed": False,
+                "failed_checks": [],
+                "metrics": {
+                    "task_success_rate": 1.0,
+                    "precision_at_k": 0.425,
+                    "noise_rate": 0.575,
+                    "validation_test_count": 5.0,
+                    "latency_p95_ms": 617.66,
+                    "evidence_insufficient_rate": 0.0,
+                    "missing_validation_rate": 0.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_run_step(*, name: str, command: list[str], cwd: Path, logs_dir: Path):
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        stdout_path = logs_dir / f"{name}.stdout.log"
+        stderr_path = logs_dir / f"{name}.stderr.log"
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text("", encoding="utf-8")
+        return module.StepResult(
+            name=name,
+            command=command,
+            returncode=0,
+            elapsed_seconds=0.01,
+            stdout_path=str(stdout_path),
+            stderr_path=str(stderr_path),
+        )
+
+    def fake_load_matrix_summary(*, summary_path: Path):
+        _ = summary_path
+        return {
+            "passed": True,
+            "benchmark_regression_detected": False,
+            "repo_count": 1,
+            "plugin_policy_summary": {
+                "totals": {
+                    "applied": 0,
+                    "conflicts": 0,
+                    "blocked": 0,
+                    "warn": 0,
+                    "remote_applied": 0,
+                }
+            },
+        }
+
+    monkeypatch.setattr(module, "_run_step", fake_run_step)
+    monkeypatch.setattr(module, "_load_matrix_summary", fake_load_matrix_summary)
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "run_release_freeze_regression.py",
+            "--matrix-config",
+            str(matrix_config),
+            "--output-dir",
+            str(output_dir),
+            "--skip-skill-validation",
+            "--validation-rich-summary",
+            str(validation_summary),
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 0
+
+    payload = json.loads((output_dir / "freeze_regression.json").read_text(encoding="utf-8"))
+    assert payload["validation_rich_gate"] == {
+        "enabled": True,
+        "passed": True,
+        "mode": "report_only",
+        "report_only": True,
+        "enforced": False,
+        "source": "config_mode",
+        "summary_path": str(validation_summary.resolve()),
+        "thresholds": {
+            "task_success_rate_min": 0.9,
+            "precision_at_k_min": 0.4,
+            "noise_rate_max": 0.6,
+            "latency_p95_ms_max": 700.0,
+            "validation_test_count_min": 5.0,
+            "missing_validation_rate_max": 0.0,
+            "evidence_insufficient_rate_max": 0.0,
+        },
+        "failures": [],
+    }
+
+
+def test_release_freeze_main_fails_when_validation_rich_gate_enforced_and_thresholds_fail(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_release_freeze_regression.py")
+
+    matrix_config = tmp_path / "matrix.yaml"
+    matrix_config.write_text(
+        """
+freeze:
+  validation_rich_gate:
+    mode: enforced
+    thresholds:
+      task_success_rate_min: 0.90
+      precision_at_k_min: 0.40
+      noise_rate_max: 0.60
+      latency_p95_ms_max: 700.0
+      validation_test_count_min: 5.0
+      missing_validation_rate_max: 0.0
+      evidence_insufficient_rate_max: 0.0
+""".lstrip(),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "freeze-output"
+    validation_summary = tmp_path / "validation-rich-summary.json"
+    validation_summary.write_text(
+        json.dumps(
+            {
+                "repo": "ace-lite-engine",
+                "case_count": 5,
+                "regressed": False,
+                "failed_checks": [],
+                "metrics": {
+                    "task_success_rate": 0.8,
+                    "precision_at_k": 0.35,
+                    "noise_rate": 0.65,
+                    "validation_test_count": 4.0,
+                    "latency_p95_ms": 710.0,
+                    "evidence_insufficient_rate": 0.2,
+                    "missing_validation_rate": 0.2,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_run_step(*, name: str, command: list[str], cwd: Path, logs_dir: Path):
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        stdout_path = logs_dir / f"{name}.stdout.log"
+        stderr_path = logs_dir / f"{name}.stderr.log"
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text("", encoding="utf-8")
+        return module.StepResult(
+            name=name,
+            command=command,
+            returncode=0,
+            elapsed_seconds=0.01,
+            stdout_path=str(stdout_path),
+            stderr_path=str(stderr_path),
+        )
+
+    def fake_load_matrix_summary(*, summary_path: Path):
+        _ = summary_path
+        return {
+            "passed": True,
+            "benchmark_regression_detected": False,
+            "repo_count": 1,
+            "plugin_policy_summary": {
+                "totals": {
+                    "applied": 0,
+                    "conflicts": 0,
+                    "blocked": 0,
+                    "warn": 0,
+                    "remote_applied": 0,
+                }
+            },
+        }
+
+    monkeypatch.setattr(module, "_run_step", fake_run_step)
+    monkeypatch.setattr(module, "_load_matrix_summary", fake_load_matrix_summary)
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "run_release_freeze_regression.py",
+            "--matrix-config",
+            str(matrix_config),
+            "--output-dir",
+            str(output_dir),
+            "--skip-skill-validation",
+            "--validation-rich-summary",
+            str(validation_summary),
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 1
+
+    payload = json.loads((output_dir / "freeze_regression.json").read_text(encoding="utf-8"))
+    assert payload["passed"] is False
+    assert payload["validation_rich_gate"]["enabled"] is True
+    assert payload["validation_rich_gate"]["mode"] == "enforced"
+    assert payload["validation_rich_gate"]["report_only"] is False
+    assert payload["validation_rich_gate"]["enforced"] is True
+    assert payload["validation_rich_gate"]["passed"] is False
+    assert {
+        failure["metric"] for failure in payload["validation_rich_gate"]["failures"]
+    } == {
+        "task_success_rate",
+        "precision_at_k",
+        "noise_rate",
+        "latency_p95_ms",
+        "validation_test_count",
+        "missing_validation_rate",
+        "evidence_insufficient_rate",
+    }
+
+
+def test_release_freeze_main_reports_only_when_validation_rich_gate_report_only_and_thresholds_fail(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_release_freeze_regression.py")
+
+    matrix_config = tmp_path / "matrix.yaml"
+    matrix_config.write_text(
+        """
+freeze:
+  validation_rich_gate:
+    mode: report_only
+    thresholds:
+      task_success_rate_min: 0.90
+      precision_at_k_min: 0.40
+      noise_rate_max: 0.60
+      latency_p95_ms_max: 700.0
+      validation_test_count_min: 5.0
+      missing_validation_rate_max: 0.0
+      evidence_insufficient_rate_max: 0.0
+""".lstrip(),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "freeze-output"
+    validation_summary = tmp_path / "validation-rich-summary.json"
+    validation_summary.write_text(
+        json.dumps(
+            {
+                "repo": "ace-lite-engine",
+                "case_count": 5,
+                "regressed": False,
+                "failed_checks": [],
+                "metrics": {
+                    "task_success_rate": 0.8,
+                    "precision_at_k": 0.35,
+                    "noise_rate": 0.65,
+                    "validation_test_count": 4.0,
+                    "latency_p95_ms": 710.0,
+                    "evidence_insufficient_rate": 0.2,
+                    "missing_validation_rate": 0.2,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_run_step(*, name: str, command: list[str], cwd: Path, logs_dir: Path):
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        stdout_path = logs_dir / f"{name}.stdout.log"
+        stderr_path = logs_dir / f"{name}.stderr.log"
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text("", encoding="utf-8")
+        return module.StepResult(
+            name=name,
+            command=command,
+            returncode=0,
+            elapsed_seconds=0.01,
+            stdout_path=str(stdout_path),
+            stderr_path=str(stderr_path),
+        )
+
+    def fake_load_matrix_summary(*, summary_path: Path):
+        _ = summary_path
+        return {
+            "passed": True,
+            "benchmark_regression_detected": False,
+            "repo_count": 1,
+            "plugin_policy_summary": {
+                "totals": {
+                    "applied": 0,
+                    "conflicts": 0,
+                    "blocked": 0,
+                    "warn": 0,
+                    "remote_applied": 0,
+                }
+            },
+        }
+
+    monkeypatch.setattr(module, "_run_step", fake_run_step)
+    monkeypatch.setattr(module, "_load_matrix_summary", fake_load_matrix_summary)
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "run_release_freeze_regression.py",
+            "--matrix-config",
+            str(matrix_config),
+            "--output-dir",
+            str(output_dir),
+            "--skip-skill-validation",
+            "--validation-rich-summary",
+            str(validation_summary),
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 0
+
+    payload = json.loads((output_dir / "freeze_regression.json").read_text(encoding="utf-8"))
+    assert payload["passed"] is True
+    assert payload["validation_rich_gate"]["enabled"] is True
+    assert payload["validation_rich_gate"]["mode"] == "report_only"
+    assert payload["validation_rich_gate"]["report_only"] is True
+    assert payload["validation_rich_gate"]["enforced"] is False
+    assert payload["validation_rich_gate"]["passed"] is False
+    assert len(payload["validation_rich_gate"]["failures"]) == 7
+
+
 def test_release_freeze_memory_gate_config_and_evaluation(tmp_path: Path) -> None:
     module = _load_script("run_release_freeze_regression.py")
     matrix_config = tmp_path / "matrix.yaml"
@@ -2352,6 +2949,185 @@ freeze:
             "expected": 0.2,
         },
     ]
+
+
+def test_release_freeze_main_includes_validation_rich_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_release_freeze_regression.py")
+
+    matrix_config = tmp_path / "matrix.yaml"
+    matrix_config.write_text("", encoding="utf-8")
+    output_dir = tmp_path / "freeze-output"
+    validation_summary = tmp_path / "validation-rich-summary.json"
+    validation_previous_summary = tmp_path / "validation-rich-previous-summary.json"
+    validation_summary.write_text(
+        json.dumps(
+            {
+                "repo": "ace-lite-engine",
+                "case_count": 5,
+                "regressed": False,
+                "failed_checks": [],
+                "metrics": {
+                    "task_success_rate": 1.0,
+                    "precision_at_k": 0.425,
+                    "noise_rate": 0.575,
+                    "validation_test_count": 5.0,
+                    "latency_p95_ms": 617.66,
+                    "evidence_insufficient_rate": 0.0,
+                    "missing_validation_rate": 0.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    validation_previous_summary.write_text(
+        json.dumps(
+            {
+                "repo": "ace-lite-engine",
+                "case_count": 5,
+                "regressed": False,
+                "failed_checks": [],
+                "metrics": {
+                    "task_success_rate": 0.8,
+                    "precision_at_k": 0.35,
+                    "noise_rate": 0.65,
+                    "validation_test_count": 4.0,
+                    "latency_p95_ms": 692.08,
+                    "evidence_insufficient_rate": 0.2,
+                    "missing_validation_rate": 0.2,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_run_step(*, name: str, command: list[str], cwd: Path, logs_dir: Path):
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        stdout_path = logs_dir / f"{name}.stdout.log"
+        stderr_path = logs_dir / f"{name}.stderr.log"
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text("", encoding="utf-8")
+        return module.StepResult(
+            name=name,
+            command=command,
+            returncode=0,
+            elapsed_seconds=0.01,
+            stdout_path=str(stdout_path),
+            stderr_path=str(stderr_path),
+        )
+
+    def fake_load_matrix_summary(*, summary_path: Path):
+        _ = summary_path
+        return {
+            "passed": True,
+            "benchmark_regression_detected": False,
+            "repo_count": 1,
+            "plugin_policy_summary": {
+                "totals": {
+                    "applied": 0,
+                    "conflicts": 0,
+                    "blocked": 0,
+                    "warn": 0,
+                    "remote_applied": 0,
+                }
+            },
+        }
+
+    monkeypatch.setattr(module, "_run_step", fake_run_step)
+    monkeypatch.setattr(module, "_load_matrix_summary", fake_load_matrix_summary)
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "run_release_freeze_regression.py",
+            "--matrix-config",
+            str(matrix_config),
+            "--output-dir",
+            str(output_dir),
+            "--skip-skill-validation",
+            "--validation-rich-summary",
+            str(validation_summary),
+            "--validation-rich-previous-summary",
+            str(validation_previous_summary),
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 0
+
+    payload = json.loads((output_dir / "freeze_regression.json").read_text(encoding="utf-8"))
+    validation_payload = payload["validation_rich_benchmark"]
+    assert validation_payload["enabled"] is True
+    assert validation_payload["report_only"] is True
+    assert validation_payload["summary_path"] == str(validation_summary.resolve())
+    assert validation_payload["previous_summary_path"] == str(
+        validation_previous_summary.resolve()
+    )
+    assert validation_payload["loaded"] is True
+    assert validation_payload["previous_loaded"] is True
+    assert validation_payload["repo"] == "ace-lite-engine"
+    assert validation_payload["case_count"] == 5
+    assert validation_payload["regressed"] is False
+    assert validation_payload["previous_repo"] == "ace-lite-engine"
+    assert validation_payload["previous_case_count"] == 5
+    assert validation_payload["previous_regressed"] is False
+    assert validation_payload["failed_checks"] == []
+    assert validation_payload["previous_failed_checks"] == []
+    assert validation_payload["metrics"] == {
+        "task_success_rate": 1.0,
+        "precision_at_k": 0.425,
+        "noise_rate": 0.575,
+        "validation_test_count": 5.0,
+        "latency_p95_ms": 617.66,
+        "evidence_insufficient_rate": 0.0,
+        "missing_validation_rate": 0.0,
+    }
+    assert validation_payload["previous_metrics"] == {
+        "task_success_rate": 0.8,
+        "precision_at_k": 0.35,
+        "noise_rate": 0.65,
+        "validation_test_count": 4.0,
+        "latency_p95_ms": 692.08,
+        "evidence_insufficient_rate": 0.2,
+        "missing_validation_rate": 0.2,
+    }
+    assert validation_payload["delta"]["task_success_rate"] == {
+        "current": 1.0,
+        "previous": 0.8,
+        "delta": pytest.approx(0.2),
+    }
+    assert validation_payload["delta"]["precision_at_k"] == {
+        "current": 0.425,
+        "previous": 0.35,
+        "delta": pytest.approx(0.075),
+    }
+    assert validation_payload["delta"]["noise_rate"] == {
+        "current": 0.575,
+        "previous": 0.65,
+        "delta": pytest.approx(-0.075),
+    }
+    assert validation_payload["delta"]["latency_p95_ms"] == {
+        "current": 617.66,
+        "previous": 692.08,
+        "delta": pytest.approx(-74.42),
+    }
+    assert validation_payload["delta"]["validation_test_count"] == {
+        "current": 5.0,
+        "previous": 4.0,
+        "delta": 1.0,
+    }
+    assert validation_payload["delta"]["evidence_insufficient_rate"] == {
+        "current": 0.0,
+        "previous": 0.2,
+        "delta": -0.2,
+    }
+    assert validation_payload["delta"]["missing_validation_rate"] == {
+        "current": 0.0,
+        "previous": 0.2,
+        "delta": -0.2,
+    }
 
 
 def test_release_freeze_embedding_gate_config_and_evaluation(tmp_path: Path) -> None:

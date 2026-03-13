@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from threading import Event, Thread
 from pathlib import Path
 
 import pytest
@@ -55,6 +56,51 @@ def test_mcp_service_health_reports_defaults(tmp_path: Path) -> None:
     assert payload["embedding_dimension"] == 256
     assert payload["ollama_base_url"] == "http://localhost:11434"
     assert isinstance(payload["plan_timeout_seconds"], float)
+    assert payload["request_stats"]["active_request_count"] == 0
+    assert payload["request_stats"]["total_request_count"] == 0
+
+
+def test_mcp_service_health_surfaces_request_stats(tmp_path: Path, monkeypatch) -> None:
+    service = _make_service(tmp_path)
+    notes_path = tmp_path / "context-map" / "memory_notes.test.jsonl"
+    started = Event()
+    release = Event()
+
+    original_store = mcp_service_module.handle_memory_store
+
+    def _blocking_store(**kwargs):
+        started.set()
+        release.wait(timeout=2.0)
+        return original_store(**kwargs)
+
+    monkeypatch.setattr(mcp_service_module, "handle_memory_store", _blocking_store)
+
+    worker = Thread(
+        target=service.memory_store,
+        kwargs={
+            "text": "long request",
+            "namespace": "bench",
+            "notes_path": str(notes_path),
+        },
+    )
+    worker.start()
+    assert started.wait(timeout=1.0) is True
+
+    payload = service.health()
+    assert payload["request_stats"]["active_request_count"] == 1
+    assert payload["request_stats"]["total_request_count"] == 1
+    assert payload["request_stats"]["last_request_tool"] == "ace_memory_store"
+    assert payload["request_stats"]["last_request_started_at"]
+
+    release.set()
+    worker.join(timeout=2.0)
+    assert worker.is_alive() is False
+
+    payload_after = service.health()
+    assert payload_after["request_stats"]["active_request_count"] == 0
+    assert payload_after["request_stats"]["total_request_count"] == 1
+    assert payload_after["request_stats"]["last_request_finished_at"]
+    assert payload_after["request_stats"]["last_request_elapsed_ms"] >= 0.0
 
 
 def test_mcp_service_index_writes_output(tmp_path: Path) -> None:

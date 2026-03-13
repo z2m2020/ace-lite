@@ -115,6 +115,74 @@ def test_benchmark_runner_can_omit_case_details() -> None:
     assert "validation_tests" not in case_payload
 
 
+def test_benchmark_runner_passes_case_filters_to_orchestrator() -> None:
+    class _FilterAwareStub:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        def plan(
+            self,
+            *,
+            query: str,
+            repo: str,
+            root: str,
+            time_range: str | None = None,
+            start_date: str | None = None,
+            end_date: str | None = None,
+            filters: dict[str, object] | None = None,
+        ) -> dict[str, object]:
+            self.calls.append(
+                {
+                    "query": query,
+                    "repo": repo,
+                    "root": root,
+                    "time_range": time_range,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "filters": filters,
+                }
+            )
+            return {
+                "index": {"candidate_files": [{"path": "src/app.py", "module": "src.app"}]},
+                "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
+                "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+                "observability": {
+                    "plugin_policy_summary": {
+                        "mode": "strict",
+                        "allowlist": ["observability.mcp_plugins"],
+                        "totals": {
+                            "applied": 0,
+                            "conflicts": 0,
+                            "blocked": 0,
+                            "warn": 0,
+                            "remote_applied": 0,
+                        },
+                    }
+                },
+            }
+
+    orchestrator = _FilterAwareStub()
+    runner = BenchmarkRunner(orchestrator)
+    case_filters = {"exclude_paths": ["tests/e2e/test_benchmark_case_files.py"]}
+
+    runner.run(
+        cases=[
+            {
+                "case_id": "c1",
+                "query": "find app",
+                "expected_keys": ["app"],
+                "top_k": 4,
+                "filters": case_filters,
+            }
+        ],
+        repo="demo",
+        root=".",
+    )
+
+    assert len(orchestrator.calls) == 1
+    assert orchestrator.calls[0]["filters"] == case_filters
+
+
 class _PolicyStubOrchestrator(_StubOrchestrator):
     def plan(
         self,
