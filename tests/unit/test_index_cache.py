@@ -145,6 +145,73 @@ def test_build_or_refresh_index_cache_only_when_only_non_indexable_changes(
     assert info.get("changed_files_detected") == 4
 
 
+def test_build_or_refresh_index_does_not_rewrite_cache_for_non_indexable_changes_when_aceignore_unchanged(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cache_path = tmp_path / "context-map" / "index.json"
+    initial = {
+        "root_dir": str(tmp_path.resolve()),
+        "configured_languages": ["python"],
+        "files": {"a.py": {"path": "a.py"}},
+        "aceignore": {"present": False, "mtime_ns": 0, "size_bytes": 0},
+    }
+    index_cache.save_index_cache(payload=initial, cache_path=cache_path)
+
+    monkeypatch.setattr(
+        index_cache,
+        "detect_changed_files_from_git",
+        lambda **_: ["README.md", "docs/ARCHITECTURE.md"],
+    )
+
+    save_calls = {"count": 0}
+    original_save = index_cache.save_index_cache
+
+    def tracking_save(*, payload, cache_path):  # type: ignore[no-untyped-def]
+        save_calls["count"] += 1
+        return original_save(payload=payload, cache_path=cache_path)
+
+    monkeypatch.setattr(index_cache, "save_index_cache", tracking_save)
+
+    payload, info = index_cache.build_or_refresh_index(
+        root_dir=tmp_path,
+        cache_path=cache_path,
+        languages=["python"],
+        incremental=True,
+    )
+
+    assert payload["files"] == initial["files"]
+    assert info["mode"] == "cache_only"
+    assert info.get("reason") == "non_indexable_changes"
+    assert save_calls["count"] == 0
+
+
+def test_detect_changed_files_from_git_reuses_short_ttl_cache(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / ".git").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("ACE_LITE_GIT_STATUS_CACHE_TTL_SECONDS", "5")
+    monkeypatch.setattr(index_cache, "_GIT_STATUS_MEMORY_CACHE", {})
+    monkeypatch.setattr(index_cache, "_get_git_head_sha", lambda **_: "a" * 40)
+    monkeypatch.setattr(index_cache, "_git_index_fingerprint", lambda **_: (0, 0))
+
+    calls = {"count": 0}
+
+    def fake_run_capture_output(*_args, **_kwargs):
+        calls["count"] += 1
+        return 0, " M src/app.py\x00?? README.md\x00", "", False
+
+    clock = iter([100.0, 100.2, 100.3])
+    monkeypatch.setattr(index_cache, "run_capture_output", fake_run_capture_output)
+    monkeypatch.setattr(index_cache, "monotonic", lambda: next(clock))
+
+    first = index_cache.detect_changed_files_from_git(root_dir=tmp_path)
+    second = index_cache.detect_changed_files_from_git(root_dir=tmp_path)
+
+    assert first == ["src/app.py", "README.md"]
+    assert second == first
+    assert calls["count"] == 1
+
+
 def test_build_or_refresh_index_incremental_update(tmp_path: Path, monkeypatch) -> None:
     cache_path = tmp_path / "context-map" / "index.json"
     initial = {
@@ -224,6 +291,54 @@ def test_build_or_refresh_index_cache_only_when_dirty_worktree_has_no_effective_
     assert info["changed_files"] == 0
     assert info.get("changed_files_detected") == 1
     assert info.get("reason") == "worktree_dirty_no_effective_changes"
+
+
+def test_build_or_refresh_index_does_not_rewrite_cache_for_no_effective_changes_when_aceignore_unchanged(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cache_path = tmp_path / "context-map" / "index.json"
+    tracked = tmp_path / "a.py"
+    tracked.write_text("print('stable')\n", encoding="utf-8")
+    stat_result = tracked.stat()
+    mtime_ns = int(getattr(stat_result, "st_mtime_ns", 0) or 0)
+    size_bytes = int(getattr(stat_result, "st_size", 0) or 0)
+
+    initial = {
+        "root_dir": str(tmp_path.resolve()),
+        "configured_languages": ["python"],
+        "files": {
+            "a.py": {
+                "path": "a.py",
+                "mtime_ns": mtime_ns,
+                "size_bytes": size_bytes,
+            }
+        },
+        "aceignore": {"present": False, "mtime_ns": 0, "size_bytes": 0},
+    }
+    index_cache.save_index_cache(payload=initial, cache_path=cache_path)
+
+    monkeypatch.setattr(index_cache, "detect_changed_files_from_git", lambda **_: ["a.py"])
+
+    save_calls = {"count": 0}
+    original_save = index_cache.save_index_cache
+
+    def tracking_save(*, payload, cache_path):  # type: ignore[no-untyped-def]
+        save_calls["count"] += 1
+        return original_save(payload=payload, cache_path=cache_path)
+
+    monkeypatch.setattr(index_cache, "save_index_cache", tracking_save)
+
+    payload, info = index_cache.build_or_refresh_index(
+        root_dir=tmp_path,
+        cache_path=cache_path,
+        languages=["python"],
+        incremental=True,
+    )
+
+    assert payload["files"] == initial["files"]
+    assert info["mode"] == "cache_only"
+    assert info.get("reason") == "worktree_dirty_no_effective_changes"
+    assert save_calls["count"] == 0
 
 
 def test_build_or_refresh_index_full_build_when_aceignore_changes(

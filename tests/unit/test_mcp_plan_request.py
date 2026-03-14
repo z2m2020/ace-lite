@@ -2,8 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ace_lite.entrypoint_runtime import (
+    EMBEDDING_RUNTIME_KWARGS_KEYS,
+    MEMORY_GATE_POSTPROCESS_RUNTIME_KWARGS_KEYS,
+    RETRIEVAL_POLICY_RUNTIME_KWARGS_KEYS,
+)
 from ace_lite.mcp_server.config import AceLiteMcpConfig
-from ace_lite.mcp_server.plan_request import resolve_plan_request_options
+from ace_lite.mcp_server.plan_request import (
+    PLAN_REQUEST_RUN_PLAN_KWARGS_KEYS,
+    resolve_plan_request_options,
+)
 
 
 def _make_config(tmp_path: Path) -> AceLiteMcpConfig:
@@ -82,3 +90,57 @@ def test_plan_request_options_explicit_args_override_config_pack(tmp_path: Path)
     assert options.deterministic_refine_enabled is False
     assert kwargs["deterministic_refine_enabled"] is False
     assert kwargs["plugins_enabled"] is False
+
+
+def test_plan_request_options_run_plan_kwargs_match_declared_contract(
+    tmp_path: Path,
+) -> None:
+    config = _make_config(tmp_path)
+
+    options = resolve_plan_request_options(
+        config=config,
+        top_k_files=6,
+        min_candidate_score=1,
+        retrieval_policy="feature",
+        lsp_enabled=True,
+        plugins_enabled=False,
+        config_pack_overrides={
+            "policy_version": "v2",
+            "embedding_enabled": True,
+            "memory_gate_enabled": True,
+        },
+    )
+
+    kwargs = options.to_run_plan_kwargs()
+
+    assert set(kwargs.keys()) == set(PLAN_REQUEST_RUN_PLAN_KWARGS_KEYS)
+    assert kwargs["top_k_files"] == 6
+    assert kwargs["min_candidate_score"] == 1
+    assert kwargs["retrieval_policy"] == "feature"
+    assert kwargs["policy_version"] == "v2"
+    assert kwargs["lsp_enabled"] is True
+    assert kwargs["plugins_enabled"] is False
+    assert kwargs["embedding_enabled"] is True
+    assert kwargs["memory_gate_enabled"] is True
+
+
+def test_plan_request_run_plan_kwargs_reuses_shared_runtime_contract_groups(
+    tmp_path: Path,
+) -> None:
+    config = _make_config(tmp_path)
+    options = resolve_plan_request_options(
+        config=config,
+        top_k_files=8,
+        min_candidate_score=2,
+        retrieval_policy="auto",
+        lsp_enabled=False,
+        plugins_enabled=False,
+        config_pack_overrides=None,
+    )
+
+    kwargs = options.to_run_plan_kwargs()
+    keys = set(kwargs.keys())
+
+    assert set(EMBEDDING_RUNTIME_KWARGS_KEYS).issubset(keys)
+    assert set(MEMORY_GATE_POSTPROCESS_RUNTIME_KWARGS_KEYS).issubset(keys)
+    assert set(RETRIEVAL_POLICY_RUNTIME_KWARGS_KEYS).issubset(keys)

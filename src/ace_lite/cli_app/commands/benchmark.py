@@ -8,6 +8,7 @@ from typing import Any
 
 import click
 
+from ace_lite.benchmark_application import create_benchmark_orchestrator_from_resolved
 from ace_lite.benchmark.diff import write_diff
 from ace_lite.benchmark.reward_replay import write_reward_replay_artifacts
 from ace_lite.benchmark.report import write_report_from_json, write_results
@@ -702,126 +703,20 @@ def benchmark_run_command(
     )
     cases = load_cases(cases_path)
 
-    memory_provider = create_memory_provider(
-        primary=memory_primary,
-        secondary=memory_secondary,
-        memory_strategy=str(resolved["memory_strategy"]).strip().lower(),
-        memory_hybrid_limit=max(1, int(resolved["memory_hybrid_limit"])),
-        memory_cache_enabled=bool(resolved["memory_cache_enabled"]),
-        memory_cache_path=str(resolved["memory_cache_path"]),
-        memory_cache_ttl_seconds=max(1, int(resolved["memory_cache_ttl_seconds"])),
-        memory_cache_max_entries=max(16, int(resolved["memory_cache_max_entries"])),
-        memory_notes_enabled=bool(resolved["memory_notes_enabled"]),
-        memory_notes_path=str(resolved["memory_notes_path"]).strip()
-        or "context-map/memory_notes.jsonl",
-        memory_notes_limit=max(1, int(resolved["memory_notes_limit"])),
-        memory_notes_mode=str(resolved["memory_notes_mode"]).strip().lower()
-        or "supplement",
-        memory_notes_expiry_enabled=bool(resolved["memory_notes_expiry_enabled"]),
-        memory_notes_ttl_days=max(1, int(resolved["memory_notes_ttl_days"])),
-        memory_notes_max_age_days=max(1, int(resolved["memory_notes_max_age_days"])),
+    orchestrator = create_benchmark_orchestrator_from_resolved(
+        create_memory_provider_fn=create_memory_provider,
+        create_orchestrator_fn=create_orchestrator,
+        resolved=resolved,
+        skills_dir=skills_dir,
+        retrieval_policy=_to_retrieval_policy(resolved["retrieval_policy"]),
+        memory_primary=memory_primary,
+        memory_secondary=memory_secondary,
         mcp_base_url=mcp_base_url,
         rest_base_url=rest_base_url,
-        timeout_seconds=memory_timeout,
+        memory_timeout=memory_timeout,
         user_id=user_id,
         app=app,
-        limit=memory_limit,
-    )
-
-    orchestrator = create_orchestrator(
-        memory_provider=memory_provider,
-        memory_disclosure_mode=str(resolved["memory_disclosure_mode"]).strip().lower(),
-        memory_preview_max_chars=max(32, int(resolved["memory_preview_max_chars"])),
-        memory_strategy=str(resolved["memory_strategy"]).strip().lower(),
-        memory_gate_enabled=bool(resolved["memory_gate_enabled"]),
-        memory_gate_mode=str(resolved["memory_gate_mode"]).strip().lower() or "auto",
-        memory_timeline_enabled=bool(resolved["memory_timeline_enabled"]),
-        memory_container_tag=resolved["memory_container_tag"],
-        memory_auto_tag_mode=resolved["memory_auto_tag_mode"],
-        memory_profile_enabled=bool(resolved["memory_profile_enabled"]),
-        memory_profile_path=str(resolved["memory_profile_path"]).strip()
-        or "~/.ace-lite/profile.json",
-        memory_profile_top_n=max(1, int(resolved["memory_profile_top_n"])),
-        memory_profile_token_budget=max(
-            1,
-            int(resolved["memory_profile_token_budget"]),
-        ),
-        memory_profile_expiry_enabled=bool(resolved["memory_profile_expiry_enabled"]),
-        memory_profile_ttl_days=max(1, int(resolved["memory_profile_ttl_days"])),
-        memory_profile_max_age_days=max(
-            1,
-            int(resolved["memory_profile_max_age_days"]),
-        ),
-        memory_feedback_enabled=bool(resolved["memory_feedback_enabled"]),
-        memory_feedback_path=str(resolved["memory_feedback_path"]).strip()
-        or "~/.ace-lite/profile.json",
-        memory_feedback_max_entries=max(0, int(resolved["memory_feedback_max_entries"])),
-        memory_feedback_boost_per_select=max(
-            0.0, float(resolved["memory_feedback_boost_per_select"])
-        ),
-        memory_feedback_max_boost=max(0.0, float(resolved["memory_feedback_max_boost"])),
-        memory_feedback_decay_days=max(0.0, float(resolved["memory_feedback_decay_days"])),
-        memory_capture_enabled=bool(resolved["memory_capture_enabled"]),
-        memory_capture_notes_path=str(resolved["memory_capture_notes_path"]).strip()
-        or "context-map/memory_notes.jsonl",
-        memory_capture_min_query_length=max(
-            1,
-            int(resolved["memory_capture_min_query_length"]),
-        ),
-        memory_capture_keywords=list(resolved["memory_capture_keywords"]),
-        memory_notes_enabled=bool(resolved["memory_notes_enabled"]),
-        memory_notes_path=str(resolved["memory_notes_path"]).strip()
-        or "context-map/memory_notes.jsonl",
-        memory_notes_limit=max(1, int(resolved["memory_notes_limit"])),
-        memory_notes_mode=str(resolved["memory_notes_mode"]).strip().lower()
-        or "supplement",
-        memory_notes_expiry_enabled=bool(resolved["memory_notes_expiry_enabled"]),
-        memory_notes_ttl_days=max(1, int(resolved["memory_notes_ttl_days"])),
-        memory_notes_max_age_days=max(1, int(resolved["memory_notes_max_age_days"])),
-        memory_postprocess_enabled=bool(resolved["memory_postprocess_enabled"]),
-        memory_postprocess_noise_filter_enabled=bool(
-            resolved["memory_postprocess_noise_filter_enabled"]
-        ),
-        memory_postprocess_length_norm_anchor_chars=max(
-            1, int(resolved["memory_postprocess_length_norm_anchor_chars"])
-        ),
-        memory_postprocess_time_decay_half_life_days=max(
-            0.0, float(resolved["memory_postprocess_time_decay_half_life_days"])
-        ),
-        memory_postprocess_hard_min_score=max(
-            0.0, float(resolved["memory_postprocess_hard_min_score"])
-        ),
-        memory_postprocess_diversity_enabled=bool(
-            resolved["memory_postprocess_diversity_enabled"]
-        ),
-        memory_postprocess_diversity_similarity_threshold=max(
-            0.0,
-            min(
-                1.0,
-                float(resolved["memory_postprocess_diversity_similarity_threshold"]),
-            ),
-        ),
-        skills_dir=skills_dir,
-        skills_config={
-            "dir": skills_dir,
-            **dict(resolved["skills"]),
-        },
-        index_config=dict(resolved["index"]),
-        embeddings_config=dict(resolved["embeddings"]),
-        adaptive_router_config=dict(resolved["adaptive_router"]),
-        plan_replay_cache_config=dict(resolved["plan_replay_cache"]),
-        retrieval_config=dict(resolved["retrieval"]),
-        repomap_config=dict(resolved["repomap"]),
-        lsp_config=dict(resolved["lsp"]),
-        plugins_config=dict(resolved["plugins"]),
-        chunking_config=dict(resolved["chunk"]),
-        tokenizer_config=dict(resolved["tokenizer"]),
-        cochange_config=dict(resolved["cochange"]),
-        retrieval_policy=_to_retrieval_policy(resolved["retrieval_policy"]),
-        policy_version=str(resolved["policy_version"]),
-        tests_config=dict(resolved["tests"]),
-        scip_config=dict(resolved["scip"]),
-        trace_config=dict(resolved["trace"]),
+        memory_limit=memory_limit,
     )
 
     threshold_overrides = build_threshold_overrides(threshold_settings)

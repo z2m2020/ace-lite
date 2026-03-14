@@ -13,6 +13,19 @@ from typing import Any, Literal, cast
 from pydantic import Field, field_validator, model_validator
 
 from ace_lite.chunking.disclosure_policy import CHUNK_DISCLOSURE_CHOICES
+from ace_lite.config_choices import (
+    ADAPTIVE_ROUTER_MODE_CHOICES,
+    CHUNK_GUARD_MODE_CHOICES,
+    MEMORY_AUTO_TAG_MODE_CHOICES,
+    MEMORY_GATE_MODE_CHOICES,
+    MEMORY_NOTES_MODE_CHOICES,
+    MEMORY_TIMEZONE_MODE_CHOICES,
+    TOPOLOGICAL_SHIELD_MODE_CHOICES,
+)
+from ace_lite.config_value_normalizers import (
+    normalize_choice_value,
+    normalize_optional_choice_value,
+)
 from ace_lite.pipeline.plugin_runtime import (
     normalize_remote_slot_allowlist,
     normalize_remote_slot_policy_mode,
@@ -38,8 +51,6 @@ from ace_lite.scoring_config import (
 )
 from ace_lite.token_estimator import normalize_tokenizer_model
 from ace_lite.utils import (
-    normalize_choice,
-    normalize_lower_str,
     normalize_optional_str,
     to_float,
     to_lower_list,
@@ -73,11 +84,10 @@ class MemoryNamespaceConfig(_StrictModel):
     @field_validator("auto_tag_mode", mode="before")
     @classmethod
     def _normalize_auto_tag_mode(cls, value: Any) -> MemoryAutoTagMode | None:
-        normalized = normalize_lower_str(value, default="")
-        if not normalized:
-            return None
-        if normalized not in ("repo", "user", "global"):
-            return None
+        normalized = normalize_optional_choice_value(
+            value,
+            choices=MEMORY_AUTO_TAG_MODE_CHOICES,
+        )
         return cast(MemoryAutoTagMode, normalized)
 
 
@@ -88,9 +98,11 @@ class MemoryGateConfig(_StrictModel):
     @field_validator("mode", mode="before")
     @classmethod
     def _normalize_mode(cls, value: Any) -> MemoryGateMode:
-        normalized = normalize_lower_str(value, default="auto") or "auto"
-        if normalized not in ("auto", "always", "never"):
-            normalized = "auto"
+        normalized = normalize_choice_value(
+            value,
+            choices=MEMORY_GATE_MODE_CHOICES,
+            default="auto",
+        )
         return cast(MemoryGateMode, normalized)
 
 
@@ -226,7 +238,11 @@ class MemoryTemporalConfig(_StrictModel):
     @field_validator("timezone_mode", mode="before")
     @classmethod
     def _normalize_timezone_mode(cls, value: Any) -> str:
-        return normalize_choice(value, ("utc", "local", "explicit"), default="utc")
+        return normalize_choice_value(
+            value,
+            choices=MEMORY_TIMEZONE_MODE_CHOICES,
+            default="utc",
+        )
 
 
 class MemoryCaptureConfig(_StrictModel):
@@ -285,9 +301,9 @@ class MemoryNotesConfig(_StrictModel):
     @field_validator("mode", mode="before")
     @classmethod
     def _normalize_mode(cls, value: Any) -> str:
-        return normalize_choice(
+        return normalize_choice_value(
             value,
-            ("supplement", "prefer_local", "local_only"),
+            choices=MEMORY_NOTES_MODE_CHOICES,
             default="supplement",
         )
 
@@ -481,9 +497,11 @@ class RetrievalConfig(_StrictModel):
     @field_validator("adaptive_router_mode", mode="before")
     @classmethod
     def _normalize_adaptive_router_mode(cls, value: Any) -> AdaptiveRouterMode:
-        normalized = normalize_lower_str(value, default="observe") or "observe"
-        if normalized not in ("observe", "shadow", "enforce"):
-            normalized = "observe"
+        normalized = normalize_choice_value(
+            value,
+            choices=ADAPTIVE_ROUTER_MODE_CHOICES,
+            default="observe",
+        )
         return cast(AdaptiveRouterMode, normalized)
 
     @field_validator("adaptive_router_model_path", "adaptive_router_state_path", mode="before")
@@ -644,9 +662,11 @@ class ChunkingConfig(_StrictModel):
         @field_validator("mode", mode="before")
         @classmethod
         def _normalize_mode(cls, value: Any) -> ChunkGuardMode:
-            normalized = normalize_lower_str(value, default="off") or "off"
-            if normalized not in ("off", "report_only", "enforce"):
-                normalized = "off"
+            normalized = normalize_choice_value(
+                value,
+                choices=CHUNK_GUARD_MODE_CHOICES,
+                default="off",
+            )
             return cast(ChunkGuardMode, normalized)
 
         @field_validator("lambda_penalty", "min_marginal_utility", mode="before")
@@ -694,9 +714,11 @@ class ChunkingConfig(_StrictModel):
         @field_validator("mode", mode="before")
         @classmethod
         def _normalize_mode(cls, value: Any) -> TopologicalShieldMode:
-            normalized = normalize_lower_str(value, default="off") or "off"
-            if normalized not in ("off", "report_only", "enforce"):
-                normalized = "off"
+            normalized = normalize_choice_value(
+                value,
+                choices=TOPOLOGICAL_SHIELD_MODE_CHOICES,
+                default="off",
+            )
             return cast(TopologicalShieldMode, normalized)
 
         @field_validator(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import replace
 from threading import Event, Thread
 from pathlib import Path
 
@@ -142,6 +143,26 @@ def test_mcp_service_repomap_writes_json_and_markdown(tmp_path: Path) -> None:
     assert result["selected_count"] >= 0
 
 
+def test_mcp_service_repomap_uses_default_output_paths(tmp_path: Path) -> None:
+    _write_sample_repo(tmp_path)
+    service = _make_service(tmp_path)
+
+    result = service.repomap_build(
+        root=str(tmp_path),
+        languages="python",
+    )
+
+    assert result["ok"] is True
+    assert result["output_json"] == str(
+        (tmp_path / "context-map" / "repo_map.json").resolve()
+    )
+    assert result["output_md"] == str(
+        (tmp_path / "context-map" / "repo_map.md").resolve()
+    )
+    assert Path(result["output_json"]).exists()
+    assert Path(result["output_md"]).exists()
+
+
 def test_mcp_service_memory_store_search_and_wipe(tmp_path: Path) -> None:
     service = _make_service(tmp_path)
     notes_path = tmp_path / "context-map" / "memory_notes.test.jsonl"
@@ -194,6 +215,8 @@ def test_mcp_service_feedback_record_and_stats(tmp_path: Path) -> None:
     assert recorded["ok"] is True
     assert Path(recorded["profile_path"]).exists()
     assert recorded["recorded"]["event"]["selected_path"] == "src/sample.py"
+    health_after_record = service.health()
+    assert health_after_record["request_stats"]["last_request_tool"] == "ace_feedback_record"
 
     stats = service.feedback_stats(
         repo="demo-repo",
@@ -207,6 +230,8 @@ def test_mcp_service_feedback_record_and_stats(tmp_path: Path) -> None:
     stats_payload = stats["stats"]
     assert stats_payload["matched_event_count"] == 1
     assert stats_payload["unique_paths"] == 1
+    health_after_stats = service.health()
+    assert health_after_stats["request_stats"]["last_request_tool"] == "ace_feedback_stats"
 
 
 def test_mcp_service_plan_smoke_returns_summary(tmp_path: Path) -> None:
@@ -284,6 +309,24 @@ def test_mcp_service_plan_summary_surfaces_contract_versions(
     assert result["index_subgraph_payload_version"] == "subgraph_payload_v1"
     assert result["source_plan_subgraph_payload_version"] == "subgraph_payload_v1"
     assert result["subgraph_taxonomy_version"] == "subgraph_edge_taxonomy_v1"
+
+
+def test_mcp_service_health_reports_memory_ready_when_enabled(tmp_path: Path) -> None:
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    config = AceLiteMcpConfig.from_env(
+        default_root=tmp_path,
+        default_skills_dir=skills_dir,
+    )
+    config = replace(config, memory_primary="rest", memory_secondary="none")
+    service = AceLiteMcpService(config=config)
+
+    payload = service.health()
+
+    assert payload["memory_primary"] == "rest"
+    assert payload["memory_secondary"] == "none"
+    assert payload["memory_ready"] is True
+    assert "Memory providers are disabled" not in " ".join(payload["warnings"])
 
 
 def test_mcp_service_plan_config_pack_overrides_defaults(tmp_path: Path, monkeypatch) -> None:

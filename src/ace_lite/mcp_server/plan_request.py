@@ -1,9 +1,36 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict
 
+from ace_lite.entrypoint_runtime import (
+    EmbeddingRuntimeKwargs,
+    MemoryGatePostprocessRuntimeKwargs,
+    RetrievalPolicyRuntimeKwargs,
+)
 from ace_lite.mcp_server.config import AceLiteMcpConfig
+
+
+class PlanRequestRunPlanKwargs(
+    EmbeddingRuntimeKwargs,
+    MemoryGatePostprocessRuntimeKwargs,
+    RetrievalPolicyRuntimeKwargs,
+):
+    top_k_files: int
+    min_candidate_score: int
+    candidate_relative_threshold: float
+    candidate_ranker: str
+    deterministic_refine_enabled: bool
+    hybrid_re2_fusion_mode: str
+    hybrid_re2_rrf_k: int
+    repomap_signal_weights: dict[str, float] | None
+    lsp_enabled: bool
+    plugins_enabled: bool
+
+
+PLAN_REQUEST_RUN_PLAN_KWARGS_KEYS = frozenset(
+    PlanRequestRunPlanKwargs.__annotations__.keys()
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +68,7 @@ class PlanRequestOptions:
     memory_postprocess_diversity_enabled: bool
     memory_postprocess_diversity_similarity_threshold: float
 
-    def to_run_plan_kwargs(self) -> dict[str, Any]:
+    def to_run_plan_kwargs(self) -> PlanRequestRunPlanKwargs:
         return {
             "top_k_files": int(self.top_k_files),
             "min_candidate_score": int(self.min_candidate_score),
@@ -418,6 +445,8 @@ def _coerce_float_dict(value: Any) -> dict[str, float] | None:
 
 
 __all__ = [
+    "PLAN_REQUEST_RUN_PLAN_KWARGS_KEYS",
+    "PlanRequestRunPlanKwargs",
     "PlanRequestOptions",
     "resolve_plan_request_options",
 ]

@@ -12,6 +12,19 @@ from typing import Any, cast
 from pydantic import Field, ValidationError, field_validator
 
 from ace_lite.chunking.disclosure_policy import CHUNK_DISCLOSURE_CHOICES
+from ace_lite.config_choices import (
+    ADAPTIVE_ROUTER_MODE_CHOICES,
+    CHUNK_GUARD_MODE_CHOICES,
+    EMBEDDING_PROVIDER_CHOICES,
+    MEMORY_AUTO_TAG_MODE_CHOICES,
+    MEMORY_GATE_MODE_CHOICES,
+    MEMORY_NOTES_MODE_CHOICES,
+    MEMORY_TIMEZONE_MODE_CHOICES,
+    REMOTE_SLOT_POLICY_CHOICES,
+    RETRIEVAL_POLICY_CHOICES,
+    TOPOLOGICAL_SHIELD_MODE_CHOICES,
+)
+from ace_lite.config_value_normalizers import validate_choice_value
 from ace_lite.pydantic_utils import StrictModel as _StrictModel
 from ace_lite.repomap.ranking import RANKING_PROFILES
 from ace_lite.runtime.scheduler import CronSchedule
@@ -23,37 +36,6 @@ from ace_lite.scoring_config import (
     MEMORY_STRATEGIES,
     SBFL_METRIC_CHOICES,
 )
-
-REMOTE_SLOT_POLICY_CHOICES: tuple[str, ...] = ("strict", "warn", "off")
-RETRIEVAL_POLICY_CHOICES: tuple[str, ...] = (
-    "auto",
-    "bugfix_test",
-    "doc_intent",
-    "feature",
-    "refactor",
-    "general",
-)
-ADAPTIVE_ROUTER_MODE_CHOICES: tuple[str, ...] = ("observe", "shadow", "enforce")
-CHUNK_GUARD_MODE_CHOICES: tuple[str, ...] = ("off", "report_only", "enforce")
-TOPOLOGICAL_SHIELD_MODE_CHOICES: tuple[str, ...] = (
-    "off",
-    "report_only",
-    "enforce",
-)
-MEMORY_AUTO_TAG_MODE_CHOICES: tuple[str, ...] = ("repo", "user", "global")
-MEMORY_NOTES_MODE_CHOICES: tuple[str, ...] = ("supplement", "prefer_local", "local_only")
-MEMORY_TIMEZONE_MODE_CHOICES: tuple[str, ...] = ("utc", "local", "explicit")
-MEMORY_GATE_MODE_CHOICES: tuple[str, ...] = ("auto", "always", "never")
-EMBEDDING_PROVIDER_CHOICES: tuple[str, ...] = (
-    "hash",
-    "hash_cross",
-    "hash_colbert",
-    "bge_m3",
-    "bge_reranker",
-    "sentence_transformers",
-    "ollama",
-)
-
 
 class TokenizerConfig(_StrictModel):
     model: str | None = None
@@ -90,16 +72,11 @@ class AdaptiveRouterConfig(_StrictModel):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in ADAPTIVE_ROUTER_MODE_CHOICES:
-            choices = ", ".join(ADAPTIVE_ROUTER_MODE_CHOICES)
-            raise ValueError(
-                "Unsupported adaptive_router.mode: "
-                f"{normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="adaptive_router.mode",
+            choices=ADAPTIVE_ROUTER_MODE_CHOICES,
+        )
 
 
 class MemoryNamespaceConfig(_StrictModel):
@@ -117,16 +94,11 @@ class MemoryNamespaceConfig(_StrictModel):
     @field_validator("auto_tag_mode")
     @classmethod
     def _validate_auto_tag_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in MEMORY_AUTO_TAG_MODE_CHOICES:
-            choices = ", ".join(MEMORY_AUTO_TAG_MODE_CHOICES)
-            raise ValueError(
-                "Unsupported memory.namespace.auto_tag_mode: "
-                f"{normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="memory.namespace.auto_tag_mode",
+            choices=MEMORY_AUTO_TAG_MODE_CHOICES,
+        )
 
 
 class MemoryProfileConfig(_StrictModel):
@@ -148,15 +120,11 @@ class MemoryTemporalConfig(_StrictModel):
     @field_validator("timezone_mode")
     @classmethod
     def _validate_timezone_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in MEMORY_TIMEZONE_MODE_CHOICES:
-            choices = ", ".join(MEMORY_TIMEZONE_MODE_CHOICES)
-            raise ValueError(
-                f"Unsupported memory.temporal.timezone_mode: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="memory.temporal.timezone_mode",
+            choices=MEMORY_TIMEZONE_MODE_CHOICES,
+        )
 
 
 class MemoryFeedbackConfig(_StrictModel):
@@ -187,15 +155,11 @@ class MemoryNotesConfig(_StrictModel):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in MEMORY_NOTES_MODE_CHOICES:
-            choices = ", ".join(MEMORY_NOTES_MODE_CHOICES)
-            raise ValueError(
-                f"Unsupported memory.notes.mode: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="memory.notes.mode",
+            choices=MEMORY_NOTES_MODE_CHOICES,
+        )
 
 
 class MemoryGateConfig(_StrictModel):
@@ -205,15 +169,11 @@ class MemoryGateConfig(_StrictModel):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in MEMORY_GATE_MODE_CHOICES:
-            choices = ", ".join(MEMORY_GATE_MODE_CHOICES)
-            raise ValueError(
-                f"Unsupported memory.gate.mode: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="memory.gate.mode",
+            choices=MEMORY_GATE_MODE_CHOICES,
+        )
 
 
 class MemoryPostprocessConfig(_StrictModel):
@@ -286,16 +246,11 @@ class ChunkGuardConfig(_StrictModel):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in CHUNK_GUARD_MODE_CHOICES:
-            choices = ", ".join(CHUNK_GUARD_MODE_CHOICES)
-            raise ValueError(
-                "Unsupported chunk.guard.mode: "
-                f"{normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="chunk.guard.mode",
+            choices=CHUNK_GUARD_MODE_CHOICES,
+        )
 
 
 class ChunkTopologicalShieldConfig(_StrictModel):
@@ -308,16 +263,11 @@ class ChunkTopologicalShieldConfig(_StrictModel):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in TOPOLOGICAL_SHIELD_MODE_CHOICES:
-            choices = ", ".join(TOPOLOGICAL_SHIELD_MODE_CHOICES)
-            raise ValueError(
-                "Unsupported chunk.topological_shield.mode: "
-                f"{normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="chunk.topological_shield.mode",
+            choices=TOPOLOGICAL_SHIELD_MODE_CHOICES,
+        )
 
 
 class ChunkConfig(_StrictModel):
@@ -363,15 +313,11 @@ class PluginsConfig(_StrictModel):
     @field_validator("remote_slot_policy_mode")
     @classmethod
     def _validate_remote_slot_policy_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in REMOTE_SLOT_POLICY_CHOICES:
-            choices = ", ".join(REMOTE_SLOT_POLICY_CHOICES)
-            raise ValueError(
-                f"Unsupported plugins.remote_slot_policy_mode: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="plugins.remote_slot_policy_mode",
+            choices=REMOTE_SLOT_POLICY_CHOICES,
+        )
 
 
 class IndexCliConfig(_StrictModel):
@@ -562,15 +508,11 @@ class EmbeddingsConfig(_StrictModel):
     @field_validator("provider")
     @classmethod
     def _validate_provider(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in EMBEDDING_PROVIDER_CHOICES:
-            choices = ", ".join(EMBEDDING_PROVIDER_CHOICES)
-            raise ValueError(
-                f"Unsupported embeddings.provider: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="embeddings.provider",
+            choices=EMBEDDING_PROVIDER_CHOICES,
+        )
 
 
 class TeamSyncConfig(_StrictModel):
@@ -867,15 +809,11 @@ class SharedPlanConfig(_StrictModel):
     @field_validator("remote_slot_policy_mode")
     @classmethod
     def _validate_remote_slot_policy_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in REMOTE_SLOT_POLICY_CHOICES:
-            choices = ", ".join(REMOTE_SLOT_POLICY_CHOICES)
-            raise ValueError(
-                f"Unsupported remote_slot_policy_mode: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="remote_slot_policy_mode",
+            choices=REMOTE_SLOT_POLICY_CHOICES,
+        )
 
     @field_validator("repomap_ranking_profile")
     @classmethod
@@ -932,42 +870,29 @@ class SharedPlanConfig(_StrictModel):
     @field_validator("chunk_guard_mode")
     @classmethod
     def _validate_chunk_guard_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in CHUNK_GUARD_MODE_CHOICES:
-            choices = ", ".join(CHUNK_GUARD_MODE_CHOICES)
-            raise ValueError(
-                f"Unsupported chunk_guard_mode: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="chunk_guard_mode",
+            choices=CHUNK_GUARD_MODE_CHOICES,
+        )
 
     @field_validator("retrieval_policy")
     @classmethod
     def _validate_retrieval_policy(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in RETRIEVAL_POLICY_CHOICES:
-            choices = ", ".join(RETRIEVAL_POLICY_CHOICES)
-            raise ValueError(
-                f"Unsupported retrieval_policy: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="retrieval_policy",
+            choices=RETRIEVAL_POLICY_CHOICES,
+        )
 
     @field_validator("adaptive_router_mode")
     @classmethod
     def _validate_adaptive_router_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in ADAPTIVE_ROUTER_MODE_CHOICES:
-            choices = ", ".join(ADAPTIVE_ROUTER_MODE_CHOICES)
-            raise ValueError(
-                "Unsupported adaptive_router_mode: "
-                f"{normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="adaptive_router_mode",
+            choices=ADAPTIVE_ROUTER_MODE_CHOICES,
+        )
 
     @field_validator("sbfl_metric")
     @classmethod
@@ -996,15 +921,11 @@ class SharedPlanConfig(_StrictModel):
     @field_validator("embedding_provider")
     @classmethod
     def _validate_embedding_provider(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in EMBEDDING_PROVIDER_CHOICES:
-            choices = ", ".join(EMBEDDING_PROVIDER_CHOICES)
-            raise ValueError(
-                f"Unsupported embedding_provider: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_choice_value(
+            value,
+            field_name="embedding_provider",
+            choices=EMBEDDING_PROVIDER_CHOICES,
+        )
 
 
 class BenchmarkThresholdsConfig(_StrictModel):

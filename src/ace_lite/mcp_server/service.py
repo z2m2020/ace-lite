@@ -6,7 +6,6 @@ It can also run in a self-test mode for health validation.
 
 from __future__ import annotations
 
-import json
 import logging
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -16,8 +15,6 @@ from time import perf_counter
 from typing import Any
 
 from ace_lite.cli_app.orchestrator_factory import create_memory_provider, run_plan
-from ace_lite.feedback_store import FeedbackBoostConfig, SelectionFeedbackStore
-from ace_lite.index_stage.terms import extract_terms
 from ace_lite.indexer import build_index
 from ace_lite.indexing_resilience import build_index_with_resilience
 from ace_lite.mcp_server.config import AceLiteMcpConfig
@@ -30,12 +27,19 @@ from ace_lite.mcp_server.file_support import (
     resolve_skills_dir,
     save_notes,
 )
+from ace_lite.mcp_server.service_health import build_health_response_payload
+from ace_lite.mcp_server.service_feedback_handlers import (
+    handle_feedback_record_request,
+    handle_feedback_stats_request,
+)
 from ace_lite.mcp_server.service_index_handlers import handle_index_request
 from ace_lite.mcp_server.service_memory_handlers import (
     handle_memory_search,
     handle_memory_store,
     handle_memory_wipe,
 )
+from ace_lite.mcp_server.service_plan_runtime import execute_mcp_plan_payload
+from ace_lite.mcp_server.service_repomap_handlers import handle_repomap_build_request
 from ace_lite.mcp_server.service_plan_handlers import (
     handle_plan_quick_request,
     handle_plan_request,
@@ -95,65 +99,13 @@ class AceLiteMcpService:
             }
 
     def health(self) -> dict[str, Any]:
-        memory_primary = str(self._config.memory_primary or "none").strip().lower() or "none"
-        memory_secondary = (
-            str(self._config.memory_secondary or "none").strip().lower() or "none"
-        )
-        memory_disabled = memory_primary == "none" and memory_secondary == "none"
-        warnings: list[str] = []
-        recommendations: list[str] = []
         version_info = get_version_info()
-        if bool(version_info.get("drifted")):
-            warnings.append(
-                "Version drift detected: pyproject.toml="
-                f"{version_info.get('pyproject_version')} but installed metadata="
-                f"{version_info.get('installed_version')} (dist={version_info.get('dist_name')}). "
-                "Run: python -m pip install -e .[dev]"
-            )
-        if memory_disabled:
-            warnings.append(
-                "Memory providers are disabled (ACE_LITE_MEMORY_PRIMARY/SECONDARY are none)."
-            )
-            recommendations.extend(
-                [
-                    "Set ACE_LITE_MEMORY_PRIMARY=mcp",
-                    "Set ACE_LITE_MEMORY_SECONDARY=rest",
-                    "Set ACE_LITE_MCP_BASE_URL / ACE_LITE_REST_BASE_URL to your OpenMemory endpoint",
-                ]
-            )
-        return {
-            "ok": True,
-            "server_name": self._config.server_name,
-            "version": get_version(),
-            "version_info": version_info,
-            "default_root": str(self._config.default_root),
-            "default_repo": self._config.default_repo,
-            "default_skills_dir": str(self._config.default_skills_dir),
-            "default_languages": self._config.default_languages,
-            "default_config_pack": str(self._config.config_pack or ""),
-            "memory_primary": memory_primary,
-            "memory_secondary": memory_secondary,
-            "memory_ready": not memory_disabled,
-            "plan_timeout_seconds": float(self._config.plan_timeout_seconds),
-            "mcp_base_url": self._config.mcp_base_url,
-            "rest_base_url": self._config.rest_base_url,
-            "embedding_enabled": bool(self._config.embedding_enabled),
-            "embedding_provider": str(self._config.embedding_provider or "hash").strip().lower()
-            or "hash",
-            "embedding_model": str(self._config.embedding_model or "hash-v1").strip()
-            or "hash-v1",
-            "embedding_dimension": max(1, int(self._config.embedding_dimension)),
-            "embedding_index_path": str(self._config.embedding_index_path or "").strip()
-            or "context-map/embeddings/index.json",
-            "ollama_base_url": str(self._config.ollama_base_url or "").strip()
-            or "http://localhost:11434",
-            "user_id": self._config.user_id,
-            "app": self._config.app,
-            "request_stats": self._request_stats_payload(),
-            "warnings": warnings,
-            "recommendations": recommendations,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
+        return build_health_response_payload(
+            config=self._config,
+            request_stats=self._request_stats_payload(),
+            version=get_version(),
+            version_info=version_info,
+        )
 
     def index(
         self,
@@ -208,51 +160,20 @@ class AceLiteMcpService:
         with self._track_request("ace_repomap_build"):
             root_path = self._resolve_root(root)
             language_csv = str(languages or self._config.default_languages).strip()
-            index_payload = build_index(
-                root_dir=str(root_path),
-                languages=parse_language_csv(language_csv),
-            )
-            repo_map = build_repo_map(
-                index_payload=index_payload,
-                budget_tokens=max(1, int(budget_tokens)),
-                top_k=max(1, int(top_k)),
-                ranking_profile=str(ranking_profile or "heuristic").strip().lower()
-                or "heuristic",
+            return handle_repomap_build_request(
+                root_path=root_path,
+                language_csv=language_csv,
+                budget_tokens=budget_tokens,
+                top_k=top_k,
+                ranking_profile=ranking_profile,
+                output_json=output_json,
+                output_md=output_md,
                 tokenizer_model=str(self._config.tokenizer_model),
+                build_index_fn=build_index,
+                parse_language_csv_fn=parse_language_csv,
+                build_repo_map_fn=build_repo_map,
+                resolve_output_path_fn=self._resolve_output_path,
             )
-
-            json_path = self._resolve_output_path(
-                root_path=root_path,
-                output=output_json,
-                default="context-map/repo_map.json",
-            )
-            md_path = self._resolve_output_path(
-                root_path=root_path,
-                output=output_md,
-                default="context-map/repo_map.md",
-            )
-            json_path.parent.mkdir(parents=True, exist_ok=True)
-            md_path.parent.mkdir(parents=True, exist_ok=True)
-
-            json_payload = dict(repo_map)
-            markdown = str(json_payload.pop("markdown", "") or "")
-            json_path.write_text(
-                json.dumps(json_payload, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            md_path.write_text(markdown, encoding="utf-8")
-
-            return {
-                "ok": True,
-                "root": str(root_path),
-                "languages": language_csv,
-                "ranking_profile": str(repo_map.get("ranking_profile", "")),
-                "budget_tokens": int(repo_map.get("budget_tokens", budget_tokens) or 0),
-                "used_tokens": int(repo_map.get("used_tokens", 0) or 0),
-                "selected_count": int(repo_map.get("selected_count", 0) or 0),
-                "output_json": str(json_path),
-                "output_md": str(md_path),
-            }
 
     def plan_quick(
         self,
@@ -376,35 +297,20 @@ class AceLiteMcpService:
             plugins_enabled=plugins_enabled,
             config_pack_overrides=config_pack_overrides,
         )
-
-        provider = create_memory_provider(
-            primary=str(memory_primary or self._config.memory_primary).strip().lower() or "none",
-            secondary=str(memory_secondary or self._config.memory_secondary).strip().lower()
-            or "none",
-            memory_strategy="hybrid",
-            memory_hybrid_limit=20,
-            memory_cache_enabled=True,
-            memory_cache_path=str(root_path / "context-map" / "memory_cache.jsonl"),
-            memory_cache_ttl_seconds=604800,
-            memory_cache_max_entries=5000,
-            memory_notes_enabled=bool(options.memory_notes_enabled),
-            mcp_base_url=self._config.mcp_base_url,
-            rest_base_url=self._config.rest_base_url,
-            timeout_seconds=self._config.memory_timeout,
-            user_id=self._config.user_id,
-            app=self._config.app,
-            limit=self._config.memory_limit,
-        )
-        return run_plan(
-            query=normalized_query,
-            repo=resolved_repo,
-            root=str(root_path),
-            skills_dir=str(skills_path),
+        return execute_mcp_plan_payload(
+            create_memory_provider_fn=create_memory_provider,
+            run_plan_fn=run_plan,
+            config=self._config,
+            normalized_query=normalized_query,
+            resolved_repo=resolved_repo,
+            root_path=root_path,
+            skills_path=skills_path,
             time_range=time_range,
             start_date=start_date,
             end_date=end_date,
-            memory_provider=provider,
-            **options.to_run_plan_kwargs(),
+            memory_primary=memory_primary,
+            memory_secondary=memory_secondary,
+            options=options,
         )
 
     def memory_search(
@@ -473,39 +379,18 @@ class AceLiteMcpService:
         position: int | None = None,
         max_entries: int = 512,
     ) -> dict[str, Any]:
-        normalized_query = str(query or "").strip()
-        if not normalized_query:
-            raise ValueError("query cannot be empty")
-        normalized_selected_path = str(selected_path or "").strip()
-        if not normalized_selected_path:
-            raise ValueError("selected_path cannot be empty")
-
-        root_path = self._resolve_root(root)
-        resolved_repo = str(repo or self._config.default_repo).strip() or self._config.default_repo
-        profile = Path(profile_path).expanduser() if profile_path else Path("~/.ace-lite/profile.json").expanduser()
-        if not profile.is_absolute():
-            profile = (root_path / profile).resolve()
-        else:
-            profile = profile.resolve()
-
-        store = SelectionFeedbackStore(
-            profile_path=profile,
-            max_entries=max(0, int(max_entries)),
-        )
-        recorded = store.record(
-            query=normalized_query,
-            repo=resolved_repo,
-            selected_path=normalized_selected_path,
-            position=position,
-            root_path=root_path,
-        )
-        return {
-            "ok": True,
-            "root": str(root_path),
-            "repo": resolved_repo,
-            "profile_path": str(profile),
-            "recorded": recorded,
-        }
+        with self._track_request("ace_feedback_record"):
+            root_path = self._resolve_root(root)
+            return handle_feedback_record_request(
+                query=query,
+                selected_path=selected_path,
+                repo=repo,
+                root_path=root_path,
+                default_repo=self._config.default_repo,
+                profile_path=profile_path,
+                position=position,
+                max_entries=max_entries,
+            )
 
     def feedback_stats(
         self,
@@ -520,39 +405,20 @@ class AceLiteMcpService:
         top_n: int = 10,
         max_entries: int = 512,
     ) -> dict[str, Any]:
-        root_path = self._resolve_root(root)
-        resolved_repo = str(repo or self._config.default_repo).strip() or self._config.default_repo
-        profile = Path(profile_path).expanduser() if profile_path else Path("~/.ace-lite/profile.json").expanduser()
-        if not profile.is_absolute():
-            profile = (root_path / profile).resolve()
-        else:
-            profile = profile.resolve()
-
-        store = SelectionFeedbackStore(
-            profile_path=profile,
-            max_entries=max(0, int(max_entries)),
-        )
-        query_terms: list[str] | None = None
-        normalized_query = str(query or "").strip()
-        if normalized_query:
-            query_terms = extract_terms(query=normalized_query, memory_stage={})
-        stats = store.stats(
-            repo=resolved_repo if repo is not None else None,
-            query_terms=query_terms,
-            boost=FeedbackBoostConfig(
-                boost_per_select=max(0.0, float(boost_per_select)),
-                max_boost=max(0.0, float(max_boost)),
-                decay_days=max(0.0, float(decay_days)),
-            ),
-            top_n=max(1, int(top_n)),
-        )
-        return {
-            "ok": True,
-            "root": str(root_path),
-            "repo": resolved_repo,
-            "profile_path": str(profile),
-            "stats": stats,
-        }
+        with self._track_request("ace_feedback_stats"):
+            root_path = self._resolve_root(root)
+            return handle_feedback_stats_request(
+                repo=repo,
+                root_path=root_path,
+                default_repo=self._config.default_repo,
+                profile_path=profile_path,
+                query=query,
+                boost_per_select=boost_per_select,
+                max_boost=max_boost,
+                decay_days=decay_days,
+                top_n=top_n,
+                max_entries=max_entries,
+            )
 
     def _resolve_root(self, root: str | None) -> Path:
         return resolve_root(root=root, default_root=self._config.default_root)

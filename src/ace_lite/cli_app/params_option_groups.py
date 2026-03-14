@@ -9,36 +9,23 @@ from typing import Any
 import click
 
 from ace_lite.chunking.disclosure_policy import CHUNK_DISCLOSURE_CHOICES
+from ace_lite.config_choices import (
+    ADAPTIVE_ROUTER_MODE_CHOICES,
+    CHUNK_GUARD_MODE_CHOICES,
+    EMBEDDING_PROVIDER_CHOICES,
+    MEMORY_AUTO_TAG_MODE_CHOICES,
+    MEMORY_GATE_MODE_CHOICES,
+    REMOTE_SLOT_POLICY_CHOICES,
+    RETRIEVAL_POLICY_CHOICES,
+)
 from ace_lite.repomap.ranking import RANKING_PROFILES
 from ace_lite.scip import SCIP_PROVIDERS
 
 CANDIDATE_RANKER_CHOICES = ("heuristic", "bm25_lite", "hybrid_re2", "rrf_hybrid")
 HYBRID_FUSION_CHOICES = ("linear", "rrf")
-RETRIEVAL_POLICY_CHOICES = (
-    "auto",
-    "bugfix_test",
-    "doc_intent",
-    "feature",
-    "refactor",
-    "general",
-)
-ADAPTIVE_ROUTER_MODE_CHOICES = ("observe", "shadow", "enforce")
-CHUNK_GUARD_MODE_CHOICES = ("off", "report_only", "enforce")
 MEMORY_STRATEGY_CHOICES = ("semantic", "hybrid")
-MEMORY_AUTO_TAG_MODE_CHOICES = ("repo", "user", "global")
-MEMORY_GATE_MODE_CHOICES = ("auto", "always", "never")
-REMOTE_SLOT_POLICY_CHOICES = ("strict", "warn", "off")
 SBFL_METRIC_CHOICES = ("ochiai", "dstar")
 SCIP_PROVIDER_CHOICES = tuple(SCIP_PROVIDERS)
-EMBEDDING_PROVIDER_CHOICES = (
-    "hash",
-    "hash_cross",
-    "hash_colbert",
-    "bge_m3",
-    "bge_reranker",
-    "sentence_transformers",
-    "ollama",
-)
 
 
 RETRIEVAL_PRESETS: dict[str, dict[str, Any]] = {

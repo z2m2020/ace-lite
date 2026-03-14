@@ -3,12 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ace_lite.config_choices import CHUNK_GUARD_MODE_CHOICES
 from ace_lite.chunking.robust_signature import (
     chunk_identity_key,
     count_available_robust_signatures,
 )
-
-CHUNK_GUARD_MODE_CHOICES: tuple[str, ...] = ("off", "report_only", "enforce")
 
 
 @dataclass(frozen=True, slots=True)

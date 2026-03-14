@@ -4,10 +4,13 @@ from pathlib import Path
 from typing import Any
 
 from ace_lite.config_pack import load_config_pack
-from ace_lite.plan_contract_summary import build_plan_contract_summary
+from ace_lite.plan_application import (
+    build_plan_contract_summary_from_payload,
+    execute_timed_plan_with_fallback,
+    resolve_plan_quick_fallback,
+)
 from ace_lite.plan_timeout import (
     PLAN_TIMEOUT_RECOMMENDATIONS,
-    execute_with_timeout,
     is_plan_timeout_debug_enabled,
     resolve_plan_timeout_seconds,
 )
@@ -102,7 +105,7 @@ def handle_plan_request(
     resolved_timeout = timeout_resolution.seconds
     debug_dump_enabled = is_plan_timeout_debug_enabled()
 
-    outcome = execute_with_timeout(
+    execution = execute_timed_plan_with_fallback(
         run_payload=lambda: run_plan_payload_fn(
             normalized_query,
             resolved_repo,
@@ -132,48 +135,33 @@ def handle_plan_request(
             "timeout_raw": timeout_resolution.raw,
         },
         debug_enabled=debug_dump_enabled,
+        fallback_resolver=lambda: resolve_plan_quick_fallback(
+            plan_quick_fn=plan_quick_fn,
+            normalized_query=normalized_query,
+            root_path=root_path,
+            top_k_files=max(1, int(top_k_files)),
+            plan_quick_kwargs={"repo": resolved_repo},
+        ),
     )
 
-    if outcome.timed_out:
-        fallback_paths: list[str] = []
-        fallback_steps: list[str] = []
-        try:
-            quick = plan_quick_fn(
-                query=normalized_query,
-                repo=resolved_repo,
-                root=str(root_path),
-                top_k_files=max(1, int(top_k_files)),
-                repomap_top_k=max(8, int(top_k_files) * 4),
-                budget_tokens=800,
-                ranking_profile="graph",
-                include_rows=False,
-            )
-            quick_paths = quick.get("candidate_files", [])
-            if isinstance(quick_paths, list):
-                fallback_paths = [str(item).strip() for item in quick_paths if str(item).strip()]
-            quick_steps = quick.get("steps", [])
-            if isinstance(quick_steps, list):
-                fallback_steps = [str(item).strip() for item in quick_steps if str(item).strip()]
-        except Exception:
-            fallback_paths = []
-            fallback_steps = []
+    if execution.timed_out:
         return {
             "ok": False,
             "query": normalized_query,
             "repo": resolved_repo,
             "root": str(root_path),
             "config_pack": config_pack_meta,
-            "source_plan_steps": len(fallback_steps),
-            "candidate_files": len(fallback_paths),
-            "candidate_file_paths": fallback_paths,
-            "fallback_mode": "plan_quick" if fallback_paths else "none",
-            "steps": fallback_steps,
-            "total_ms": float(max(0.0, outcome.elapsed_ms)),
+            "source_plan_steps": len(execution.fallback.steps),
+            "candidate_files": len(execution.fallback.candidate_file_paths),
+            "candidate_file_paths": execution.fallback.candidate_file_paths,
+            "fallback_mode": execution.fallback.fallback_mode,
+            "steps": execution.fallback.steps,
+            "total_ms": float(max(0.0, execution.outcome.elapsed_ms)),
             "timed_out": True,
             "timeout_seconds": float(resolved_timeout),
             "reason": "ace_plan_timeout",
             "timeout_source": timeout_resolution.source,
-            "debug_dump_path": outcome.debug_dump_path,
+            "debug_dump_path": execution.outcome.debug_dump_path,
             "recommendations": list(PLAN_TIMEOUT_RECOMMENDATIONS),
         }
 
@@ -184,43 +172,28 @@ def handle_plan_request(
         "root": str(root_path),
         "config_pack": config_pack_meta,
         "source_plan_steps": len(
-            outcome.payload.get("source_plan", {}).get("steps", [])
-            if isinstance(outcome.payload, dict)
-            and isinstance(outcome.payload.get("source_plan"), dict)
+            execution.payload.get("source_plan", {}).get("steps", [])
+            if isinstance(execution.payload, dict)
+            and isinstance(execution.payload.get("source_plan"), dict)
             else []
         ),
         "candidate_files": len(
-            outcome.payload.get("source_plan", {}).get("candidate_files", [])
-            if isinstance(outcome.payload, dict)
-            and isinstance(outcome.payload.get("source_plan"), dict)
+            execution.payload.get("source_plan", {}).get("candidate_files", [])
+            if isinstance(execution.payload, dict)
+            and isinstance(execution.payload.get("source_plan"), dict)
             else []
         ),
         "total_ms": float(
-            outcome.payload.get("observability", {}).get("total_ms", 0.0)
-            if isinstance(outcome.payload, dict)
-            and isinstance(outcome.payload.get("observability"), dict)
+            execution.payload.get("observability", {}).get("total_ms", 0.0)
+            if isinstance(execution.payload, dict)
+            and isinstance(execution.payload.get("observability"), dict)
             else 0.0
         ),
     }
-    if isinstance(outcome.payload, dict):
-        index_payload = (
-            outcome.payload.get("index", {})
-            if isinstance(outcome.payload.get("index"), dict)
-            else {}
-        )
-        source_plan_payload = (
-            outcome.payload.get("source_plan", {})
-            if isinstance(outcome.payload.get("source_plan"), dict)
-            else {}
-        )
-        summary.update(
-            build_plan_contract_summary(
-                index_payload=index_payload,
-                source_plan_payload=source_plan_payload,
-            )
-        )
+    if isinstance(execution.payload, dict):
+        summary.update(build_plan_contract_summary_from_payload(execution.payload))
     if include_full_payload:
-        summary["plan"] = outcome.payload
+        summary["plan"] = execution.payload
     return summary
 
 

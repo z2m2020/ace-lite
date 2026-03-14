@@ -11,6 +11,7 @@ import os
 from collections import deque
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
+from time import monotonic
 from typing import Any
 
 from ace_lite.indexer import DEFAULT_EXCLUDE_DIRS, build_index, update_index
@@ -23,10 +24,15 @@ _INDEX_MEMORY_CACHE: dict[
 
 _GIT_TIMEOUT_ENV = "ACE_LITE_GIT_TIMEOUT_SECONDS"
 _DEFAULT_GIT_TIMEOUT_SECONDS = 2.0
+_GIT_STATUS_CACHE_TTL_ENV = "ACE_LITE_GIT_STATUS_CACHE_TTL_SECONDS"
+_DEFAULT_GIT_STATUS_CACHE_TTL_SECONDS = 1.0
 _REVERSE_DEP_DEPTH_ENV = "ACE_LITE_INDEX_REVERSE_DEP_DEPTH"
 _DEFAULT_REVERSE_DEP_DEPTH = 1
 _REVERSE_DEP_MAX_EXTRA_ENV = "ACE_LITE_INDEX_REVERSE_DEP_MAX_EXTRA"
 _DEFAULT_REVERSE_DEP_MAX_EXTRA = 256
+_GIT_STATUS_MEMORY_CACHE: dict[
+    tuple[str, str, int, int], tuple[float, list[str]]
+] = {}
 
 
 def _is_hex_sha(value: str) -> bool:
@@ -119,6 +125,34 @@ def _git_timeout_seconds() -> float:
     except ValueError:
         return _DEFAULT_GIT_TIMEOUT_SECONDS
     return max(0.1, value)
+
+
+def _git_status_cache_ttl_seconds() -> float:
+    raw = str(os.getenv(_GIT_STATUS_CACHE_TTL_ENV, "")).strip()
+    if not raw:
+        return _DEFAULT_GIT_STATUS_CACHE_TTL_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return _DEFAULT_GIT_STATUS_CACHE_TTL_SECONDS
+    return max(0.0, value)
+
+
+def _git_index_fingerprint(*, root: Path) -> tuple[int, int]:
+    index_path = _resolve_git_dir(root=root)
+    if index_path is None:
+        return (0, 0)
+    index_file = index_path / "index"
+    if not index_file.exists() or not index_file.is_file():
+        return (0, 0)
+    try:
+        stat = index_file.stat()
+    except OSError:
+        return (0, 0)
+    return (
+        int(getattr(stat, "st_mtime_ns", 0) or 0),
+        int(getattr(stat, "st_size", 0) or 0),
+    )
 
 
 def _read_positive_int_env(name: str, default: int) -> int:
@@ -253,6 +287,19 @@ def detect_changed_files_from_git(*, root_dir: str | Path) -> list[str]:
     if not (root / ".git").exists():
         return []
 
+    resolved_root = str(root.resolve())
+    cache_ttl_seconds = _git_status_cache_ttl_seconds()
+    cache_key: tuple[str, str, int, int] | None = None
+    if cache_ttl_seconds > 0.0:
+        head_sha = str(_get_git_head_sha(root_dir=root) or "").strip().lower()
+        index_mtime_ns, index_size = _git_index_fingerprint(root=root)
+        cache_key = (resolved_root, head_sha, index_mtime_ns, index_size)
+        cached = _GIT_STATUS_MEMORY_CACHE.get(cache_key)
+        now = monotonic()
+        if cached is not None and (now - cached[0]) <= cache_ttl_seconds:
+            _GIT_STATUS_MEMORY_CACHE[cache_key] = (now, list(cached[1]))
+            return list(cached[1])
+
     returncode, stdout, _stderr, timed_out = run_capture_output(
         ["git", "status", "--porcelain", "-z"],
         cwd=root,
@@ -276,6 +323,8 @@ def detect_changed_files_from_git(*, root_dir: str | Path) -> list[str]:
         seen.add(path)
         normalized.append(path)
 
+    if cache_key is not None:
+        _GIT_STATUS_MEMORY_CACHE[cache_key] = (monotonic(), list(normalized))
     return normalized
 
 
@@ -414,10 +463,15 @@ def _normalize_aceignore_state(value: Any) -> dict[str, Any]:
     }
 
 
+def _aceignore_state_matches(*, cache: dict[str, Any], current: dict[str, Any]) -> bool:
+    return _normalize_aceignore_state(cache.get("aceignore")) == _normalize_aceignore_state(
+        current
+    )
+
+
 def _aceignore_state_changed(*, cache: dict[str, Any], root_dir: str | Path) -> bool:
     current = _current_aceignore_state(root_dir=root_dir)
-    cached = _normalize_aceignore_state(cache.get("aceignore"))
-    return current != cached
+    return not _aceignore_state_matches(cache=cache, current=current)
 
 
 def _store_aceignore_state(*, payload: dict[str, Any], root_dir: str | Path) -> dict[str, Any]:
@@ -693,8 +747,9 @@ def build_or_refresh_index(
             if _normalize_changed_path(str(item or "")).lower() != ".aceignore"
         ]
         if not changed_files_detected:
-            cache["aceignore"] = dict(aceignore_state)
-            save_index_cache(payload=cache, cache_path=cache_path)
+            if not _aceignore_state_matches(cache=cache, current=aceignore_state):
+                cache["aceignore"] = dict(aceignore_state)
+                save_index_cache(payload=cache, cache_path=cache_path)
             return cache, {
                 "cache_hit": True,
                 "mode": "cache_only",
@@ -707,8 +762,9 @@ def build_or_refresh_index(
         changed_files=changed_files_detected, languages=languages
     )
     if not changed_files_index:
-        cache["aceignore"] = dict(aceignore_state)
-        save_index_cache(payload=cache, cache_path=cache_path)
+        if not _aceignore_state_matches(cache=cache, current=aceignore_state):
+            cache["aceignore"] = dict(aceignore_state)
+            save_index_cache(payload=cache, cache_path=cache_path)
         return cache, {
             "cache_hit": True,
             "mode": "cache_only",
@@ -724,8 +780,9 @@ def build_or_refresh_index(
         index_files=index_files,
     )
     if not effective_changed_files:
-        cache["aceignore"] = dict(aceignore_state)
-        save_index_cache(payload=cache, cache_path=cache_path)
+        if not _aceignore_state_matches(cache=cache, current=aceignore_state):
+            cache["aceignore"] = dict(aceignore_state)
+            save_index_cache(payload=cache, cache_path=cache_path)
         return cache, {
             "cache_hit": True,
             "mode": "cache_only",
