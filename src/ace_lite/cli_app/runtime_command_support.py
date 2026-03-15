@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 import sqlite3
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import click
@@ -41,6 +43,25 @@ from ace_lite.stage_artifact_cache_gc import (
 
 
 DEFAULT_RUNTIME_STATS_DB_PATH = DEFAULT_USER_RUNTIME_DB_PATH
+
+
+@dataclass(frozen=True)
+class RuntimeCommandDomainDescriptor:
+    name: str
+    handlers: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RuntimeStatusSections:
+    mcp: dict[str, Any]
+    plan_index: dict[str, Any]
+    plan_embeddings: dict[str, Any]
+    plan_replay: dict[str, Any]
+    plan_trace: dict[str, Any]
+    plan_lsp: dict[str, Any]
+    plan_skills: dict[str, Any]
+    plan_plugins: dict[str, Any]
+    plan_cochange: dict[str, Any]
 
 
 def load_runtime_snapshot(
@@ -659,38 +680,16 @@ def execute_codex_mcp_setup_plan(
     return result
 
 
-def build_codex_mcp_setup_plan(
+def _resolve_codex_mcp_setup_identity(
     *,
     name: str,
     root: str,
     skills_dir: str,
-    codex_executable: str,
-    python_executable: str,
-    enable_memory: bool,
-    memory_primary: str,
-    memory_secondary: str,
-    mcp_base_url: str,
-    rest_base_url: str,
-    user_id: str,
-    app: str,
     config_pack: str,
-    enable_embeddings: bool,
-    embedding_provider: str,
-    embedding_model: str,
-    embedding_dimension: int,
-    embedding_index_path: str,
-    embedding_rerank_pool: int,
-    embedding_lexical_weight: float,
-    embedding_semantic_weight: float,
-    embedding_min_similarity: float,
-    embedding_fail_open: bool,
-    ollama_base_url: str,
-    replace: bool,
-    apply: bool,
-    verify: bool,
+    user_id: str,
     resolve_cli_path_fn: Any,
     env_get_fn: Any,
-) -> dict[str, Any]:
+) -> dict[str, str]:
     normalized_name = str(name or "").strip() or "ace-lite"
     normalized_root = resolve_cli_path_fn(root)
     normalized_skills = resolve_cli_path_fn(skills_dir)
@@ -704,7 +703,39 @@ def build_codex_mcp_setup_plan(
         or str(env_get_fn("USER", "")).strip()
         or "codex"
     )
+    return {
+        "normalized_name": normalized_name,
+        "normalized_root": normalized_root,
+        "normalized_skills": normalized_skills,
+        "normalized_config_pack": normalized_config_pack,
+        "resolved_user_id": resolved_user_id,
+    }
 
+
+def _build_codex_mcp_env_items(
+    *,
+    normalized_root: str,
+    normalized_skills: str,
+    normalized_config_pack: str,
+    enable_memory: bool,
+    memory_primary: str,
+    memory_secondary: str,
+    mcp_base_url: str,
+    rest_base_url: str,
+    resolved_user_id: str,
+    app: str,
+    enable_embeddings: bool,
+    embedding_provider: str,
+    embedding_model: str,
+    embedding_dimension: int,
+    embedding_index_path: str,
+    embedding_rerank_pool: int,
+    embedding_lexical_weight: float,
+    embedding_semantic_weight: float,
+    embedding_min_similarity: float,
+    embedding_fail_open: bool,
+    ollama_base_url: str,
+) -> list[str]:
     env_items: list[str] = [
         f"ACE_LITE_DEFAULT_ROOT={normalized_root}",
         f"ACE_LITE_DEFAULT_SKILLS_DIR={normalized_skills}",
@@ -747,22 +778,33 @@ def build_codex_mcp_setup_plan(
         )
     else:
         env_items.append("ACE_LITE_EMBEDDING_ENABLED=0")
+    return env_items
 
-    remove_cmd = [str(codex_executable), "mcp", "remove", normalized_name]
-    add_cmd: list[str] = [str(codex_executable), "mcp", "add", normalized_name]
-    for item in env_items:
-        add_cmd.extend(["--env", item])
-    add_cmd.extend(
-        [
-            "--",
-            str(python_executable),
-            "-m",
-            "ace_lite.mcp_server",
-            "--transport",
-            "stdio",
-        ]
-    )
 
+def _build_codex_mcp_self_test_env(
+    *,
+    normalized_root: str,
+    normalized_skills: str,
+    normalized_config_pack: str,
+    enable_memory: bool,
+    memory_primary: str,
+    memory_secondary: str,
+    mcp_base_url: str,
+    rest_base_url: str,
+    resolved_user_id: str,
+    app: str,
+    enable_embeddings: bool,
+    embedding_provider: str,
+    embedding_model: str,
+    embedding_dimension: int,
+    embedding_index_path: str,
+    embedding_rerank_pool: int,
+    embedding_lexical_weight: float,
+    embedding_semantic_weight: float,
+    embedding_min_similarity: float,
+    embedding_fail_open: bool,
+    ollama_base_url: str,
+) -> dict[str, str]:
     self_test_env: dict[str, str] = {
         "ACE_LITE_DEFAULT_ROOT": normalized_root,
         "ACE_LITE_DEFAULT_SKILLS_DIR": normalized_skills,
@@ -773,19 +815,20 @@ def build_codex_mcp_setup_plan(
     if normalized_config_pack:
         self_test_env["ACE_LITE_CONFIG_PACK"] = normalized_config_pack
     if enable_memory:
-        self_test_env = {
-            "ACE_LITE_DEFAULT_ROOT": normalized_root,
-            "ACE_LITE_DEFAULT_SKILLS_DIR": normalized_skills,
-            "ACE_LITE_MEMORY_PRIMARY": str(memory_primary).strip().lower() or "mcp",
-            "ACE_LITE_MEMORY_SECONDARY": str(memory_secondary).strip().lower() or "rest",
-            "ACE_LITE_EMBEDDING_ENABLED": "0",
-            "ACE_LITE_MCP_BASE_URL": str(mcp_base_url).strip() or "http://localhost:8765",
-            "ACE_LITE_REST_BASE_URL": str(rest_base_url).strip() or "http://localhost:8765",
-            "ACE_LITE_USER_ID": resolved_user_id,
-            "ACE_LITE_APP": str(app).strip() or "ace-lite",
-        }
-        if normalized_config_pack:
-            self_test_env["ACE_LITE_CONFIG_PACK"] = normalized_config_pack
+        self_test_env.update(
+            {
+                "ACE_LITE_MEMORY_PRIMARY": str(memory_primary).strip().lower()
+                or "mcp",
+                "ACE_LITE_MEMORY_SECONDARY": str(memory_secondary).strip().lower()
+                or "rest",
+                "ACE_LITE_MCP_BASE_URL": str(mcp_base_url).strip()
+                or "http://localhost:8765",
+                "ACE_LITE_REST_BASE_URL": str(rest_base_url).strip()
+                or "http://localhost:8765",
+                "ACE_LITE_USER_ID": resolved_user_id,
+                "ACE_LITE_APP": str(app).strip() or "ace-lite",
+            }
+        )
     if enable_embeddings:
         self_test_env.update(
             {
@@ -814,6 +857,117 @@ def build_codex_mcp_setup_plan(
                 or "http://localhost:11434",
             }
         )
+    return self_test_env
+
+
+def build_codex_mcp_setup_plan(
+    *,
+    name: str,
+    root: str,
+    skills_dir: str,
+    codex_executable: str,
+    python_executable: str,
+    enable_memory: bool,
+    memory_primary: str,
+    memory_secondary: str,
+    mcp_base_url: str,
+    rest_base_url: str,
+    user_id: str,
+    app: str,
+    config_pack: str,
+    enable_embeddings: bool,
+    embedding_provider: str,
+    embedding_model: str,
+    embedding_dimension: int,
+    embedding_index_path: str,
+    embedding_rerank_pool: int,
+    embedding_lexical_weight: float,
+    embedding_semantic_weight: float,
+    embedding_min_similarity: float,
+    embedding_fail_open: bool,
+    ollama_base_url: str,
+    replace: bool,
+    apply: bool,
+    verify: bool,
+    resolve_cli_path_fn: Any,
+    env_get_fn: Any,
+) -> dict[str, Any]:
+    identity = _resolve_codex_mcp_setup_identity(
+        name=name,
+        root=root,
+        skills_dir=skills_dir,
+        config_pack=config_pack,
+        user_id=user_id,
+        resolve_cli_path_fn=resolve_cli_path_fn,
+        env_get_fn=env_get_fn,
+    )
+    normalized_name = identity["normalized_name"]
+    normalized_root = identity["normalized_root"]
+    normalized_skills = identity["normalized_skills"]
+    normalized_config_pack = identity["normalized_config_pack"]
+    resolved_user_id = identity["resolved_user_id"]
+    env_items = _build_codex_mcp_env_items(
+        normalized_root=normalized_root,
+        normalized_skills=normalized_skills,
+        normalized_config_pack=normalized_config_pack,
+        enable_memory=enable_memory,
+        memory_primary=memory_primary,
+        memory_secondary=memory_secondary,
+        mcp_base_url=mcp_base_url,
+        rest_base_url=rest_base_url,
+        resolved_user_id=resolved_user_id,
+        app=app,
+        enable_embeddings=enable_embeddings,
+        embedding_provider=embedding_provider,
+        embedding_model=embedding_model,
+        embedding_dimension=embedding_dimension,
+        embedding_index_path=embedding_index_path,
+        embedding_rerank_pool=embedding_rerank_pool,
+        embedding_lexical_weight=embedding_lexical_weight,
+        embedding_semantic_weight=embedding_semantic_weight,
+        embedding_min_similarity=embedding_min_similarity,
+        embedding_fail_open=embedding_fail_open,
+        ollama_base_url=ollama_base_url,
+    )
+
+    remove_cmd = [str(codex_executable), "mcp", "remove", normalized_name]
+    add_cmd: list[str] = [str(codex_executable), "mcp", "add", normalized_name]
+    for item in env_items:
+        add_cmd.extend(["--env", item])
+    add_cmd.extend(
+        [
+            "--",
+            str(python_executable),
+            "-m",
+            "ace_lite.mcp_server",
+            "--transport",
+            "stdio",
+        ]
+    )
+
+    self_test_env = _build_codex_mcp_self_test_env(
+        normalized_root=normalized_root,
+        normalized_skills=normalized_skills,
+        normalized_config_pack=normalized_config_pack,
+        enable_memory=enable_memory,
+        memory_primary=memory_primary,
+        memory_secondary=memory_secondary,
+        mcp_base_url=mcp_base_url,
+        rest_base_url=rest_base_url,
+        resolved_user_id=resolved_user_id,
+        app=app,
+        enable_embeddings=enable_embeddings,
+        embedding_provider=embedding_provider,
+        embedding_model=embedding_model,
+        embedding_dimension=embedding_dimension,
+        embedding_index_path=embedding_index_path,
+        embedding_rerank_pool=embedding_rerank_pool,
+        embedding_lexical_weight=embedding_lexical_weight,
+        embedding_semantic_weight=embedding_semantic_weight,
+        embedding_min_similarity=embedding_min_similarity,
+        embedding_fail_open=embedding_fail_open,
+        ollama_base_url=ollama_base_url,
+    )
 
     return {
         "normalized_name": normalized_name,
@@ -1012,86 +1166,93 @@ def _resolve_repo_relative_path(*, root: str | Path, configured_path: str | Path
     return str(path.resolve())
 
 
-def build_runtime_status_payload(
-    *,
-    root: str | Path,
-    settings: dict[str, Any],
-    fingerprint: str,
-    selected_profile: str | None,
-    stats_tags: dict[str, Any] | None,
-    snapshot_loaded: bool,
-    snapshot_path: str | Path,
-    memory_state: dict[str, Any],
-    runtime_stats: dict[str, Any],
-) -> dict[str, Any]:
-    root_path = Path(root).resolve()
+def _resolve_runtime_status_sections(settings: dict[str, Any]) -> RuntimeStatusSections:
     plan = settings.get("plan", {}) if isinstance(settings.get("plan"), dict) else {}
     mcp = settings.get("mcp", {}) if isinstance(settings.get("mcp"), dict) else {}
-    plan_index = plan.get("index", {}) if isinstance(plan.get("index"), dict) else {}
-    plan_embeddings = (
-        plan.get("embeddings", {})
-        if isinstance(plan.get("embeddings"), dict)
-        else {}
-    )
-    plan_replay = (
-        plan.get("plan_replay_cache", {})
-        if isinstance(plan.get("plan_replay_cache"), dict)
-        else {}
-    )
-    plan_trace = plan.get("trace", {}) if isinstance(plan.get("trace"), dict) else {}
-    plan_lsp = plan.get("lsp", {}) if isinstance(plan.get("lsp"), dict) else {}
-    plan_skills = (
-        plan.get("skills", {}) if isinstance(plan.get("skills"), dict) else {}
-    )
-    plan_plugins = (
-        plan.get("plugins", {}) if isinstance(plan.get("plugins"), dict) else {}
-    )
-    plan_cochange = (
-        plan.get("cochange", {}) if isinstance(plan.get("cochange"), dict) else {}
+    return RuntimeStatusSections(
+        mcp=mcp,
+        plan_index=plan.get("index", {}) if isinstance(plan.get("index"), dict) else {},
+        plan_embeddings=(
+            plan.get("embeddings", {})
+            if isinstance(plan.get("embeddings"), dict)
+            else {}
+        ),
+        plan_replay=(
+            plan.get("plan_replay_cache", {})
+            if isinstance(plan.get("plan_replay_cache"), dict)
+            else {}
+        ),
+        plan_trace=plan.get("trace", {}) if isinstance(plan.get("trace"), dict) else {},
+        plan_lsp=plan.get("lsp", {}) if isinstance(plan.get("lsp"), dict) else {},
+        plan_skills=(
+            plan.get("skills", {}) if isinstance(plan.get("skills"), dict) else {}
+        ),
+        plan_plugins=(
+            plan.get("plugins", {}) if isinstance(plan.get("plugins"), dict) else {}
+        ),
+        plan_cochange=(
+            plan.get("cochange", {}) if isinstance(plan.get("cochange"), dict) else {}
+        ),
     )
 
-    cache_paths = {
+
+def _build_runtime_status_cache_paths(
+    *,
+    root_path: Path,
+    sections: RuntimeStatusSections,
+    runtime_stats: dict[str, Any],
+) -> dict[str, str | None]:
+    return {
         "index": _resolve_repo_relative_path(
             root=root_path,
-            configured_path=plan_index.get("cache_path"),
+            configured_path=sections.plan_index.get("cache_path"),
         ),
         "embeddings": _resolve_repo_relative_path(
             root=root_path,
-            configured_path=plan_embeddings.get("index_path"),
+            configured_path=sections.plan_embeddings.get("index_path"),
         ),
         "plan_replay_cache": _resolve_repo_relative_path(
             root=root_path,
-            configured_path=plan_replay.get("cache_path"),
+            configured_path=sections.plan_replay.get("cache_path"),
         ),
         "trace_export": _resolve_repo_relative_path(
             root=root_path,
-            configured_path=plan_trace.get("export_path"),
+            configured_path=sections.plan_trace.get("export_path"),
         )
-        if bool(plan_trace.get("export_enabled"))
+        if bool(sections.plan_trace.get("export_enabled"))
         else None,
         "memory_notes": _resolve_repo_relative_path(
             root=root_path,
-            configured_path=mcp.get("notes_path"),
+            configured_path=sections.mcp.get("notes_path"),
         ),
         "cochange": _resolve_repo_relative_path(
             root=root_path,
-            configured_path=plan_cochange.get("cache_path"),
+            configured_path=sections.plan_cochange.get("cache_path"),
         ),
         "runtime_stats_db": str(Path(runtime_stats.get("db_path", "")).resolve()),
         "skills_dir": _resolve_repo_relative_path(
             root=root_path,
-            configured_path=plan_skills.get("dir"),
+            configured_path=sections.plan_skills.get("dir"),
         ),
     }
 
-    skills_dir_path = (
-        Path(cache_paths["skills_dir"]) if isinstance(cache_paths["skills_dir"], str) else None
-    )
-    lsp_commands = plan_lsp.get("commands")
-    lsp_xref_commands = plan_lsp.get("xref_commands")
-    lsp_has_commands = bool(lsp_commands) or bool(lsp_xref_commands)
 
-    service_health = [
+def _build_runtime_service_health(
+    *,
+    cache_paths: dict[str, str | None],
+    sections: RuntimeStatusSections,
+    memory_state: dict[str, Any],
+    runtime_stats: dict[str, Any],
+) -> list[dict[str, Any]]:
+    skills_dir_path = (
+        Path(cache_paths["skills_dir"])
+        if isinstance(cache_paths["skills_dir"], str)
+        else None
+    )
+    lsp_commands = sections.plan_lsp.get("commands")
+    lsp_xref_commands = sections.plan_lsp.get("xref_commands")
+    lsp_has_commands = bool(lsp_commands) or bool(lsp_xref_commands)
+    return [
         {
             "name": "memory",
             "status": "disabled" if bool(memory_state.get("memory_disabled")) else "ok",
@@ -1102,27 +1263,31 @@ def build_runtime_status_payload(
         },
         {
             "name": "embeddings",
-            "status": "ok" if bool(mcp.get("embedding_enabled")) else "disabled",
-            "provider": mcp.get("embedding_provider"),
-            "model": mcp.get("embedding_model"),
+            "status": "ok" if bool(sections.mcp.get("embedding_enabled")) else "disabled",
+            "provider": sections.mcp.get("embedding_provider"),
+            "model": sections.mcp.get("embedding_model"),
             "index_path": cache_paths["embeddings"],
         },
         {
             "name": "plugins",
-            "status": "ok" if bool(plan_plugins.get("enabled", True)) else "disabled",
-            "remote_slot_policy_mode": plan_plugins.get("remote_slot_policy_mode"),
+            "status": (
+                "ok" if bool(sections.plan_plugins.get("enabled", True)) else "disabled"
+            ),
+            "remote_slot_policy_mode": sections.plan_plugins.get(
+                "remote_slot_policy_mode"
+            ),
         },
         {
             "name": "lsp",
             "status": (
                 "disabled"
-                if not bool(plan_lsp.get("enabled"))
+                if not bool(sections.plan_lsp.get("enabled"))
                 else ("ok" if lsp_has_commands else "degraded")
             ),
-            "enabled": bool(plan_lsp.get("enabled")),
+            "enabled": bool(sections.plan_lsp.get("enabled")),
             "commands_configured": lsp_has_commands,
             "reason": "enabled_without_commands"
-            if bool(plan_lsp.get("enabled")) and not lsp_has_commands
+            if bool(sections.plan_lsp.get("enabled")) and not lsp_has_commands
             else "",
         },
         {
@@ -1134,7 +1299,7 @@ def build_runtime_status_payload(
             ),
             "skills_dir": cache_paths["skills_dir"],
             "precomputed_routing_enabled": bool(
-                plan_skills.get("precomputed_routing_enabled")
+                sections.plan_skills.get("precomputed_routing_enabled")
             ),
             "reason": ""
             if skills_dir_path is not None and skills_dir_path.exists()
@@ -1144,18 +1309,21 @@ def build_runtime_status_payload(
             "name": "trace_export",
             "status": (
                 "ok"
-                if bool(plan_trace.get("export_enabled") or plan_trace.get("otlp_enabled"))
+                if bool(
+                    sections.plan_trace.get("export_enabled")
+                    or sections.plan_trace.get("otlp_enabled")
+                )
                 else "disabled"
             ),
-            "export_enabled": bool(plan_trace.get("export_enabled")),
-            "otlp_enabled": bool(plan_trace.get("otlp_enabled")),
+            "export_enabled": bool(sections.plan_trace.get("export_enabled")),
+            "otlp_enabled": bool(sections.plan_trace.get("otlp_enabled")),
             "export_path": cache_paths["trace_export"],
-            "otlp_endpoint": plan_trace.get("otlp_endpoint"),
+            "otlp_endpoint": sections.plan_trace.get("otlp_endpoint"),
         },
         {
             "name": "plan_replay_cache",
-            "status": "ok" if bool(plan_replay.get("enabled")) else "disabled",
-            "enabled": bool(plan_replay.get("enabled")),
+            "status": "ok" if bool(sections.plan_replay.get("enabled")) else "disabled",
+            "enabled": bool(sections.plan_replay.get("enabled")),
             "cache_path": cache_paths["plan_replay_cache"],
         },
         {
@@ -1173,6 +1341,12 @@ def build_runtime_status_payload(
         },
     ]
 
+
+def _build_runtime_degraded_services(
+    *,
+    service_health: list[dict[str, Any]],
+    runtime_stats: dict[str, Any],
+) -> list[dict[str, Any]]:
     degraded_services = [
         {
             "name": item["name"],
@@ -1182,31 +1356,63 @@ def build_runtime_status_payload(
         for item in service_health
         if item.get("status") == "degraded"
     ]
-
     latest_session = runtime_stats.get("summary", {}).get("session")
-    if isinstance(latest_session, dict):
-        degraded_states = latest_session.get("degraded_states", [])
-        reason_map = {
-            "memory_fallback": "memory",
-            "memory_namespace_fallback": "memory",
-            "trace_export_failed": "trace_export",
-            "plan_replay_invalid_cached_payload": "plan_replay_cache",
-            "plan_replay_store_failed": "plan_replay_cache",
-            "candidate_ranker_fallback": "retrieval",
-            "embedding_time_budget_exceeded": "embeddings",
-            "embedding_fallback": "embeddings",
-        }
-        for item in degraded_states if isinstance(degraded_states, list) else []:
-            reason_code = str(item.get("reason_code", "")).strip()
-            if not reason_code:
-                continue
-            degraded_services.append(
-                {
-                    "name": reason_map.get(reason_code, "runtime"),
-                    "reason": reason_code,
-                    "source": "latest_runtime_stats",
-                }
-            )
+    if not isinstance(latest_session, dict):
+        return degraded_services
+    degraded_states = latest_session.get("degraded_states", [])
+    reason_map = {
+        "memory_fallback": "memory",
+        "memory_namespace_fallback": "memory",
+        "trace_export_failed": "trace_export",
+        "plan_replay_invalid_cached_payload": "plan_replay_cache",
+        "plan_replay_store_failed": "plan_replay_cache",
+        "candidate_ranker_fallback": "retrieval",
+        "embedding_time_budget_exceeded": "embeddings",
+        "embedding_fallback": "embeddings",
+    }
+    for item in degraded_states if isinstance(degraded_states, list) else []:
+        reason_code = str(item.get("reason_code", "")).strip()
+        if not reason_code:
+            continue
+        degraded_services.append(
+            {
+                "name": reason_map.get(reason_code, "runtime"),
+                "reason": reason_code,
+                "source": "latest_runtime_stats",
+            }
+        )
+    return degraded_services
+
+
+def build_runtime_status_payload(
+    *,
+    root: str | Path,
+    settings: dict[str, Any],
+    fingerprint: str,
+    selected_profile: str | None,
+    stats_tags: dict[str, Any] | None,
+    snapshot_loaded: bool,
+    snapshot_path: str | Path,
+    memory_state: dict[str, Any],
+    runtime_stats: dict[str, Any],
+) -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    sections = _resolve_runtime_status_sections(settings)
+    cache_paths = _build_runtime_status_cache_paths(
+        root_path=root_path,
+        sections=sections,
+        runtime_stats=runtime_stats,
+    )
+    service_health = _build_runtime_service_health(
+        cache_paths=cache_paths,
+        sections=sections,
+        memory_state=memory_state,
+        runtime_stats=runtime_stats,
+    )
+    degraded_services = _build_runtime_degraded_services(
+        service_health=service_health,
+        runtime_stats=runtime_stats,
+    )
 
     return {
         "settings_fingerprint": fingerprint,
@@ -1225,18 +1431,72 @@ def build_runtime_status_payload(
     }
 
 
+def _build_runtime_command_domain_registry() -> dict[str, RuntimeCommandDomainDescriptor]:
+    descriptors = (
+        RuntimeCommandDomainDescriptor(
+            name="settings",
+            handlers=(
+                "resolve_runtime_settings_bundle",
+                "build_runtime_settings_payload",
+                "collect_runtime_settings_show_payload",
+            ),
+        ),
+        RuntimeCommandDomainDescriptor(
+            name="doctor",
+            handlers=(
+                "collect_runtime_mcp_doctor_payload",
+                "collect_runtime_mcp_self_test_payload",
+                "build_runtime_cache_doctor_payload",
+                "build_runtime_cache_vacuum_payload",
+                "build_runtime_doctor_payload",
+            ),
+        ),
+        RuntimeCommandDomainDescriptor(
+            name="status",
+            handlers=(
+                "collect_runtime_status_payload",
+                "build_runtime_status_snapshot",
+                "build_runtime_status_payload",
+                "load_runtime_stats_summary",
+                "load_latest_runtime_stats_match",
+            ),
+        ),
+        RuntimeCommandDomainDescriptor(
+            name="setup",
+            handlers=(
+                "build_codex_mcp_setup_plan",
+                "execute_codex_mcp_setup_plan",
+            ),
+        ),
+    )
+    return {descriptor.name: descriptor for descriptor in descriptors}
+
+
+RUNTIME_COMMAND_DOMAIN_REGISTRY = MappingProxyType(
+    _build_runtime_command_domain_registry()
+)
+
+
+def iter_runtime_command_domains() -> tuple[RuntimeCommandDomainDescriptor, ...]:
+    return tuple(RUNTIME_COMMAND_DOMAIN_REGISTRY.values())
+
+
 __all__ = [
     "build_codex_mcp_setup_plan",
+    "build_runtime_doctor_payload",
     "build_runtime_settings_payload",
+    "build_runtime_status_snapshot",
     "collect_runtime_settings_show_payload",
     "collect_runtime_mcp_self_test_payload",
     "collect_runtime_status_payload",
     "DEFAULT_RUNTIME_STATS_DB_PATH",
     "evaluate_runtime_memory_state",
     "build_runtime_status_payload",
+    "iter_runtime_command_domains",
     "load_latest_runtime_stats_match",
     "load_runtime_snapshot",
     "load_runtime_stats_summary",
     "resolve_runtime_settings_bundle",
+    "RUNTIME_COMMAND_DOMAIN_REGISTRY",
     "resolve_user_runtime_stats_path",
 ]

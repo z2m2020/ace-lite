@@ -3,19 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from ace_lite.exceptions import StageContractError
+from ace_lite.pipeline.registry import get_stage_descriptor
 
 
 def validate_stage_output(stage_name: str, output: Any) -> None:
     normalized = str(stage_name or "").strip().lower()
-    if normalized not in {
-        "memory",
-        "index",
-        "repomap",
-        "augment",
-        "skills",
-        "source_plan",
-        "validation",
-    }:
+    descriptor = get_stage_descriptor(normalized)
+    if descriptor is None or not descriptor.contract_enforced:
         return
 
     if not isinstance(output, dict):
@@ -27,20 +21,10 @@ def validate_stage_output(stage_name: str, output: Any) -> None:
             context={"type": type(output).__name__},
         )
 
-    if normalized == "memory":
-        _validate_memory(output)
-    elif normalized == "index":
-        _validate_index(output)
-    elif normalized == "repomap":
-        _validate_repomap(output)
-    elif normalized == "augment":
-        _validate_augment(output)
-    elif normalized == "skills":
-        _validate_skills(output)
-    elif normalized == "source_plan":
-        _validate_source_plan(output)
-    elif normalized == "validation":
-        _validate_validation(output)
+    validator = STAGE_OUTPUT_VALIDATORS.get(normalized)
+    if validator is None:
+        return
+    validator(output)
 
 
 def _require_key(output: dict[str, Any], key: str, *, stage: str) -> Any:
@@ -236,4 +220,15 @@ def _validate_validation(output: dict[str, Any]) -> None:
     _require_str(output, "policy_version", stage=stage)
 
 
-__all__ = ["validate_stage_output"]
+STAGE_OUTPUT_VALIDATORS = {
+    "memory": _validate_memory,
+    "index": _validate_index,
+    "repomap": _validate_repomap,
+    "augment": _validate_augment,
+    "skills": _validate_skills,
+    "source_plan": _validate_source_plan,
+    "validation": _validate_validation,
+}
+
+
+__all__ = ["STAGE_OUTPUT_VALIDATORS", "validate_stage_output"]

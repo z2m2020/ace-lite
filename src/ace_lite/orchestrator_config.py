@@ -12,6 +12,7 @@ from typing import Any, cast
 
 from pydantic import Field, field_validator, model_validator
 
+from ace_lite.config_choices import MEMORY_NOTES_MODE_CHOICES
 from ace_lite.config_model_shared import (
     AdaptiveRouterMode,
     ChunkGuardMode,
@@ -963,4 +964,4 @@ class OrchestratorConfig(_StrictModel):
     )
 
 
-__all__ = ["OrchestratorConfig"]
+__all__ = ["MEMORY_NOTES_MODE_CHOICES", "OrchestratorConfig"]

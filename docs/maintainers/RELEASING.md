@@ -389,6 +389,30 @@ Use this section for dependency, provider, policy, or schema upgrades.
 - which dated artifacts are the source of truth
 - any known downgrade or report-only caveats that remain
 
+### Plugin / MCP compatibility review
+
+Use this checklist whenever the candidate changes plugin runtime behavior,
+MCP tool signatures, timeout/auth/retry knobs, trust policy, or remote slot
+filtering. The normative compatibility matrix lives in
+`docs/design/ORCHESTRATOR_DESIGN.md`.
+
+Required checks:
+
+- `ace_plan` still defaults to `plugins_enabled = false` on the MCP surface
+- MCP tool names and descriptions still match the expected public registry
+- trusted `in_process` plugins still load locally, while untrusted
+  `in_process` plugins still downgrade to MCP
+- untrusted remote MCP endpoints still keep `mock://` by default and only keep
+  `http(s)` when explicit opt-in is enabled
+- remote slot policy still keeps `observability.mcp_plugins` allowlisted and
+  does not silently broaden non-allowlisted remote writes
+
+Minimum regression commands:
+
+```powershell
+python -m pytest tests/unit/test_mcp_server.py tests/unit/test_plugins_runtime.py tests/integration/test_orchestrator_slot_policy.py -q
+```
+
 ## 5. Artifact Review Template
 
 Use the following headings in a release checkpoint or PR comment:

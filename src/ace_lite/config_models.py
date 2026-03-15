@@ -11,6 +11,16 @@ from typing import Any, cast
 
 from pydantic import Field, ValidationError, field_validator
 
+from ace_lite.config_choices import (
+    ADAPTIVE_ROUTER_MODE_CHOICES,
+    CHUNK_GUARD_MODE_CHOICES,
+    EMBEDDING_PROVIDER_CHOICES,
+    MEMORY_AUTO_TAG_MODE_CHOICES,
+    MEMORY_GATE_MODE_CHOICES,
+    MEMORY_TIMEZONE_MODE_CHOICES,
+    REMOTE_SLOT_POLICY_CHOICES,
+    RETRIEVAL_POLICY_CHOICES,
+)
 from ace_lite.config_model_shared import (
     validate_adaptive_router_mode,
     validate_candidate_ranker,
@@ -867,9 +877,17 @@ def validate_cli_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "ADAPTIVE_ROUTER_MODE_CHOICES",
     "AceLiteConfig",
     "BenchmarkConfig",
+    "CHUNK_GUARD_MODE_CHOICES",
+    "EMBEDDING_PROVIDER_CHOICES",
+    "MEMORY_AUTO_TAG_MODE_CHOICES",
+    "MEMORY_GATE_MODE_CHOICES",
+    "MEMORY_TIMEZONE_MODE_CHOICES",
+    "REMOTE_SLOT_POLICY_CHOICES",
     "RepoMapConfig",
+    "RETRIEVAL_POLICY_CHOICES",
     "RuntimeConfig",
     "SharedPlanConfig",
     "TeamConfig",

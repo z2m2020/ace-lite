@@ -4,11 +4,13 @@ import subprocess
 from pathlib import Path
 
 from ace_lite.cli_app.runtime_command_support import (
+    RUNTIME_COMMAND_DOMAIN_REGISTRY,
     build_codex_mcp_setup_plan,
     build_runtime_status_snapshot,
     collect_runtime_settings_show_payload,
     collect_runtime_status_payload,
     execute_codex_mcp_setup_plan,
+    iter_runtime_command_domains,
     resolve_runtime_settings_bundle,
     resolve_effective_runtime_skills_dir,
 )
@@ -281,3 +283,34 @@ def test_execute_codex_mcp_setup_plan_apply_and_verify(tmp_path: Path) -> None:
     assert commands[0][:3] == ["codex", "mcp", "remove"]
     assert commands[1][:3] == ["codex", "mcp", "add"]
     assert commands[2][:3] == ["codex", "mcp", "get"]
+
+
+def test_runtime_command_domain_registry_covers_phase1_domains() -> None:
+    domains = {descriptor.name: descriptor.handlers for descriptor in iter_runtime_command_domains()}
+
+    assert domains == {
+        "settings": (
+            "resolve_runtime_settings_bundle",
+            "build_runtime_settings_payload",
+            "collect_runtime_settings_show_payload",
+        ),
+        "doctor": (
+            "collect_runtime_mcp_doctor_payload",
+            "collect_runtime_mcp_self_test_payload",
+            "build_runtime_cache_doctor_payload",
+            "build_runtime_cache_vacuum_payload",
+            "build_runtime_doctor_payload",
+        ),
+        "status": (
+            "collect_runtime_status_payload",
+            "build_runtime_status_snapshot",
+            "build_runtime_status_payload",
+            "load_runtime_stats_summary",
+            "load_latest_runtime_stats_match",
+        ),
+        "setup": (
+            "build_codex_mcp_setup_plan",
+            "execute_codex_mcp_setup_plan",
+        ),
+    }
+    assert set(RUNTIME_COMMAND_DOMAIN_REGISTRY) == set(domains)

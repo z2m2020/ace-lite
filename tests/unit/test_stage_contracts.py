@@ -9,6 +9,7 @@ from ace_lite.exceptions import StageContractError
 from ace_lite.orchestrator import AceOrchestrator
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.pipeline.contracts import validate_stage_output
+from ace_lite.pipeline.registry import CORE_PIPELINE_ORDER, StageRegistry, get_stage_descriptor
 
 
 def _build_sample_repo(tmp_path: Path) -> Path:
@@ -44,6 +45,27 @@ def _build_orchestrator(index_cache_path: Path) -> AceOrchestrator:
 
 def test_validate_stage_output_ignores_unknown_stage() -> None:
     validate_stage_output("unknown", {"ok": True})
+
+
+def test_core_pipeline_order_matches_known_stage_descriptors() -> None:
+    assert CORE_PIPELINE_ORDER == (
+        "memory",
+        "index",
+        "repomap",
+        "augment",
+        "skills",
+        "source_plan",
+        "validation",
+    )
+    assert get_stage_descriptor("source_plan") is not None
+    assert get_stage_descriptor("unknown") is None
+
+
+def test_stage_registry_exposes_descriptor_lookup() -> None:
+    registry = StageRegistry()
+
+    assert registry.has_descriptor("memory") is True
+    assert registry.has_descriptor("unknown") is False
 
 
 def test_validate_stage_output_accepts_minimal_valid_payloads() -> None:

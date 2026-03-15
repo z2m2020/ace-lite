@@ -24,7 +24,7 @@ def test_build_health_payload_reports_memory_disabled_recommendations(
     payload = build_health_response_payload(
         config=config,
         request_stats={"active_request_count": 0},
-        version="0.3.41",
+        version="0.3.42",
         version_info={"drifted": False},
         now_iso_fn=lambda: "2026-03-14T00:00:00+00:00",
     )
@@ -51,10 +51,10 @@ def test_build_health_payload_surfaces_version_drift_warning(
     payload = build_health_response_payload(
         config=config,
         request_stats={"active_request_count": 1},
-        version="0.3.41",
+        version="0.3.42",
         version_info={
             "drifted": True,
-            "pyproject_version": "0.3.41",
+            "pyproject_version": "0.3.42",
             "installed_version": "0.3.39",
             "dist_name": "ace-lite-engine",
         },

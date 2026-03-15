@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
 
@@ -50,6 +51,13 @@ class GroupedFlatSectionSpec:
     group_key: str
     group_payload: dict[str, Any]
     flat_payload: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class PayloadFamilyDescriptor:
+    family: str
+    builder: Callable[..., dict[str, Any]]
+    grouped_inputs: tuple[str, ...]
 
 
 def set_nested_mapping_value(
@@ -1436,6 +1444,111 @@ def build_scip_payload(
             ),
         ),
     )
+
+
+def _build_payload_family_registry() -> dict[str, PayloadFamilyDescriptor]:
+    descriptors = (
+        PayloadFamilyDescriptor(
+            family="memory",
+            builder=build_memory_payload,
+            grouped_inputs=("memory_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="retrieval",
+            builder=build_retrieval_payload,
+            grouped_inputs=("retrieval_group", "adaptive_router_group"),
+        ),
+        PayloadFamilyDescriptor(
+            family="chunking",
+            builder=build_chunking_payload,
+            grouped_inputs=("chunking_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="skills",
+            builder=build_skills_payload,
+            grouped_inputs=("skills_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="index",
+            builder=build_index_payload,
+            grouped_inputs=("index_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="repomap",
+            builder=build_repomap_payload,
+            grouped_inputs=("repomap_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="lsp",
+            builder=build_lsp_payload,
+            grouped_inputs=("lsp_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="plugins",
+            builder=build_plugins_payload,
+            grouped_inputs=("plugins_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="embeddings",
+            builder=build_embeddings_payload,
+            grouped_inputs=("embeddings_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="tokenizer",
+            builder=build_tokenizer_payload,
+            grouped_inputs=("tokenizer_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="cochange",
+            builder=build_cochange_payload,
+            grouped_inputs=("cochange_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="trace",
+            builder=build_trace_payload,
+            grouped_inputs=("trace_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="plan_replay_cache",
+            builder=build_plan_replay_cache_payload,
+            grouped_inputs=("plan_replay_cache_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="tests",
+            builder=build_tests_payload,
+            grouped_inputs=("tests_group",),
+        ),
+        PayloadFamilyDescriptor(
+            family="scip",
+            builder=build_scip_payload,
+            grouped_inputs=("scip_group",),
+        ),
+    )
+    return {descriptor.family: descriptor for descriptor in descriptors}
+
+
+PAYLOAD_FAMILY_REGISTRY: Mapping[str, PayloadFamilyDescriptor] = MappingProxyType(
+    _build_payload_family_registry()
+)
+
+
+def iter_payload_family_descriptors() -> tuple[PayloadFamilyDescriptor, ...]:
+    return tuple(PAYLOAD_FAMILY_REGISTRY.values())
+
+
+def get_payload_family_descriptor(family: str) -> PayloadFamilyDescriptor:
+    try:
+        return PAYLOAD_FAMILY_REGISTRY[family]
+    except KeyError as exc:
+        raise KeyError(f"Unknown payload family: {family}") from exc
+
+
+def build_payload_family(
+    family: str,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    descriptor = get_payload_family_descriptor(family)
+    return descriptor.builder(**kwargs)
 
 
 __all__ = [

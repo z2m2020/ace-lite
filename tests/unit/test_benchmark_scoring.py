@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from ace_lite.benchmark.case_evaluation_payloads import count_unique_paths, safe_ratio
+from ace_lite.benchmark.report_metrics import ALL_METRIC_ORDER, COMPARABLE_METRIC_ORDER
 from ace_lite.benchmark.scoring import (
     aggregate_metrics,
     build_comparison_lane_summary,
@@ -967,6 +968,14 @@ def test_compare_metrics_and_detect_regression() -> None:
     assert len(regression["failed_thresholds"]) == 4
 
 
+def test_compare_metrics_preserves_registry_order() -> None:
+    delta = compare_metrics(current={"utility_rate": 0.5}, baseline={})
+
+    assert list(delta.keys()) == list(COMPARABLE_METRIC_ORDER)
+    assert delta["task_success_rate"] == 0.5
+    assert delta["utility_rate"] == 0.5
+
+
 def test_resolve_regression_thresholds_with_profile_and_overrides() -> None:
     thresholds = resolve_regression_thresholds(
         profile="strict",
@@ -1007,6 +1016,13 @@ def test_aggregate_metrics_reports_latency_median() -> None:
     assert metrics["latency_p95_ms"] == 40.0
     assert metrics["repomap_latency_median_ms"] == 3.0
     assert metrics["repomap_latency_p95_ms"] == 3.0
+
+
+def test_aggregate_metrics_empty_uses_registry_order() -> None:
+    metrics = aggregate_metrics([])
+
+    assert list(metrics.keys()) == list(ALL_METRIC_ORDER)
+    assert all(value == 0.0 for value in metrics.values())
 
 
 def test_evaluate_case_result_negative_control_can_expose_retrieval_task_gap() -> None:

@@ -88,6 +88,7 @@ def test_build_mcp_server_exposes_stable_tool_metadata_and_schema(tmp_path: Path
         assert tools[name].description == description
 
     assert tools["ace_plan"].parameters["required"] == ["query"]
+    assert tools["ace_plan"].parameters["properties"]["plugins_enabled"]["default"] is False
     assert tools["ace_plan_quick"].parameters["required"] == ["query"]
     assert tools["ace_index"].parameters["properties"]["resume"]["default"] is False
     assert (

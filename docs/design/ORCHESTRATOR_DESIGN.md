@@ -68,6 +68,26 @@ Output telemetry:
 - per-stage metric list in `observability.stage_metrics`
 - each stage metric includes `tags` (cache mode, selected count, diagnostics, plugin invocations, etc.)
 
+## Plugin / MCP Compatibility Matrix
+
+This is the maintainer-facing compatibility surface for plugin runtime,
+tool registration, and remote slot policy. Keep release checks aligned with
+this matrix before changing plugin trust rules, MCP tool signatures, or
+remote contribution policy.
+
+| Surface | Supported mode | Compatibility rule | Evidence / release check |
+| --- | --- | --- | --- |
+| MCP public tools | `ace_health`, `ace_index`, `ace_repomap_build`, `ace_plan_quick`, `ace_plan`, memory, feedback | Tool names and descriptions are owned by `server_tool_registration.py`; parameter schema is derived from FastMCP function signatures. | `src/ace_lite/mcp_server/server_tool_registration.py`; `src/ace_lite/mcp_server/server.py`; `tests/unit/test_mcp_server.py` |
+| `ace_plan` plugin toggle | `plugins_enabled=false` by default; `true` is opt-in | MCP callers stay deterministic by default and must opt in before repo plugins participate in runtime planning. | `src/ace_lite/mcp_server/server_tool_registration.py`; `src/ace_lite/mcp_server/service.py`; `src/ace_lite/mcp_server/plan_request.py`; `tests/unit/test_mcp_server.py`; `tests/unit/test_mcp_service_plan_runtime.py` |
+| Trusted repo plugin | `runtime: in_process`, `trusted: true` | Trusted plugins may load a local Python entrypoint and register `before_stage` / `after_stage` hooks directly. | `src/ace_lite/plugins/loader.py`; `tests/unit/test_plugins_runtime.py` |
+| Repo plugin over MCP | `runtime: mcp` | MCP plugins register fail-open hook wrappers and may use manifest knobs for endpoint, timeout, retries, and auth env. | `src/ace_lite/plugins/loader.py`; `tests/unit/test_plugins_runtime.py` |
+| Untrusted local plugin | `runtime: in_process`, `trusted: false` | Untrusted in-process plugins are downgraded to the default untrusted runtime (`mcp`) before hooks are loaded. | `src/ace_lite/plugins/loader.py`; `tests/unit/test_plugins_runtime.py` |
+| Untrusted remote endpoint | `mock://...` kept by default; `http(s)` cleared unless explicitly allowed | Untrusted remote endpoints are stripped unless `allow_untrusted_remote_mcp_endpoint` is enabled; `mock://` remains the safe default for tests and dry runs. | `src/ace_lite/plugins/loader.py`; `tests/unit/test_plugins_runtime.py` |
+| Remote slot contribution policy | allowlisted remote slots only by default | `observability.mcp_plugins` is allowlisted; non-allowlisted remote slots are blocked in `strict`, recorded in `warn`, and passed through only in `off`. Local plugin slots are unchanged. | `src/ace_lite/pipeline/plugin_runtime.py`; `tests/integration/test_orchestrator_slot_policy.py` |
+
+When this matrix changes, update the linked release checklist in
+`docs/maintainers/RELEASING.md` in the same patch.
+
 ## Schema contract
 
 Each plan payload is schema-validated (`schema_version = 2.0`) and includes:

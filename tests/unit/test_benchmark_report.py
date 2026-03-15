@@ -658,7 +658,7 @@ def test_build_results_summary_defaults_missing_fields() -> None:
     assert summary["repo"] == "demo"
     assert summary["regressed"] is False
     assert summary["failed_checks"] == []
-    assert set(summary["metrics"].keys()) == set(ALL_METRIC_ORDER)
+    assert list(summary["metrics"].keys()) == list(ALL_METRIC_ORDER)
 
 
 def test_build_results_summary_preserves_adaptive_router_arm_summary() -> None:

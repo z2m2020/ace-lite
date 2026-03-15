@@ -65,3 +65,52 @@ def test_shared_config_choices_are_single_sourced() -> None:
         params_option_groups.EMBEDDING_PROVIDER_CHOICES
         is config_choices.EMBEDDING_PROVIDER_CHOICES
     )
+
+
+def test_option_group_registry_covers_shared_descriptor_families() -> None:
+    groups = {
+        descriptor.name: descriptor.option_descriptors
+        for descriptor in params_option_groups.iter_option_group_descriptors()
+    }
+
+    assert groups["memory"] is params_option_groups.SHARED_MEMORY_OPTION_DESCRIPTORS
+    assert groups["skills"] is params_option_groups.SHARED_SKILLS_OPTION_DESCRIPTORS
+    assert groups["target"] is params_option_groups.SHARED_TARGET_OPTION_DESCRIPTORS
+    assert (
+        groups["adaptive_router"]
+        is params_option_groups.SHARED_ADAPTIVE_ROUTER_OPTION_DESCRIPTORS
+    )
+    assert (
+        groups["plan_replay"]
+        is params_option_groups.SHARED_PLAN_REPLAY_OPTION_DESCRIPTORS
+    )
+    assert groups["chunk"] is params_option_groups.SHARED_CHUNK_OPTION_DESCRIPTORS
+    assert groups["candidate"] is params_option_groups.SHARED_CANDIDATE_OPTION_DESCRIPTORS
+    assert groups["embedding"] is params_option_groups.SHARED_EMBEDDING_OPTION_DESCRIPTORS
+    assert groups["index"] is params_option_groups.SHARED_INDEX_OPTION_DESCRIPTORS
+    assert groups["lsp"] is params_option_groups.SHARED_LSP_OPTION_DESCRIPTORS
+    assert groups["cochange"] is params_option_groups.SHARED_COCHANGE_OPTION_DESCRIPTORS
+    assert groups["policy"] is params_option_groups.SHARED_POLICY_OPTION_DESCRIPTORS
+    assert groups["repomap"] is params_option_groups.SHARED_REPOMAP_OPTION_DESCRIPTORS
+    assert (
+        groups["test_signal"]
+        is params_option_groups.SHARED_TEST_SIGNAL_OPTION_DESCRIPTORS
+    )
+    assert groups["scip"] is params_option_groups.SHARED_SCIP_OPTION_DESCRIPTORS
+    assert groups["trace"] is params_option_groups.SHARED_TRACE_OPTION_DESCRIPTORS
+    assert set(params_option_groups.OPTION_GROUP_REGISTRY) == set(groups)
+
+
+def test_build_option_group_decorators_matches_descriptor_count() -> None:
+    decorators = params_option_groups.build_option_group_decorators("candidate")
+
+    assert len(decorators) == len(params_option_groups.SHARED_CANDIDATE_OPTION_DESCRIPTORS)
+    assert len(params_option_groups.build_option_group_decorators("target")) == len(
+        params_option_groups.SHARED_TARGET_OPTION_DESCRIPTORS
+    )
+    assert len(params_option_groups.build_option_group_decorators("index")) == len(
+        params_option_groups.SHARED_INDEX_OPTION_DESCRIPTORS
+    )
+    assert len(params_option_groups.build_option_group_decorators("repomap")) == len(
+        params_option_groups.SHARED_REPOMAP_OPTION_DESCRIPTORS
+    )

@@ -39,7 +39,7 @@ from ace_lite.orchestrator_runtime_support import (
 from ace_lite.pipeline.contracts import validate_stage_output
 from ace_lite.pipeline.hooks import HookBus
 from ace_lite.pipeline.plugin_runtime import PluginRuntime
-from ace_lite.pipeline.registry import StageRegistry
+from ace_lite.pipeline.registry import CORE_PIPELINE_ORDER, StageRegistry
 from ace_lite.pipeline.stage_tags import build_stage_tags
 from ace_lite.pipeline.stages.augment import run_diagnostics_augment
 from ace_lite.pipeline.stages.index import IndexStageConfig, run_index
@@ -77,7 +77,7 @@ logger = logging.getLogger(__name__)
 
 
 class AceOrchestrator:
-    PIPELINE_ORDER = ("memory", "index", "repomap", "augment", "skills", "source_plan", "validation")
+    PIPELINE_ORDER = CORE_PIPELINE_ORDER
     CANDIDATE_RANKERS = ("heuristic", "bm25_lite", "hybrid_re2", "rrf_hybrid")
     REMOTE_SLOT_ALLOWLIST = ("observability.mcp_plugins",)
     PLAN_REPLAY_STAGE = "source_plan"

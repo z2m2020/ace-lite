@@ -49,20 +49,7 @@ from ace_lite.cli_app.params_option_groups import (
     RETRIEVAL_PRESET_CHOICES,
     SBFL_METRIC_CHOICES,
     SCIP_PROVIDER_CHOICES,
-    SHARED_CANDIDATE_OPTION_DESCRIPTORS,
-    SHARED_CHUNK_OPTION_DESCRIPTORS,
-    SHARED_COCHANGE_OPTION_DESCRIPTORS,
-    SHARED_ADAPTIVE_ROUTER_OPTION_DESCRIPTORS,
-    SHARED_EMBEDDING_OPTION_DESCRIPTORS,
-    SHARED_LSP_OPTION_DESCRIPTORS,
-    SHARED_MEMORY_OPTION_DESCRIPTORS,
-    SHARED_PLAN_REPLAY_OPTION_DESCRIPTORS,
-    SHARED_SKILLS_OPTION_DESCRIPTORS,
-    SHARED_POLICY_OPTION_DESCRIPTORS,
-    SHARED_SCIP_OPTION_DESCRIPTORS,
-    SHARED_TEST_SIGNAL_OPTION_DESCRIPTORS,
-    SHARED_TRACE_OPTION_DESCRIPTORS,
-    _build_option_decorators,
+    build_option_group_decorators,
 )
 from ace_lite.repomap.ranking import RANKING_PROFILES
 from ace_lite.runtime_profiles import RUNTIME_PROFILE_NAMES
@@ -93,225 +80,67 @@ def _compose_click_decorators(
 
 
 def _with_shared_target_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        click.option("--repo", required=True, help="Repository identifier."),
-        click.option(
-            "--root",
-            required=True,
-            type=click.Path(path_type=str),
-            help="Repository root path.",
-        ),
-        click.option(
-            "--skills-dir",
-            default="skills",
-            show_default=True,
-            type=click.Path(path_type=str),
-            help="Markdown skills directory.",
-        ),
-        click.option(
-            "--config-pack",
-            default=None,
-            envvar="ACE_LITE_CONFIG_PACK",
-            show_default="env ACE_LITE_CONFIG_PACK",
-            type=click.Path(path_type=str),
-            help="Optional config pack JSON path to apply tuned overrides.",
-        ),
-        click.option(
-            "--time-range",
-            default=None,
-            type=str,
-            help="Optional time window for temporal filtering (e.g., 24h, 7d, 2w).",
-        ),
-        click.option(
-            "--start-date",
-            default=None,
-            type=str,
-            help="Optional ISO start date/datetime for temporal filtering (UTC unless configured).",
-        ),
-        click.option(
-            "--end-date",
-            default=None,
-            type=str,
-            help="Optional ISO end date/datetime for temporal filtering (UTC unless configured).",
-        ),
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("target"))(func)
 
 
 def _with_shared_candidate_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_CANDIDATE_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("candidate"))(func)
 
 
 def _with_shared_index_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        click.option(
-            "--languages",
-            default="python,typescript,javascript,go,markdown",
-            show_default=True,
-            help="Comma-separated index language profile.",
-        ),
-        click.option(
-            "--index-cache-path",
-            default="context-map/index.json",
-            show_default=True,
-            type=click.Path(path_type=str),
-            help="Distilled index cache path.",
-        ),
-        click.option(
-            "--index-incremental/--no-index-incremental",
-            default=True,
-            show_default=True,
-            help="Enable incremental index refresh from git changed files.",
-        ),
-        click.option(
-            "--conventions-file",
-            "conventions_files",
-            multiple=True,
-            help="Convention file paths relative to --root.",
-        ),
-        click.option(
-            "--plugins/--no-plugins",
-            "plugins_enabled",
-            default=True,
-            show_default=True,
-            help="Enable plugin loading from plugins/.",
-        ),
-        click.option(
-            "--remote-slot-policy-mode",
-            default="strict",
-            show_default=True,
-            type=click.Choice(list(REMOTE_SLOT_POLICY_CHOICES), case_sensitive=False),
-            help="Policy mode for mcp_remote slot filtering: strict blocks, warn logs only, off disables filtering.",
-        ),
-        click.option(
-            "--remote-slot-allowlist",
-            default="observability.mcp_plugins",
-            show_default=True,
-            help="Comma-separated slot allowlist for mcp_remote contributions.",
-        ),
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("index"))(func)
 
 
 def _with_shared_embedding_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_EMBEDDING_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("embedding"))(func)
 
 
 def _with_shared_repomap_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        click.option(
-            "--repomap/--no-repomap",
-            "repomap_enabled",
-            default=True,
-            show_default=True,
-            help="Enable repomap stage for one-hop dependency expansion.",
-        ),
-        click.option(
-            "--repomap-top-k",
-            default=8,
-            show_default=True,
-            type=int,
-            help="Max seed files entering repomap stage.",
-        ),
-        click.option(
-            "--repomap-neighbor-limit",
-            default=20,
-            show_default=True,
-            type=int,
-            help="Max one-hop neighbors collected by repomap stage.",
-        ),
-        click.option(
-            "--repomap-budget-tokens",
-            default=800,
-            show_default=True,
-            type=int,
-            help="Token budget for repomap skeleton markdown.",
-        ),
-        click.option(
-            "--repomap-ranking-profile",
-            default="graph",
-            show_default=True,
-            type=click.Choice(list(RANKING_PROFILES), case_sensitive=False),
-            help="Ranking profile used by repomap stage.",
-        ),
-        click.option(
-            "--repomap-signal-weights",
-            default=None,
-            type=str,
-            help="Optional JSON object for repomap signal weights.",
-        ),
-        click.option(
-            "--verbose", is_flag=True, default=False, help="Enable debug logging."
-        ),
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("repomap"))(func)
 
 
 def _with_shared_lsp_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_LSP_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("lsp"))(func)
 
 
 def _with_shared_memory_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_MEMORY_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("memory"))(func)
 
 
 def _with_shared_skills_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_SKILLS_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("skills"))(func)
 
 
 def _with_shared_adaptive_router_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_ADAPTIVE_ROUTER_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("adaptive_router"))(func)
 
 
 def _with_shared_plan_replay_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_PLAN_REPLAY_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("plan_replay"))(func)
 
 
 def _with_shared_chunk_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_CHUNK_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("chunk"))(func)
 
 
 def _with_shared_cochange_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_COCHANGE_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("cochange"))(func)
 
 
 def _with_shared_policy_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_POLICY_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("policy"))(func)
 
 
 def _with_shared_test_signal_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_TEST_SIGNAL_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("test_signal"))(func)
 
 
 def _with_shared_scip_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_SCIP_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("scip"))(func)
 
 
 def _with_shared_trace_options(func: Callable[..., Any]) -> Callable[..., Any]:
-    return _apply_click_options(
-        *_build_option_decorators(SHARED_TRACE_OPTION_DESCRIPTORS)
-    )(func)
+    return _apply_click_options(*build_option_group_decorators("trace"))(func)
 
 
 def _with_shared_plan_options(func: Callable[..., Any]) -> Callable[..., Any]:

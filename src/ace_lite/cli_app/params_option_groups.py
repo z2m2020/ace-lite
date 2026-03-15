@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
 import click
@@ -54,6 +56,12 @@ RETRIEVAL_PRESETS: dict[str, dict[str, Any]] = {
 
 RETRIEVAL_PRESET_CHOICES = ("none", *tuple(RETRIEVAL_PRESETS.keys()))
 OptionDescriptor = tuple[tuple[str, ...], dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class OptionGroupDescriptor:
+    name: str
+    option_descriptors: tuple[OptionDescriptor, ...]
 
 
 def _build_option_decorators(
@@ -239,6 +247,68 @@ SHARED_SKILLS_OPTION_DESCRIPTORS: tuple[OptionDescriptor, ...] = (
             "default": True,
             "show_default": True,
             "help": "Precompute skill routing before the skills stage and reuse it during skill hydration.",
+        },
+    ),
+)
+
+
+SHARED_TARGET_OPTION_DESCRIPTORS: tuple[OptionDescriptor, ...] = (
+    (
+        ("--repo",),
+        {
+            "required": True,
+            "help": "Repository identifier.",
+        },
+    ),
+    (
+        ("--root",),
+        {
+            "required": True,
+            "type": click.Path(path_type=str),
+            "help": "Repository root path.",
+        },
+    ),
+    (
+        ("--skills-dir",),
+        {
+            "default": "skills",
+            "show_default": True,
+            "type": click.Path(path_type=str),
+            "help": "Markdown skills directory.",
+        },
+    ),
+    (
+        ("--config-pack",),
+        {
+            "default": None,
+            "envvar": "ACE_LITE_CONFIG_PACK",
+            "show_default": "env ACE_LITE_CONFIG_PACK",
+            "type": click.Path(path_type=str),
+            "help": "Optional config pack JSON path to apply tuned overrides.",
+        },
+    ),
+    (
+        ("--time-range",),
+        {
+            "default": None,
+            "type": str,
+            "help": "Optional time window for temporal filtering (e.g., 24h, 7d, 2w).",
+        },
+    ),
+    (
+        ("--start-date",),
+        {
+            "default": None,
+            "type": str,
+            "help": "Optional ISO start date/datetime for temporal filtering (UTC unless configured).",
+        },
+    ),
+    (
+        ("--end-date",),
+        {
+            "default": None,
+            "type": str,
+            "help": "Optional ISO end date/datetime for temporal filtering (UTC unless configured).",
         },
     ),
 )
@@ -697,6 +767,131 @@ SHARED_EMBEDDING_OPTION_DESCRIPTORS: tuple[OptionDescriptor, ...] = (
 )
 
 
+SHARED_INDEX_OPTION_DESCRIPTORS: tuple[OptionDescriptor, ...] = (
+    (
+        ("--languages",),
+        {
+            "default": "python,typescript,javascript,go,markdown",
+            "show_default": True,
+            "help": "Comma-separated index language profile.",
+        },
+    ),
+    (
+        ("--index-cache-path",),
+        {
+            "default": "context-map/index.json",
+            "show_default": True,
+            "type": click.Path(path_type=str),
+            "help": "Distilled index cache path.",
+        },
+    ),
+    (
+        ("--index-incremental/--no-index-incremental",),
+        {
+            "default": True,
+            "show_default": True,
+            "help": "Enable incremental index refresh from git changed files.",
+        },
+    ),
+    (
+        ("--conventions-file", "conventions_files"),
+        {
+            "multiple": True,
+            "help": "Convention file paths relative to --root.",
+        },
+    ),
+    (
+        ("--plugins/--no-plugins", "plugins_enabled"),
+        {
+            "default": True,
+            "show_default": True,
+            "help": "Enable plugin loading from plugins/.",
+        },
+    ),
+    (
+        ("--remote-slot-policy-mode",),
+        {
+            "default": "strict",
+            "show_default": True,
+            "type": click.Choice(list(REMOTE_SLOT_POLICY_CHOICES), case_sensitive=False),
+            "help": "Policy mode for mcp_remote slot filtering: strict blocks, warn logs only, off disables filtering.",
+        },
+    ),
+    (
+        ("--remote-slot-allowlist",),
+        {
+            "default": "observability.mcp_plugins",
+            "show_default": True,
+            "help": "Comma-separated slot allowlist for mcp_remote contributions.",
+        },
+    ),
+)
+
+
+SHARED_REPOMAP_OPTION_DESCRIPTORS: tuple[OptionDescriptor, ...] = (
+    (
+        ("--repomap/--no-repomap", "repomap_enabled"),
+        {
+            "default": True,
+            "show_default": True,
+            "help": "Enable repomap stage for one-hop dependency expansion.",
+        },
+    ),
+    (
+        ("--repomap-top-k",),
+        {
+            "default": 8,
+            "show_default": True,
+            "type": int,
+            "help": "Max seed files entering repomap stage.",
+        },
+    ),
+    (
+        ("--repomap-neighbor-limit",),
+        {
+            "default": 20,
+            "show_default": True,
+            "type": int,
+            "help": "Max one-hop neighbors collected by repomap stage.",
+        },
+    ),
+    (
+        ("--repomap-budget-tokens",),
+        {
+            "default": 800,
+            "show_default": True,
+            "type": int,
+            "help": "Token budget for repomap skeleton markdown.",
+        },
+    ),
+    (
+        ("--repomap-ranking-profile",),
+        {
+            "default": "graph",
+            "show_default": True,
+            "type": click.Choice(list(RANKING_PROFILES), case_sensitive=False),
+            "help": "Ranking profile used by repomap stage.",
+        },
+    ),
+    (
+        ("--repomap-signal-weights",),
+        {
+            "default": None,
+            "type": str,
+            "help": "Optional JSON object for repomap signal weights.",
+        },
+    ),
+    (
+        ("--verbose",),
+        {
+            "is_flag": True,
+            "default": False,
+            "help": "Enable debug logging.",
+        },
+    ),
+)
+
+
 SHARED_LSP_OPTION_DESCRIPTORS: tuple[OptionDescriptor, ...] = (
     (
         ("--lsp/--no-lsp", "lsp_enabled"),
@@ -957,6 +1152,51 @@ SHARED_TRACE_OPTION_DESCRIPTORS: tuple[OptionDescriptor, ...] = (
 )
 
 
+def _build_option_group_registry() -> dict[str, OptionGroupDescriptor]:
+    descriptors = (
+        OptionGroupDescriptor("memory", SHARED_MEMORY_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("skills", SHARED_SKILLS_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("target", SHARED_TARGET_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor(
+            "adaptive_router",
+            SHARED_ADAPTIVE_ROUTER_OPTION_DESCRIPTORS,
+        ),
+        OptionGroupDescriptor("plan_replay", SHARED_PLAN_REPLAY_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("chunk", SHARED_CHUNK_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("candidate", SHARED_CANDIDATE_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("embedding", SHARED_EMBEDDING_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("index", SHARED_INDEX_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("lsp", SHARED_LSP_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("cochange", SHARED_COCHANGE_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("policy", SHARED_POLICY_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("repomap", SHARED_REPOMAP_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("test_signal", SHARED_TEST_SIGNAL_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("scip", SHARED_SCIP_OPTION_DESCRIPTORS),
+        OptionGroupDescriptor("trace", SHARED_TRACE_OPTION_DESCRIPTORS),
+    )
+    return {descriptor.name: descriptor for descriptor in descriptors}
+
+
+OPTION_GROUP_REGISTRY = MappingProxyType(_build_option_group_registry())
+
+
+def iter_option_group_descriptors() -> tuple[OptionGroupDescriptor, ...]:
+    return tuple(OPTION_GROUP_REGISTRY.values())
+
+
+def get_option_group_descriptor(name: str) -> OptionGroupDescriptor:
+    try:
+        return OPTION_GROUP_REGISTRY[name]
+    except KeyError as exc:
+        raise KeyError(f"Unknown option group: {name}") from exc
+
+
+def build_option_group_decorators(
+    name: str,
+) -> tuple[Callable[[Callable[..., Any]], Callable[..., Any]], ...]:
+    return _build_option_decorators(get_option_group_descriptor(name).option_descriptors)
+
+
 __all__ = [
     "CANDIDATE_RANKER_CHOICES",
     "CHUNK_DISCLOSURE_CHOICES",
@@ -966,6 +1206,8 @@ __all__ = [
     "MEMORY_AUTO_TAG_MODE_CHOICES",
     "MEMORY_GATE_MODE_CHOICES",
     "MEMORY_STRATEGY_CHOICES",
+    "OptionGroupDescriptor",
+    "OPTION_GROUP_REGISTRY",
     "OptionDescriptor",
     "REMOTE_SLOT_POLICY_CHOICES",
     "RETRIEVAL_POLICY_CHOICES",
@@ -983,7 +1225,13 @@ __all__ = [
     "SHARED_SKILLS_OPTION_DESCRIPTORS",
     "SHARED_POLICY_OPTION_DESCRIPTORS",
     "SHARED_SCIP_OPTION_DESCRIPTORS",
+    "SHARED_INDEX_OPTION_DESCRIPTORS",
+    "SHARED_REPOMAP_OPTION_DESCRIPTORS",
+    "SHARED_TARGET_OPTION_DESCRIPTORS",
     "SHARED_TEST_SIGNAL_OPTION_DESCRIPTORS",
     "SHARED_TRACE_OPTION_DESCRIPTORS",
+    "build_option_group_decorators",
+    "get_option_group_descriptor",
+    "iter_option_group_descriptors",
     "_build_option_decorators",
 ]

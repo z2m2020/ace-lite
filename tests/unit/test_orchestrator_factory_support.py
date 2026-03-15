@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 from ace_lite.cli_app.orchestrator_factory_support import (
+    PAYLOAD_FAMILY_REGISTRY,
+    build_payload_family,
     build_chunking_payload,
     build_retrieval_payload,
+    get_payload_family_descriptor,
+    iter_payload_family_descriptors,
 )
 
 
@@ -292,3 +298,69 @@ def test_build_chunking_payload_explicit_values_override_grouped_defaults() -> N
     assert payload["snippet_max_lines"] == 11
     assert payload["snippet_max_chars"] == 333
     assert payload["guard"]["mode"] == "enforce"
+
+
+def test_payload_family_registry_exposes_supported_builder_families() -> None:
+    families = {descriptor.family for descriptor in iter_payload_family_descriptors()}
+
+    assert families == {
+        "chunking",
+        "cochange",
+        "embeddings",
+        "index",
+        "lsp",
+        "memory",
+        "plan_replay_cache",
+        "plugins",
+        "repomap",
+        "retrieval",
+        "scip",
+        "skills",
+        "tests",
+        "tokenizer",
+        "trace",
+    }
+    assert get_payload_family_descriptor("retrieval").grouped_inputs == (
+        "retrieval_group",
+        "adaptive_router_group",
+    )
+    assert set(PAYLOAD_FAMILY_REGISTRY) == families
+
+
+def test_build_payload_family_dispatches_to_registered_builder() -> None:
+    payload = build_payload_family(
+        "retrieval",
+        retrieval_group={"top_k_files": 5, "candidate_ranker": "bm25_lite"},
+        adaptive_router_group={},
+        top_k_files=8,
+        min_candidate_score=2,
+        candidate_relative_threshold=0.0,
+        candidate_ranker="heuristic",
+        exact_search_enabled=False,
+        deterministic_refine_enabled=True,
+        exact_search_time_budget_ms=40,
+        exact_search_max_paths=24,
+        hybrid_re2_fusion_mode="linear",
+        hybrid_re2_rrf_k=60,
+        hybrid_re2_bm25_weight=0.0,
+        hybrid_re2_heuristic_weight=0.0,
+        hybrid_re2_coverage_weight=0.0,
+        hybrid_re2_combined_scale=0.0,
+        retrieval_policy="auto",
+        policy_version="v1",
+        adaptive_router_enabled=False,
+        adaptive_router_mode="observe",
+        adaptive_router_model_path="context-map/router/model.json",
+        adaptive_router_state_path="context-map/router/state.json",
+        adaptive_router_arm_set="retrieval_policy_v1",
+        adaptive_router_online_bandit_enabled=False,
+        adaptive_router_online_bandit_experiment_enabled=False,
+    )
+
+    assert payload["top_k_files"] == 5
+    assert payload["candidate_ranker"] == "bm25_lite"
+
+
+def test_get_payload_family_descriptor_rejects_unknown_family() -> None:
+    with pytest.raises(KeyError, match="Unknown payload family: unknown"):
+        get_payload_family_descriptor("unknown")

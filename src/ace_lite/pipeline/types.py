@@ -35,6 +35,12 @@ class StageMetric:
     tags: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class StageDescriptor:
+    name: str
+    contract_enforced: bool = True
+
+
 StageCallable = Callable[[StageContext], dict[str, Any]]
 
 
@@ -48,6 +54,7 @@ def run_stage(stage_name: str, func: StageCallable, ctx: StageContext) -> tuple[
 __all__ = [
     "StageCallable",
     "StageContext",
+    "StageDescriptor",
     "StageEvent",
     "StageMetric",
     "StagePatch",
