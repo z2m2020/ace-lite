@@ -300,7 +300,12 @@ def test_cli_runtime_doctor_groups_settings_stats_cache_and_integration(
     assert "stats" in payload
     assert "cache" in payload
     assert "integration" in payload
+    assert "settings" in payload["settings"]
+    assert "fingerprint" in payload["settings"]
+    assert "latest_match" in payload["stats"]
+    assert "summary" in payload["stats"]
     assert payload["cache"]["ok"] is True
+    assert payload["cache"]["entry_count"] == 1
     assert payload["integration"]["event"] == "mcp_doctor"
 
 
@@ -1077,6 +1082,14 @@ def test_cli_runtime_status_reports_service_health_and_cache_paths(tmp_path: Pat
     service_health = {item["name"]: item for item in payload["service_health"]}
     assert payload["event"] == "runtime_status"
     assert len(payload["settings_fingerprint"]) == 64
+    assert {
+        "memory",
+        "skills",
+        "embeddings",
+        "plan_replay_cache",
+        "trace_export",
+        "durable_stats",
+    }.issubset(service_health)
     assert (
         payload["cache_paths"]["plan_replay_cache"]
         == str((tmp_path / "context-map" / "runtime-cache" / "replay.json").resolve())

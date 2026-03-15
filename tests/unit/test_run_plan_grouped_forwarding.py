@@ -237,6 +237,26 @@ def test_run_plan_prefers_grouped_internal_forwarding(monkeypatch) -> None:
     assert captured["lsp_config"] == lsp_config
     assert captured["trace_config"] == trace_config
     assert captured["plan_replay_cache_config"] == plan_replay_cache_config
+    assert set(captured) == {
+        "memory_client",
+        "memory_provider",
+        "memory_config",
+        "skills_config",
+        "index_config",
+        "embeddings_config",
+        "cochange_config",
+        "tests_config",
+        "scip_config",
+        "chunking_config",
+        "tokenizer_config",
+        "retrieval_config",
+        "adaptive_router_config",
+        "plugins_config",
+        "repomap_config",
+        "lsp_config",
+        "trace_config",
+        "plan_replay_cache_config",
+    }
 
     for key in (
         "top_k_files",

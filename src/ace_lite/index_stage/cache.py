@@ -85,6 +85,60 @@ def build_index_candidate_cache_key(
     return hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest()
 
 
+def clone_index_candidate_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    cloned = dict(payload)
+    cloned.pop("candidate_cache", None)
+    return cloned
+
+
+def attach_index_candidate_cache_info(
+    *,
+    payload: dict[str, Any],
+    cache_info: dict[str, Any],
+) -> dict[str, Any]:
+    materialized = clone_index_candidate_payload(payload)
+    materialized["candidate_cache"] = dict(cache_info)
+    return materialized
+
+
+def refresh_cached_index_candidate_payload(
+    *,
+    payload: dict[str, Any],
+    index_data: dict[str, Any],
+    cache_info: dict[str, Any],
+    index_hash: str,
+    timings_ms: dict[str, float],
+    benchmark_filter_payload: dict[str, Any],
+) -> dict[str, Any]:
+    materialized = clone_index_candidate_payload(payload)
+    materialized["index_hash"] = str(index_hash or "")
+    materialized["file_count"] = int(index_data.get("file_count", 0) or 0)
+    materialized["indexed_at"] = index_data.get("indexed_at")
+    materialized["languages_covered"] = list(index_data.get("languages_covered", []))
+    materialized["parser"] = (
+        dict(index_data.get("parser", {}))
+        if isinstance(index_data.get("parser"), dict)
+        else {}
+    )
+    materialized["cache"] = dict(cache_info)
+
+    metadata = (
+        dict(materialized.get("metadata", {}))
+        if isinstance(materialized.get("metadata"), dict)
+        else {}
+    )
+    previous_timings = metadata.get("timings_ms")
+    if isinstance(previous_timings, dict):
+        metadata["cached_payload_timings_ms"] = dict(previous_timings)
+    metadata["timings_ms"] = dict(timings_ms)
+    metadata["candidate_cache_reused"] = True
+    materialized["metadata"] = metadata
+
+    if benchmark_filter_payload.get("requested", False):
+        materialized["benchmark_filters"] = dict(benchmark_filter_payload)
+    return materialized
+
+
 def load_cached_index_candidates_checked(
     *,
     cache_path: Path,
@@ -356,8 +410,11 @@ def _store_artifact_memory(
 
 
 __all__ = [
+    "attach_index_candidate_cache_info",
     "build_index_candidate_cache_key",
+    "clone_index_candidate_payload",
     "default_index_candidate_cache_path",
     "load_cached_index_candidates_checked",
+    "refresh_cached_index_candidate_payload",
     "store_cached_index_candidates",
 ]

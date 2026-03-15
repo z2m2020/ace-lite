@@ -233,3 +233,104 @@ def test_runtime_payload_builders_share_canonical_config_slice() -> None:
     assert {key: run_plan_payload[key] for key in SHARED_RUNTIME_PAYLOAD_KEYS} == {
         key: orchestrator_payload[key] for key in SHARED_RUNTIME_PAYLOAD_KEYS
     }
+
+
+def test_shared_runtime_payload_keys_exclude_run_plan_and_orchestrator_only_fields() -> None:
+    for key in (
+        "skills_config",
+        "index_config",
+        "embeddings_config",
+        "adaptive_router_config",
+        "plan_replay_cache_config",
+        "retrieval_config",
+        "chunking_config",
+        "trace_config",
+        "retrieval_policy",
+        "policy_version",
+    ):
+        assert key in SHARED_RUNTIME_PAYLOAD_KEYS
+
+    for key in (
+        "memory_config",
+        "embedding_enabled",
+        "junit_xml",
+        "trace_export_enabled",
+        "skills_dir",
+    ):
+        assert key not in SHARED_RUNTIME_PAYLOAD_KEYS
+
+
+def test_runtime_payload_builders_preserve_grouped_runtime_contracts() -> None:
+    resolved = _make_resolved()
+    resolved["skills"] = {"top_n": 4, "manifest": "context-map/skills.json"}
+    resolved["retrieval"] = {
+        "top_k_files": 6,
+        "candidate_ranker": "rrf_hybrid",
+        "adaptive_router": {"enabled": True},
+    }
+    resolved["adaptive_router"] = {
+        "enabled": True,
+        "mode": "shadow",
+        "arm_set": "retrieval_policy_shadow",
+    }
+    resolved["plan_replay_cache"] = {
+        "enabled": True,
+        "cache_path": "context-map/plan-replay/cache.json",
+    }
+    resolved["chunk"] = {
+        "top_k": 11,
+        "guard": {"enabled": True, "mode": "report_only"},
+        "topological_shield": {"enabled": True, "mode": "report_only"},
+    }
+    resolved["trace"] = {
+        "export_enabled": True,
+        "export_path": "context-map/traces/stage_spans.jsonl",
+    }
+
+    run_plan_payload = build_run_plan_kwargs_from_resolved(
+        resolved=resolved,
+        skills_dir="custom-skills",
+        retrieval_policy="feature",
+    )
+    orchestrator_payload = build_orchestrator_kwargs_from_resolved(
+        resolved=resolved,
+        skills_dir="custom-skills",
+        retrieval_policy="feature",
+    )
+
+    for payload in (run_plan_payload, orchestrator_payload):
+        assert payload["skills_config"] == {
+            "dir": "custom-skills",
+            "top_n": 4,
+            "manifest": "context-map/skills.json",
+        }
+        assert payload["retrieval_config"] == {
+            "top_k_files": 6,
+            "candidate_ranker": "rrf_hybrid",
+            "adaptive_router": {"enabled": True},
+        }
+        assert payload["adaptive_router_config"] == {
+            "enabled": True,
+            "mode": "shadow",
+            "arm_set": "retrieval_policy_shadow",
+        }
+        assert payload["plan_replay_cache_config"] == {
+            "enabled": True,
+            "cache_path": "context-map/plan-replay/cache.json",
+        }
+        assert payload["chunking_config"] == {
+            "top_k": 11,
+            "guard": {"enabled": True, "mode": "report_only"},
+            "topological_shield": {"enabled": True, "mode": "report_only"},
+        }
+        assert payload["trace_config"] == {
+            "export_enabled": True,
+            "export_path": "context-map/traces/stage_spans.jsonl",
+        }
+        assert payload["retrieval_policy"] == "feature"
+        assert payload["policy_version"] == "v2"
+
+    assert run_plan_payload["skills_config"] is not resolved["skills"]
+    assert run_plan_payload["retrieval_config"] is not resolved["retrieval"]
+    assert run_plan_payload["chunking_config"] is not resolved["chunk"]
+    assert run_plan_payload["trace_config"] is not resolved["trace"]

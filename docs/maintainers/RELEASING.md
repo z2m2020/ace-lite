@@ -251,6 +251,22 @@ Run this for release candidates, protected-branch release prep, and upgrades tha
 python scripts/run_release_freeze_regression.py --matrix-config benchmark/matrix/repos.yaml --output-dir artifacts/release-freeze/latest --fail-on-thresholds --skip-skill-validation
 ```
 
+Keep `--skip-skill-validation` only when the candidate does not touch skills,
+skill manifests, skill-routing heuristics, release-readiness playbooks, or
+benchmark-tuning guidance. If any of those surfaces change, rerun freeze
+without the skip flag and review these additional artifacts together with the
+normal freeze result:
+
+- `artifacts/release-freeze/latest/skill-validation/skill_validation_matrix.json`
+- `artifacts/release-freeze/latest/skill-validation/skill_validation_index.json`
+
+When skill validation is enabled, require:
+
+- the `skill_validation_matrix` step is present in `freeze_regression.json`
+- overall skill pass rate stays at or above the configured `--skill-validation-min-pass-rate`
+- misses are reviewed before interpreting the freeze as GO-ready, even if the
+  rest of the regression steps are green
+
 Required files to inspect:
 
 - `artifacts/release-freeze/latest/freeze_regression.json`
@@ -326,6 +342,11 @@ Run this when the release changes release-freeze behavior, guard thresholds, or 
 ```bash
 python scripts/run_freeze_stability.py --runs 2 --output-dir artifacts/release-freeze/stability/latest --skip-skill-validation --max-failure-rate 1.0 --tracked-feature-slices perf_routing,dependency_recall,perturbation,repomap_perturbation --min-feature-slice-pass-rate 1.0
 ```
+
+If the release candidate changed `skills/`, maintainer docs, or cross-agent
+playbooks that directly affect prompt routing, repeat the same stability run
+without `--skip-skill-validation` so the stability evidence includes skill
+selection drift alongside the freeze summary.
 
 Required checks:
 

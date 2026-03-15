@@ -11,31 +11,29 @@ from typing import Any, cast
 
 from pydantic import Field, ValidationError, field_validator
 
-from ace_lite.chunking.disclosure_policy import CHUNK_DISCLOSURE_CHOICES
-from ace_lite.config_choices import (
-    ADAPTIVE_ROUTER_MODE_CHOICES,
-    CHUNK_GUARD_MODE_CHOICES,
-    EMBEDDING_PROVIDER_CHOICES,
-    MEMORY_AUTO_TAG_MODE_CHOICES,
-    MEMORY_GATE_MODE_CHOICES,
-    MEMORY_NOTES_MODE_CHOICES,
-    MEMORY_TIMEZONE_MODE_CHOICES,
-    REMOTE_SLOT_POLICY_CHOICES,
-    RETRIEVAL_POLICY_CHOICES,
-    TOPOLOGICAL_SHIELD_MODE_CHOICES,
+from ace_lite.config_model_shared import (
+    validate_adaptive_router_mode,
+    validate_candidate_ranker,
+    validate_chunk_guard_mode,
+    validate_chunk_disclosure,
+    validate_embedding_provider,
+    validate_hybrid_fusion_mode,
+    validate_memory_auto_tag_mode,
+    validate_memory_disclosure_mode,
+    validate_memory_gate_mode,
+    validate_memory_notes_mode,
+    validate_memory_strategy,
+    validate_memory_timezone_mode,
+    validate_remote_slot_policy_mode,
+    validate_ranking_profile,
+    validate_retrieval_policy,
+    validate_sbfl_metric,
+    validate_scip_provider,
+    validate_topological_shield_mode,
 )
 from ace_lite.config_value_normalizers import validate_choice_value
 from ace_lite.pydantic_utils import StrictModel as _StrictModel
-from ace_lite.repomap.ranking import RANKING_PROFILES
 from ace_lite.runtime.scheduler import CronSchedule
-from ace_lite.scip import SCIP_PROVIDERS
-from ace_lite.scoring_config import (
-    CANDIDATE_RANKER_CHOICES,
-    HYBRID_FUSION_MODES,
-    MEMORY_DISCLOSURE_MODES,
-    MEMORY_STRATEGIES,
-    SBFL_METRIC_CHOICES,
-)
 
 class TokenizerConfig(_StrictModel):
     model: str | None = None
@@ -72,10 +70,9 @@ class AdaptiveRouterConfig(_StrictModel):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_adaptive_router_mode(
             value,
             field_name="adaptive_router.mode",
-            choices=ADAPTIVE_ROUTER_MODE_CHOICES,
         )
 
 
@@ -94,10 +91,9 @@ class MemoryNamespaceConfig(_StrictModel):
     @field_validator("auto_tag_mode")
     @classmethod
     def _validate_auto_tag_mode(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_memory_auto_tag_mode(
             value,
             field_name="memory.namespace.auto_tag_mode",
-            choices=MEMORY_AUTO_TAG_MODE_CHOICES,
         )
 
 
@@ -120,10 +116,9 @@ class MemoryTemporalConfig(_StrictModel):
     @field_validator("timezone_mode")
     @classmethod
     def _validate_timezone_mode(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_memory_timezone_mode(
             value,
             field_name="memory.temporal.timezone_mode",
-            choices=MEMORY_TIMEZONE_MODE_CHOICES,
         )
 
 
@@ -155,10 +150,9 @@ class MemoryNotesConfig(_StrictModel):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_memory_notes_mode(
             value,
             field_name="memory.notes.mode",
-            choices=MEMORY_NOTES_MODE_CHOICES,
         )
 
 
@@ -169,10 +163,9 @@ class MemoryGateConfig(_StrictModel):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_memory_gate_mode(
             value,
             field_name="memory.gate.mode",
-            choices=MEMORY_GATE_MODE_CHOICES,
         )
 
 
@@ -205,28 +198,18 @@ class MemoryConfig(_StrictModel):
     @field_validator("disclosure_mode")
     @classmethod
     def _validate_disclosure_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in MEMORY_DISCLOSURE_MODES:
-            choices = ", ".join(MEMORY_DISCLOSURE_MODES)
-            raise ValueError(
-                f"Unsupported memory.disclosure_mode: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_memory_disclosure_mode(
+            value,
+            field_name="memory.disclosure_mode",
+        )
 
     @field_validator("strategy")
     @classmethod
     def _validate_strategy(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in MEMORY_STRATEGIES:
-            choices = ", ".join(MEMORY_STRATEGIES)
-            raise ValueError(
-                f"Unsupported memory.strategy: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_memory_strategy(
+            value,
+            field_name="memory.strategy",
+        )
 
 
 class ChunkSnippetConfig(_StrictModel):
@@ -246,10 +229,9 @@ class ChunkGuardConfig(_StrictModel):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_chunk_guard_mode(
             value,
             field_name="chunk.guard.mode",
-            choices=CHUNK_GUARD_MODE_CHOICES,
         )
 
 
@@ -263,10 +245,9 @@ class ChunkTopologicalShieldConfig(_StrictModel):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_topological_shield_mode(
             value,
             field_name="chunk.topological_shield.mode",
-            choices=TOPOLOGICAL_SHIELD_MODE_CHOICES,
         )
 
 
@@ -283,15 +264,7 @@ class ChunkConfig(_StrictModel):
     @field_validator("disclosure")
     @classmethod
     def _validate_disclosure(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in CHUNK_DISCLOSURE_CHOICES:
-            choices = ", ".join(CHUNK_DISCLOSURE_CHOICES)
-            raise ValueError(
-                f"Unsupported chunk.disclosure: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_chunk_disclosure(value, field_name="chunk.disclosure")
 
 
 class SkillsConfig(_StrictModel):
@@ -313,10 +286,9 @@ class PluginsConfig(_StrictModel):
     @field_validator("remote_slot_policy_mode")
     @classmethod
     def _validate_remote_slot_policy_mode(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_remote_slot_policy_mode(
             value,
             field_name="plugins.remote_slot_policy_mode",
-            choices=REMOTE_SLOT_POLICY_CHOICES,
         )
 
 
@@ -344,13 +316,7 @@ class SbflConfig(_StrictModel):
     @field_validator("metric")
     @classmethod
     def _validate_metric(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in SBFL_METRIC_CHOICES:
-            choices = ", ".join(SBFL_METRIC_CHOICES)
-            raise ValueError(f"Unsupported sbfl.metric: {normalized}. Expected one of: {choices}")
-        return normalized
+        return validate_sbfl_metric(value, field_name="sbfl.metric")
 
 
 class TestsCliConfig(_StrictModel):
@@ -363,15 +329,7 @@ class TestsCliConfig(_StrictModel):
     @field_validator("sbfl_metric")
     @classmethod
     def _validate_sbfl_metric(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in SBFL_METRIC_CHOICES:
-            choices = ", ".join(SBFL_METRIC_CHOICES)
-            raise ValueError(
-                f"Unsupported tests.sbfl_metric: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_sbfl_metric(value, field_name="tests.sbfl_metric")
 
 
 class TraceConfig(_StrictModel):
@@ -396,15 +354,7 @@ class ScipCliConfig(_StrictModel):
     @field_validator("provider")
     @classmethod
     def _validate_provider(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in SCIP_PROVIDERS:
-            choices = ", ".join(sorted(SCIP_PROVIDERS))
-            raise ValueError(
-                f"Unsupported scip.provider: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_scip_provider(value, field_name="scip.provider")
 
 
 class RepomapConfig(_StrictModel):
@@ -418,15 +368,7 @@ class RepomapConfig(_StrictModel):
     @field_validator("ranking_profile")
     @classmethod
     def _validate_ranking_profile(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in RANKING_PROFILES:
-            choices = ", ".join(sorted(RANKING_PROFILES))
-            raise ValueError(
-                f"Unsupported repomap.ranking_profile: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_ranking_profile(value, field_name="repomap.ranking_profile")
 
 
 class LspConfig(_StrictModel):
@@ -458,29 +400,18 @@ class RetrievalGroupConfig(_StrictModel):
     @field_validator("candidate_ranker")
     @classmethod
     def _validate_candidate_ranker(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in CANDIDATE_RANKER_CHOICES:
-            choices = ", ".join(CANDIDATE_RANKER_CHOICES)
-            raise ValueError(
-                f"Unsupported retrieval.candidate_ranker: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_candidate_ranker(
+            value,
+            field_name="retrieval.candidate_ranker",
+        )
 
     @field_validator("hybrid_re2_fusion_mode")
     @classmethod
     def _validate_hybrid_fusion_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in HYBRID_FUSION_MODES:
-            choices = ", ".join(HYBRID_FUSION_MODES)
-            raise ValueError(
-                "Unsupported retrieval.hybrid_re2_fusion_mode: "
-                f"{normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_hybrid_fusion_mode(
+            value,
+            field_name="retrieval.hybrid_re2_fusion_mode",
+        )
 
     @field_validator("exact_search_time_budget_ms", "exact_search_max_paths")
     @classmethod
@@ -508,11 +439,7 @@ class EmbeddingsConfig(_StrictModel):
     @field_validator("provider")
     @classmethod
     def _validate_provider(cls, value: str | None) -> str | None:
-        return validate_choice_value(
-            value,
-            field_name="embeddings.provider",
-            choices=EMBEDDING_PROVIDER_CHOICES,
-        )
+        return validate_embedding_provider(value, field_name="embeddings.provider")
 
 
 class TeamSyncConfig(_StrictModel):
@@ -758,15 +685,7 @@ class SharedPlanConfig(_StrictModel):
     @field_validator("candidate_ranker")
     @classmethod
     def _validate_candidate_ranker(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in CANDIDATE_RANKER_CHOICES:
-            choices = ", ".join(CANDIDATE_RANKER_CHOICES)
-            raise ValueError(
-                f"Unsupported candidate_ranker: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_candidate_ranker(value, field_name="candidate_ranker")
 
     @field_validator("runtime_profile")
     @classmethod
@@ -779,15 +698,10 @@ class SharedPlanConfig(_StrictModel):
     @field_validator("hybrid_re2_fusion_mode")
     @classmethod
     def _validate_hybrid_fusion_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in HYBRID_FUSION_MODES:
-            choices = ", ".join(HYBRID_FUSION_MODES)
-            raise ValueError(
-                f"Unsupported hybrid_re2_fusion_mode: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_hybrid_fusion_mode(
+            value,
+            field_name="hybrid_re2_fusion_mode",
+        )
 
     @field_validator("exact_search_time_budget_ms", "exact_search_max_paths")
     @classmethod
@@ -809,123 +723,75 @@ class SharedPlanConfig(_StrictModel):
     @field_validator("remote_slot_policy_mode")
     @classmethod
     def _validate_remote_slot_policy_mode(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_remote_slot_policy_mode(
             value,
             field_name="remote_slot_policy_mode",
-            choices=REMOTE_SLOT_POLICY_CHOICES,
         )
 
     @field_validator("repomap_ranking_profile")
     @classmethod
     def _validate_repomap_ranking_profile(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in RANKING_PROFILES:
-            choices = ", ".join(sorted(RANKING_PROFILES))
-            raise ValueError(
-                f"Unsupported repomap_ranking_profile: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_ranking_profile(
+            value,
+            field_name="repomap_ranking_profile",
+        )
 
     @field_validator("memory_disclosure_mode")
     @classmethod
     def _validate_memory_disclosure_mode(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in MEMORY_DISCLOSURE_MODES:
-            choices = ", ".join(MEMORY_DISCLOSURE_MODES)
-            raise ValueError(
-                f"Unsupported memory_disclosure_mode: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_memory_disclosure_mode(
+            value,
+            field_name="memory_disclosure_mode",
+        )
 
     @field_validator("memory_strategy")
     @classmethod
     def _validate_memory_strategy(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in MEMORY_STRATEGIES:
-            choices = ", ".join(MEMORY_STRATEGIES)
-            raise ValueError(
-                f"Unsupported memory_strategy: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_memory_strategy(value, field_name="memory_strategy")
 
     @field_validator("chunk_disclosure")
     @classmethod
     def _validate_chunk_disclosure(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in CHUNK_DISCLOSURE_CHOICES:
-            choices = ", ".join(CHUNK_DISCLOSURE_CHOICES)
-            raise ValueError(
-                f"Unsupported chunk_disclosure: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_chunk_disclosure(value, field_name="chunk_disclosure")
 
     @field_validator("chunk_guard_mode")
     @classmethod
     def _validate_chunk_guard_mode(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_chunk_guard_mode(
             value,
             field_name="chunk_guard_mode",
-            choices=CHUNK_GUARD_MODE_CHOICES,
         )
 
     @field_validator("retrieval_policy")
     @classmethod
     def _validate_retrieval_policy(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_retrieval_policy(
             value,
             field_name="retrieval_policy",
-            choices=RETRIEVAL_POLICY_CHOICES,
         )
 
     @field_validator("adaptive_router_mode")
     @classmethod
     def _validate_adaptive_router_mode(cls, value: str | None) -> str | None:
-        return validate_choice_value(
+        return validate_adaptive_router_mode(
             value,
             field_name="adaptive_router_mode",
-            choices=ADAPTIVE_ROUTER_MODE_CHOICES,
         )
 
     @field_validator("sbfl_metric")
     @classmethod
     def _validate_sbfl_metric(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in SBFL_METRIC_CHOICES:
-            choices = ", ".join(SBFL_METRIC_CHOICES)
-            raise ValueError(f"Unsupported sbfl_metric: {normalized}. Expected one of: {choices}")
-        return normalized
+        return validate_sbfl_metric(value, field_name="sbfl_metric")
 
     @field_validator("scip_provider")
     @classmethod
     def _validate_scip_provider(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in SCIP_PROVIDERS:
-            choices = ", ".join(sorted(SCIP_PROVIDERS))
-            raise ValueError(
-                f"Unsupported scip_provider: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_scip_provider(value, field_name="scip_provider")
 
     @field_validator("embedding_provider")
     @classmethod
     def _validate_embedding_provider(cls, value: str | None) -> str | None:
-        return validate_choice_value(
-            value,
-            field_name="embedding_provider",
-            choices=EMBEDDING_PROVIDER_CHOICES,
-        )
+        return validate_embedding_provider(value, field_name="embedding_provider")
 
 
 class BenchmarkThresholdsConfig(_StrictModel):
@@ -969,15 +835,7 @@ class RepoMapConfig(_StrictModel):
     @field_validator("ranking_profile")
     @classmethod
     def _validate_ranking_profile(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip().lower()
-        if normalized not in RANKING_PROFILES:
-            choices = ", ".join(sorted(RANKING_PROFILES))
-            raise ValueError(
-                f"Unsupported repomap.ranking_profile: {normalized}. Expected one of: {choices}"
-            )
-        return normalized
+        return validate_ranking_profile(value, field_name="repomap.ranking_profile")
 
 
 class AceLiteConfig(SharedPlanConfig):

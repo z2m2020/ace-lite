@@ -2,7 +2,7 @@
 
 ## Deterministic pipeline
 
-`memory -> index -> repomap -> augment -> skills -> source_plan`
+`memory -> index -> repomap -> augment -> skills -> source_plan -> validation`
 
 ## Runtime construction
 
@@ -47,6 +47,10 @@
 - Build deterministic execution plan
 - Emit writeback template contract
 
+7. `validation`
+- Run optional validation checks against the source-plan output
+- Emit stable validation result and sandbox payloads for CLI, benchmark, and replay consumers
+
 ## Plugin system
 
 `AceOrchestrator` loads plugin hooks from `plugins/*/plugin.yaml`.
@@ -68,9 +72,16 @@ Output telemetry:
 
 Each plan payload is schema-validated (`schema_version = 2.0`) and includes:
 
-- Top-level stage payloads: `memory`, `index`, `augment`, `skills`, `source_plan`
+- Top-level stage payloads: `memory`, `index`, `repomap`, `augment`, `skills`, `source_plan`, `validation`
 - `conventions` snapshot metadata
 - `observability` runtime metrics and plugin trace
+
+## Refactor boundaries
+
+- `src/ace_lite/cli_app/orchestrator_factory.py` and `src/ace_lite/cli_app/runtime_command_support.py` own CLI-to-config translation and runtime command payload assembly.
+- `src/ace_lite/mcp_server/server_tool_registration.py` owns MCP tool registration metadata and registration grouping.
+- `src/ace_lite/index_stage/` owns extracted index-stage helper seams; `src/ace_lite/pipeline/stages/index.py` remains the stage orchestration entry.
+- `src/ace_lite/benchmark/case_evaluation_*.py` owns extracted benchmark-evaluation seams; `src/ace_lite/benchmark/case_evaluation.py` remains the orchestration shell.
 
 ## Conventions loading
 

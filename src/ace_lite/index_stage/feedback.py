@@ -10,6 +10,7 @@ from ace_lite.feedback_store import (
     SelectionFeedbackStore,
     build_feedback_boosts,
 )
+from ace_lite.index_stage.repo_paths import normalize_repo_path
 
 
 def _resolve_profile_path(*, root: str | Path, configured_path: str | Path) -> Path:
@@ -17,15 +18,6 @@ def _resolve_profile_path(*, root: str | Path, configured_path: str | Path) -> P
     if path.is_absolute():
         return path
     return Path(root) / path
-
-
-def _normalize_repo_path(value: Any) -> str:
-    path = str(value or "").strip().replace("\\", "/")
-    while path.startswith("./"):
-        path = path[2:]
-    return path.lstrip("/")
-
-
 def apply_feedback_boost(
     *,
     candidates: list[dict[str, Any]],
@@ -109,7 +101,7 @@ def apply_feedback_boost(
     boosted_count = 0
     boosted_paths: set[str] = set()
     for row in rows:
-        path = _normalize_repo_path(row.get("path"))
+        path = normalize_repo_path(row.get("path"), strip_leading_slash=True)
         if not path:
             continue
         boost = float(boosts_by_path.get(path, 0.0) or 0.0)
@@ -144,4 +136,3 @@ def apply_feedback_boost(
 
 
 __all__ = ["apply_feedback_boost"]
-

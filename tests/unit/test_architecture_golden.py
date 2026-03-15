@@ -8,6 +8,7 @@ Phase 0 deliverable: freeze current behavior before major refactor.
 
 from __future__ import annotations
 
+import re
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,13 @@ from ace_lite.orchestrator import (
     AceOrchestrator,
 )
 from ace_lite.orchestrator_config import OrchestratorConfig
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _read_repo_text(relative_path: str) -> str:
+    return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
 
 def _build_orchestrator(**kwargs: Any) -> AceOrchestrator:
@@ -472,3 +480,80 @@ class TestOutputSchemaStability:
 
         assert "stage_metrics" in payload["observability"]
         assert isinstance(payload["observability"]["stage_metrics"], list)
+
+
+class TestArchitectureDocsSync:
+    """Ensure design docs stay aligned with the live orchestrator contract."""
+
+    DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs" / "design"
+
+    def test_architecture_overview_pipeline_matches_runtime(self) -> None:
+        overview = (self.DOCS_ROOT / "ARCHITECTURE_OVERVIEW.md").read_text(
+            encoding="utf-8"
+        )
+        expected_pipeline = " -> ".join(AceOrchestrator.PIPELINE_ORDER)
+
+        assert expected_pipeline in overview
+
+    def test_orchestrator_design_pipeline_matches_runtime(self) -> None:
+        design = (self.DOCS_ROOT / "ORCHESTRATOR_DESIGN.md").read_text(
+            encoding="utf-8"
+        )
+        expected_pipeline = " -> ".join(AceOrchestrator.PIPELINE_ORDER)
+
+        assert expected_pipeline in design
+
+    def test_orchestrator_design_lists_all_top_level_stage_payloads(self) -> None:
+        design = (self.DOCS_ROOT / "ORCHESTRATOR_DESIGN.md").read_text(
+            encoding="utf-8"
+        )
+        expected_stage_payloads = (
+            "`memory`, `index`, `repomap`, `augment`, `skills`, "
+            "`source_plan`, `validation`"
+        )
+
+        assert expected_stage_payloads in design
+
+
+# ---------------------------------------------------------------------------
+# Phase 0.6: Refactor Boundary Contracts
+# ---------------------------------------------------------------------------
+
+
+class TestRefactorBoundaryContracts:
+    """Freeze module seams introduced by maintainability refactors."""
+
+    def test_design_docs_describe_validation_pipeline(self) -> None:
+        pipeline = "`memory -> index -> repomap -> augment -> skills -> source_plan -> validation`"
+        assert pipeline in _read_repo_text("docs/design/ARCHITECTURE_OVERVIEW.md")
+        assert pipeline in _read_repo_text("docs/design/ORCHESTRATOR_DESIGN.md")
+
+    def test_design_docs_capture_refactor_seams(self) -> None:
+        overview = _read_repo_text("docs/design/ARCHITECTURE_OVERVIEW.md")
+        orchestrator_design = _read_repo_text("docs/design/ORCHESTRATOR_DESIGN.md")
+
+        for text in (overview, orchestrator_design):
+            assert "runtime_command_support.py" in text
+            assert "server_tool_registration.py" in text
+            assert "src/ace_lite/index_stage/" in text
+            assert "case_evaluation_*.py" in text
+
+    def test_mcp_server_shell_delegates_tool_registration(self) -> None:
+        server_text = _read_repo_text("src/ace_lite/mcp_server/server.py")
+        assert "register_mcp_tools(server=server, service=service)" in server_text
+        assert "@mcp.tool" not in server_text
+
+    def test_runtime_command_module_uses_support_helpers(self) -> None:
+        runtime_text = _read_repo_text("src/ace_lite/cli_app/commands/runtime.py")
+        assert "from ace_lite.cli_app.runtime_command_support import (" in runtime_text
+        assert "collect_runtime_status_payload" in runtime_text
+        assert "build_runtime_doctor_payload" in runtime_text
+        assert "collect_runtime_mcp_doctor_payload" in runtime_text
+
+    def test_index_stage_entry_has_no_private_helpers(self) -> None:
+        index_stage_text = _read_repo_text("src/ace_lite/pipeline/stages/index.py")
+        assert re.search(r"^def _", index_stage_text, flags=re.MULTILINE) is None
+
+    def test_case_evaluation_entry_has_no_private_helpers(self) -> None:
+        case_eval_text = _read_repo_text("src/ace_lite/benchmark/case_evaluation.py")
+        assert re.search(r"^def _", case_eval_text, flags=re.MULTILINE) is None

@@ -312,6 +312,32 @@ python scripts/run_freeze_stability.py \
   --min-feature-slice-pass-rate 1.0
 ```
 
+Keep `--skip-skill-validation` only when the repeated-run question is strictly
+about retrieval robustness, latency drift, or release-freeze stability. If the
+change also touches skill routing, skill manifests, release skills, or benchmark
+playbooks, rerun the same freeze workflow without `--skip-skill-validation` so
+the artifact bundle also includes:
+
+- `artifacts/release-freeze/stability/latest/skill-validation/skill_validation_matrix.json`
+- `artifacts/release-freeze/stability/latest/skill-validation/skill_validation_index.json`
+
+For a standalone skill-routing check outside the full freeze workflow, run:
+
+```bash
+python scripts/run_skill_validation.py \
+  --repo-url <repo-url> \
+  --repo-ref <ref> \
+  --repo-name <repo-name> \
+  --repo-dir artifacts/repos-workdir/skill-validation \
+  --skills-dir skills \
+  --index-cache-path artifacts/release-freeze/stability/latest/skill-validation/skill_validation_index.json \
+  --output-path artifacts/release-freeze/stability/latest/skill-validation/skill_validation_matrix.json \
+  --languages typescript,javascript \
+  --apps codex,claude-code,opencode \
+  --min-pass-rate 0.8 \
+  --fail-on-miss
+```
+
 Acceptable drift policy for the current robustness lane:
 
 - Core robustness slices (`dependency_recall`, `perturbation`, `repomap_perturbation`) must classify as `stable_pass` across the repeated runs.

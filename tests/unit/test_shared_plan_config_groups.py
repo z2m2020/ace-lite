@@ -1,19 +1,28 @@
 from __future__ import annotations
 
+import json
+
 import click
 
 from ace_lite.cli_app.config_resolve import _resolve_shared_plan_config
+from ace_lite.cli_app.config_resolve_helpers import _apply_plan_namespace_overlays
 
 
-def _resolve_shared_plan(**config: object) -> dict[str, object]:
+def _resolve_shared_plan(
+    *,
+    config_pack: str | None = None,
+    runtime_profile: str | None = None,
+    retrieval_preset: str = "none",
+    **config: object,
+) -> dict[str, object]:
     ctx = click.Context(click.Command("unit"))
     return _resolve_shared_plan_config(
         ctx=ctx,
         config=config,
         namespace="plan",
-        config_pack=None,
-        runtime_profile=None,
-        retrieval_preset="none",
+        config_pack=config_pack,
+        runtime_profile=runtime_profile,
+        retrieval_preset=retrieval_preset,
         adaptive_router_enabled=False,
         adaptive_router_mode="observe",
         adaptive_router_model_path="context-map/router/model.json",
@@ -271,3 +280,46 @@ def test_resolve_shared_plan_grouped_and_flat_auxiliary_config_match() -> None:
         "scip",
     ):
         assert grouped[key] == flat[key]
+
+
+def test_apply_plan_namespace_overlays_merges_runtime_profile_preset_and_config_pack(
+    tmp_path,
+) -> None:
+    config_pack_path = tmp_path / "pack.json"
+    config_pack_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "ace-lite-config-pack-v1",
+                "name": "test-pack",
+                "overrides": {
+                    "top_k_files": 2,
+                    "candidate_ranker": "bm25_lite",
+                    "plan_replay_cache_enabled": False,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = {
+        "plan": {
+            "top_k_files": 30,
+            "candidate_ranker": "hybrid_re2",
+        }
+    }
+
+    resolved_profile_name = _apply_plan_namespace_overlays(
+        config=config,
+        namespace="plan",
+        runtime_profile="wide_search",
+        retrieval_preset="precision-v1",
+        config_pack=str(config_pack_path),
+    )
+
+    plan_config = config["plan"]
+    assert resolved_profile_name == "wide_search"
+    assert plan_config["runtime_profile"] == "wide_search"
+    assert plan_config["retrieval"]["top_k_files"] == 18
+    assert plan_config["top_k_files"] == 2
+    assert plan_config["candidate_ranker"] == "bm25_lite"
+    assert plan_config["plan_replay_cache_enabled"] is False

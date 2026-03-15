@@ -18,8 +18,9 @@ token_estimate: 420
 4. Verify diagnostics and structure artifacts: `failed_test_report` or `junit_xml`, `sbfl_metric`, trace export settings, and SCIP provider/index assumptions.
 5. Verify config/schema compatibility and migration notes, including embeddings index, validation payload expectations, and replay-cache-sensitive workflows if they affect release evidence.
 6. Verify local install/runtime consistency for the candidate build: version metadata, MCP self-test, and doctor output.
-7. Ensure governance docs/changelog are updated.
-8. Produce go/no-go decision with blocking items.
+7. If the release touches `skills/`, benchmark playbooks, or release-readiness prompts, run freeze without `--skip-skill-validation` and review the skill validation artifact bundle.
+8. Ensure governance docs/changelog are updated.
+9. Produce go/no-go decision with blocking items.
 
 # Prompt Template
 
@@ -38,6 +39,7 @@ Prefer explicit release evidence over prose:
 - `coverage_json`
 - `sbfl_json` and `sbfl_metric`
 - benchmark result JSON/markdown
+- `skill_validation_matrix` when release scope touches skills, skill routing, or maintainer playbooks
 - `trace_export_path` or OTLP endpoint used during release verification
 - `scip_provider` and index path if structural retrieval is part of the release surface
 - MCP self-test payload or `ace-lite doctor` output from the candidate environment
@@ -61,6 +63,11 @@ ace-lite plan \
 ```
 
 Record the benchmark artifact path beside this command so the go/no-go package stays complete.
+
+If release scope includes `skills/`, rerun freeze without `--skip-skill-validation` and attach:
+
+- `artifacts/release-freeze/latest/skill-validation/skill_validation_matrix.json`
+- `artifacts/release-freeze/latest/skill-validation/skill_validation_index.json`
 
 # Scenario Templates
 

@@ -1,0 +1,283 @@
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+from ace_lite.cli_app.runtime_command_support import (
+    build_codex_mcp_setup_plan,
+    build_runtime_status_snapshot,
+    collect_runtime_settings_show_payload,
+    collect_runtime_status_payload,
+    execute_codex_mcp_setup_plan,
+    resolve_runtime_settings_bundle,
+    resolve_effective_runtime_skills_dir,
+)
+from ace_lite.runtime_settings_store import (
+    build_runtime_settings_record,
+    persist_runtime_settings_record,
+)
+
+
+def test_resolve_runtime_settings_bundle_uses_last_known_good_selected_profile(
+    tmp_path: Path,
+) -> None:
+    current_path = tmp_path / "current-settings.json"
+    lkg_path = tmp_path / "last-known-good.json"
+    valid_payload = build_runtime_settings_record(
+        snapshot={"plan": {"retrieval": {"top_k_files": 12}}},
+        provenance={"plan": {"retrieval": {"top_k_files": "cli"}}},
+        metadata={"selected_profile": "team-default"},
+    )
+    persist_runtime_settings_record(
+        current_path=current_path,
+        last_known_good_path=lkg_path,
+        payload=valid_payload,
+        update_last_known_good=True,
+    )
+    current_path.write_text('{"schema_version": 1, "snapshot": {"broken": true}}', encoding="utf-8")
+
+    bundle = resolve_runtime_settings_bundle(
+        root=str(tmp_path),
+        config_file=".ace-lite.yml",
+        mcp_name="ace-lite",
+        runtime_profile=None,
+        use_snapshot=False,
+        current_path=str(current_path),
+        last_known_good_path=str(lkg_path),
+    )
+
+    assert bundle["persisted_source"] == "last_known_good"
+    assert bundle["selected_profile"] == "team-default"
+    assert str(bundle["resolved_current_path"]) == str(current_path)
+    assert str(bundle["resolved_lkg_path"]) == str(lkg_path)
+
+
+def test_collect_runtime_settings_show_payload_matches_bundle_snapshot(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        "plan:\n  runtime_profile: bugfix\n",
+        encoding="utf-8",
+    )
+
+    bundle = resolve_runtime_settings_bundle(
+        root=str(tmp_path),
+        config_file=".ace-lite.yml",
+        mcp_name="ace-lite",
+        runtime_profile=None,
+        use_snapshot=False,
+        current_path=str(tmp_path / "current.json"),
+        last_known_good_path=str(tmp_path / "lkg.json"),
+    )
+    payload = collect_runtime_settings_show_payload(
+        root=str(tmp_path),
+        config_file=".ace-lite.yml",
+        mcp_name="ace-lite",
+        runtime_profile=None,
+        use_snapshot=False,
+        current_path=str(tmp_path / "current.json"),
+        last_known_good_path=str(tmp_path / "lkg.json"),
+    )
+
+    resolved = bundle["resolved"]
+    assert payload["ok"] is True
+    assert payload["event"] == "runtime_settings_show"
+    assert payload["settings"] == resolved.snapshot
+    assert payload["provenance"] == resolved.provenance
+    assert payload["fingerprint"] == resolved.fingerprint
+    assert payload["selected_profile"] == bundle["selected_profile"]
+    assert payload["persisted_source"] == bundle["persisted_source"]
+    assert payload["stats_tags"] == resolved.metadata.get("stats_tags", {})
+    assert payload["metadata"] == resolved.metadata
+
+
+def test_resolve_effective_runtime_skills_dir_prefers_explicit_override() -> None:
+    settings = {"plan": {"skills": {"dir": "repo-skills"}}}
+
+    assert (
+        resolve_effective_runtime_skills_dir(settings, skills_dir="cli-skills")
+        == "cli-skills"
+    )
+    assert resolve_effective_runtime_skills_dir(settings) == "repo-skills"
+    assert resolve_effective_runtime_skills_dir({}) == "skills"
+
+
+def test_build_runtime_status_snapshot_matches_collect_payload(tmp_path: Path) -> None:
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  retrieval:\n"
+            "    top_k_files: 7\n"
+        ),
+        encoding="utf-8",
+    )
+
+    bundle = resolve_runtime_settings_bundle(
+        root=str(tmp_path),
+        config_file=".ace-lite.yml",
+        mcp_name="ace-lite",
+        runtime_profile=None,
+        use_snapshot=False,
+        current_path=str(tmp_path / "current.json"),
+        last_known_good_path=str(tmp_path / "lkg.json"),
+    )
+    expected_snapshot = build_runtime_status_snapshot(
+        root=str(tmp_path),
+        bundle=bundle,
+        db_path=str(tmp_path / "runtime-state.db"),
+        extract_memory_channels_fn=lambda payload: (
+            payload.get("memory_primary", "none"),
+            payload.get("memory_secondary", "none"),
+        ),
+        memory_channels_disabled_fn=lambda primary, secondary: primary == "none"
+        and secondary == "none",
+        memory_config_recommendations_fn=lambda root, skills_dir: [
+            f"configure-memory:{Path(root).name}:{Path(skills_dir).name}"
+        ],
+    )
+    payload = collect_runtime_status_payload(
+        root=str(tmp_path),
+        config_file=".ace-lite.yml",
+        mcp_name="ace-lite",
+        runtime_profile=None,
+        use_snapshot=False,
+        current_path=str(tmp_path / "current.json"),
+        last_known_good_path=str(tmp_path / "lkg.json"),
+        db_path=str(tmp_path / "runtime-state.db"),
+        extract_memory_channels_fn=lambda payload: (
+            payload.get("memory_primary", "none"),
+            payload.get("memory_secondary", "none"),
+        ),
+        memory_channels_disabled_fn=lambda primary, secondary: primary == "none"
+        and secondary == "none",
+        memory_config_recommendations_fn=lambda root, skills_dir: [
+            f"configure-memory:{Path(root).name}:{Path(skills_dir).name}"
+        ],
+    )
+
+    assert payload["ok"] is True
+    assert payload["event"] == "runtime_status"
+    assert {key: value for key, value in payload.items() if key not in {"ok", "event"}} == (
+        expected_snapshot
+    )
+
+
+def test_execute_codex_mcp_setup_plan_dry_run_does_not_run_commands() -> None:
+    setup_plan = build_codex_mcp_setup_plan(
+        name="ace-lite",
+        root="repo",
+        skills_dir="skills",
+        codex_executable="codex",
+        python_executable="python",
+        enable_memory=False,
+        memory_primary="rest",
+        memory_secondary="none",
+        mcp_base_url="http://localhost:8765",
+        rest_base_url="http://localhost:8765",
+        user_id="",
+        app="ace-lite",
+        config_pack="",
+        enable_embeddings=False,
+        embedding_provider="ollama",
+        embedding_model="model",
+        embedding_dimension=2560,
+        embedding_index_path="context-map/embeddings/index.json",
+        embedding_rerank_pool=16,
+        embedding_lexical_weight=0.55,
+        embedding_semantic_weight=0.45,
+        embedding_min_similarity=0.05,
+        embedding_fail_open=True,
+        ollama_base_url="http://localhost:11434",
+        replace=True,
+        apply=False,
+        verify=True,
+        resolve_cli_path_fn=lambda value: str(value),
+        env_get_fn=lambda key, default="": default,
+    )
+    calls: list[list[str]] = []
+
+    result = execute_codex_mcp_setup_plan(
+        setup_plan=setup_plan,
+        python_executable="python",
+        run_subprocess_fn=lambda *args, **kwargs: calls.append(list(args[0])),
+        write_snapshot_fn=lambda **kwargs: Path("snapshot.json"),
+        run_mcp_self_test_fn=lambda **kwargs: {"ok": True},
+    )
+
+    assert result["event"] == "setup_codex_mcp"
+    assert "commands" in result
+    assert calls == []
+
+
+def test_execute_codex_mcp_setup_plan_apply_and_verify(tmp_path: Path) -> None:
+    setup_plan = build_codex_mcp_setup_plan(
+        name="ace-lite",
+        root=str(tmp_path),
+        skills_dir=str(tmp_path / "skills"),
+        codex_executable="codex",
+        python_executable="python",
+        enable_memory=True,
+        memory_primary="rest",
+        memory_secondary="none",
+        mcp_base_url="http://localhost:8765",
+        rest_base_url="http://localhost:8765",
+        user_id="snapshot-user",
+        app="ace-lite",
+        config_pack="",
+        enable_embeddings=False,
+        embedding_provider="ollama",
+        embedding_model="model",
+        embedding_dimension=2560,
+        embedding_index_path="context-map/embeddings/index.json",
+        embedding_rerank_pool=16,
+        embedding_lexical_weight=0.55,
+        embedding_semantic_weight=0.45,
+        embedding_min_similarity=0.05,
+        embedding_fail_open=True,
+        ollama_base_url="http://localhost:11434",
+        replace=True,
+        apply=True,
+        verify=True,
+        resolve_cli_path_fn=lambda value: str(Path(value)),
+        env_get_fn=lambda key, default="": default,
+    )
+    commands: list[list[str]] = []
+
+    def _fake_run(command, capture_output, text, check=False, env=None, timeout=None):
+        _ = (capture_output, text, check, env, timeout)
+        commands.append(list(command))
+        if command[:3] == ["codex", "mcp", "get"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="ace-lite\n  enabled: true\n",
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout="ok\n",
+            stderr="",
+        )
+
+    result = execute_codex_mcp_setup_plan(
+        setup_plan=setup_plan,
+        python_executable="python",
+        run_subprocess_fn=_fake_run,
+        write_snapshot_fn=lambda **kwargs: tmp_path / "snapshot.json",
+        run_mcp_self_test_fn=lambda **kwargs: {
+            "ok": True,
+            "memory_primary": "rest",
+            "memory_secondary": "none",
+        },
+    )
+
+    assert result["event"] == "setup_codex_mcp"
+    assert Path(result["snapshot_path"]) == (tmp_path / "snapshot.json")
+    assert result["verify_get"]["ok"] is True
+    assert result["verify_self_test"]["ok"] is True
+    assert commands[0][:3] == ["codex", "mcp", "remove"]
+    assert commands[1][:3] == ["codex", "mcp", "add"]
+    assert commands[2][:3] == ["codex", "mcp", "get"]

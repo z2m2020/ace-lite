@@ -6,26 +6,17 @@ candidates for downstream stages.
 
 from __future__ import annotations
 
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
-from fnmatch import fnmatchcase
 from pathlib import Path
-from threading import Lock
 from time import perf_counter
 from typing import Any
 
 from ace_lite.embeddings import (
-    BGE_M3_DEFAULT_MODEL,
-    BGE_RERANKER_DEFAULT_MODEL,
-    OLLAMA_DEFAULT_DIMENSION,
-    OLLAMA_DEFAULT_MODEL,
     CrossEncoderProvider,
     EmbeddingIndexStats,
     EmbeddingProvider,
-    rerank_candidates_with_cross_encoder,
-    rerank_rows_with_cross_encoder,
-    rerank_rows_with_embeddings,
 )
 from ace_lite.exact_search import run_exact_search_ripgrep, score_exact_search_hits
 from ace_lite.index_stage import (
@@ -35,28 +26,51 @@ from ace_lite.index_stage import (
     InitialCandidateGenerationDeps,
     apply_candidate_priors,
     apply_chunk_selection,
+    apply_multi_channel_rrf_fusion,
     apply_exact_search_boost,
     apply_semantic_candidate_rerank,
     apply_structural_rerank,
+    build_adaptive_router_payload,
+    build_disabled_docs_payload,
+    build_disabled_worktree_prior,
+    build_embedding_stats,
     build_index_stage_output,
     build_exact_search_payload,
     collect_docs_signals,
     collect_parallel_signals,
     collect_worktree_prior,
+    EmbeddingRuntimeConfig,
     extract_memory_paths,
+    filter_candidate_rows,
+    filter_files_map_for_benchmark,
     gather_initial_candidates,
+    merge_candidate_lists,
+    get_index_parallel_executor,
+    normalize_repo_path,
     postprocess_candidates,
     refine_candidate_pool,
+    rerank_cross_encoder_with_time_budget,
+    rerank_rows_cross_encoder_with_time_budget,
+    rerank_rows_embeddings_with_time_budget,
+    resolve_benchmark_candidate_filters,
+    resolve_docs_policy_for_benchmark,
+    resolve_embedding_runtime_config,
     resolve_online_bandit_gate,
+    resolve_parallel_future,
+    resolve_repo_relative_path,
     resolve_retrieval_policy,
     resolve_shadow_router_arm,
+    resolve_worktree_policy_for_benchmark,
     select_index_chunks,
     select_initial_candidates,
 )
 from ace_lite.index_stage.cache import (
+    attach_index_candidate_cache_info,
     build_index_candidate_cache_key,
+    clone_index_candidate_payload,
     default_index_candidate_cache_path,
     load_cached_index_candidates_checked,
+    refresh_cached_index_candidate_payload,
     store_cached_index_candidates,
 )
 from ace_lite.index_stage.config_adapter import (
@@ -65,11 +79,7 @@ from ace_lite.index_stage.config_adapter import (
 from ace_lite.index_stage.feedback import apply_feedback_boost
 from ace_lite.parsers.languages import supported_extensions
 from ace_lite.pipeline.types import StageContext
-from ace_lite.rankers import (
-    fuse_rrf,
-    normalize_fusion_mode,
-    normalize_rrf_scores,
-)
+from ace_lite.rankers import normalize_fusion_mode
 from ace_lite.retrieval_shared import (
     build_retrieval_runtime_profile,
     extract_retrieval_terms,
@@ -77,164 +87,6 @@ from ace_lite.retrieval_shared import (
 )
 
 _INDEX_CANDIDATE_CACHE_CONTENT_VERSION = "index-candidates-v1"
-
-
-def _normalize_candidate_filter_path(value: Any) -> str:
-    return str(value or "").strip().replace("\\", "/")
-
-
-def _coerce_candidate_filter_list(value: Any) -> list[str]:
-    if isinstance(value, str):
-        normalized = _normalize_candidate_filter_path(value)
-        return [normalized] if normalized else []
-    if not isinstance(value, list):
-        return []
-    output: list[str] = []
-    for item in value:
-        normalized = _normalize_candidate_filter_path(item)
-        if normalized:
-            output.append(normalized)
-    return output
-
-
-def _resolve_benchmark_candidate_filters(ctx: StageContext) -> dict[str, Any]:
-    raw = ctx.state.get("benchmark_filters")
-    filters = raw if isinstance(raw, dict) else {}
-    include_paths = _coerce_candidate_filter_list(filters.get("include_paths"))
-    include_globs = _coerce_candidate_filter_list(filters.get("include_globs"))
-    exclude_paths = _coerce_candidate_filter_list(filters.get("exclude_paths"))
-    exclude_globs = _coerce_candidate_filter_list(filters.get("exclude_globs"))
-    return {
-        "requested": bool(include_paths or include_globs or exclude_paths or exclude_globs),
-        "include_paths": include_paths,
-        "include_globs": include_globs,
-        "exclude_paths": exclude_paths,
-        "exclude_globs": exclude_globs,
-    }
-
-
-def _path_looks_like_docs(path: str) -> bool:
-    normalized = _normalize_candidate_filter_path(path).lower()
-    if not normalized:
-        return False
-    if normalized.endswith(".md"):
-        return True
-    if normalized.startswith("docs/") or "/docs/" in normalized:
-        return True
-    if normalized in {
-        "readme",
-        "readme.md",
-        "changelog",
-        "changelog.md",
-        "contributing",
-        "contributing.md",
-        "security",
-        "security.md",
-    }:
-        return True
-    return False
-
-
-def _resolve_docs_policy_for_benchmark(
-    *,
-    policy_docs_enabled: bool,
-    benchmark_filter_payload: dict[str, Any],
-) -> tuple[bool, str]:
-    if not bool(policy_docs_enabled):
-        return False, "policy_disabled"
-    include_paths = _coerce_candidate_filter_list(benchmark_filter_payload.get("include_paths"))
-    if not include_paths:
-        return True, "policy_enabled"
-    if any(_path_looks_like_docs(path) for path in include_paths):
-        return True, "benchmark_include_paths_contains_docs"
-    return False, "benchmark_include_paths_code_only"
-
-
-def _resolve_worktree_policy_for_benchmark(
-    *,
-    worktree_prior_enabled: bool,
-    benchmark_filter_payload: dict[str, Any],
-) -> tuple[bool, str]:
-    if not bool(worktree_prior_enabled):
-        return False, "policy_disabled"
-    include_paths = _coerce_candidate_filter_list(benchmark_filter_payload.get("include_paths"))
-    include_globs = _coerce_candidate_filter_list(benchmark_filter_payload.get("include_globs"))
-    if include_paths or include_globs:
-        return False, "benchmark_filter_explicit_scope"
-    return True, "policy_enabled"
-
-
-def _candidate_path_matches_filters(
-    path: Any,
-    *,
-    include_paths: list[str],
-    include_globs: list[str],
-    exclude_paths: list[str],
-    exclude_globs: list[str],
-) -> bool:
-    normalized = _normalize_candidate_filter_path(path)
-    if not normalized:
-        return False
-    include_requested = bool(include_paths or include_globs)
-    if include_requested:
-        included = normalized in include_paths or any(
-            fnmatchcase(normalized, pattern) for pattern in include_globs
-        )
-        if not included:
-            return False
-    if normalized in exclude_paths:
-        return False
-    if any(fnmatchcase(normalized, pattern) for pattern in exclude_globs):
-        return False
-    return True
-
-
-def _filter_candidate_rows(
-    rows: list[dict[str, Any]],
-    *,
-    include_paths: list[str],
-    include_globs: list[str],
-    exclude_paths: list[str],
-    exclude_globs: list[str],
-) -> tuple[list[dict[str, Any]], int]:
-    output: list[dict[str, Any]] = []
-    removed = 0
-    for item in rows:
-        if not _candidate_path_matches_filters(
-            item.get("path"),
-            include_paths=include_paths,
-            include_globs=include_globs,
-            exclude_paths=exclude_paths,
-            exclude_globs=exclude_globs,
-        ):
-            removed += 1
-            continue
-        output.append(item)
-    return output, removed
-
-
-def _filter_files_map_for_benchmark(
-    files_map: dict[str, Any],
-    *,
-    include_paths: list[str],
-    include_globs: list[str],
-    exclude_paths: list[str],
-    exclude_globs: list[str],
-) -> tuple[dict[str, Any], int]:
-    output: dict[str, Any] = {}
-    removed = 0
-    for path, payload in files_map.items():
-        if not _candidate_path_matches_filters(
-            path,
-            include_paths=include_paths,
-            include_globs=include_globs,
-            exclude_paths=exclude_paths,
-            exclude_globs=exclude_globs,
-        ):
-            removed += 1
-            continue
-        output[str(path)] = payload
-    return output, removed
 
 
 @dataclass(frozen=True, slots=True)
@@ -397,673 +249,6 @@ class IndexStageConfig:
         )
 
 
-def _build_adaptive_router_payload(
-    *,
-    config: IndexAdaptiveRouterConfig,
-    policy: dict[str, Any],
-    shadow: dict[str, Any] | None = None,
-    online_bandit: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    enabled = bool(config.enabled)
-    source = str(policy.get("source", "")).strip() if enabled else "disabled"
-    confidence = 1.0 if enabled and source == "configured" else 0.0
-    shadow_payload = shadow if isinstance(shadow, dict) else {}
-    online_bandit_payload = online_bandit if isinstance(online_bandit, dict) else {}
-    return {
-        "enabled": enabled,
-        "mode": str(config.mode).strip() or "observe",
-        "model_path": str(config.model_path).strip(),
-        "state_path": str(config.state_path).strip(),
-        "arm_set": str(config.arm_set).strip() or "retrieval_policy_v1",
-        "arm_id": str(policy.get("name", "")).strip() if enabled else "",
-        "source": source,
-        "confidence": float(confidence),
-        "shadow_arm_id": str(shadow_payload.get("arm_id", "")).strip() if enabled else "",
-        "shadow_confidence": float(shadow_payload.get("confidence", 0.0) or 0.0)
-        if enabled
-        else 0.0,
-        "online_bandit": dict(online_bandit_payload),
-    }
-
-
-@dataclass(frozen=True, slots=True)
-class EmbeddingRuntimeConfig:
-    provider: str
-    model: str
-    dimension: int
-    normalized_fields: tuple[str, ...]
-    notes: tuple[str, ...]
-
-
-def _resolve_repo_relative_path(*, root: str, configured_path: str) -> Path:
-    path = Path(str(configured_path or "").strip() or "context-map/index.json")
-    if path.is_absolute():
-        return path
-    return Path(root) / path
-
-
-def _normalize_repo_path(value: str) -> str:
-    path = str(value or "").strip().replace("\\", "/")
-    while path.startswith("./"):
-        path = path[2:]
-    return path
-
-
-def _build_embedding_stats(
-    *,
-    enabled: bool,
-    provider: str,
-    model: str,
-    dimension: int,
-    index_path: str | Path,
-    rerank_pool: int,
-    lexical_weight: float,
-    semantic_weight: float,
-    fallback: bool,
-    warning: str | None,
-) -> dict[str, Any]:
-    return EmbeddingIndexStats(
-        enabled=bool(enabled),
-        provider=str(provider),
-        model=str(model),
-        dimension=max(1, int(dimension)),
-        cache_hit=False,
-        index_path=str(index_path),
-        indexed_files=0,
-        rerank_pool=max(0, int(rerank_pool)),
-        reranked_count=0,
-        lexical_weight=max(0.0, float(lexical_weight)),
-        semantic_weight=max(0.0, float(semantic_weight)),
-        similarity_mean=0.0,
-        similarity_max=0.0,
-        fallback=bool(fallback),
-        warning=warning,
-    ).to_dict()
-
-
-def _resolve_embedding_runtime_config(
-    *,
-    provider: str,
-    model: str,
-    dimension: int,
-) -> EmbeddingRuntimeConfig:
-    provider_name = str(provider or "hash").strip().lower() or "hash"
-    configured_model = str(model or "").strip()
-    configured_dimension = max(8, int(dimension))
-
-    runtime_model = configured_model
-    runtime_dimension = configured_dimension
-    normalized_fields: list[str] = []
-    notes: list[str] = []
-
-    if provider_name == "hash":
-        if not runtime_model:
-            runtime_model = "hash-v1"
-            normalized_fields.append("model")
-            notes.append("hash_default_model")
-    elif provider_name == "hash_cross":
-        if not runtime_model:
-            runtime_model = "hash-cross-v1"
-            normalized_fields.append("model")
-            notes.append("hash_cross_default_model")
-        if configured_dimension != 1:
-            runtime_dimension = 1
-            normalized_fields.append("dimension")
-            notes.append("hash_cross_dimension_forced")
-    elif provider_name == "hash_colbert":
-        if not runtime_model:
-            runtime_model = "hash-colbert-v1"
-            normalized_fields.append("model")
-            notes.append("hash_colbert_default_model")
-        if configured_dimension != 1:
-            runtime_dimension = 1
-            normalized_fields.append("dimension")
-            notes.append("hash_colbert_dimension_forced")
-    elif provider_name == "bge_m3":
-        if not runtime_model or runtime_model in {"hash-v1", "hash-cross-v1"}:
-            runtime_model = BGE_M3_DEFAULT_MODEL
-            normalized_fields.append("model")
-            notes.append("bge_m3_default_model")
-        # Avoid silent quality regression when inheriting the global hash default.
-        if configured_dimension == 256:
-            runtime_dimension = 1024
-            normalized_fields.append("dimension")
-            notes.append("bge_m3_default_dimension")
-    elif provider_name == "bge_reranker":
-        if not runtime_model or runtime_model in {"hash-v1", "hash-cross-v1"}:
-            runtime_model = BGE_RERANKER_DEFAULT_MODEL
-            normalized_fields.append("model")
-            notes.append("bge_reranker_default_model")
-        if configured_dimension != 1:
-            runtime_dimension = 1
-            normalized_fields.append("dimension")
-            notes.append("bge_reranker_dimension_forced")
-    elif provider_name == "ollama":
-        if not runtime_model or runtime_model in {"hash-v1", "hash-cross-v1"}:
-            runtime_model = OLLAMA_DEFAULT_MODEL
-            normalized_fields.append("model")
-            notes.append("ollama_default_model")
-        # Avoid silent quality regression when inheriting the global hash default.
-        if configured_dimension == 256:
-            runtime_dimension = OLLAMA_DEFAULT_DIMENSION
-            normalized_fields.append("dimension")
-            notes.append("ollama_default_dimension")
-
-    return EmbeddingRuntimeConfig(
-        provider=provider_name,
-        model=runtime_model,
-        dimension=max(1, int(runtime_dimension)),
-        normalized_fields=tuple(dict.fromkeys(normalized_fields)),
-        notes=tuple(dict.fromkeys(notes)),
-    )
-
-
-def _clone_index_candidate_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    cloned = dict(payload)
-    cloned.pop("candidate_cache", None)
-    return cloned
-
-
-def _attach_index_candidate_cache_info(
-    *,
-    payload: dict[str, Any],
-    cache_info: dict[str, Any],
-) -> dict[str, Any]:
-    materialized = _clone_index_candidate_payload(payload)
-    materialized["candidate_cache"] = dict(cache_info)
-    return materialized
-
-
-def _refresh_cached_index_candidate_payload(
-    *,
-    payload: dict[str, Any],
-    index_data: dict[str, Any],
-    cache_info: dict[str, Any],
-    index_hash: str,
-    timings_ms: dict[str, float],
-    benchmark_filter_payload: dict[str, Any],
-) -> dict[str, Any]:
-    materialized = _clone_index_candidate_payload(payload)
-    materialized["index_hash"] = str(index_hash or "")
-    materialized["file_count"] = int(index_data.get("file_count", 0) or 0)
-    materialized["indexed_at"] = index_data.get("indexed_at")
-    materialized["languages_covered"] = list(index_data.get("languages_covered", []))
-    materialized["parser"] = (
-        dict(index_data.get("parser", {}))
-        if isinstance(index_data.get("parser"), dict)
-        else {}
-    )
-    materialized["cache"] = dict(cache_info)
-
-    metadata = (
-        dict(materialized.get("metadata", {}))
-        if isinstance(materialized.get("metadata"), dict)
-        else {}
-    )
-    previous_timings = metadata.get("timings_ms")
-    if isinstance(previous_timings, dict):
-        metadata["cached_payload_timings_ms"] = dict(previous_timings)
-    metadata["timings_ms"] = dict(timings_ms)
-    metadata["candidate_cache_reused"] = True
-    materialized["metadata"] = metadata
-
-    if benchmark_filter_payload.get("requested", False):
-        materialized["benchmark_filters"] = dict(benchmark_filter_payload)
-    return materialized
-
-
-def _rerank_cross_encoder_with_time_budget(
-    *,
-    candidates: list[dict[str, Any]],
-    files_map: dict[str, dict[str, Any]],
-    query: str,
-    provider: CrossEncoderProvider,
-    index_path: str | Path,
-    rerank_pool: int,
-    lexical_weight: float,
-    semantic_weight: float,
-    min_similarity: float,
-    time_budget_ms: int,
-) -> tuple[list[dict[str, Any]], EmbeddingIndexStats]:
-    budget_ms = max(1, int(time_budget_ms))
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(
-        rerank_candidates_with_cross_encoder,
-        candidates=candidates,
-        files_map=files_map,
-        query=query,
-        provider=provider,
-        index_path=index_path,
-        rerank_pool=rerank_pool,
-        lexical_weight=lexical_weight,
-        semantic_weight=semantic_weight,
-        min_similarity=min_similarity,
-    )
-    try:
-        return future.result(timeout=float(budget_ms) / 1000.0)
-    except FuturesTimeoutError as exc:
-        raise TimeoutError(f"cross_encoder_time_budget_exceeded:{budget_ms}ms") from exc
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
-
-
-def _rerank_rows_cross_encoder_with_time_budget(
-    *,
-    rows: list[dict[str, Any]],
-    texts: list[str],
-    query: str,
-    provider: CrossEncoderProvider,
-    rerank_pool: int,
-    lexical_weight: float,
-    semantic_weight: float,
-    min_similarity: float,
-    time_budget_ms: int,
-) -> tuple[list[dict[str, Any]], EmbeddingIndexStats]:
-    budget_ms = max(1, int(time_budget_ms))
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(
-        rerank_rows_with_cross_encoder,
-        rows=rows,
-        texts=texts,
-        query=query,
-        provider=provider,
-        rerank_pool=rerank_pool,
-        lexical_weight=lexical_weight,
-        semantic_weight=semantic_weight,
-        min_similarity=min_similarity,
-    )
-    try:
-        return future.result(timeout=float(budget_ms) / 1000.0)
-    except FuturesTimeoutError as exc:
-        raise TimeoutError(
-            f"chunk_cross_encoder_time_budget_exceeded:{budget_ms}ms"
-        ) from exc
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
-
-
-def _rerank_rows_embeddings_with_time_budget(
-    *,
-    rows: list[dict[str, Any]],
-    texts: list[str],
-    query: str,
-    provider: EmbeddingProvider,
-    index_path: str | Path | None,
-    index_hash: str | None,
-    rerank_pool: int,
-    lexical_weight: float,
-    semantic_weight: float,
-    min_similarity: float,
-    time_budget_ms: int,
-) -> tuple[list[dict[str, Any]], EmbeddingIndexStats]:
-    budget_ms = max(1, int(time_budget_ms))
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(
-        rerank_rows_with_embeddings,
-        rows=rows,
-        texts=texts,
-        query=query,
-        provider=provider,
-        index_path=index_path,
-        index_hash=index_hash,
-        rerank_pool=rerank_pool,
-        lexical_weight=lexical_weight,
-        semantic_weight=semantic_weight,
-        min_similarity=min_similarity,
-    )
-    try:
-        return future.result(timeout=float(budget_ms) / 1000.0)
-    except FuturesTimeoutError as exc:
-        raise TimeoutError(
-            f"chunk_embedding_time_budget_exceeded:{budget_ms}ms"
-        ) from exc
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
-
-
-def _merge_candidate_lists(
-    *,
-    primary: list[dict[str, Any]],
-    secondary: list[dict[str, Any]],
-    limit: int,
-) -> list[dict[str, Any]]:
-    if limit <= 0:
-        return []
-
-    merged_by_path: dict[str, dict[str, Any]] = {}
-    for source_name, rows in (("primary", primary), ("secondary", secondary)):
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            path = str(row.get("path") or "").strip()
-            if not path:
-                continue
-            score = float(row.get("score") or 0.0)
-            existing = merged_by_path.get(path)
-            if existing is None or float(existing.get("score") or 0.0) < score:
-                payload = dict(row)
-                payload["retrieval_pass"] = source_name
-                merged_by_path[path] = payload
-
-    merged = list(merged_by_path.values())
-    merged.sort(
-        key=lambda item: (
-            -float(item.get("score") or 0.0),
-            str(item.get("path") or ""),
-        )
-    )
-    return merged[:limit]
-
-
-def _apply_multi_channel_rrf_fusion(
-    *,
-    candidates: list[dict[str, Any]],
-    files_map: dict[str, dict[str, Any]],
-    docs_payload: dict[str, Any],
-    memory_paths: list[str],
-    top_k_files: int,
-    rrf_k: int,
-    pool_cap: int,
-    code_cap: int,
-    docs_cap: int,
-    memory_cap: int,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    normalized_top_k_files = max(1, int(top_k_files))
-    rrf_k_effective = max(1, int(rrf_k))
-    pool_cap_effective = int(pool_cap)
-    if pool_cap_effective <= 0:
-        pool_cap_effective = max(32, normalized_top_k_files * 12)
-    pool_cap_effective = min(pool_cap_effective, len(candidates))
-
-    code_cap_effective = int(code_cap)
-    if code_cap_effective <= 0:
-        code_cap_effective = max(16, normalized_top_k_files * 8)
-    code_cap_effective = min(code_cap_effective, pool_cap_effective)
-
-    docs_cap_effective = int(docs_cap)
-    if docs_cap_effective <= 0:
-        docs_cap_effective = max(8, normalized_top_k_files * 4)
-    docs_cap_effective = min(docs_cap_effective, pool_cap_effective)
-
-    memory_cap_effective = int(memory_cap)
-    if memory_cap_effective <= 0:
-        memory_cap_effective = max(8, normalized_top_k_files * 4)
-    memory_cap_effective = min(memory_cap_effective, pool_cap_effective)
-
-    payload: dict[str, Any] = {
-        "enabled": True,
-        "applied": False,
-        "reason": "disabled",
-        "rrf_k": rrf_k_effective,
-        "caps": {
-            "pool": int(pool_cap_effective),
-            "code": int(code_cap_effective),
-            "docs": int(docs_cap_effective),
-            "memory": int(memory_cap_effective),
-        },
-        "channels": {
-            "code": {"count": 0, "cap": int(code_cap_effective), "top": []},
-            "docs": {"count": 0, "cap": int(docs_cap_effective), "top": []},
-            "memory": {"count": 0, "cap": int(memory_cap_effective), "top": []},
-        },
-        "fused": {
-            "scored_count": 0,
-            "pool_size": int(pool_cap_effective),
-            "top": [],
-        },
-        "warning": None,
-    }
-
-    if not candidates:
-        payload["reason"] = "empty_candidates"
-        return candidates, payload
-    if pool_cap_effective <= 0:
-        payload["reason"] = "empty_pool"
-        return candidates, payload
-
-    pool = list(candidates[:pool_cap_effective])
-    tail = list(candidates[pool_cap_effective:])
-
-    pool_paths: list[str] = []
-    pool_set: set[str] = set()
-    for row in pool:
-        if not isinstance(row, dict):
-            continue
-        path = _normalize_repo_path(str(row.get("path") or ""))
-        if not path or path in pool_set:
-            continue
-        pool_set.add(path)
-        pool_paths.append(path)
-
-    code_ranking = pool_paths[:code_cap_effective]
-
-    docs_ranking: list[str] = []
-    docs_hints = (
-        docs_payload.get("hints", {})
-        if isinstance(docs_payload.get("hints"), dict)
-        else {}
-    )
-    docs_path_scores = docs_hints.get("path_scores", [])
-    scored_docs_paths: list[tuple[float, str]] = []
-    if isinstance(docs_path_scores, list):
-        for row in docs_path_scores:
-            if not isinstance(row, dict):
-                continue
-            path = _normalize_repo_path(str(row.get("value") or ""))
-            if not path or path not in pool_set or path not in files_map:
-                continue
-            try:
-                score = float(row.get("score") or 0.0)
-            except Exception:
-                score = 0.0
-            if score <= 0.0:
-                continue
-            scored_docs_paths.append((score, path))
-    scored_docs_paths.sort(key=lambda item: (-float(item[0]), str(item[1])))
-    seen_docs: set[str] = set()
-    for score, path in scored_docs_paths:
-        _ = score
-        if path in seen_docs:
-            continue
-        seen_docs.add(path)
-        docs_ranking.append(path)
-        if len(docs_ranking) >= docs_cap_effective:
-            break
-
-    memory_ranking: list[str] = []
-    seen_memory: set[str] = set()
-    for raw_path in memory_paths:
-        path = _normalize_repo_path(str(raw_path or ""))
-        if not path or path in seen_memory:
-            continue
-        if path not in pool_set or path not in files_map:
-            continue
-        seen_memory.add(path)
-        memory_ranking.append(path)
-        if len(memory_ranking) >= memory_cap_effective:
-            break
-
-    payload["channels"]["code"]["count"] = len(code_ranking)
-    payload["channels"]["docs"]["count"] = len(docs_ranking)
-    payload["channels"]["memory"]["count"] = len(memory_ranking)
-    payload["channels"]["code"]["top"] = list(code_ranking[:8])
-    payload["channels"]["docs"]["top"] = list(docs_ranking[:8])
-    payload["channels"]["memory"]["top"] = list(memory_ranking[:8])
-
-    if not docs_ranking and not memory_ranking:
-        payload["reason"] = "no_aux_rankings"
-        return candidates, payload
-
-    try:
-        fused_raw = fuse_rrf(
-            [code_ranking, docs_ranking, memory_ranking],
-            rrf_k=rrf_k_effective,
-        )
-        fused = normalize_rrf_scores(fused_raw)
-    except Exception as exc:  # pragma: no cover - fail-open
-        payload["reason"] = f"error:{exc.__class__.__name__}"
-        payload["warning"] = str(exc)[:240]
-        return candidates, payload
-
-    code_pos = {path: rank for rank, path in enumerate(code_ranking, start=1)}
-    docs_pos = {path: rank for rank, path in enumerate(docs_ranking, start=1)}
-    memory_pos = {path: rank for rank, path in enumerate(memory_ranking, start=1)}
-
-    rrf_scores: dict[str, float] = {str(k): float(v) for k, v in fused.items()}
-    payload["fused"]["scored_count"] = len(rrf_scores)
-
-    for row in pool:
-        if not isinstance(row, dict):
-            continue
-        path = _normalize_repo_path(str(row.get("path") or ""))
-        if not path:
-            continue
-        rrf_score = float(rrf_scores.get(path, 0.0) or 0.0)
-        if rrf_score <= 0.0:
-            continue
-        row["score_rrf_multi"] = round(rrf_score, 8)
-        breakdown = row.get("score_breakdown")
-        if not isinstance(breakdown, dict):
-            breakdown = {}
-            row["score_breakdown"] = breakdown
-        breakdown["rrf_multi_channel"] = round(rrf_score, 8)
-
-    pool.sort(
-        key=lambda row: (
-            -float(
-                rrf_scores.get(
-                    _normalize_repo_path(str(row.get("path") or "")),
-                    0.0,
-                )
-                or 0.0
-            ),
-            -float(row.get("score", 0.0) or 0.0),
-            _normalize_repo_path(str(row.get("path") or "")),
-        )
-    )
-
-    fused_top: list[dict[str, Any]] = []
-    for path, score in sorted(
-        rrf_scores.items(),
-        key=lambda item: (-float(item[1]), str(item[0])),
-    )[:12]:
-        code_rank = int(code_pos.get(path, 0) or 0)
-        docs_rank = int(docs_pos.get(path, 0) or 0)
-        memory_rank = int(memory_pos.get(path, 0) or 0)
-        fused_top.append(
-            {
-                "path": str(path),
-                "score": float(round(float(score), 8)),
-                "ranks": {
-                    "code": code_rank,
-                    "docs": docs_rank,
-                    "memory": memory_rank,
-                },
-                "contrib": {
-                    "code": float(round(1.0 / (rrf_k_effective + code_rank), 8))
-                    if code_rank > 0
-                    else 0.0,
-                    "docs": float(round(1.0 / (rrf_k_effective + docs_rank), 8))
-                    if docs_rank > 0
-                    else 0.0,
-                    "memory": float(
-                        round(1.0 / (rrf_k_effective + memory_rank), 8)
-                    )
-                    if memory_rank > 0
-                    else 0.0,
-                },
-            }
-        )
-
-    payload["fused"]["top"] = fused_top
-    payload["fused"]["pool_size"] = int(pool_cap_effective)
-    payload["applied"] = True
-    payload["reason"] = "ok"
-    return pool + tail, payload
-
-
-def _disabled_docs_payload(*, reason: str, elapsed_ms: float) -> dict[str, Any]:
-    return {
-        "enabled": False,
-        "reason": str(reason),
-        "backend": "disabled",
-        "backend_fallback_reason": "",
-        "cache_hit": False,
-        "cache_layer": "none",
-        "cache_store_written": False,
-        "cache_path": "",
-        "docs_fingerprint": "",
-        "section_pool_size": 0,
-        "section_count": 0,
-        "query_token_count": 0,
-        "evidence": [],
-        "hints": {
-            "paths": [],
-            "modules": [],
-            "symbols": [],
-            "path_scores": [],
-            "module_scores": [],
-            "symbol_scores": [],
-        },
-        "elapsed_ms": round(float(elapsed_ms), 3),
-    }
-
-
-def _disabled_worktree_prior(*, reason: str) -> dict[str, Any]:
-    return {
-        "enabled": False,
-        "reason": str(reason),
-        "changed_count": 0,
-        "changed_paths": [],
-        "seed_paths": [],
-        "reverse_added_count": 0,
-        "state_hash": "",
-        "raw": {
-            "enabled": False,
-            "reason": str(reason),
-            "changed_count": 0,
-            "entries": [],
-            "truncated": False,
-            "error": "",
-        },
-    }
-
-
-def _resolve_parallel_future(
-    *,
-    future: Future[Any] | None,
-    timeout_seconds: float | None,
-    fallback: Any,
-) -> tuple[Any, bool, str]:
-    if future is None:
-        return fallback, False, ""
-
-    try:
-        if timeout_seconds is None:
-            return future.result(), False, ""
-        return future.result(timeout=float(timeout_seconds)), False, ""
-    except FuturesTimeoutError:
-        future.cancel()
-        return fallback, True, "timeout"
-    except Exception as exc:  # pragma: no cover - defensive
-        return fallback, False, exc.__class__.__name__
-
-
-_INDEX_PARALLEL_EXECUTOR: ThreadPoolExecutor | None = None
-_INDEX_PARALLEL_EXECUTOR_LOCK = Lock()
-
-
-def _get_index_parallel_executor() -> ThreadPoolExecutor:
-    global _INDEX_PARALLEL_EXECUTOR
-    with _INDEX_PARALLEL_EXECUTOR_LOCK:
-        if _INDEX_PARALLEL_EXECUTOR is None:
-            _INDEX_PARALLEL_EXECUTOR = ThreadPoolExecutor(
-                max_workers=2,
-                thread_name_prefix="ace-lite-index-parallel",
-            )
-        return _INDEX_PARALLEL_EXECUTOR
-
-
 def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     """Run the index stage."""
     timings_ms: dict[str, float] = {}
@@ -1093,7 +278,7 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     shadow_router = resolve_shadow_router_arm(
         enabled=router_cfg.enabled,
         mode=router_cfg.mode,
-        model_path=_resolve_repo_relative_path(
+        model_path=resolve_repo_relative_path(
             root=ctx.root,
             configured_path=router_cfg.model_path,
         ),
@@ -1105,13 +290,17 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     online_bandit_gate = resolve_online_bandit_gate(
         enabled=router_cfg.online_bandit_enabled,
         experiment_enabled=router_cfg.online_bandit_experiment_enabled,
-        state_path=_resolve_repo_relative_path(
+        state_path=resolve_repo_relative_path(
             root=ctx.root,
             configured_path=router_cfg.state_path,
         ),
     )
-    adaptive_router_payload = _build_adaptive_router_payload(
-        config=router_cfg,
+    adaptive_router_payload = build_adaptive_router_payload(
+        enabled=bool(router_cfg.enabled),
+        mode=str(router_cfg.mode),
+        model_path=str(router_cfg.model_path),
+        state_path=str(router_cfg.state_path),
+        arm_set=str(router_cfg.arm_set),
         policy=policy,
         shadow=shadow_router,
         online_bandit=online_bandit_gate,
@@ -1135,11 +324,11 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     files_map = snapshot.files_map
     index_hash = snapshot.index_hash
     corpus_size = snapshot.corpus_size
-    benchmark_filter_payload = _resolve_benchmark_candidate_filters(ctx)
+    benchmark_filter_payload = resolve_benchmark_candidate_filters(ctx)
     effective_files_map = files_map
     effective_corpus_size = corpus_size
     if benchmark_filter_payload["requested"]:
-        filtered_files_map, removed_file_count = _filter_files_map_for_benchmark(
+        filtered_files_map, removed_file_count = filter_files_map_for_benchmark(
             files_map,
             include_paths=list(benchmark_filter_payload["include_paths"]),
             include_globs=list(benchmark_filter_payload["include_globs"]),
@@ -1164,19 +353,19 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
         benchmark_filter_payload["files_map_applied"] = False
         benchmark_filter_payload["files_map_fallback_to_unfiltered"] = False
     ctx.state["__index_files"] = effective_files_map
-    docs_policy_enabled, docs_policy_reason = _resolve_docs_policy_for_benchmark(
+    docs_policy_enabled, docs_policy_reason = resolve_docs_policy_for_benchmark(
         policy_docs_enabled=bool(policy.get("docs_enabled", True)),
         benchmark_filter_payload=benchmark_filter_payload,
     )
     benchmark_filter_payload["docs_policy_enabled"] = bool(docs_policy_enabled)
     benchmark_filter_payload["docs_policy_reason"] = str(docs_policy_reason)
-    worktree_prior_enabled, worktree_policy_reason = _resolve_worktree_policy_for_benchmark(
+    worktree_prior_enabled, worktree_policy_reason = resolve_worktree_policy_for_benchmark(
         worktree_prior_enabled=bool(config.cochange_enabled),
         benchmark_filter_payload=benchmark_filter_payload,
     )
     benchmark_filter_payload["worktree_policy_enabled"] = bool(worktree_prior_enabled)
     benchmark_filter_payload["worktree_policy_reason"] = str(worktree_policy_reason)
-    embedding_runtime = _resolve_embedding_runtime_config(
+    embedding_runtime = resolve_embedding_runtime_config(
         provider=str(config.embedding_provider),
         model=str(config.embedding_model),
         dimension=int(config.embedding_dimension),
@@ -1311,7 +500,7 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
                     router_cfg.online_bandit_experiment_enabled
                 ),
             },
-            "benchmark_filters": _resolve_benchmark_candidate_filters(ctx),
+            "benchmark_filters": resolve_benchmark_candidate_filters(ctx),
         },
         content_version=_INDEX_CANDIDATE_CACHE_CONTENT_VERSION,
     )
@@ -1333,12 +522,12 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     if cached_index_payload is not None:
         index_candidate_cache["hit"] = True
         if bool(config.cochange_enabled) and not worktree_prior_enabled:
-            ctx.state["__vcs_worktree"] = _disabled_worktree_prior(
+            ctx.state["__vcs_worktree"] = build_disabled_worktree_prior(
                 reason=worktree_policy_reason
             )
         else:
             ctx.state.pop("__vcs_worktree", None)
-        refreshed_cached_payload = _refresh_cached_index_candidate_payload(
+        refreshed_cached_payload = refresh_cached_index_candidate_payload(
             payload=cached_index_payload,
             index_data=index_data,
             cache_info=cache_info,
@@ -1346,7 +535,7 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
             timings_ms=timings_ms,
             benchmark_filter_payload=benchmark_filter_payload,
         )
-        return _attach_index_candidate_cache_info(
+        return attach_index_candidate_cache_info(
             payload=refreshed_cached_payload,
             cache_info=index_candidate_cache,
         )
@@ -1416,13 +605,13 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
             apply_candidate_priors=apply_candidate_priors,
             collect_docs=collect_docs_signals,
             collect_worktree=collect_worktree_prior,
-            disabled_docs_payload=_disabled_docs_payload,
-            disabled_worktree_prior=_disabled_worktree_prior,
-            get_executor=_get_index_parallel_executor,
-            resolve_future=_resolve_parallel_future,
+            disabled_docs_payload=build_disabled_docs_payload,
+            disabled_worktree_prior=build_disabled_worktree_prior,
+            get_executor=get_index_parallel_executor,
+            resolve_future=resolve_parallel_future,
             run_exact_search=run_exact_search_ripgrep,
             score_exact_hits=score_exact_search_hits,
-            normalize_repo_path=_normalize_repo_path,
+            normalize_repo_path=normalize_repo_path,
             mark_timing=mark_timing,
         ),
     )
@@ -1447,7 +636,7 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
     ):
         ctx.state["__vcs_worktree"] = initial_candidates.raw_worktree
 
-    embedding_index_path = _resolve_repo_relative_path(
+    embedding_index_path = resolve_repo_relative_path(
         root=ctx.root, configured_path=config.embedding_index_path
     )
     candidate_fusion = refine_candidate_pool(
@@ -1511,12 +700,12 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
             apply_structural_rerank=apply_structural_rerank,
             apply_semantic_candidate_rerank=apply_semantic_candidate_rerank,
             apply_feedback_boost=apply_feedback_boost,
-            apply_multi_channel_rrf_fusion=_apply_multi_channel_rrf_fusion,
-            merge_candidate_lists=_merge_candidate_lists,
-            resolve_embedding_runtime_config=_resolve_embedding_runtime_config,
-            build_embedding_stats=_build_embedding_stats,
+            apply_multi_channel_rrf_fusion=apply_multi_channel_rrf_fusion,
+            merge_candidate_lists=merge_candidate_lists,
+            resolve_embedding_runtime_config=resolve_embedding_runtime_config,
+            build_embedding_stats=build_embedding_stats,
             rerank_cross_encoder_with_time_budget=(
-                _rerank_cross_encoder_with_time_budget
+                rerank_cross_encoder_with_time_budget
             ),
             mark_timing=mark_timing,
         ),
@@ -1537,7 +726,7 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
         candidate_fusion.semantic_cross_encoder_provider
     )
     if benchmark_filter_payload["requested"]:
-        filtered_candidates, removed_count = _filter_candidate_rows(
+        filtered_candidates, removed_count = filter_candidate_rows(
             candidates,
             include_paths=list(benchmark_filter_payload["include_paths"]),
             include_globs=list(benchmark_filter_payload["include_globs"]),
@@ -1624,10 +813,10 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
             apply_chunk_selection=apply_chunk_selection,
             mark_timing=mark_timing,
             rerank_rows_embeddings_with_time_budget=(
-                _rerank_rows_embeddings_with_time_budget
+                rerank_rows_embeddings_with_time_budget
             ),
             rerank_rows_cross_encoder_with_time_budget=(
-                _rerank_rows_cross_encoder_with_time_budget
+                rerank_rows_cross_encoder_with_time_budget
             ),
         ),
     )
@@ -1690,7 +879,7 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
         store_cached_index_candidates(
             cache_path=index_candidate_cache_path,
             key=index_candidate_cache_key,
-            payload=_clone_index_candidate_payload(payload),
+            payload=clone_index_candidate_payload(payload),
             meta={
                 **index_candidate_cache_required_meta,
                 "query": ctx.query,
@@ -1699,7 +888,7 @@ def run_index(*, ctx: StageContext, config: IndexStageConfig) -> dict[str, Any]:
             },
         )
     )
-    return _attach_index_candidate_cache_info(
+    return attach_index_candidate_cache_info(
         payload=payload,
         cache_info=index_candidate_cache,
     )

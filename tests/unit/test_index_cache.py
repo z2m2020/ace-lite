@@ -5,6 +5,11 @@ import os
 from pathlib import Path
 
 import ace_lite.index_cache as index_cache
+from ace_lite.index_stage.cache import (
+    attach_index_candidate_cache_info,
+    clone_index_candidate_payload,
+    refresh_cached_index_candidate_payload,
+)
 
 
 def test_save_and_load_index_cache_roundtrip(tmp_path: Path) -> None:
@@ -51,6 +56,54 @@ def test_load_index_cache_rejects_root_or_language_mismatch(tmp_path: Path) -> N
         )
         is None
     )
+
+
+def test_clone_and_attach_index_candidate_cache_info() -> None:
+    payload = {
+        "candidate_files": [{"path": "src/alpha.py"}],
+        "candidate_cache": {"hit": False},
+    }
+    cache_info = {"hit": True, "path": "context-map/cache.json"}
+
+    cloned = clone_index_candidate_payload(payload)
+    attached = attach_index_candidate_cache_info(payload=payload, cache_info=cache_info)
+
+    assert "candidate_cache" not in cloned
+    assert payload["candidate_cache"] == {"hit": False}
+    assert attached["candidate_cache"] == cache_info
+    assert attached["candidate_files"] == payload["candidate_files"]
+
+
+def test_refresh_cached_index_candidate_payload_updates_live_metadata() -> None:
+    payload = {
+        "index_hash": "old",
+        "file_count": 1,
+        "languages_covered": ["python"],
+        "metadata": {"timings_ms": {"initial": 1.0}},
+        "candidate_cache": {"hit": False},
+    }
+    refreshed = refresh_cached_index_candidate_payload(
+        payload=payload,
+        index_data={
+            "file_count": 2,
+            "indexed_at": "2026-03-14T00:00:00+00:00",
+            "languages_covered": ["python", "markdown"],
+            "parser": {"tree_sitter": True},
+        },
+        cache_info={"cache_hit": True, "mode": "cache_only"},
+        index_hash="new-hash",
+        timings_ms={"index_cache_load": 2.5},
+        benchmark_filter_payload={"requested": True, "include_paths": ["src/alpha.py"]},
+    )
+
+    assert refreshed["index_hash"] == "new-hash"
+    assert refreshed["file_count"] == 2
+    assert refreshed["cache"] == {"cache_hit": True, "mode": "cache_only"}
+    assert refreshed["metadata"]["cached_payload_timings_ms"] == {"initial": 1.0}
+    assert refreshed["metadata"]["timings_ms"] == {"index_cache_load": 2.5}
+    assert refreshed["metadata"]["candidate_cache_reused"] is True
+    assert refreshed["benchmark_filters"]["include_paths"] == ["src/alpha.py"]
+    assert "candidate_cache" not in refreshed
 
 
 def test_load_index_cache_rejects_git_head_mismatch(

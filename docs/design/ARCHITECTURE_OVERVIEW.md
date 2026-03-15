@@ -6,7 +6,7 @@ ACE-Lite is a local-first “Active Context Engine” that turns a repo + a user
 
 The default plan path is:
 
-`memory -> index -> repomap -> augment -> skills -> source_plan`
+`memory -> index -> repomap -> augment -> skills -> source_plan -> validation`
 
 Key idea: start deterministic (structure + signals), then expand only where needed.
 
@@ -49,6 +49,19 @@ Key idea: start deterministic (structure + signals), then expand only where need
   - `candidate_files` + rationale
   - `candidate_chunks` (definition refs/snippets)
   - budgets, fingerprints, and observability fields
+
+### Validation
+
+- Executes optional post-plan validation behind fail-open policy gates.
+- Emits machine-readable validation diagnostics, result summaries, and sandbox metadata.
+- Preserves top-level `validation` payload stability so CLI, benchmark, and replay flows can compare outcomes safely.
+
+## Refactor seam boundaries
+
+- `src/ace_lite/cli_app/runtime_command_support.py`: shared runtime doctor/status/settings/setup payload builders, keeping CLI command callbacks thin.
+- `src/ace_lite/mcp_server/server_tool_registration.py`: MCP tool registration surface and metadata, keeping `server.py` as the server entry shell.
+- `src/ace_lite/index_stage/`: index-stage helper seams for benchmark filters, fusion, parallel runtime, rerank timeouts, and repo-path normalization.
+- `src/ace_lite/benchmark/case_evaluation_*.py`: benchmark evaluation seams for matching, context, metrics, diagnostics, row assembly, and detail output.
 
 ## Determinism and observability
 

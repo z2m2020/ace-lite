@@ -10,6 +10,11 @@ import pytest
 
 import ace_lite.mcp_server.service as mcp_service_module
 from ace_lite.mcp_server import AceLiteMcpConfig, AceLiteMcpService
+from ace_lite.mcp_server.server import build_mcp_server
+from ace_lite.mcp_server.server_tool_registration import (
+    MCP_REGISTERED_TOOL_NAMES,
+    MCP_TOOL_DESCRIPTIONS,
+)
 
 
 def _make_service(tmp_path: Path) -> AceLiteMcpService:
@@ -59,6 +64,36 @@ def test_mcp_service_health_reports_defaults(tmp_path: Path) -> None:
     assert isinstance(payload["plan_timeout_seconds"], float)
     assert payload["request_stats"]["active_request_count"] == 0
     assert payload["request_stats"]["total_request_count"] == 0
+
+
+def test_build_mcp_server_registers_expected_tool_names(tmp_path: Path) -> None:
+    config = AceLiteMcpConfig.from_env(
+        default_root=tmp_path,
+        default_skills_dir=tmp_path / "skills",
+    )
+    server = build_mcp_server(config=config)
+
+    assert set(server._tool_manager._tools.keys()) == set(MCP_REGISTERED_TOOL_NAMES)
+
+
+def test_build_mcp_server_exposes_stable_tool_metadata_and_schema(tmp_path: Path) -> None:
+    config = AceLiteMcpConfig.from_env(
+        default_root=tmp_path,
+        default_skills_dir=tmp_path / "skills",
+    )
+    server = build_mcp_server(config=config)
+    tools = server._tool_manager._tools
+
+    for name, description in MCP_TOOL_DESCRIPTIONS.items():
+        assert tools[name].description == description
+
+    assert tools["ace_plan"].parameters["required"] == ["query"]
+    assert tools["ace_plan_quick"].parameters["required"] == ["query"]
+    assert tools["ace_index"].parameters["properties"]["resume"]["default"] is False
+    assert (
+        tools["ace_memory_store"].parameters["properties"]["tags"]["anyOf"][0]["type"]
+        == "object"
+    )
 
 
 def test_mcp_service_health_surfaces_request_stats(tmp_path: Path, monkeypatch) -> None:

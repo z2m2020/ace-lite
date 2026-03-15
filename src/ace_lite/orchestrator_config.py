@@ -8,23 +8,34 @@ make configuration changes explicit.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from pydantic import Field, field_validator, model_validator
 
-from ace_lite.chunking.disclosure_policy import CHUNK_DISCLOSURE_CHOICES
-from ace_lite.config_choices import (
-    ADAPTIVE_ROUTER_MODE_CHOICES,
-    CHUNK_GUARD_MODE_CHOICES,
-    MEMORY_AUTO_TAG_MODE_CHOICES,
-    MEMORY_GATE_MODE_CHOICES,
-    MEMORY_NOTES_MODE_CHOICES,
-    MEMORY_TIMEZONE_MODE_CHOICES,
-    TOPOLOGICAL_SHIELD_MODE_CHOICES,
-)
-from ace_lite.config_value_normalizers import (
-    normalize_choice_value,
-    normalize_optional_choice_value,
+from ace_lite.config_model_shared import (
+    AdaptiveRouterMode,
+    ChunkGuardMode,
+    MemoryAutoTagMode,
+    MemoryGateMode,
+    MemoryNotesMode,
+    MemoryTimezoneMode,
+    TopologicalShieldMode,
+    normalize_adaptive_router_mode,
+    normalize_candidate_ranker,
+    normalize_embedding_provider,
+    normalize_chunk_guard_mode,
+    normalize_chunk_disclosure,
+    normalize_memory_auto_tag_mode,
+    normalize_memory_disclosure_mode,
+    normalize_memory_gate_mode,
+    normalize_memory_notes_mode,
+    normalize_ranking_profile,
+    normalize_retrieval_policy,
+    normalize_memory_strategy,
+    normalize_memory_timezone_mode,
+    normalize_topological_shield_mode,
+    validate_sbfl_metric,
+    validate_scip_provider,
 )
 from ace_lite.pipeline.plugin_runtime import (
     normalize_remote_slot_allowlist,
@@ -32,9 +43,7 @@ from ace_lite.pipeline.plugin_runtime import (
 )
 from ace_lite.pydantic_utils import StrictModel as _StrictModel
 from ace_lite.rankers import normalize_fusion_mode
-from ace_lite.scip import SCIP_PROVIDERS
 from ace_lite.scoring_config import (
-    CANDIDATE_RANKER_CHOICES,
     CHUNK_DIVERSITY_KIND_PENALTY,
     CHUNK_DIVERSITY_LOCALITY_PENALTY,
     CHUNK_DIVERSITY_LOCALITY_WINDOW,
@@ -45,9 +54,6 @@ from ace_lite.scoring_config import (
     HYBRID_COVERAGE_WEIGHT,
     HYBRID_HEURISTIC_WEIGHT,
     HYBRID_RRF_K_DEFAULT,
-    MEMORY_DISCLOSURE_MODES,
-    MEMORY_STRATEGIES,
-    SBFL_METRIC_CHOICES,
 )
 from ace_lite.token_estimator import normalize_tokenizer_model
 from ace_lite.utils import (
@@ -64,14 +70,6 @@ def _normalize_positive_int(value: Any, default: int) -> int:
         return default
 
 
-MemoryAutoTagMode = Literal["repo", "user", "global"]
-MemoryTimezoneMode = Literal["utc", "local", "explicit"]
-MemoryGateMode = Literal["auto", "always", "never"]
-AdaptiveRouterMode = Literal["observe", "shadow", "enforce"]
-ChunkGuardMode = Literal["off", "report_only", "enforce"]
-TopologicalShieldMode = Literal["off", "report_only", "enforce"]
-
-
 class MemoryNamespaceConfig(_StrictModel):
     container_tag: str | None = None
     auto_tag_mode: MemoryAutoTagMode | None = None
@@ -84,10 +82,7 @@ class MemoryNamespaceConfig(_StrictModel):
     @field_validator("auto_tag_mode", mode="before")
     @classmethod
     def _normalize_auto_tag_mode(cls, value: Any) -> MemoryAutoTagMode | None:
-        normalized = normalize_optional_choice_value(
-            value,
-            choices=MEMORY_AUTO_TAG_MODE_CHOICES,
-        )
+        normalized = normalize_memory_auto_tag_mode(value)
         return cast(MemoryAutoTagMode, normalized)
 
 
@@ -98,11 +93,7 @@ class MemoryGateConfig(_StrictModel):
     @field_validator("mode", mode="before")
     @classmethod
     def _normalize_mode(cls, value: Any) -> MemoryGateMode:
-        normalized = normalize_choice_value(
-            value,
-            choices=MEMORY_GATE_MODE_CHOICES,
-            default="auto",
-        )
+        normalized = normalize_memory_gate_mode(value, default="auto")
         return cast(MemoryGateMode, normalized)
 
 
@@ -238,11 +229,7 @@ class MemoryTemporalConfig(_StrictModel):
     @field_validator("timezone_mode", mode="before")
     @classmethod
     def _normalize_timezone_mode(cls, value: Any) -> str:
-        return normalize_choice_value(
-            value,
-            choices=MEMORY_TIMEZONE_MODE_CHOICES,
-            default="utc",
-        )
+        return normalize_memory_timezone_mode(value, default="utc")
 
 
 class MemoryCaptureConfig(_StrictModel):
@@ -275,9 +262,6 @@ class MemoryCaptureConfig(_StrictModel):
         return tuple(deduped)
 
 
-MemoryNotesMode = Literal["supplement", "prefer_local", "local_only"]
-
-
 class MemoryNotesConfig(_StrictModel):
     enabled: bool = False
     path: str | Path = "context-map/memory_notes.jsonl"
@@ -301,11 +285,7 @@ class MemoryNotesConfig(_StrictModel):
     @field_validator("mode", mode="before")
     @classmethod
     def _normalize_mode(cls, value: Any) -> str:
-        return normalize_choice_value(
-            value,
-            choices=MEMORY_NOTES_MODE_CHOICES,
-            default="supplement",
-        )
+        return normalize_memory_notes_mode(value, default="supplement")
 
     @field_validator("ttl_days", mode="before")
     @classmethod
@@ -335,10 +315,7 @@ class MemoryConfig(_StrictModel):
     @field_validator("disclosure_mode", mode="before")
     @classmethod
     def _normalize_disclosure_mode(cls, value: Any) -> str:
-        normalized = str(value or "compact").strip().lower() or "compact"
-        if normalized not in MEMORY_DISCLOSURE_MODES:
-            return "compact"
-        return normalized
+        return normalize_memory_disclosure_mode(value, default="compact")
 
     @field_validator("preview_max_chars", mode="before")
     @classmethod
@@ -351,10 +328,7 @@ class MemoryConfig(_StrictModel):
     @field_validator("strategy", mode="before")
     @classmethod
     def _normalize_strategy(cls, value: Any) -> str:
-        normalized = str(value or "hybrid").strip().lower() or "hybrid"
-        if normalized not in MEMORY_STRATEGIES:
-            return "hybrid"
-        return normalized
+        return normalize_memory_strategy(value, default="hybrid")
 
 
 class SkillsConfig(_StrictModel):
@@ -431,10 +405,7 @@ class RetrievalConfig(_StrictModel):
     @field_validator("candidate_ranker", mode="before")
     @classmethod
     def _normalize_candidate_ranker(cls, value: Any) -> str:
-        normalized = str(value or "heuristic").strip().lower() or "heuristic"
-        if normalized not in CANDIDATE_RANKER_CHOICES:
-            return "heuristic"
-        return normalized
+        return normalize_candidate_ranker(value, default="heuristic")
 
     @field_validator("hybrid_re2_fusion_mode", mode="before")
     @classmethod
@@ -487,7 +458,7 @@ class RetrievalConfig(_StrictModel):
     @field_validator("retrieval_policy", mode="before")
     @classmethod
     def _normalize_retrieval_policy(cls, value: Any) -> str:
-        return str(value or "auto").strip().lower() or "auto"
+        return normalize_retrieval_policy(value, default="auto")
 
     @field_validator("policy_version", mode="before")
     @classmethod
@@ -497,11 +468,7 @@ class RetrievalConfig(_StrictModel):
     @field_validator("adaptive_router_mode", mode="before")
     @classmethod
     def _normalize_adaptive_router_mode(cls, value: Any) -> AdaptiveRouterMode:
-        normalized = normalize_choice_value(
-            value,
-            choices=ADAPTIVE_ROUTER_MODE_CHOICES,
-            default="observe",
-        )
+        normalized = normalize_adaptive_router_mode(value, default="observe")
         return cast(AdaptiveRouterMode, normalized)
 
     @field_validator("adaptive_router_model_path", "adaptive_router_state_path", mode="before")
@@ -534,7 +501,7 @@ class RepomapConfig(_StrictModel):
     @field_validator("ranking_profile", mode="before")
     @classmethod
     def _normalize_ranking_profile(cls, value: Any) -> str:
-        return str(value or "graph").strip().lower() or "graph"
+        return normalize_ranking_profile(value, default="graph")
 
     @field_validator("signal_weights", mode="before")
     @classmethod
@@ -662,11 +629,7 @@ class ChunkingConfig(_StrictModel):
         @field_validator("mode", mode="before")
         @classmethod
         def _normalize_mode(cls, value: Any) -> ChunkGuardMode:
-            normalized = normalize_choice_value(
-                value,
-                choices=CHUNK_GUARD_MODE_CHOICES,
-                default="off",
-            )
+            normalized = normalize_chunk_guard_mode(value, default="off")
             return cast(ChunkGuardMode, normalized)
 
         @field_validator("lambda_penalty", "min_marginal_utility", mode="before")
@@ -714,11 +677,7 @@ class ChunkingConfig(_StrictModel):
         @field_validator("mode", mode="before")
         @classmethod
         def _normalize_mode(cls, value: Any) -> TopologicalShieldMode:
-            normalized = normalize_choice_value(
-                value,
-                choices=TOPOLOGICAL_SHIELD_MODE_CHOICES,
-                default="off",
-            )
+            normalized = normalize_topological_shield_mode(value, default="off")
             return cast(TopologicalShieldMode, normalized)
 
         @field_validator(
@@ -810,10 +769,7 @@ class ChunkingConfig(_StrictModel):
     @field_validator("disclosure", mode="before")
     @classmethod
     def _normalize_disclosure(cls, value: Any) -> str:
-        normalized = str(value or "refs").strip().lower() or "refs"
-        if normalized not in CHUNK_DISCLOSURE_CHOICES:
-            return "refs"
-        return normalized
+        return normalize_chunk_disclosure(value, default="refs")
 
     @model_validator(mode="after")
     def _apply_signature_compatibility(self) -> ChunkingConfig:
@@ -878,10 +834,11 @@ class TestSignalsConfig(_StrictModel):
     @field_validator("sbfl_metric", mode="before")
     @classmethod
     def _normalize_sbfl_metric(cls, value: Any) -> str:
-        normalized = str(value or "ochiai").strip().lower() or "ochiai"
-        if normalized not in SBFL_METRIC_CHOICES:
-            return "ochiai"
-        return normalized
+        normalized = validate_sbfl_metric(
+            str(value or "ochiai").strip().lower() or "ochiai",
+            field_name="sbfl_metric",
+        )
+        return str(normalized or "ochiai")
 
 
 class ScipConfig(_StrictModel):
@@ -893,10 +850,11 @@ class ScipConfig(_StrictModel):
     @field_validator("provider", mode="before")
     @classmethod
     def _normalize_provider(cls, value: Any) -> str:
-        normalized = str(value or "auto").strip().lower() or "auto"
-        if normalized not in SCIP_PROVIDERS:
-            return "auto"
-        return normalized
+        normalized = validate_scip_provider(
+            str(value or "auto").strip().lower() or "auto",
+            field_name="scip.provider",
+        )
+        return str(normalized or "auto")
 
 
 class EmbeddingsConfig(_StrictModel):
@@ -914,7 +872,7 @@ class EmbeddingsConfig(_StrictModel):
     @field_validator("provider", mode="before")
     @classmethod
     def _normalize_provider(cls, value: Any) -> str:
-        return str(value or "hash").strip().lower() or "hash"
+        return normalize_embedding_provider(value, default="hash")
 
     @field_validator("model", mode="before")
     @classmethod

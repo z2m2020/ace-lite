@@ -1,12 +1,32 @@
 from __future__ import annotations
 
+import os
 import sqlite3
+import subprocess
 from pathlib import Path
 from typing import Any
 
+import click
+
+from ace_lite.cli_app.runtime_mcp_ops import (
+    extract_memory_channels,
+    load_mcp_env_snapshot,
+    mcp_env_snapshot_path,
+    memory_channels_disabled,
+    memory_config_recommendations,
+    probe_mcp_memory_endpoint,
+    probe_rest_memory_endpoint,
+    run_mcp_self_test,
+)
 from ace_lite.runtime_db import connect_runtime_db
 from ace_lite.runtime_paths import DEFAULT_USER_RUNTIME_DB_PATH
 from ace_lite.runtime_paths import resolve_user_runtime_db_path
+from ace_lite.runtime_settings import RuntimeSettingsManager
+from ace_lite.runtime_settings_store import (
+    load_runtime_settings_with_fallback,
+    resolve_user_runtime_settings_last_known_good_path,
+    resolve_user_runtime_settings_path,
+)
 from ace_lite.runtime_stats import RuntimeScopeRollup
 from ace_lite.runtime_stats_schema import (
     RUNTIME_STATS_ALL_TIME_SCOPE_KEY,
@@ -14,6 +34,10 @@ from ace_lite.runtime_stats_schema import (
     build_runtime_stats_migration_bootstrap,
 )
 from ace_lite.runtime_stats_store import DurableStatsStore
+from ace_lite.stage_artifact_cache_gc import (
+    vacuum_stage_artifact_cache,
+    verify_stage_artifact_cache,
+)
 
 
 DEFAULT_RUNTIME_STATS_DB_PATH = DEFAULT_USER_RUNTIME_DB_PATH
@@ -61,6 +85,578 @@ def evaluate_runtime_memory_state(
         "warnings": warnings,
         "recommendations": recommendations,
     }
+
+
+def selected_profile_from_resolved_settings(
+    *,
+    resolved: Any,
+    persisted_record: dict[str, Any] | None,
+) -> str | None:
+    selected_profile = resolved.metadata.get("selected_profile")
+    if selected_profile is None and isinstance(persisted_record, dict):
+        metadata = persisted_record.get("metadata", {})
+        if isinstance(metadata, dict):
+            selected_profile = metadata.get("selected_profile")
+    return str(selected_profile) if selected_profile is not None else None
+
+
+def resolve_runtime_settings_bundle(
+    *,
+    root: str,
+    config_file: str,
+    mcp_name: str,
+    runtime_profile: str | None,
+    use_snapshot: bool,
+    current_path: str,
+    last_known_good_path: str,
+    snapshot_path_fn: Any = mcp_env_snapshot_path,
+    load_snapshot_fn: Any = load_mcp_env_snapshot,
+) -> dict[str, Any]:
+    snapshot_env, snapshot_path = load_runtime_snapshot(
+        root=root,
+        mcp_name=mcp_name,
+        use_snapshot=use_snapshot,
+        snapshot_path_fn=snapshot_path_fn,
+        load_snapshot_fn=load_snapshot_fn,
+    )
+    resolved = RuntimeSettingsManager().resolve(
+        root=root,
+        cwd=Path.cwd(),
+        config_file=config_file,
+        plan_runtime_profile=runtime_profile,
+        mcp_env=dict(os.environ),
+        mcp_snapshot_env=snapshot_env if snapshot_env else None,
+    )
+    resolved_current_path = resolve_user_runtime_settings_path(
+        configured_path=current_path,
+    )
+    resolved_lkg_path = resolve_user_runtime_settings_last_known_good_path(
+        configured_path=last_known_good_path,
+    )
+    persisted_record, persisted_source = load_runtime_settings_with_fallback(
+        current_path=resolved_current_path,
+        last_known_good_path=resolved_lkg_path,
+    )
+    persisted_dict = persisted_record if isinstance(persisted_record, dict) else None
+    return {
+        "snapshot_env": snapshot_env,
+        "snapshot_path": snapshot_path,
+        "resolved": resolved,
+        "resolved_current_path": resolved_current_path,
+        "resolved_lkg_path": resolved_lkg_path,
+        "persisted_record": persisted_dict,
+        "persisted_source": persisted_source,
+        "selected_profile": selected_profile_from_resolved_settings(
+            resolved=resolved,
+            persisted_record=persisted_dict,
+        ),
+    }
+
+
+def build_runtime_settings_payload(bundle: dict[str, Any]) -> dict[str, Any]:
+    resolved = bundle["resolved"]
+    return {
+        "settings": resolved.snapshot,
+        "provenance": resolved.provenance,
+        "fingerprint": resolved.fingerprint,
+        "selected_profile": bundle["selected_profile"],
+        "persisted_source": bundle["persisted_source"],
+        "current_path": str(bundle["resolved_current_path"]),
+        "last_known_good_path": str(bundle["resolved_lkg_path"]),
+        "snapshot_loaded": bool(bundle["snapshot_env"]),
+        "snapshot_path": str(bundle["snapshot_path"]),
+        "stats_tags": resolved.metadata.get("stats_tags", {}),
+        "metadata": resolved.metadata,
+    }
+
+
+def resolve_effective_runtime_skills_dir(
+    settings: dict[str, Any],
+    *,
+    skills_dir: str = "",
+) -> str:
+    if skills_dir:
+        return str(skills_dir)
+    plan = settings.get("plan", {}) if isinstance(settings.get("plan"), dict) else {}
+    plan_skills = plan.get("skills", {}) if isinstance(plan.get("skills"), dict) else {}
+    return str(plan_skills.get("dir", "skills"))
+
+
+def collect_runtime_settings_show_payload(
+    *,
+    root: str,
+    config_file: str,
+    mcp_name: str,
+    runtime_profile: str | None,
+    use_snapshot: bool,
+    current_path: str,
+    last_known_good_path: str,
+    snapshot_path_fn: Any = mcp_env_snapshot_path,
+    load_snapshot_fn: Any = load_mcp_env_snapshot,
+) -> dict[str, Any]:
+    bundle = resolve_runtime_settings_bundle(
+        root=root,
+        config_file=config_file,
+        mcp_name=mcp_name,
+        runtime_profile=runtime_profile,
+        use_snapshot=use_snapshot,
+        current_path=current_path,
+        last_known_good_path=last_known_good_path,
+        snapshot_path_fn=snapshot_path_fn,
+        load_snapshot_fn=load_snapshot_fn,
+    )
+    return {
+        "ok": True,
+        "event": "runtime_settings_show",
+        **build_runtime_settings_payload(bundle),
+    }
+
+
+def collect_runtime_mcp_doctor_payload(
+    *,
+    root: str,
+    skills_dir: str,
+    python_executable: str,
+    timeout_seconds: float,
+    mcp_name: str,
+    use_snapshot: bool,
+    require_memory: bool,
+    probe_endpoints: bool,
+) -> dict[str, Any]:
+    snapshot_env, snapshot_path = load_runtime_snapshot(
+        root=root,
+        mcp_name=mcp_name,
+        use_snapshot=use_snapshot,
+        snapshot_path_fn=mcp_env_snapshot_path,
+        load_snapshot_fn=load_mcp_env_snapshot,
+    )
+    payload = run_mcp_self_test(
+        root=root,
+        skills_dir=skills_dir,
+        python_executable=python_executable,
+        timeout_seconds=timeout_seconds,
+        env_overrides=snapshot_env if snapshot_env else None,
+    )
+    memory_state = evaluate_runtime_memory_state(
+        payload=payload,
+        root=root,
+        skills_dir=skills_dir,
+        extract_memory_channels_fn=extract_memory_channels,
+        memory_channels_disabled_fn=memory_channels_disabled,
+        memory_config_recommendations_fn=memory_config_recommendations,
+    )
+    primary = str(memory_state["primary"])
+    secondary = str(memory_state["secondary"])
+    memory_disabled = bool(memory_state["memory_disabled"])
+
+    checks: list[dict[str, Any]] = [
+        {
+            "name": "self_test",
+            "ok": True,
+        }
+    ]
+    warnings = list(memory_state["warnings"])
+    recommendations = list(memory_state["recommendations"])
+    endpoint_checks: list[dict[str, Any]] = []
+    ok = True
+
+    if memory_disabled:
+        checks.append(
+            {
+                "name": "memory_configured",
+                "ok": False,
+                "detail": "memory_primary and memory_secondary are both none",
+            }
+        )
+        warnings.append("Remote memory is disabled (none/none).")
+        if require_memory:
+            ok = False
+    else:
+        checks.append(
+            {
+                "name": "memory_configured",
+                "ok": True,
+                "primary": primary,
+                "secondary": secondary,
+            }
+        )
+
+    if probe_endpoints and not memory_disabled:
+        timeout = max(0.5, float(timeout_seconds))
+        channels = {primary, secondary}
+        if "mcp" in channels:
+            mcp_result = probe_mcp_memory_endpoint(
+                base_url=str(payload.get("mcp_base_url") or "http://localhost:8765"),
+                timeout_seconds=timeout,
+            )
+            endpoint_checks.append({"name": "mcp_endpoint", **mcp_result})
+        if "rest" in channels:
+            rest_result = probe_rest_memory_endpoint(
+                base_url=str(payload.get("rest_base_url") or "http://localhost:8765"),
+                timeout_seconds=timeout,
+                user_id=str(payload.get("user_id") or "codex"),
+                app=str(payload.get("app") or "ace-lite"),
+            )
+            endpoint_checks.append({"name": "rest_endpoint", **rest_result})
+
+        checks.extend(endpoint_checks)
+        if (
+            require_memory
+            and endpoint_checks
+            and not any(bool(item.get("ok")) for item in endpoint_checks)
+        ):
+            ok = False
+            warnings.append(
+                "All configured memory endpoints failed probing in require-memory mode."
+            )
+        for item in endpoint_checks:
+            if not bool(item.get("ok")):
+                warnings.append(
+                    f"{item.get('name')}: probe failed ({item.get('error') or item.get('fallback_error') or item.get('primary_error') or 'unknown'})"
+                )
+
+    return {
+        "ok": ok,
+        "event": "mcp_doctor",
+        "self_test": payload,
+        "checks": checks,
+        "warnings": warnings,
+        "recommendations": recommendations,
+        "snapshot_loaded": bool(snapshot_env),
+        "snapshot_path": str(snapshot_path),
+    }
+
+
+def collect_runtime_mcp_self_test_payload(
+    *,
+    root: str,
+    skills_dir: str,
+    python_executable: str,
+    timeout_seconds: float,
+    mcp_name: str,
+    use_snapshot: bool,
+    require_memory: bool,
+    extract_memory_channels_fn: Any,
+    memory_channels_disabled_fn: Any,
+    memory_config_recommendations_fn: Any,
+    run_mcp_self_test_fn: Any = run_mcp_self_test,
+    snapshot_path_fn: Any = mcp_env_snapshot_path,
+    load_snapshot_fn: Any = load_mcp_env_snapshot,
+) -> dict[str, Any]:
+    snapshot_env, snapshot_path = load_runtime_snapshot(
+        root=root,
+        mcp_name=mcp_name,
+        use_snapshot=use_snapshot,
+        snapshot_path_fn=snapshot_path_fn,
+        load_snapshot_fn=load_snapshot_fn,
+    )
+    payload = run_mcp_self_test_fn(
+        root=root,
+        skills_dir=skills_dir,
+        python_executable=python_executable,
+        timeout_seconds=timeout_seconds,
+        env_overrides=snapshot_env if snapshot_env else None,
+    )
+    memory_state = evaluate_runtime_memory_state(
+        payload=payload,
+        root=root,
+        skills_dir=skills_dir,
+        extract_memory_channels_fn=extract_memory_channels_fn,
+        memory_channels_disabled_fn=memory_channels_disabled_fn,
+        memory_config_recommendations_fn=memory_config_recommendations_fn,
+    )
+    if memory_state["memory_disabled"] and require_memory:
+        raise click.ClickException(
+            "Memory providers are disabled; rerun with configured Mem0/OpenMemory env vars."
+        )
+    return {
+        "ok": True,
+        "event": "mcp_self_test",
+        "payload": payload,
+        "warnings": memory_state["warnings"],
+        "recommendations": memory_state["recommendations"],
+        "snapshot_loaded": bool(snapshot_env),
+        "snapshot_path": str(snapshot_path),
+    }
+
+
+def build_runtime_cache_doctor_payload(
+    *,
+    root: str,
+    db_path: str,
+    payload_root: str,
+    temp_root: str,
+) -> dict[str, Any]:
+    report = verify_stage_artifact_cache(
+        repo_root=root,
+        db_path=db_path or None,
+        payload_root=payload_root or None,
+        temp_root=temp_root or None,
+    )
+    severe_issue_count = int(report.get("severe_issue_count", 0) or 0)
+    warning_issue_count = int(report.get("warning_issue_count", 0) or 0)
+    return {
+        "ok": severe_issue_count == 0,
+        "event": "runtime_doctor_cache",
+        "summary": {
+            "severe_issue_count": severe_issue_count,
+            "warning_issue_count": warning_issue_count,
+        },
+        **report,
+    }
+
+
+def build_runtime_cache_vacuum_payload(
+    *,
+    root: str,
+    db_path: str,
+    payload_root: str,
+    temp_root: str,
+    apply: bool,
+) -> dict[str, Any]:
+    result = vacuum_stage_artifact_cache(
+        repo_root=root,
+        db_path=db_path or None,
+        payload_root=payload_root or None,
+        temp_root=temp_root or None,
+        apply=apply,
+    )
+    return {
+        "ok": bool(result.get("ok", False)),
+        "event": "runtime_cache_vacuum",
+        **result,
+    }
+
+
+def build_runtime_doctor_payload(
+    *,
+    root: str,
+    config_file: str,
+    skills_dir: str,
+    python_executable: str,
+    timeout_seconds: float,
+    mcp_name: str,
+    runtime_profile: str | None,
+    use_snapshot: bool,
+    require_memory: bool,
+    probe_endpoints: bool,
+    current_path: str,
+    last_known_good_path: str,
+    stats_db_path: str,
+    cache_db_path: str,
+    payload_root: str,
+    temp_root: str,
+) -> dict[str, Any]:
+    bundle = resolve_runtime_settings_bundle(
+        root=root,
+        config_file=config_file,
+        mcp_name=mcp_name,
+        runtime_profile=runtime_profile,
+        use_snapshot=use_snapshot,
+        current_path=current_path,
+        last_known_good_path=last_known_good_path,
+    )
+    resolved = bundle["resolved"]
+    runtime_stats = load_runtime_stats_summary(
+        db_path=stats_db_path,
+        home_path=os.environ.get("HOME")
+        or os.environ.get("USERPROFILE")
+        or Path.home(),
+    )
+    cache_report = verify_stage_artifact_cache(
+        repo_root=root,
+        db_path=cache_db_path or None,
+        payload_root=payload_root or None,
+        temp_root=temp_root or None,
+    )
+    effective_skills_dir = resolve_effective_runtime_skills_dir(
+        resolved.snapshot,
+        skills_dir=skills_dir,
+    )
+    integration = collect_runtime_mcp_doctor_payload(
+        root=root,
+        skills_dir=effective_skills_dir,
+        python_executable=python_executable,
+        timeout_seconds=timeout_seconds,
+        mcp_name=mcp_name,
+        use_snapshot=use_snapshot,
+        require_memory=require_memory,
+        probe_endpoints=probe_endpoints,
+    )
+    plugins_payload = (
+        resolved.snapshot.get("plan", {}).get("plugins", {})
+        if isinstance(resolved.snapshot.get("plan"), dict)
+        and isinstance(resolved.snapshot.get("plan", {}).get("plugins"), dict)
+        else {}
+    )
+    return {
+        "ok": bool(integration.get("ok")) and bool(cache_report.get("ok")),
+        "event": "runtime_doctor",
+        "settings": build_runtime_settings_payload(bundle),
+        "stats": runtime_stats,
+        "cache": cache_report,
+        "integration": {
+            **integration,
+            "plugin_policy": {
+                "remote_slot_policy_mode": plugins_payload.get("remote_slot_policy_mode"),
+                "remote_slot_allowlist": plugins_payload.get("remote_slot_allowlist"),
+            },
+        },
+    }
+
+
+def collect_runtime_status_payload(
+    *,
+    root: str,
+    config_file: str,
+    mcp_name: str,
+    runtime_profile: str | None,
+    use_snapshot: bool,
+    current_path: str,
+    last_known_good_path: str,
+    db_path: str,
+    extract_memory_channels_fn: Any,
+    memory_channels_disabled_fn: Any,
+    memory_config_recommendations_fn: Any,
+    snapshot_path_fn: Any = mcp_env_snapshot_path,
+    load_snapshot_fn: Any = load_mcp_env_snapshot,
+) -> dict[str, Any]:
+    bundle = resolve_runtime_settings_bundle(
+        root=root,
+        config_file=config_file,
+        mcp_name=mcp_name,
+        runtime_profile=runtime_profile,
+        use_snapshot=use_snapshot,
+        current_path=current_path,
+        last_known_good_path=last_known_good_path,
+        snapshot_path_fn=snapshot_path_fn,
+        load_snapshot_fn=load_snapshot_fn,
+    )
+    return {
+        "ok": True,
+        "event": "runtime_status",
+        **build_runtime_status_snapshot(
+            root=root,
+            bundle=bundle,
+            db_path=db_path,
+            extract_memory_channels_fn=extract_memory_channels_fn,
+            memory_channels_disabled_fn=memory_channels_disabled_fn,
+            memory_config_recommendations_fn=memory_config_recommendations_fn,
+        ),
+    }
+
+
+def build_runtime_status_snapshot(
+    *,
+    root: str,
+    bundle: dict[str, Any],
+    db_path: str,
+    extract_memory_channels_fn: Any,
+    memory_channels_disabled_fn: Any,
+    memory_config_recommendations_fn: Any,
+) -> dict[str, Any]:
+    resolved = bundle["resolved"]
+    skills_dir = resolve_effective_runtime_skills_dir(resolved.snapshot)
+    memory_state = evaluate_runtime_memory_state(
+        payload=resolved.snapshot.get("mcp", {})
+        if isinstance(resolved.snapshot.get("mcp"), dict)
+        else {},
+        root=root,
+        skills_dir=skills_dir,
+        extract_memory_channels_fn=extract_memory_channels_fn,
+        memory_channels_disabled_fn=memory_channels_disabled_fn,
+        memory_config_recommendations_fn=memory_config_recommendations_fn,
+    )
+    runtime_stats = load_runtime_stats_summary(
+        db_path=db_path,
+        home_path=os.environ.get("HOME")
+        or os.environ.get("USERPROFILE")
+        or Path.home(),
+    )
+    return build_runtime_status_payload(
+        root=root,
+        settings=resolved.snapshot,
+        fingerprint=resolved.fingerprint,
+        selected_profile=bundle["selected_profile"],
+        stats_tags=resolved.metadata.get("stats_tags", {}),
+        snapshot_loaded=bool(bundle["snapshot_env"]),
+        snapshot_path=bundle["snapshot_path"],
+        memory_state=memory_state,
+        runtime_stats=runtime_stats,
+    )
+
+
+def execute_codex_mcp_setup_plan(
+    *,
+    setup_plan: dict[str, Any],
+    python_executable: str,
+    run_subprocess_fn: Any,
+    list2cmdline_fn: Any = subprocess.list2cmdline,
+    write_snapshot_fn: Any,
+    run_mcp_self_test_fn: Any,
+    self_test_timeout_seconds: float = 10.0,
+) -> dict[str, Any]:
+    normalized_name = str(setup_plan["normalized_name"])
+    normalized_root = str(setup_plan["normalized_root"])
+    normalized_skills = str(setup_plan["normalized_skills"])
+    env_items = list(setup_plan["env_items"])
+    remove_cmd = list(setup_plan["remove_cmd"])
+    add_cmd = list(setup_plan["add_cmd"])
+    self_test_env = dict(setup_plan["self_test_env"])
+    result: dict[str, Any] = dict(setup_plan["result"])
+    result["commands"] = {
+        "remove": list2cmdline_fn(remove_cmd),
+        "add": list2cmdline_fn(add_cmd),
+    }
+
+    if not bool(result.get("apply")):
+        return result
+
+    if bool(result.get("replace")):
+        run_subprocess_fn(remove_cmd, capture_output=True, text=True, check=False)
+
+    add_process = run_subprocess_fn(add_cmd, capture_output=True, text=True, check=False)
+    if add_process.returncode != 0:
+        raise click.ClickException(
+            "Failed to add Codex MCP server: "
+            + str(add_process.stderr or add_process.stdout or "").strip()
+        )
+
+    snapshot_path = write_snapshot_fn(
+        root=normalized_root,
+        mcp_name=normalized_name,
+        env_items=env_items,
+    )
+    result["snapshot_path"] = str(snapshot_path)
+
+    if bool(result.get("verify")):
+        get_cmd = [str(remove_cmd[0]), "mcp", "get", normalized_name]
+        get_process = run_subprocess_fn(
+            get_cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        result["verify_get"] = {
+            "ok": get_process.returncode == 0,
+            "stdout": str(get_process.stdout or "").strip(),
+            "stderr": str(get_process.stderr or "").strip(),
+        }
+        if get_process.returncode != 0:
+            raise click.ClickException(
+                "Added MCP server but verification failed: "
+                + str(get_process.stderr or get_process.stdout or "").strip()
+            )
+
+        result["verify_self_test"] = run_mcp_self_test_fn(
+            root=normalized_root,
+            skills_dir=normalized_skills,
+            python_executable=python_executable,
+            timeout_seconds=float(self_test_timeout_seconds),
+            env_overrides=self_test_env,
+        )
+
+    return result
 
 
 def build_codex_mcp_setup_plan(
@@ -631,11 +1227,16 @@ def build_runtime_status_payload(
 
 __all__ = [
     "build_codex_mcp_setup_plan",
+    "build_runtime_settings_payload",
+    "collect_runtime_settings_show_payload",
+    "collect_runtime_mcp_self_test_payload",
+    "collect_runtime_status_payload",
     "DEFAULT_RUNTIME_STATS_DB_PATH",
     "evaluate_runtime_memory_state",
     "build_runtime_status_payload",
     "load_latest_runtime_stats_match",
     "load_runtime_snapshot",
     "load_runtime_stats_summary",
+    "resolve_runtime_settings_bundle",
     "resolve_user_runtime_stats_path",
 ]

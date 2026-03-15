@@ -20,9 +20,10 @@ token_estimate: 560
 6. Change one parameter group per iteration (weights, thresholds, router mode, structure source, chunk controls, validation policy, or loop policy).
 7. Run targeted benchmark first, then matrix benchmark if gates are close; export trace artifacts when latency, plugin behavior, validation diagnostics, or incremental reruns are under review.
 8. Record actual useful files via `ace_feedback_record` and compute trend via `ace_feedback_stats`.
-9. Compare deltas against explicit keep/rollback rules, including evidence sufficiency and benchmark comparability.
-10. Keep only changes that improve the primary objective without violating latency, recall, validation, or loop-stability constraints.
-11. Record iteration summary so another agent can resume without context loss.
+9. If the iteration changes `skills/`, release playbooks, or benchmark playbooks, add `run_skill_validation.py` or freeze-without-skip evidence so routing drift is measured explicitly.
+10. Compare deltas against explicit keep/rollback rules, including evidence sufficiency and benchmark comparability.
+11. Keep only changes that improve the primary objective without violating latency, recall, validation, loop-stability, or skill-routing constraints.
+12. Record iteration summary so another agent can resume without context loss.
 
 # Prompt Template
 
@@ -50,6 +51,7 @@ Keep one artifact bundle per benchmark iteration:
 - result JSON or markdown summary
 - `plan_replay_cache_path` if replay stability matters
 - `trace_export_path` when latency or plugin behavior is part of the decision
+- `skill_validation_matrix.json` when the tuned change can alter skill routing or skill content
 - `validation.result.summary.status` and `validation.diagnostic_count` when validation is enabled
 - selected `validation_tests` or the reason they were intentionally out of scope
 - whether `agent_loop` was enabled; if yes, `stop_reason`, `iteration_count`, final query, and replay fingerprint
@@ -93,6 +95,7 @@ Final report format:
 - If latency spikes, empty retrieval, or plugin instability appear, run `ace-lite doctor` or `ace-lite runtime test-mcp` before blaming ranking parameters.
 - If validation diagnostics or loop actions differ between baseline and candidate, treat the benchmark as non-comparable until those settings are pinned or intentionally under test.
 - When benchmarking an installed CLI, verify version/install sync first; otherwise a drifted editable install can invalidate the comparison.
+- If the iteration changes `skills/`, compare the same repo/revision with and without the change using `run_skill_validation.py` or freeze evidence without `--skip-skill-validation` before claiming a routing improvement.
 - Example feedback loop:
 
 ```python

@@ -576,6 +576,8 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "Artifact Checklist" in benchmark_text
     assert "validation_result_v1" in benchmark_text
     assert "agent_loop_summary_v1" in benchmark_text
+    assert "run_skill_validation.py" in benchmark_text
+    assert "skill_validation_matrix.json" in benchmark_text
 
     release_text = (
         repo_root / "skills" / "cross-agent-release-readiness.md"
@@ -586,6 +588,7 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "--junit-xml" in release_text
     assert "Scenario Templates" in release_text
     assert "RC dry run" in release_text
+    assert "skill_validation_matrix" in release_text
 
     bugfix_text = (
         repo_root / "skills" / "cross-agent-bugfix-and-regression.md"

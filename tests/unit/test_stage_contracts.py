@@ -1,11 +1,45 @@
 from __future__ import annotations
 
+import textwrap
+from pathlib import Path
+
 import pytest
 
 from ace_lite.exceptions import StageContractError
 from ace_lite.orchestrator import AceOrchestrator
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.pipeline.contracts import validate_stage_output
+
+
+def _build_sample_repo(tmp_path: Path) -> Path:
+    root = tmp_path
+    (root / "src" / "app").mkdir(parents=True, exist_ok=True)
+    (root / "src" / "app" / "core.py").write_text(
+        textwrap.dedent(
+            """
+            def process_data(input: str) -> str:
+                return input.upper()
+            """
+        ).strip()
+        + "\\n",
+        encoding="utf-8",
+    )
+    return root
+
+
+def _build_orchestrator(index_cache_path: Path) -> AceOrchestrator:
+    return AceOrchestrator(
+        config=OrchestratorConfig(
+            index={
+                "languages": ["python"],
+                "cache_path": str(index_cache_path),
+            },
+            repomap={"enabled": False},
+            lsp={"enabled": False},
+            cochange={"enabled": False},
+            plugins={"enabled": False},
+        )
+    )
 
 
 def test_validate_stage_output_ignores_unknown_stage() -> None:
@@ -186,6 +220,122 @@ def test_validate_stage_output_missing_key_has_stable_code_and_reason() -> None:
     assert exc.reason == "memory.query"
 
 
+@pytest.mark.parametrize(
+    ("stage_name", "payload", "expected_reason"),
+    [
+        (
+            "source_plan",
+            {
+                "repo": "r",
+                "root": "/tmp",
+                "query": "q",
+                "stages": [],
+                "constraints": [],
+                "diagnostics": [],
+                "xref": {},
+                "tests": {},
+                "validation_tests": [],
+                "candidate_chunks": [],
+                "chunk_steps": [],
+                "chunk_budget_used": 0,
+                "chunk_budget_limit": 0,
+                "chunk_disclosure": "refs",
+                "policy_name": "general",
+                "policy_version": "v1",
+                "steps": [],
+            },
+            "source_plan.writeback_template",
+        ),
+        (
+            "validation",
+            {
+                "enabled": False,
+                "reason": "disabled",
+                "sandbox": {},
+                "diagnostics": [],
+                "diagnostic_count": 0,
+                "xref_enabled": False,
+                "xref": {},
+                "patch_artifact_present": False,
+                "policy_name": "general",
+                "policy_version": "v1",
+            },
+            "validation.result",
+        ),
+    ],
+)
+def test_validate_stage_output_missing_contract_keys_for_source_plan_and_validation(
+    stage_name: str,
+    payload: dict[str, object],
+    expected_reason: str,
+) -> None:
+    with pytest.raises(StageContractError) as exc_info:
+        validate_stage_output(stage_name, payload)
+
+    exc = exc_info.value
+    assert exc.error_code == "stage_contract.missing_key"
+    assert exc.reason == expected_reason
+
+
+@pytest.mark.parametrize(
+    ("stage_name", "payload", "expected_reason"),
+    [
+        (
+            "source_plan",
+            {
+                "repo": "r",
+                "root": "/tmp",
+                "query": "q",
+                "stages": [],
+                "constraints": [],
+                "diagnostics": [],
+                "xref": {},
+                "tests": {},
+                "validation_tests": [],
+                "candidate_chunks": [],
+                "chunk_steps": [],
+                "chunk_budget_used": 0,
+                "chunk_budget_limit": 0,
+                "chunk_disclosure": "refs",
+                "policy_name": "general",
+                "policy_version": "v1",
+                "steps": [],
+                "writeback_template": [],
+            },
+            "source_plan.writeback_template",
+        ),
+        (
+            "validation",
+            {
+                "enabled": False,
+                "reason": "disabled",
+                "sandbox": {},
+                "diagnostics": [],
+                "diagnostic_count": 0,
+                "xref_enabled": False,
+                "xref": {},
+                "result": [],
+                "patch_artifact_present": False,
+                "policy_name": "general",
+                "policy_version": "v1",
+            },
+            "validation.result",
+        ),
+    ],
+)
+def test_validate_stage_output_rejects_invalid_contract_container_types(
+    stage_name: str,
+    payload: dict[str, object],
+    expected_reason: str,
+) -> None:
+    with pytest.raises(StageContractError) as exc_info:
+        validate_stage_output(stage_name, payload)
+
+    exc = exc_info.value
+    assert exc.error_code == "stage_contract.invalid_type"
+    assert exc.reason == expected_reason
+
+
 def test_orchestrator_plan_includes_contract_error_payload(tmp_path, monkeypatch) -> None:
     orchestrator = AceOrchestrator(config=OrchestratorConfig())
 
@@ -207,3 +357,19 @@ def test_orchestrator_plan_includes_contract_error_payload(tmp_path, monkeypatch
     assert error["type"] == "stage_contract_error"
     assert error["error_code"] == "stage_contract.invalid_type"
     assert error["reason"] == "memory.output"
+
+
+def test_validate_stage_output_accepts_live_orchestrator_stage_payloads(
+    tmp_path: Path,
+) -> None:
+    root = _build_sample_repo(tmp_path)
+    orchestrator = _build_orchestrator(root / "context-map" / "index.json")
+
+    payload = orchestrator.plan(
+        query="fix bug in process_data",
+        repo="test-repo",
+        root=str(root),
+    )
+
+    for stage_name in AceOrchestrator.PIPELINE_ORDER:
+        validate_stage_output(stage_name, payload[stage_name])

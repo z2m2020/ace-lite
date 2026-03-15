@@ -27,6 +27,14 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         "ace_lite.index_stage.chunk_selection",
         "apply_chunk_selection",
     ),
+    "filter_candidate_rows": (
+        "ace_lite.index_stage.benchmark_filters",
+        "filter_candidate_rows",
+    ),
+    "filter_files_map_for_benchmark": (
+        "ace_lite.index_stage.benchmark_filters",
+        "filter_files_map_for_benchmark",
+    ),
     "apply_graph_lookup_rerank": (
         "ace_lite.index_stage.graph_lookup",
         "apply_graph_lookup_rerank",
@@ -36,17 +44,45 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         "ace_lite.index_stage.exact_search_boost",
         "build_exact_search_payload",
     ),
+    "build_adaptive_router_payload": (
+        "ace_lite.index_stage.adaptive_router",
+        "build_adaptive_router_payload",
+    ),
+    "build_embedding_stats": (
+        "ace_lite.index_stage.embedding_runtime",
+        "build_embedding_stats",
+    ),
     "collect_docs_signals": ("ace_lite.index_stage.docs_channel", "collect_docs_signals"),
     "collect_parallel_signals": (
         "ace_lite.index_stage.parallel_signals",
         "collect_parallel_signals",
     ),
+    "build_disabled_docs_payload": (
+        "ace_lite.index_stage.parallel_runtime",
+        "build_disabled_docs_payload",
+    ),
+    "build_disabled_worktree_prior": (
+        "ace_lite.index_stage.parallel_runtime",
+        "build_disabled_worktree_prior",
+    ),
     "collect_worktree_prior": ("ace_lite.index_stage.priors", "collect_worktree_prior"),
     "extract_memory_paths": ("ace_lite.index_stage.memory_paths", "extract_memory_paths"),
     "extract_terms": ("ace_lite.index_stage.terms", "extract_terms"),
+    "EmbeddingRuntimeConfig": (
+        "ace_lite.index_stage.embedding_runtime",
+        "EmbeddingRuntimeConfig",
+    ),
     "postprocess_candidates": (
         "ace_lite.index_stage.candidate_postprocess",
         "postprocess_candidates",
+    ),
+    "merge_candidate_lists": (
+        "ace_lite.index_stage.candidate_postprocess",
+        "merge_candidate_lists",
+    ),
+    "get_index_parallel_executor": (
+        "ace_lite.index_stage.parallel_runtime",
+        "get_index_parallel_executor",
     ),
     "apply_semantic_candidate_rerank": (
         "ace_lite.index_stage.semantic_candidate_rerank",
@@ -56,7 +92,47 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         "ace_lite.index_stage.policy",
         "resolve_online_bandit_gate",
     ),
+    "resolve_embedding_runtime_config": (
+        "ace_lite.index_stage.embedding_runtime",
+        "resolve_embedding_runtime_config",
+    ),
+    "rerank_cross_encoder_with_time_budget": (
+        "ace_lite.index_stage.rerank_timeouts",
+        "rerank_cross_encoder_with_time_budget",
+    ),
+    "rerank_rows_cross_encoder_with_time_budget": (
+        "ace_lite.index_stage.rerank_timeouts",
+        "rerank_rows_cross_encoder_with_time_budget",
+    ),
+    "rerank_rows_embeddings_with_time_budget": (
+        "ace_lite.index_stage.rerank_timeouts",
+        "rerank_rows_embeddings_with_time_budget",
+    ),
+    "normalize_repo_path": (
+        "ace_lite.index_stage.repo_paths",
+        "normalize_repo_path",
+    ),
+    "resolve_repo_relative_path": (
+        "ace_lite.index_stage.repo_paths",
+        "resolve_repo_relative_path",
+    ),
+    "resolve_parallel_future": (
+        "ace_lite.index_stage.parallel_runtime",
+        "resolve_parallel_future",
+    ),
+    "resolve_benchmark_candidate_filters": (
+        "ace_lite.index_stage.benchmark_filters",
+        "resolve_benchmark_candidate_filters",
+    ),
+    "resolve_docs_policy_for_benchmark": (
+        "ace_lite.index_stage.benchmark_filters",
+        "resolve_docs_policy_for_benchmark",
+    ),
     "resolve_retrieval_policy": ("ace_lite.index_stage.policy", "resolve_retrieval_policy"),
+    "resolve_worktree_policy_for_benchmark": (
+        "ace_lite.index_stage.benchmark_filters",
+        "resolve_worktree_policy_for_benchmark",
+    ),
     "resolve_shadow_router_arm": ("ace_lite.index_stage.policy", "resolve_shadow_router_arm"),
     "select_initial_candidates": (
         "ace_lite.index_stage.candidate_selection",
@@ -73,6 +149,10 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "build_index_stage_output": (
         "ace_lite.index_stage.result_payload",
         "build_index_stage_output",
+    ),
+    "apply_multi_channel_rrf_fusion": (
+        "ace_lite.index_stage.candidate_fusion",
+        "apply_multi_channel_rrf_fusion",
     ),
     "CandidateFusionDeps": (
         "ace_lite.index_stage.candidate_fusion",

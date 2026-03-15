@@ -9,8 +9,11 @@ from typing import Any
 import click
 from click.core import ParameterSource
 
+from ace_lite.cli_app.params import _resolve_retrieval_preset
 from ace_lite.config import config_get, load_layered_config
+from ace_lite.config_pack import load_config_pack
 from ace_lite.config_models import validate_cli_config
+from ace_lite.runtime_profiles import get_runtime_profile
 
 
 def _parameter_is_default(ctx: click.Context, param_name: str) -> bool:
@@ -81,3 +84,43 @@ def _load_command_config(root: str) -> dict[str, Any]:
     if meta is not None:
         validated["_meta"] = meta
     return validated
+
+
+def _apply_plan_namespace_overlays(
+    *,
+    config: dict[str, Any],
+    namespace: str,
+    runtime_profile: str | None,
+    retrieval_preset: str,
+    config_pack: str | None,
+) -> str | None:
+    runtime_profile_payload: dict[str, Any] = {}
+    resolved_profile_name = None
+    if runtime_profile:
+        resolved_profile = get_runtime_profile(runtime_profile)
+        if resolved_profile is not None:
+            runtime_profile_payload = resolved_profile.plan_overrides()
+            resolved_profile_name = resolved_profile.name
+    preset_payload = _resolve_retrieval_preset(retrieval_preset)
+    pack_result = load_config_pack(path=config_pack)
+
+    if not runtime_profile_payload and preset_payload is None and not pack_result.enabled:
+        return resolved_profile_name
+
+    scoped_config = config.get(namespace)
+    if not isinstance(scoped_config, dict):
+        scoped_config = {}
+        config[namespace] = scoped_config
+
+    if runtime_profile_payload:
+        for key, value in runtime_profile_payload.items():
+            scoped_config[str(key)] = value
+        scoped_config["runtime_profile"] = resolved_profile_name
+    if preset_payload is not None:
+        for key, value in preset_payload.items():
+            scoped_config[str(key)] = value
+    if pack_result.enabled:
+        for key, value in pack_result.overrides.items():
+            scoped_config[str(key)] = value
+
+    return resolved_profile_name

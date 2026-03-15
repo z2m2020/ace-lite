@@ -1,0 +1,350 @@
+"""Base row assembly helpers for benchmark case evaluation."""
+
+from __future__ import annotations
+
+from typing import Any
+
+
+def build_case_evaluation_row(
+    *,
+    case: dict[str, Any],
+    expected: list[str],
+    top_k: int,
+    recall_hit: float,
+    precision: float,
+    first_hit_rank: int | None,
+    hit_at_1: float,
+    reciprocal_rank: float,
+    utility: float,
+    task_success_hit: float,
+    task_success_config: dict[str, Any],
+    task_success_failed_checks: list[str],
+    noise: float,
+    dependency_recall: float,
+    memory_latency_ms: float,
+    index_latency_ms: float,
+    repomap_latency_ms: float,
+    augment_latency_ms: float,
+    skills_latency_ms: float,
+    source_plan_latency_ms: float,
+    latency_ms: float,
+    chunk_hit_at_k: float,
+    chunks_per_file_mean: float,
+    chunk_budget_used: float,
+    chunk_contract_fallback_count: int,
+    chunk_contract_skeleton_chunk_count: int,
+    chunk_contract_fallback_ratio: float,
+    chunk_contract_skeleton_ratio: float,
+    unsupported_language_fallback_count: int,
+    unsupported_language_fallback_ratio: float,
+    subgraph_payload_enabled: bool,
+    subgraph_seed_path_count: int,
+    subgraph_edge_type_count: int,
+    subgraph_edge_total_count: int,
+    robust_signature_count: int,
+    robust_signature_coverage_ratio: float,
+    graph_prior_chunk_count: int,
+    graph_prior_coverage_ratio: float,
+    graph_prior_total: float,
+    graph_seeded_chunk_count: int,
+    graph_transfer_count: int,
+    graph_hub_suppressed_chunk_count: int,
+    graph_hub_penalty_total: float,
+    graph_closure_enabled: bool,
+    graph_closure_boosted_chunk_count: int,
+    graph_closure_coverage_ratio: float,
+    graph_closure_anchor_count: int,
+    graph_closure_support_edge_count: int,
+    graph_closure_total: float,
+    topological_shield_enabled: bool,
+    topological_shield_report_only: bool,
+    topological_shield_attenuated_chunk_count: int,
+    topological_shield_coverage_ratio: float,
+    topological_shield_attenuation_total: float,
+    topological_shield_attenuation_per_chunk: float,
+    skills_selected_count: float,
+    skills_token_budget: float,
+    skills_token_budget_used: float,
+    skills_token_budget_utilization_ratio: float,
+    skills_budget_exhausted: bool,
+    skills_skipped_for_budget_count: float,
+    skills_route_latency_ms: float,
+    skills_hydration_latency_ms: float,
+    skills_metadata_only_routing: bool,
+    skills_precomputed_route: bool,
+    plan_replay_cache_enabled: bool,
+    plan_replay_cache_hit: bool,
+    plan_replay_cache_stale_hit_safe: bool,
+    chunk_stage_miss: dict[str, Any],
+    validation_tests: list[Any],
+    source_plan_evidence_summary: dict[str, float],
+    source_plan_graph_closure_preference_enabled: bool,
+    source_plan_graph_closure_bonus_candidate_count: int,
+    source_plan_graph_closure_preferred_count: int,
+    source_plan_focused_file_promoted_count: int,
+    source_plan_packed_path_count: int,
+    source_plan_chunk_retention_ratio: float,
+    source_plan_packed_path_ratio: float,
+    notes_hit_ratio: float,
+    profile_selected_count: int,
+    capture_triggered: bool,
+    policy_profile: str,
+    graph_transfer_per_seed_ratio: float,
+    router_enabled: bool,
+    router_mode: str,
+    router_arm_set: str,
+    router_arm_id: str,
+    router_confidence: float,
+    router_shadow_arm_id: str,
+    router_shadow_confidence: float,
+    router_online_bandit_requested: bool,
+    router_experiment_enabled: bool,
+    router_online_bandit_active: bool,
+    router_is_exploration: bool,
+    router_exploration_probability: float,
+    router_fallback_applied: bool,
+    router_fallback_reason: str,
+    router_online_bandit_reason: str,
+    docs_enabled_flag: bool,
+    docs_hit: float,
+    hint_inject: float,
+    embedding_enabled: bool,
+    embedding_similarity_mean: float,
+    embedding_similarity_max: float,
+    embedding_rerank_ratio: float,
+    embedding_cache_hit: bool,
+    embedding_fallback: bool,
+    parallel_time_budget_ms: float,
+    embedding_time_budget_ms: float,
+    chunk_semantic_time_budget_ms: float,
+    xref_time_budget_ms: float,
+    parallel_docs_timed_out: bool,
+    parallel_worktree_timed_out: bool,
+    embedding_time_budget_exceeded: bool,
+    embedding_adaptive_budget_applied: bool,
+    chunk_semantic_time_budget_exceeded: bool,
+    chunk_semantic_fallback: bool,
+    chunk_guard_enabled: bool,
+    chunk_guard_mode: str,
+    chunk_guard_reason: str,
+    chunk_guard_report_only: bool,
+    chunk_guard_filtered_count: int,
+    chunk_guard_filter_ratio: float,
+    chunk_guard_pairwise_conflict_count: int,
+    chunk_guard_pairwise_conflict_density: float,
+    chunk_guard_fallback: bool,
+    chunk_guard_expectation: dict[str, Any],
+    xref_budget_exhausted: bool,
+    slo_downgrade_signals: list[str],
+    decision_trace: list[dict[str, Any]],
+    evidence_insufficiency: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "case_id": case.get("case_id", "unknown"),
+        "query": case.get("query", ""),
+        "expected_keys": expected,
+        "top_k": top_k,
+        "recall_hit": recall_hit,
+        "precision_at_k": precision,
+        "first_hit_rank": first_hit_rank,
+        "hit_at_1": hit_at_1,
+        "reciprocal_rank": reciprocal_rank,
+        "utility_hit": utility,
+        "task_success_hit": task_success_hit,
+        "task_success_mode": str(task_success_config["mode"]),
+        "task_success_failed_checks": task_success_failed_checks,
+        "task_success_requirements": {
+            "require_recall_hit": bool(task_success_config["require_recall_hit"]),
+            "min_validation_tests": int(task_success_config["min_validation_tests"]),
+        },
+        "noise_rate": noise,
+        "dependency_recall": dependency_recall,
+        "memory_latency_ms": memory_latency_ms,
+        "index_latency_ms": index_latency_ms,
+        "repomap_latency_ms": repomap_latency_ms,
+        "augment_latency_ms": augment_latency_ms,
+        "skills_latency_ms": skills_latency_ms,
+        "source_plan_latency_ms": source_plan_latency_ms,
+        "latency_ms": latency_ms,
+        "chunk_hit_at_k": chunk_hit_at_k,
+        "chunks_per_file_mean": chunks_per_file_mean,
+        "chunk_budget_used": chunk_budget_used,
+        "chunk_contract_fallback_count": float(chunk_contract_fallback_count),
+        "chunk_contract_skeleton_chunk_count": float(
+            chunk_contract_skeleton_chunk_count
+        ),
+        "chunk_contract_fallback_ratio": chunk_contract_fallback_ratio,
+        "chunk_contract_skeleton_ratio": chunk_contract_skeleton_ratio,
+        "unsupported_language_fallback_count": float(
+            unsupported_language_fallback_count
+        ),
+        "unsupported_language_fallback_ratio": unsupported_language_fallback_ratio,
+        "subgraph_payload_enabled": 1.0 if subgraph_payload_enabled else 0.0,
+        "subgraph_seed_path_count": float(subgraph_seed_path_count),
+        "subgraph_edge_type_count": float(subgraph_edge_type_count),
+        "subgraph_edge_total_count": float(subgraph_edge_total_count),
+        "robust_signature_count": float(robust_signature_count),
+        "robust_signature_coverage_ratio": robust_signature_coverage_ratio,
+        "graph_prior_chunk_count": float(graph_prior_chunk_count),
+        "graph_prior_coverage_ratio": float(graph_prior_coverage_ratio),
+        "graph_prior_total": float(graph_prior_total),
+        "graph_seeded_chunk_count": float(graph_seeded_chunk_count),
+        "graph_transfer_count": float(graph_transfer_count),
+        "graph_hub_suppressed_chunk_count": float(graph_hub_suppressed_chunk_count),
+        "graph_hub_penalty_total": float(graph_hub_penalty_total),
+        "graph_closure_enabled": 1.0 if graph_closure_enabled else 0.0,
+        "graph_closure_boosted_chunk_count": float(graph_closure_boosted_chunk_count),
+        "graph_closure_coverage_ratio": float(graph_closure_coverage_ratio),
+        "graph_closure_anchor_count": float(graph_closure_anchor_count),
+        "graph_closure_support_edge_count": float(graph_closure_support_edge_count),
+        "graph_closure_total": float(graph_closure_total),
+        "topological_shield_enabled": 1.0 if topological_shield_enabled else 0.0,
+        "topological_shield_report_only": (
+            1.0 if topological_shield_report_only else 0.0
+        ),
+        "topological_shield_attenuated_chunk_count": float(
+            topological_shield_attenuated_chunk_count
+        ),
+        "topological_shield_coverage_ratio": float(
+            topological_shield_coverage_ratio
+        ),
+        "topological_shield_attenuation_total": float(
+            topological_shield_attenuation_total
+        ),
+        "topological_shield_attenuation_per_chunk": (
+            topological_shield_attenuation_per_chunk
+        ),
+        "skills_selected_count": skills_selected_count,
+        "skills_token_budget": skills_token_budget,
+        "skills_token_budget_used": skills_token_budget_used,
+        "skills_token_budget_utilization_ratio": (
+            skills_token_budget_utilization_ratio
+        ),
+        "skills_budget_exhausted": 1.0 if skills_budget_exhausted else 0.0,
+        "skills_skipped_for_budget_count": skills_skipped_for_budget_count,
+        "skills_route_latency_ms": skills_route_latency_ms,
+        "skills_hydration_latency_ms": skills_hydration_latency_ms,
+        "skills_metadata_only_routing": (
+            1.0 if skills_metadata_only_routing else 0.0
+        ),
+        "skills_precomputed_route": 1.0 if skills_precomputed_route else 0.0,
+        "plan_replay_cache_enabled": 1.0 if plan_replay_cache_enabled else 0.0,
+        "plan_replay_cache_hit": 1.0 if plan_replay_cache_hit else 0.0,
+        "plan_replay_cache_stale_hit_safe": (
+            1.0 if plan_replay_cache_stale_hit_safe else 0.0
+        ),
+        "chunk_stage_miss_applicable": 1.0 if chunk_stage_miss["applicable"] else 0.0,
+        "chunk_stage_miss_classified": 1.0 if chunk_stage_miss["label"] else 0.0,
+        "chunk_stage_miss": str(chunk_stage_miss["label"]),
+        "validation_test_count": len(validation_tests),
+        "source_plan_direct_evidence_ratio": float(
+            source_plan_evidence_summary.get("direct_ratio", 0.0) or 0.0
+        ),
+        "source_plan_neighbor_context_ratio": float(
+            source_plan_evidence_summary.get("neighbor_context_ratio", 0.0) or 0.0
+        ),
+        "source_plan_hint_only_ratio": float(
+            source_plan_evidence_summary.get("hint_only_ratio", 0.0) or 0.0
+        ),
+        "source_plan_graph_closure_preference_enabled": (
+            1.0 if source_plan_graph_closure_preference_enabled else 0.0
+        ),
+        "source_plan_graph_closure_bonus_candidate_count": float(
+            source_plan_graph_closure_bonus_candidate_count
+        ),
+        "source_plan_graph_closure_preferred_count": float(
+            source_plan_graph_closure_preferred_count
+        ),
+        "source_plan_focused_file_promoted_count": float(
+            source_plan_focused_file_promoted_count
+        ),
+        "source_plan_packed_path_count": float(source_plan_packed_path_count),
+        "source_plan_chunk_retention_ratio": source_plan_chunk_retention_ratio,
+        "source_plan_packed_path_ratio": source_plan_packed_path_ratio,
+        "notes_hit_ratio": notes_hit_ratio,
+        "profile_selected_count": float(profile_selected_count),
+        "capture_triggered": 1.0 if capture_triggered else 0.0,
+        "policy_profile": policy_profile,
+        "graph_transfer_per_seed_ratio": graph_transfer_per_seed_ratio,
+        "router_enabled": 1.0 if router_enabled else 0.0,
+        "router_mode": router_mode,
+        "router_arm_set": router_arm_set,
+        "router_arm_id": router_arm_id,
+        "router_confidence": router_confidence,
+        "router_shadow_arm_id": router_shadow_arm_id,
+        "router_shadow_confidence": router_shadow_confidence,
+        "router_online_bandit_requested": (
+            1.0 if router_online_bandit_requested else 0.0
+        ),
+        "router_experiment_enabled": 1.0 if router_experiment_enabled else 0.0,
+        "router_online_bandit_active": 1.0 if router_online_bandit_active else 0.0,
+        "router_is_exploration": 1.0 if router_is_exploration else 0.0,
+        "router_exploration_probability": router_exploration_probability,
+        "router_fallback_applied": 1.0 if router_fallback_applied else 0.0,
+        "router_fallback_reason": router_fallback_reason,
+        "router_online_bandit_reason": router_online_bandit_reason,
+        "docs_enabled": 1.0 if docs_enabled_flag else 0.0,
+        "docs_hit": docs_hit,
+        "hint_inject": hint_inject,
+        "embedding_enabled": 1.0 if embedding_enabled else 0.0,
+        "embedding_similarity_mean": embedding_similarity_mean,
+        "embedding_similarity_max": embedding_similarity_max,
+        "embedding_rerank_ratio": embedding_rerank_ratio,
+        "embedding_cache_hit": 1.0 if embedding_cache_hit else 0.0,
+        "embedding_fallback": 1.0 if embedding_fallback else 0.0,
+        "parallel_time_budget_ms": parallel_time_budget_ms,
+        "embedding_time_budget_ms": embedding_time_budget_ms,
+        "chunk_semantic_time_budget_ms": chunk_semantic_time_budget_ms,
+        "xref_time_budget_ms": xref_time_budget_ms,
+        "parallel_docs_timed_out": 1.0 if parallel_docs_timed_out else 0.0,
+        "parallel_worktree_timed_out": 1.0 if parallel_worktree_timed_out else 0.0,
+        "embedding_time_budget_exceeded": (
+            1.0 if embedding_time_budget_exceeded else 0.0
+        ),
+        "embedding_adaptive_budget_applied": (
+            1.0 if embedding_adaptive_budget_applied else 0.0
+        ),
+        "chunk_semantic_time_budget_exceeded": (
+            1.0 if chunk_semantic_time_budget_exceeded else 0.0
+        ),
+        "chunk_semantic_fallback": 1.0 if chunk_semantic_fallback else 0.0,
+        "chunk_guard_enabled": 1.0 if chunk_guard_enabled else 0.0,
+        "chunk_guard_mode": chunk_guard_mode,
+        "chunk_guard_reason": chunk_guard_reason,
+        "chunk_guard_report_only": 1.0 if chunk_guard_report_only else 0.0,
+        "chunk_guard_filtered_count": float(chunk_guard_filtered_count),
+        "chunk_guard_filter_ratio": float(chunk_guard_filter_ratio),
+        "chunk_guard_pairwise_conflict_count": float(
+            chunk_guard_pairwise_conflict_count
+        ),
+        "chunk_guard_pairwise_conflict_density": (
+            chunk_guard_pairwise_conflict_density
+        ),
+        "chunk_guard_fallback": 1.0 if chunk_guard_fallback else 0.0,
+        "chunk_guard_expectation_applicable": (
+            1.0 if chunk_guard_expectation["applicable"] else 0.0
+        ),
+        "chunk_guard_stale_majority_case": (
+            1.0 if chunk_guard_expectation["scenario"] == "stale_majority" else 0.0
+        ),
+        "chunk_guard_expected_retained_hit": (
+            1.0 if chunk_guard_expectation["expected_retained_hit"] else 0.0
+        ),
+        "chunk_guard_expected_filtered_hit_count": float(
+            chunk_guard_expectation["expected_filtered_hit_count"]
+        ),
+        "chunk_guard_expected_filtered_hit_rate": float(
+            chunk_guard_expectation["expected_filtered_hit_rate"]
+        ),
+        "chunk_guard_report_only_improved": (
+            1.0 if chunk_guard_expectation["report_only_improved"] else 0.0
+        ),
+        "xref_budget_exhausted": 1.0 if xref_budget_exhausted else 0.0,
+        "slo_downgrade_triggered": 1.0 if slo_downgrade_signals else 0.0,
+        "decision_trace_count": len(decision_trace),
+        "decision_trace": decision_trace,
+        **evidence_insufficiency,
+    }
+
+
+__all__ = ["build_case_evaluation_row"]

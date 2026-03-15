@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from time import perf_counter
 from typing import Any, Callable
 
 from ace_lite.index_stage.cochange import apply_cochange_neighbors
 from ace_lite.index_stage.graph_lookup import apply_graph_lookup_rerank
+from ace_lite.index_stage.repo_paths import resolve_repo_relative_path
 from ace_lite.index_stage.scip_boost import apply_scip_boost
 from ace_lite.scip import load_scip_edges
 
@@ -17,15 +17,6 @@ class StructuralRerankResult:
     cochange_payload: dict[str, Any]
     scip_payload: dict[str, Any]
     graph_lookup_payload: dict[str, Any]
-
-
-def _resolve_repo_relative_path(*, root: str, configured_path: str) -> Path:
-    path = Path(str(configured_path or "").strip())
-    if not str(path):
-        path = Path("context-map/index.json")
-    if path.is_absolute():
-        return path
-    return Path(root) / path
 
 
 def apply_structural_rerank(
@@ -68,7 +59,7 @@ def apply_structural_rerank(
     }
     timing_started = perf_counter_fn()
     if cochange_enabled and bool(policy.get("cochange_enabled", True)) and files_map:
-        cache_path = _resolve_repo_relative_path(
+        cache_path = resolve_repo_relative_path(
             root=root, configured_path=cochange_cache_path
         )
         candidates, cochange_payload = cochange_fn(
@@ -102,7 +93,7 @@ def apply_structural_rerank(
         "generate_fallback": bool(scip_generate_fallback),
         "fallback_generated": False,
     }
-    resolved_scip_index_path = _resolve_repo_relative_path(
+    resolved_scip_index_path = resolve_repo_relative_path(
         root=root, configured_path=scip_index_path
     )
     timing_started = perf_counter_fn()

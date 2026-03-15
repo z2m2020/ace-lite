@@ -12,14 +12,12 @@ from ace_lite.cli_app.config import (
     resolve_retrieval_and_lsp_config,
 )
 from ace_lite.cli_app.config_resolve_helpers import (
+    _apply_plan_namespace_overlays,
     _load_command_config,
     _parameter_is_default,
     _resolve_from_config,
     _resolve_from_layers,
 )
-from ace_lite.cli_app.params import _resolve_retrieval_preset
-from ace_lite.config_pack import load_config_pack
-from ace_lite.runtime_profiles import get_runtime_profile
 
 
 def _resolve_shared_plan_config(
@@ -177,31 +175,13 @@ def _resolve_shared_plan_config(
         paths=[(namespace, "runtime_profile")],
         transform=lambda value: str(value or "").strip().lower() or None,
     )
-    runtime_profile_payload = {}
-    resolved_profile_name = None
-    if selected_runtime_profile:
-        resolved_profile = get_runtime_profile(selected_runtime_profile)
-        if resolved_profile is not None:
-            runtime_profile_payload = resolved_profile.plan_overrides()
-            resolved_profile_name = resolved_profile.name
-    preset_payload = _resolve_retrieval_preset(retrieval_preset)
-    pack_result = load_config_pack(path=config_pack)
-
-    if runtime_profile_payload or preset_payload is not None or pack_result.enabled:
-        scoped_config = config.get(namespace)
-        if not isinstance(scoped_config, dict):
-            scoped_config = {}
-            config[namespace] = scoped_config
-        if runtime_profile_payload:
-            for key, value in runtime_profile_payload.items():
-                scoped_config[str(key)] = value
-            scoped_config["runtime_profile"] = resolved_profile_name
-        if preset_payload is not None:
-            for key, value in preset_payload.items():
-                scoped_config[str(key)] = value
-        if pack_result.enabled:
-            for key, value in pack_result.overrides.items():
-                scoped_config[str(key)] = value
+    resolved_profile_name = _apply_plan_namespace_overlays(
+        config=config,
+        namespace=namespace,
+        runtime_profile=selected_runtime_profile,
+        retrieval_preset=retrieval_preset,
+        config_pack=config_pack,
+    )
 
     retrieval_payload = resolve_retrieval_and_lsp_config(
         ctx=ctx,

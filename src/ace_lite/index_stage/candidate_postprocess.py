@@ -17,6 +17,40 @@ class CandidatePostprocessResult:
     refine_pass_payload: dict[str, Any]
 
 
+def merge_candidate_lists(
+    *,
+    primary: list[dict[str, Any]],
+    secondary: list[dict[str, Any]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+
+    merged_by_path: dict[str, dict[str, Any]] = {}
+    for source_name, rows in (("primary", primary), ("secondary", secondary)):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            path = str(row.get("path") or "").strip()
+            if not path:
+                continue
+            score = float(row.get("score") or 0.0)
+            existing = merged_by_path.get(path)
+            if existing is None or float(existing.get("score") or 0.0) < score:
+                payload = dict(row)
+                payload["retrieval_pass"] = source_name
+                merged_by_path[path] = payload
+
+    merged = list(merged_by_path.values())
+    merged.sort(
+        key=lambda item: (
+            -float(item.get("score") or 0.0),
+            str(item.get("path") or ""),
+        )
+    )
+    return merged[:limit]
+
+
 def postprocess_candidates(
     *,
     candidates: list[dict[str, Any]],
@@ -105,5 +139,8 @@ def postprocess_candidates(
         refine_pass_payload=refine_pass_payload,
     )
 
-
-__all__ = ["CandidatePostprocessResult", "postprocess_candidates"]
+__all__ = [
+    "CandidatePostprocessResult",
+    "merge_candidate_lists",
+    "postprocess_candidates",
+]

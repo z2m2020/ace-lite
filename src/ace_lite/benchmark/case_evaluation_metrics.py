@@ -1,0 +1,1066 @@
+"""Metrics and observability snapshot helpers for benchmark case evaluation."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from ace_lite.benchmark.case_evaluation_payloads import (
+    compute_chunks_per_file_mean,
+    count_unique_paths,
+    extract_stage_latency_ms,
+    extract_stage_observability,
+    normalize_source_plan_evidence_summary,
+    safe_ratio,
+)
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+@dataclass(frozen=True, slots=True)
+class CaseEvaluationMetrics:
+    source_plan_evidence_summary: dict[str, float]
+    skills_payload: dict[str, Any]
+    plan_replay_cache_payload: dict[str, Any]
+    subgraph_payload: dict[str, Any]
+    subgraph_edge_counts: dict[str, Any]
+    subgraph_seed_paths: list[str]
+    chunk_guard_payload: dict[str, Any]
+    validation_tests: list[Any]
+    exact_search_payload: dict[str, Any]
+    second_pass_payload: dict[str, Any]
+    refine_pass_payload: dict[str, Any]
+    candidate_ranker_fallbacks: list[str]
+    neighbor_paths: list[str]
+    dependency_recall: float
+    repomap_latency_ms: float
+    memory_latency_ms: float
+    index_latency_ms: float
+    augment_latency_ms: float
+    skills_latency_ms: float
+    source_plan_latency_ms: float
+    notes_hit_ratio: float
+    profile_selected_count: int
+    capture_triggered: bool
+    embedding_enabled: bool
+    embedding_fallback: bool
+    embedding_cache_hit: bool
+    embedding_rerank_ratio: float
+    embedding_similarity_mean: float
+    embedding_similarity_max: float
+    docs_backend_fallback_reason: str
+    memory_gate_skipped: bool
+    memory_gate_skip_reason: str
+    memory_fallback_reason: str
+    memory_namespace_fallback: str
+    chunk_semantic_reason: str
+    parallel_time_budget_ms: float
+    embedding_time_budget_ms: float
+    chunk_semantic_time_budget_ms: float
+    xref_time_budget_ms: float
+    parallel_docs_timed_out: bool
+    parallel_worktree_timed_out: bool
+    embedding_time_budget_exceeded: bool
+    embedding_adaptive_budget_applied: bool
+    chunk_semantic_time_budget_exceeded: bool
+    chunk_semantic_fallback: bool
+    chunk_guard_candidate_pool: int
+    chunk_guard_filtered_count: int
+    chunk_guard_retained_count: int
+    chunk_guard_signed_chunk_count: int
+    chunk_guard_pairwise_conflict_count: int
+    chunk_guard_max_conflict_penalty: float
+    chunk_guard_mode: str
+    chunk_guard_reason: str
+    chunk_guard_enabled: bool
+    chunk_guard_report_only: bool
+    chunk_guard_fallback: bool
+    chunk_guard_filter_ratio: float
+    xref_budget_exhausted: bool
+    chunk_budget_used: float
+    chunks_per_file_mean: float
+    chunk_contract_fallback_count: int
+    chunk_contract_skeleton_chunk_count: int
+    chunk_contract_fallback_ratio: float
+    chunk_contract_skeleton_ratio: float
+    unsupported_language_fallback_count: int
+    unsupported_language_fallback_ratio: float
+    robust_signature_count: int
+    robust_signature_coverage_ratio: float
+    graph_prior_chunk_count: int
+    graph_prior_coverage_ratio: float
+    graph_prior_total: float
+    graph_seeded_chunk_count: int
+    graph_transfer_count: int
+    graph_hub_suppressed_chunk_count: int
+    graph_hub_penalty_total: float
+    graph_closure_enabled: bool
+    graph_closure_boosted_chunk_count: int
+    graph_closure_coverage_ratio: float
+    graph_closure_anchor_count: int
+    graph_closure_support_edge_count: int
+    graph_closure_total: float
+    topological_shield_enabled: bool
+    topological_shield_report_only: bool
+    topological_shield_attenuated_chunk_count: int
+    topological_shield_coverage_ratio: float
+    topological_shield_attenuation_total: float
+    skills_selected_count: float
+    skills_skipped_for_budget_count: float
+    skills_token_budget: float
+    skills_token_budget_used: float
+    skills_budget_exhausted: bool
+    skills_route_latency_ms: float
+    skills_hydration_latency_ms: float
+    skills_metadata_only_routing: bool
+    skills_precomputed_route: bool
+    plan_replay_cache_enabled: bool
+    plan_replay_cache_hit: bool
+    plan_replay_cache_stale_hit_safe: bool
+    source_plan_graph_closure_preference_enabled: bool
+    source_plan_graph_closure_bonus_candidate_count: int
+    source_plan_graph_closure_preferred_count: int
+    source_plan_focused_file_promoted_count: int
+    source_plan_packed_path_count: int
+    source_plan_packing_reason: str
+    source_plan_chunk_retention_ratio: float
+    source_plan_packed_path_ratio: float
+    skills_token_budget_utilization_ratio: float
+    graph_transfer_per_seed_ratio: float
+    chunk_guard_pairwise_conflict_density: float
+    topological_shield_attenuation_per_chunk: float
+    router_enabled: bool
+    router_mode: str
+    router_arm_set: str
+    router_arm_id: str
+    router_confidence: float
+    router_shadow_arm_id: str
+    router_shadow_confidence: float
+    router_online_bandit_requested: bool
+    router_experiment_enabled: bool
+    router_online_bandit_active: bool
+    router_is_exploration: bool
+    router_exploration_probability: float
+    router_fallback_applied: bool
+    router_fallback_reason: str
+    router_online_bandit_reason: str
+    policy_profile: str
+    docs_enabled_flag: bool
+    docs_hit: float
+    hint_inject: float
+    subgraph_seed_path_count: int
+    subgraph_edge_type_count: int
+    subgraph_edge_total_count: int
+    subgraph_payload_enabled: bool
+
+
+def build_case_evaluation_metrics(
+    *,
+    plan_payload: dict[str, Any],
+    index_payload: dict[str, Any],
+    index_metadata: dict[str, Any],
+    source_plan_payload: dict[str, Any],
+    candidate_files: list[Any],
+    raw_candidate_chunks: list[dict[str, Any]],
+    candidate_chunks: list[dict[str, Any]],
+    source_plan_has_candidate_chunks: bool,
+) -> CaseEvaluationMetrics:
+    chunk_metrics = _as_dict(index_payload.get("chunk_metrics"))
+    embeddings_payload = _as_dict(index_payload.get("embeddings"))
+    docs_payload = _as_dict(index_payload.get("docs"))
+    chunk_semantic_payload = _as_dict(index_payload.get("chunk_semantic_rerank"))
+    topological_shield_payload = _as_dict(index_payload.get("topological_shield"))
+    chunk_guard_payload = _as_dict(index_payload.get("chunk_guard"))
+    chunk_contract_payload = _as_dict(index_payload.get("chunk_contract"))
+    parallel_payload = _as_dict(index_payload.get("parallel"))
+    parallel_docs_payload = _as_dict(parallel_payload.get("docs"))
+    parallel_worktree_payload = _as_dict(parallel_payload.get("worktree"))
+    candidate_ranking_payload = _as_dict(index_payload.get("candidate_ranking"))
+    adaptive_router_payload = _as_dict(index_payload.get("adaptive_router"))
+    exact_search_payload = _as_dict(candidate_ranking_payload.get("exact_search"))
+    second_pass_payload = _as_dict(candidate_ranking_payload.get("second_pass"))
+    refine_pass_payload = _as_dict(candidate_ranking_payload.get("refine_pass"))
+    candidate_ranker_fallbacks = _as_list(candidate_ranking_payload.get("fallbacks"))
+    augment_payload = _as_dict(plan_payload.get("augment"))
+    xref_payload = _as_dict(augment_payload.get("xref"))
+
+    stage_observability = extract_stage_observability(plan_payload)
+    index_stage = _as_dict(stage_observability.get("index"))
+    index_tags = _as_dict(index_stage.get("tags"))
+    augment_stage = _as_dict(stage_observability.get("augment"))
+    augment_tags = _as_dict(augment_stage.get("tags"))
+    source_plan_stage = _as_dict(stage_observability.get("source_plan"))
+    source_plan_tags = _as_dict(source_plan_stage.get("tags"))
+
+    source_plan_packing_payload = _as_dict(source_plan_payload.get("packing"))
+    source_plan_subgraph_payload = _as_dict(source_plan_payload.get("subgraph_payload"))
+    source_plan_evidence_summary = normalize_source_plan_evidence_summary(
+        source_plan_payload.get("evidence_summary", {})
+    )
+    skills_payload = _as_dict(plan_payload.get("skills"))
+    repomap_payload = _as_dict(plan_payload.get("repomap"))
+    index_subgraph_payload = _as_dict(index_payload.get("subgraph_payload"))
+    subgraph_payload = (
+        source_plan_subgraph_payload
+        if source_plan_subgraph_payload
+        else index_subgraph_payload
+    )
+    subgraph_edge_counts = _as_dict(subgraph_payload.get("edge_counts"))
+    subgraph_seed_paths = _as_list(subgraph_payload.get("seed_paths"))
+    subgraph_seed_path_count = len(
+        [item for item in subgraph_seed_paths if str(item).strip()]
+    )
+    subgraph_edge_type_count = len(
+        [
+            key
+            for key, value in subgraph_edge_counts.items()
+            if str(key).strip() and int(value or 0) > 0
+        ]
+    )
+    subgraph_edge_total_count = sum(
+        max(0, int(value or 0)) for value in subgraph_edge_counts.values()
+    )
+    subgraph_payload_enabled = bool(subgraph_payload.get("enabled", False))
+
+    dependency = _as_dict(repomap_payload.get("dependency_recall"))
+    dependency_recall = float(dependency.get("hit_rate", 0.0) or 0.0)
+    neighbor_paths = _as_list(repomap_payload.get("neighbor_paths"))
+    repomap_latency_ms = extract_stage_latency_ms(plan_payload=plan_payload, stage="repomap")
+    memory_latency_ms = extract_stage_latency_ms(plan_payload=plan_payload, stage="memory")
+    index_latency_ms = extract_stage_latency_ms(plan_payload=plan_payload, stage="index")
+    augment_latency_ms = extract_stage_latency_ms(plan_payload=plan_payload, stage="augment")
+    skills_latency_ms = extract_stage_latency_ms(plan_payload=plan_payload, stage="skills")
+    source_plan_latency_ms = extract_stage_latency_ms(
+        plan_payload=plan_payload,
+        stage="source_plan",
+    )
+
+    memory_payload = _as_dict(plan_payload.get("memory"))
+    memory_gate_payload = _as_dict(memory_payload.get("gate"))
+    memory_namespace_payload = _as_dict(memory_payload.get("namespace"))
+    profile_payload = _as_dict(memory_payload.get("profile"))
+    capture_payload = _as_dict(memory_payload.get("capture"))
+    notes_payload = _as_dict(memory_payload.get("notes"))
+    validation_tests = _as_list(source_plan_payload.get("validation_tests"))
+    memory_count = max(0, int(memory_payload.get("count", 0) or 0))
+    notes_selected_count = max(0, int(notes_payload.get("selected_count", 0) or 0))
+    notes_hit_ratio = (
+        float(notes_selected_count) / float(memory_count)
+        if memory_count > 0
+        else 0.0
+    )
+    profile_selected_count = max(
+        0,
+        int(profile_payload.get("selected_count", 0) or 0),
+    )
+    capture_triggered = bool(capture_payload.get("triggered", False))
+    embedding_enabled = bool(embeddings_payload.get("enabled", False))
+    embedding_fallback = bool(embeddings_payload.get("fallback", False))
+    embedding_cache_hit = bool(embeddings_payload.get("cache_hit", False))
+    embedding_rerank_pool = max(0, int(embeddings_payload.get("rerank_pool", 0) or 0))
+    embedding_reranked_count = max(
+        0,
+        int(embeddings_payload.get("reranked_count", 0) or 0),
+    )
+    embedding_rerank_ratio = (
+        float(embedding_reranked_count) / float(embedding_rerank_pool)
+        if embedding_rerank_pool > 0
+        else 0.0
+    )
+    embedding_similarity_mean = float(
+        embeddings_payload.get("similarity_mean", 0.0) or 0.0
+    )
+    embedding_similarity_max = float(
+        embeddings_payload.get("similarity_max", 0.0) or 0.0
+    )
+    docs_backend_fallback_reason = str(
+        docs_payload.get("backend_fallback_reason", "") or ""
+    ).strip()
+    memory_fallback_reason = str(memory_payload.get("fallback_reason", "") or "").strip()
+    memory_gate_skip_reason = str(
+        memory_gate_payload.get("skip_reason", "") or ""
+    ).strip()
+    memory_namespace_fallback = str(
+        memory_namespace_payload.get("fallback", "") or ""
+    ).strip()
+    chunk_semantic_reason = str(chunk_semantic_payload.get("reason", "") or "").strip()
+    parallel_time_budget_ms = float(
+        parallel_payload.get("time_budget_ms", index_tags.get("parallel_time_budget_ms", 0.0))
+        or 0.0
+    )
+    embedding_time_budget_ms = float(
+        embeddings_payload.get(
+            "time_budget_ms",
+            index_tags.get("embedding_time_budget_ms", 0.0),
+        )
+        or 0.0
+    )
+    chunk_semantic_time_budget_ms = float(
+        chunk_semantic_payload.get(
+            "time_budget_ms",
+            index_tags.get("chunk_semantic_time_budget_ms", 0.0),
+        )
+        or 0.0
+    )
+    xref_time_budget_ms = float(
+        xref_payload.get("time_budget_ms", augment_tags.get("xref_time_budget_ms", 0.0))
+        or 0.0
+    )
+    parallel_docs_timed_out = bool(
+        parallel_docs_payload.get(
+            "timed_out",
+            index_tags.get("parallel_docs_timed_out", False),
+        )
+    )
+    parallel_worktree_timed_out = bool(
+        parallel_worktree_payload.get(
+            "timed_out",
+            index_tags.get("parallel_worktree_timed_out", False),
+        )
+    )
+    embedding_time_budget_exceeded = bool(
+        embeddings_payload.get(
+            "time_budget_exceeded",
+            index_tags.get("embedding_time_budget_exceeded", False),
+        )
+    )
+    embedding_adaptive_budget_applied = bool(
+        embeddings_payload.get(
+            "adaptive_budget_applied",
+            index_tags.get("embedding_adaptive_budget_applied", False),
+        )
+    )
+    chunk_semantic_time_budget_exceeded = bool(
+        chunk_semantic_payload.get(
+            "time_budget_exceeded",
+            index_tags.get("chunk_semantic_time_budget_exceeded", False),
+        )
+    )
+    chunk_semantic_fallback = bool(
+        chunk_semantic_payload.get(
+            "fallback",
+            index_tags.get("chunk_semantic_fallback", False),
+        )
+    )
+    chunk_guard_candidate_pool = max(
+        0,
+        int(
+            chunk_guard_payload.get(
+                "candidate_pool",
+                index_tags.get("chunk_guard_candidate_pool", 0),
+            )
+            or 0
+        ),
+    )
+    chunk_guard_filtered_count = max(
+        0,
+        int(
+            chunk_guard_payload.get(
+                "filtered_count",
+                index_tags.get("chunk_guard_filtered_count", 0),
+            )
+            or 0
+        ),
+    )
+    chunk_guard_retained_count = max(
+        0,
+        int(
+            chunk_guard_payload.get(
+                "retained_count",
+                index_tags.get("chunk_guard_retained_count", 0),
+            )
+            or 0
+        ),
+    )
+    chunk_guard_signed_chunk_count = max(
+        0,
+        int(
+            chunk_guard_payload.get(
+                "signed_chunk_count",
+                index_tags.get("chunk_guard_signed_chunk_count", 0),
+            )
+            or 0
+        ),
+    )
+    chunk_guard_pairwise_conflict_count = max(
+        0,
+        int(
+            chunk_guard_payload.get(
+                "pairwise_conflict_count",
+                index_tags.get("chunk_guard_pairwise_conflict_count", 0),
+            )
+            or 0
+        ),
+    )
+    chunk_guard_max_conflict_penalty = float(
+        chunk_guard_payload.get(
+            "max_conflict_penalty",
+            index_tags.get("chunk_guard_max_conflict_penalty", 0.0),
+        )
+        or 0.0
+    )
+    chunk_guard_mode = str(
+        chunk_guard_payload.get("mode", index_tags.get("chunk_guard_mode", "")) or ""
+    ).strip()
+    chunk_guard_reason = str(
+        chunk_guard_payload.get("reason", index_tags.get("chunk_guard_reason", "")) or ""
+    ).strip()
+    chunk_guard_enabled = bool(
+        chunk_guard_payload.get(
+            "enabled",
+            index_tags.get("chunk_guard_enabled", False),
+        )
+    )
+    chunk_guard_report_only = bool(
+        chunk_guard_payload.get(
+            "report_only",
+            index_tags.get("chunk_guard_report_only", False),
+        )
+    )
+    chunk_guard_fallback = bool(
+        chunk_guard_payload.get(
+            "fallback",
+            index_tags.get("chunk_guard_fallback", False),
+        )
+    )
+    chunk_guard_filter_ratio = (
+        float(chunk_guard_filtered_count) / float(chunk_guard_candidate_pool)
+        if chunk_guard_candidate_pool > 0
+        else 0.0
+    )
+    xref_budget_exhausted = bool(
+        xref_payload.get(
+            "budget_exhausted",
+            augment_tags.get("xref_budget_exhausted", False),
+        )
+    )
+    chunk_budget_used = float(
+        source_plan_payload.get(
+            "chunk_budget_used",
+            chunk_metrics.get("chunk_budget_used", 0.0),
+        )
+        or 0.0
+    )
+    chunks_per_file_mean = (
+        compute_chunks_per_file_mean(candidate_chunks)
+        if source_plan_has_candidate_chunks
+        else float(chunk_metrics.get("chunks_per_file_mean", 0.0) or 0.0)
+    )
+    raw_candidate_chunk_count = len(raw_candidate_chunks)
+    chunk_contract_fallback_count = max(
+        0,
+        int(chunk_contract_payload.get("fallback_count", 0) or 0),
+    )
+    chunk_contract_skeleton_chunk_count = max(
+        0,
+        int(chunk_contract_payload.get("skeleton_chunk_count", 0) or 0),
+    )
+    chunk_contract_fallback_ratio = safe_ratio(
+        chunk_contract_fallback_count,
+        raw_candidate_chunk_count,
+    )
+    chunk_contract_skeleton_ratio = safe_ratio(
+        chunk_contract_skeleton_chunk_count,
+        raw_candidate_chunk_count,
+    )
+    unsupported_language_fallback_count = sum(
+        1
+        for item in raw_candidate_chunks
+        if str(item.get("disclosure_fallback_reason") or "").strip()
+        == "unsupported_language"
+    )
+    unsupported_language_fallback_ratio = safe_ratio(
+        unsupported_language_fallback_count,
+        raw_candidate_chunk_count,
+    )
+    robust_signature_count = max(
+        0,
+        int(
+            chunk_metrics.get(
+                "robust_signature_count",
+                index_tags.get("robust_signature_count", 0),
+            )
+            or 0
+        ),
+    )
+    robust_signature_coverage_ratio = float(
+        chunk_metrics.get(
+            "robust_signature_coverage_ratio",
+            index_tags.get("robust_signature_coverage_ratio", 0.0),
+        )
+        or 0.0
+    )
+    graph_prior_chunk_count = max(
+        0,
+        int(
+            chunk_metrics.get(
+                "graph_prior_chunk_count",
+                index_tags.get("graph_prior_chunk_count", 0),
+            )
+            or 0
+        ),
+    )
+    graph_prior_coverage_ratio = float(
+        chunk_metrics.get(
+            "graph_prior_coverage_ratio",
+            index_tags.get("graph_prior_coverage_ratio", 0.0),
+        )
+        or 0.0
+    )
+    graph_prior_total = float(
+        chunk_metrics.get(
+            "graph_prior_total",
+            index_tags.get("graph_prior_total", 0.0),
+        )
+        or 0.0
+    )
+    graph_seeded_chunk_count = max(
+        0,
+        int(
+            chunk_metrics.get(
+                "graph_seeded_chunk_count",
+                index_tags.get("graph_seeded_chunk_count", 0),
+            )
+            or 0
+        ),
+    )
+    graph_transfer_count = max(
+        0,
+        int(
+            chunk_metrics.get(
+                "graph_transfer_count",
+                index_tags.get("graph_transfer_count", 0),
+            )
+            or 0
+        ),
+    )
+    graph_hub_suppressed_chunk_count = max(
+        0,
+        int(
+            chunk_metrics.get(
+                "graph_hub_suppressed_chunk_count",
+                index_tags.get("graph_hub_suppressed_chunk_count", 0),
+            )
+            or 0
+        ),
+    )
+    graph_hub_penalty_total = float(
+        chunk_metrics.get(
+            "graph_hub_penalty_total",
+            index_tags.get("graph_hub_penalty_total", 0.0),
+        )
+        or 0.0
+    )
+    graph_closure_enabled = bool(
+        chunk_metrics.get(
+            "graph_closure_enabled",
+            index_tags.get("graph_closure_enabled", 0.0),
+        )
+    )
+    graph_closure_boosted_chunk_count = max(
+        0,
+        int(
+            chunk_metrics.get(
+                "graph_closure_boosted_chunk_count",
+                index_tags.get("graph_closure_boosted_chunk_count", 0),
+            )
+            or 0
+        ),
+    )
+    graph_closure_coverage_ratio = float(
+        chunk_metrics.get(
+            "graph_closure_coverage_ratio",
+            index_tags.get("graph_closure_coverage_ratio", 0.0),
+        )
+        or 0.0
+    )
+    graph_closure_anchor_count = max(
+        0,
+        int(
+            chunk_metrics.get(
+                "graph_closure_anchor_count",
+                index_tags.get("graph_closure_anchor_count", 0),
+            )
+            or 0
+        ),
+    )
+    graph_closure_support_edge_count = max(
+        0,
+        int(
+            chunk_metrics.get(
+                "graph_closure_support_edge_count",
+                index_tags.get("graph_closure_support_edge_count", 0),
+            )
+            or 0
+        ),
+    )
+    graph_closure_total = float(
+        chunk_metrics.get(
+            "graph_closure_total",
+            index_tags.get("graph_closure_total", 0.0),
+        )
+        or 0.0
+    )
+    topological_shield_enabled = bool(
+        topological_shield_payload.get(
+            "enabled",
+            chunk_metrics.get("topological_shield_enabled", 0.0),
+        )
+    )
+    topological_shield_report_only = bool(
+        topological_shield_payload.get(
+            "report_only",
+            chunk_metrics.get("topological_shield_report_only", 0.0),
+        )
+    )
+    topological_shield_attenuated_chunk_count = max(
+        0,
+        int(
+            topological_shield_payload.get(
+                "attenuated_chunk_count",
+                chunk_metrics.get("topological_shield_attenuated_chunk_count", 0.0),
+            )
+            or 0
+        ),
+    )
+    topological_shield_coverage_ratio = float(
+        topological_shield_payload.get(
+            "coverage_ratio",
+            chunk_metrics.get("topological_shield_coverage_ratio", 0.0),
+        )
+        or 0.0
+    )
+    topological_shield_attenuation_total = float(
+        topological_shield_payload.get(
+            "attenuation_total",
+            chunk_metrics.get("topological_shield_attenuation_total", 0.0),
+        )
+        or 0.0
+    )
+    selected_skills = _as_list(skills_payload.get("selected"))
+    skipped_for_budget = _as_list(skills_payload.get("skipped_for_budget"))
+    skills_selected_count = float(
+        len([item for item in selected_skills if isinstance(item, dict)])
+    )
+    skills_skipped_for_budget_count = float(
+        len([item for item in skipped_for_budget if isinstance(item, dict)])
+    )
+    skills_token_budget = float(skills_payload.get("token_budget", 0.0) or 0.0)
+    skills_token_budget_used = float(
+        skills_payload.get(
+            "token_budget_used",
+            skills_payload.get("selected_token_estimate_total", 0.0),
+        )
+        or 0.0
+    )
+    skills_budget_exhausted = bool(skills_payload.get("budget_exhausted", False))
+    skills_route_latency_ms = float(skills_payload.get("route_latency_ms", 0.0) or 0.0)
+    skills_hydration_latency_ms = float(
+        skills_payload.get("hydration_latency_ms", 0.0) or 0.0
+    )
+    skills_metadata_only_routing = bool(
+        skills_payload.get("metadata_only_routing", False)
+    )
+    skills_precomputed_route = (
+        str(skills_payload.get("routing_source") or "").strip().lower() == "precomputed"
+    )
+    plan_replay_cache_payload = _as_dict(_as_dict(plan_payload.get("observability")).get("plan_replay_cache"))
+    plan_replay_cache_enabled = bool(plan_replay_cache_payload.get("enabled", False))
+    plan_replay_cache_hit = bool(plan_replay_cache_payload.get("hit", False))
+    plan_replay_cache_stale_hit_safe = bool(
+        plan_replay_cache_payload.get(
+            "stale_hit_safe",
+            plan_replay_cache_payload.get("safe_hit", False),
+        )
+    )
+    source_plan_graph_closure_preference_enabled = bool(
+        source_plan_packing_payload.get(
+            "graph_closure_preference_enabled",
+            source_plan_tags.get("packing_graph_closure_preference_enabled", False),
+        )
+    )
+    source_plan_graph_closure_bonus_candidate_count = max(
+        0,
+        int(
+            source_plan_packing_payload.get(
+                "graph_closure_bonus_candidate_count",
+                source_plan_tags.get("packing_graph_closure_bonus_candidate_count", 0),
+            )
+            or 0
+        ),
+    )
+    source_plan_graph_closure_preferred_count = max(
+        0,
+        int(
+            source_plan_packing_payload.get(
+                "graph_closure_preferred_count",
+                source_plan_tags.get("packing_graph_closure_preferred_count", 0),
+            )
+            or 0
+        ),
+    )
+    source_plan_focused_file_promoted_count = max(
+        0,
+        int(
+            source_plan_packing_payload.get(
+                "focused_file_promoted_count",
+                source_plan_tags.get("packing_focused_file_promoted_count", 0),
+            )
+            or 0
+        ),
+    )
+    source_plan_packed_path_count = max(
+        0,
+        int(
+            source_plan_packing_payload.get(
+                "packed_path_count",
+                source_plan_tags.get("packing_packed_path_count", 0),
+            )
+            or 0
+        ),
+    )
+    source_plan_packing_reason = str(
+        source_plan_packing_payload.get(
+            "reason",
+            source_plan_tags.get("packing_reason", ""),
+        )
+        or ""
+    )
+    candidate_file_path_count = count_unique_paths(
+        [item for item in candidate_files if isinstance(item, dict)]
+    )
+    effective_packed_path_count = (
+        source_plan_packed_path_count
+        if source_plan_packed_path_count > 0
+        else (
+            count_unique_paths(candidate_chunks)
+            if source_plan_has_candidate_chunks
+            else candidate_file_path_count
+        )
+    )
+    source_plan_chunk_retention_ratio = safe_ratio(
+        len(candidate_chunks),
+        len(raw_candidate_chunks),
+    )
+    source_plan_packed_path_ratio = safe_ratio(
+        effective_packed_path_count,
+        candidate_file_path_count,
+    )
+    skills_token_budget_utilization_ratio = safe_ratio(
+        skills_token_budget_used,
+        skills_token_budget,
+    )
+    graph_transfer_per_seed_ratio = safe_ratio(
+        graph_transfer_count,
+        graph_seeded_chunk_count,
+    )
+    chunk_guard_pairwise_conflict_density = safe_ratio(
+        chunk_guard_pairwise_conflict_count,
+        chunk_guard_candidate_pool,
+    )
+    topological_shield_attenuation_per_chunk = safe_ratio(
+        topological_shield_attenuation_total,
+        topological_shield_attenuated_chunk_count,
+    )
+    router_enabled = bool(
+        adaptive_router_payload.get(
+            "enabled",
+            index_metadata.get("router_enabled", index_tags.get("router_enabled", False)),
+        )
+    )
+    router_mode = str(
+        adaptive_router_payload.get(
+            "mode",
+            index_metadata.get("router_mode", index_tags.get("router_mode", "")),
+        )
+        or ""
+    )
+    router_arm_set = str(
+        adaptive_router_payload.get(
+            "arm_set",
+            index_metadata.get("router_arm_set", index_tags.get("router_arm_set", "")),
+        )
+        or ""
+    )
+    router_arm_id = str(
+        adaptive_router_payload.get(
+            "arm_id",
+            index_metadata.get("router_arm_id", index_tags.get("router_arm_id", "")),
+        )
+        or ""
+    )
+    router_confidence = float(
+        adaptive_router_payload.get(
+            "confidence",
+            index_metadata.get("router_confidence", index_tags.get("router_confidence", 0.0)),
+        )
+        or 0.0
+    )
+    router_shadow_arm_id = str(
+        adaptive_router_payload.get(
+            "shadow_arm_id",
+            index_metadata.get(
+                "router_shadow_arm_id",
+                index_tags.get("router_shadow_arm_id", ""),
+            ),
+        )
+        or ""
+    )
+    router_shadow_confidence = float(
+        adaptive_router_payload.get(
+            "shadow_confidence",
+            index_metadata.get(
+                "router_shadow_confidence",
+                index_tags.get("router_shadow_confidence", 0.0),
+            ),
+        )
+        or 0.0
+    )
+    router_online_bandit_payload = _as_dict(adaptive_router_payload.get("online_bandit"))
+    router_online_bandit_requested = bool(
+        router_online_bandit_payload.get(
+            "requested",
+            index_metadata.get(
+                "router_online_bandit_requested",
+                index_tags.get("router_online_bandit_requested", False),
+            ),
+        )
+    )
+    router_experiment_enabled = bool(
+        router_online_bandit_payload.get(
+            "experiment_enabled",
+            index_metadata.get(
+                "router_experiment_enabled",
+                index_tags.get("router_experiment_enabled", False),
+            ),
+        )
+    )
+    router_online_bandit_active = bool(
+        router_online_bandit_payload.get(
+            "active",
+            index_metadata.get(
+                "router_online_bandit_active",
+                index_tags.get("router_online_bandit_active", False),
+            ),
+        )
+    )
+    router_is_exploration = bool(
+        router_online_bandit_payload.get(
+            "is_exploration",
+            index_metadata.get(
+                "router_is_exploration",
+                index_tags.get("router_is_exploration", False),
+            ),
+        )
+    )
+    router_exploration_probability = float(
+        router_online_bandit_payload.get(
+            "exploration_probability",
+            index_metadata.get(
+                "router_exploration_probability",
+                index_tags.get("router_exploration_probability", 0.0),
+            ),
+        )
+        or 0.0
+    )
+    router_fallback_applied = bool(
+        router_online_bandit_payload.get(
+            "fallback_applied",
+            index_metadata.get(
+                "router_fallback_applied",
+                index_tags.get("router_fallback_applied", False),
+            ),
+        )
+    )
+    router_fallback_reason = str(
+        router_online_bandit_payload.get(
+            "fallback_reason",
+            index_metadata.get(
+                "router_fallback_reason",
+                index_tags.get("router_fallback_reason", ""),
+            ),
+        )
+        or ""
+    )
+    router_online_bandit_reason = str(
+        router_online_bandit_payload.get(
+            "reason",
+            index_metadata.get(
+                "router_online_bandit_reason",
+                index_tags.get("router_online_bandit_reason", ""),
+            ),
+        )
+        or ""
+    )
+
+    policy_profile = str(index_payload.get("policy_name") or "").strip()
+    docs_enabled_flag = bool(
+        index_metadata.get("docs_enabled", docs_payload.get("enabled", False))
+    )
+    docs_section_count = int(
+        index_metadata.get("docs_section_count", docs_payload.get("section_count", 0)) or 0
+    )
+    docs_injected_count = int(index_metadata.get("docs_injected_count", 0) or 0)
+    docs_hit = 1.0 if docs_enabled_flag and docs_section_count > 0 else 0.0
+    hint_inject = 1.0 if docs_injected_count > 0 else 0.0
+
+    return CaseEvaluationMetrics(
+        source_plan_evidence_summary=source_plan_evidence_summary,
+        skills_payload=skills_payload,
+        plan_replay_cache_payload=plan_replay_cache_payload,
+        subgraph_payload=subgraph_payload,
+        subgraph_edge_counts=subgraph_edge_counts,
+        subgraph_seed_paths=subgraph_seed_paths,
+        chunk_guard_payload=chunk_guard_payload,
+        validation_tests=validation_tests,
+        exact_search_payload=exact_search_payload,
+        second_pass_payload=second_pass_payload,
+        refine_pass_payload=refine_pass_payload,
+        candidate_ranker_fallbacks=[
+            str(item).strip() for item in candidate_ranker_fallbacks if str(item).strip()
+        ],
+        neighbor_paths=[str(item).strip() for item in neighbor_paths if str(item).strip()],
+        dependency_recall=dependency_recall,
+        repomap_latency_ms=repomap_latency_ms,
+        memory_latency_ms=memory_latency_ms,
+        index_latency_ms=index_latency_ms,
+        augment_latency_ms=augment_latency_ms,
+        skills_latency_ms=skills_latency_ms,
+        source_plan_latency_ms=source_plan_latency_ms,
+        notes_hit_ratio=notes_hit_ratio,
+        profile_selected_count=profile_selected_count,
+        capture_triggered=capture_triggered,
+        embedding_enabled=embedding_enabled,
+        embedding_fallback=embedding_fallback,
+        embedding_cache_hit=embedding_cache_hit,
+        embedding_rerank_ratio=embedding_rerank_ratio,
+        embedding_similarity_mean=embedding_similarity_mean,
+        embedding_similarity_max=embedding_similarity_max,
+        docs_backend_fallback_reason=docs_backend_fallback_reason,
+        memory_gate_skipped=bool(memory_gate_payload.get("skipped", False)),
+        memory_gate_skip_reason=memory_gate_skip_reason,
+        memory_fallback_reason=memory_fallback_reason,
+        memory_namespace_fallback=memory_namespace_fallback,
+        chunk_semantic_reason=chunk_semantic_reason,
+        parallel_time_budget_ms=parallel_time_budget_ms,
+        embedding_time_budget_ms=embedding_time_budget_ms,
+        chunk_semantic_time_budget_ms=chunk_semantic_time_budget_ms,
+        xref_time_budget_ms=xref_time_budget_ms,
+        parallel_docs_timed_out=parallel_docs_timed_out,
+        parallel_worktree_timed_out=parallel_worktree_timed_out,
+        embedding_time_budget_exceeded=embedding_time_budget_exceeded,
+        embedding_adaptive_budget_applied=embedding_adaptive_budget_applied,
+        chunk_semantic_time_budget_exceeded=chunk_semantic_time_budget_exceeded,
+        chunk_semantic_fallback=chunk_semantic_fallback,
+        chunk_guard_candidate_pool=chunk_guard_candidate_pool,
+        chunk_guard_filtered_count=chunk_guard_filtered_count,
+        chunk_guard_retained_count=chunk_guard_retained_count,
+        chunk_guard_signed_chunk_count=chunk_guard_signed_chunk_count,
+        chunk_guard_pairwise_conflict_count=chunk_guard_pairwise_conflict_count,
+        chunk_guard_max_conflict_penalty=chunk_guard_max_conflict_penalty,
+        chunk_guard_mode=chunk_guard_mode,
+        chunk_guard_reason=chunk_guard_reason,
+        chunk_guard_enabled=chunk_guard_enabled,
+        chunk_guard_report_only=chunk_guard_report_only,
+        chunk_guard_fallback=chunk_guard_fallback,
+        chunk_guard_filter_ratio=chunk_guard_filter_ratio,
+        xref_budget_exhausted=xref_budget_exhausted,
+        chunk_budget_used=chunk_budget_used,
+        chunks_per_file_mean=chunks_per_file_mean,
+        chunk_contract_fallback_count=chunk_contract_fallback_count,
+        chunk_contract_skeleton_chunk_count=chunk_contract_skeleton_chunk_count,
+        chunk_contract_fallback_ratio=chunk_contract_fallback_ratio,
+        chunk_contract_skeleton_ratio=chunk_contract_skeleton_ratio,
+        unsupported_language_fallback_count=unsupported_language_fallback_count,
+        unsupported_language_fallback_ratio=unsupported_language_fallback_ratio,
+        robust_signature_count=robust_signature_count,
+        robust_signature_coverage_ratio=robust_signature_coverage_ratio,
+        graph_prior_chunk_count=graph_prior_chunk_count,
+        graph_prior_coverage_ratio=graph_prior_coverage_ratio,
+        graph_prior_total=graph_prior_total,
+        graph_seeded_chunk_count=graph_seeded_chunk_count,
+        graph_transfer_count=graph_transfer_count,
+        graph_hub_suppressed_chunk_count=graph_hub_suppressed_chunk_count,
+        graph_hub_penalty_total=graph_hub_penalty_total,
+        graph_closure_enabled=graph_closure_enabled,
+        graph_closure_boosted_chunk_count=graph_closure_boosted_chunk_count,
+        graph_closure_coverage_ratio=graph_closure_coverage_ratio,
+        graph_closure_anchor_count=graph_closure_anchor_count,
+        graph_closure_support_edge_count=graph_closure_support_edge_count,
+        graph_closure_total=graph_closure_total,
+        topological_shield_enabled=topological_shield_enabled,
+        topological_shield_report_only=topological_shield_report_only,
+        topological_shield_attenuated_chunk_count=topological_shield_attenuated_chunk_count,
+        topological_shield_coverage_ratio=topological_shield_coverage_ratio,
+        topological_shield_attenuation_total=topological_shield_attenuation_total,
+        skills_selected_count=skills_selected_count,
+        skills_skipped_for_budget_count=skills_skipped_for_budget_count,
+        skills_token_budget=skills_token_budget,
+        skills_token_budget_used=skills_token_budget_used,
+        skills_budget_exhausted=skills_budget_exhausted,
+        skills_route_latency_ms=skills_route_latency_ms,
+        skills_hydration_latency_ms=skills_hydration_latency_ms,
+        skills_metadata_only_routing=skills_metadata_only_routing,
+        skills_precomputed_route=skills_precomputed_route,
+        plan_replay_cache_enabled=plan_replay_cache_enabled,
+        plan_replay_cache_hit=plan_replay_cache_hit,
+        plan_replay_cache_stale_hit_safe=plan_replay_cache_stale_hit_safe,
+        source_plan_graph_closure_preference_enabled=(
+            source_plan_graph_closure_preference_enabled
+        ),
+        source_plan_graph_closure_bonus_candidate_count=(
+            source_plan_graph_closure_bonus_candidate_count
+        ),
+        source_plan_graph_closure_preferred_count=(
+            source_plan_graph_closure_preferred_count
+        ),
+        source_plan_focused_file_promoted_count=(
+            source_plan_focused_file_promoted_count
+        ),
+        source_plan_packed_path_count=source_plan_packed_path_count,
+        source_plan_packing_reason=source_plan_packing_reason,
+        source_plan_chunk_retention_ratio=source_plan_chunk_retention_ratio,
+        source_plan_packed_path_ratio=source_plan_packed_path_ratio,
+        skills_token_budget_utilization_ratio=(
+            skills_token_budget_utilization_ratio
+        ),
+        graph_transfer_per_seed_ratio=graph_transfer_per_seed_ratio,
+        chunk_guard_pairwise_conflict_density=(
+            chunk_guard_pairwise_conflict_density
+        ),
+        topological_shield_attenuation_per_chunk=(
+            topological_shield_attenuation_per_chunk
+        ),
+        router_enabled=router_enabled,
+        router_mode=router_mode,
+        router_arm_set=router_arm_set,
+        router_arm_id=router_arm_id,
+        router_confidence=router_confidence,
+        router_shadow_arm_id=router_shadow_arm_id,
+        router_shadow_confidence=router_shadow_confidence,
+        router_online_bandit_requested=router_online_bandit_requested,
+        router_experiment_enabled=router_experiment_enabled,
+        router_online_bandit_active=router_online_bandit_active,
+        router_is_exploration=router_is_exploration,
+        router_exploration_probability=router_exploration_probability,
+        router_fallback_applied=router_fallback_applied,
+        router_fallback_reason=router_fallback_reason,
+        router_online_bandit_reason=router_online_bandit_reason,
+        policy_profile=policy_profile,
+        docs_enabled_flag=docs_enabled_flag,
+        docs_hit=docs_hit,
+        hint_inject=hint_inject,
+        subgraph_seed_path_count=subgraph_seed_path_count,
+        subgraph_edge_type_count=subgraph_edge_type_count,
+        subgraph_edge_total_count=subgraph_edge_total_count,
+        subgraph_payload_enabled=subgraph_payload_enabled,
+    )
+
+
+__all__ = ["CaseEvaluationMetrics", "build_case_evaluation_metrics"]

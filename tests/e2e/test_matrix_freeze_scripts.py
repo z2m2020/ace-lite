@@ -1419,6 +1419,78 @@ freeze:
     }
 
 
+def test_release_freeze_main_includes_skill_validation_step_when_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_release_freeze_regression.py")
+
+    matrix_config = tmp_path / "matrix.yaml"
+    matrix_config.write_text("freeze:\n  runtime_gate: true\n", encoding="utf-8")
+    output_dir = tmp_path / "freeze-output"
+    captured_commands: dict[str, list[str]] = {}
+
+    def fake_run_step(*, name: str, command: list[str], cwd: Path, logs_dir: Path):
+        _ = cwd
+        captured_commands[name] = list(command)
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        stdout_path = logs_dir / f"{name}.stdout.log"
+        stderr_path = logs_dir / f"{name}.stderr.log"
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text("", encoding="utf-8")
+        return module.StepResult(
+            name=name,
+            command=command,
+            returncode=0,
+            elapsed_seconds=0.01,
+            stdout_path=str(stdout_path),
+            stderr_path=str(stderr_path),
+        )
+
+    def fake_load_matrix_summary(*, summary_path: Path):
+        _ = summary_path
+        return {
+            "passed": True,
+            "benchmark_regression_detected": False,
+            "repo_count": 1,
+            "plugin_policy_summary": {"totals": {}},
+            "retrieval_metrics_mean": {},
+            "memory_metrics_mean": {},
+            "embedding_metrics_mean": {},
+        }
+
+    monkeypatch.setattr(module, "_run_step", fake_run_step)
+    monkeypatch.setattr(module, "_load_matrix_summary", fake_load_matrix_summary)
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "run_release_freeze_regression.py",
+            "--matrix-config",
+            str(matrix_config),
+            "--output-dir",
+            str(output_dir),
+            "--skill-validation-apps",
+            "codex,claude-code",
+            "--skill-validation-min-pass-rate",
+            "0.75",
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 0
+
+    payload = json.loads((output_dir / "freeze_regression.json").read_text(encoding="utf-8"))
+    assert "skill_validation_matrix" in [step["name"] for step in payload["steps"]]
+    skill_command = captured_commands["skill_validation_matrix"]
+    assert skill_command[1].endswith("run_skill_validation.py")
+    assert "--apps" in skill_command
+    assert "codex,claude-code" in skill_command
+    assert "--min-pass-rate" in skill_command
+    assert "0.75" in skill_command
+    assert "--fail-on-miss" in skill_command
+
+
 def test_release_freeze_main_profile_override_source_mixed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

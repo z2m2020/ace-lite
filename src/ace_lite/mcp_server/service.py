@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from time import perf_counter
-from typing import Any
+from typing import Any, Callable
 
 from ace_lite.cli_app.orchestrator_factory import create_memory_provider, run_plan
 from ace_lite.indexer import build_index
@@ -98,6 +98,14 @@ class AceLiteMcpService:
                 "last_request_elapsed_ms": float(self._last_request_elapsed_ms),
             }
 
+    def _run_tracked(
+        self,
+        tool_name: str,
+        operation: Callable[[], dict[str, Any]],
+    ) -> dict[str, Any]:
+        with self._track_request(tool_name):
+            return operation()
+
     def health(self) -> dict[str, Any]:
         version_info = get_version_info()
         return build_health_response_payload(
@@ -123,14 +131,14 @@ class AceLiteMcpService:
         subprocess_batch_timeout_seconds: float | None = None,
         include_payload: bool = False,
     ) -> dict[str, Any]:
-        with self._track_request("ace_index"):
-            root_path = self._resolve_root(root)
-            language_csv = str(languages or self._config.default_languages).strip()
-            enabled_languages = parse_language_csv(language_csv)
-            return handle_index_request(
-                root_path=root_path,
-                language_csv=language_csv,
-                enabled_languages=enabled_languages,
+        return self._run_tracked(
+            "ace_index",
+            lambda: handle_index_request(
+                root_path=self._resolve_root(root),
+                language_csv=str(languages or self._config.default_languages).strip(),
+                enabled_languages=parse_language_csv(
+                    str(languages or self._config.default_languages).strip()
+                ),
                 output=output,
                 batch_mode=batch_mode,
                 batch_size=batch_size,
@@ -144,7 +152,8 @@ class AceLiteMcpService:
                 build_index_fn=build_index,
                 build_index_with_resilience_fn=build_index_with_resilience,
                 resolve_output_path_fn=self._resolve_output_path,
-            )
+            ),
+        )
 
     def repomap_build(
         self,
@@ -157,12 +166,11 @@ class AceLiteMcpService:
         output_json: str | None = None,
         output_md: str | None = None,
     ) -> dict[str, Any]:
-        with self._track_request("ace_repomap_build"):
-            root_path = self._resolve_root(root)
-            language_csv = str(languages or self._config.default_languages).strip()
-            return handle_repomap_build_request(
-                root_path=root_path,
-                language_csv=language_csv,
+        return self._run_tracked(
+            "ace_repomap_build",
+            lambda: handle_repomap_build_request(
+                root_path=self._resolve_root(root),
+                language_csv=str(languages or self._config.default_languages).strip(),
                 budget_tokens=budget_tokens,
                 top_k=top_k,
                 ranking_profile=ranking_profile,
@@ -173,7 +181,8 @@ class AceLiteMcpService:
                 parse_language_csv_fn=parse_language_csv,
                 build_repo_map_fn=build_repo_map,
                 resolve_output_path_fn=self._resolve_output_path,
-            )
+            ),
+        )
 
     def plan_quick(
         self,
@@ -194,15 +203,14 @@ class AceLiteMcpService:
         ranking_profile: str = "graph",
         include_rows: bool = False,
     ) -> dict[str, Any]:
-        with self._track_request("ace_plan_quick"):
-            root_path = self._resolve_root(root)
-            language_csv = str(languages or self._config.default_languages).strip()
-            return handle_plan_quick_request(
+        return self._run_tracked(
+            "ace_plan_quick",
+            lambda: handle_plan_quick_request(
                 query=query,
                 repo=repo,
-                root_path=root_path,
+                root_path=self._resolve_root(root),
                 default_repo=self._config.default_repo,
-                language_csv=language_csv,
+                language_csv=str(languages or self._config.default_languages).strip(),
                 top_k_files=top_k_files,
                 repomap_top_k=repomap_top_k,
                 candidate_ranker=candidate_ranker,
@@ -216,7 +224,8 @@ class AceLiteMcpService:
                 include_rows=include_rows,
                 tokenizer_model=str(self._config.tokenizer_model),
                 build_plan_quick_fn=build_plan_quick,
-            )
+            ),
+        )
 
     def plan(
         self,
@@ -239,7 +248,7 @@ class AceLiteMcpService:
         include_full_payload: bool = True,
         timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
-        with self._track_request("ace_plan"):
+        def _operation() -> dict[str, Any]:
             root_path = self._resolve_root(root)
             skills_path = self._resolve_skills_dir(root_path=root_path, skills_dir=skills_dir)
             config_pack_path = self._resolve_config_pack_path(
@@ -269,6 +278,8 @@ class AceLiteMcpService:
                 run_plan_payload_fn=self._run_plan_payload,
                 plan_quick_fn=self.plan_quick,
             )
+
+        return self._run_tracked("ace_plan", _operation)
 
     def _run_plan_payload(
         self,
@@ -321,7 +332,7 @@ class AceLiteMcpService:
         namespace: str | None = None,
         notes_path: str | None = None,
     ) -> dict[str, Any]:
-        with self._track_request("ace_memory_search"):
+        def _operation() -> dict[str, Any]:
             path = self._resolve_notes_path(notes_path=notes_path)
             notes = self._load_notes(path)
             return handle_memory_search(
@@ -332,6 +343,8 @@ class AceLiteMcpService:
                 notes=notes,
             )
 
+        return self._run_tracked("ace_memory_search", _operation)
+
     def memory_store(
         self,
         *,
@@ -340,7 +353,7 @@ class AceLiteMcpService:
         tags: dict[str, str] | None = None,
         notes_path: str | None = None,
     ) -> dict[str, Any]:
-        with self._track_request("ace_memory_store"):
+        def _operation() -> dict[str, Any]:
             path = self._resolve_notes_path(notes_path=notes_path)
             rows = self._load_notes(path)
             return handle_memory_store(
@@ -352,13 +365,15 @@ class AceLiteMcpService:
                 save_notes_fn=self._save_notes,
             )
 
+        return self._run_tracked("ace_memory_store", _operation)
+
     def memory_wipe(
         self,
         *,
         namespace: str | None = None,
         notes_path: str | None = None,
     ) -> dict[str, Any]:
-        with self._track_request("ace_memory_wipe"):
+        def _operation() -> dict[str, Any]:
             path = self._resolve_notes_path(notes_path=notes_path)
             rows = self._load_notes(path)
             return handle_memory_wipe(
@@ -367,6 +382,8 @@ class AceLiteMcpService:
                 rows=rows,
                 save_notes_fn=self._save_notes,
             )
+
+        return self._run_tracked("ace_memory_wipe", _operation)
 
     def feedback_record(
         self,
@@ -379,18 +396,19 @@ class AceLiteMcpService:
         position: int | None = None,
         max_entries: int = 512,
     ) -> dict[str, Any]:
-        with self._track_request("ace_feedback_record"):
-            root_path = self._resolve_root(root)
-            return handle_feedback_record_request(
+        return self._run_tracked(
+            "ace_feedback_record",
+            lambda: handle_feedback_record_request(
                 query=query,
                 selected_path=selected_path,
                 repo=repo,
-                root_path=root_path,
+                root_path=self._resolve_root(root),
                 default_repo=self._config.default_repo,
                 profile_path=profile_path,
                 position=position,
                 max_entries=max_entries,
-            )
+            ),
+        )
 
     def feedback_stats(
         self,
@@ -405,11 +423,11 @@ class AceLiteMcpService:
         top_n: int = 10,
         max_entries: int = 512,
     ) -> dict[str, Any]:
-        with self._track_request("ace_feedback_stats"):
-            root_path = self._resolve_root(root)
-            return handle_feedback_stats_request(
+        return self._run_tracked(
+            "ace_feedback_stats",
+            lambda: handle_feedback_stats_request(
                 repo=repo,
-                root_path=root_path,
+                root_path=self._resolve_root(root),
                 default_repo=self._config.default_repo,
                 profile_path=profile_path,
                 query=query,
@@ -418,7 +436,8 @@ class AceLiteMcpService:
                 decay_days=decay_days,
                 top_n=top_n,
                 max_entries=max_entries,
-            )
+            ),
+        )
 
     def _resolve_root(self, root: str | None) -> Path:
         return resolve_root(root=root, default_root=self._config.default_root)

@@ -14,17 +14,19 @@ Current gate is intentionally incremental. The blocking checks stay repo-wide,
 while the report-only hotspot summary now tracks the current post-backlog
 maintainability set:
 
-- `src/ace_lite/benchmark/case_evaluation.py`
-- `src/ace_lite/cli_app/orchestrator_factory.py`
+- `src/ace_lite/cli_app/orchestrator_factory_support.py`
+- `src/ace_lite/cli_app/runtime_command_support.py`
 - `src/ace_lite/pipeline/stages/index.py`
 - `src/ace_lite/orchestrator.py`
 - `src/ace_lite/cli_app/params_option_groups.py`
 - `src/ace_lite/benchmark/report.py`
-- `src/ace_lite/config_models.py`
+- `src/ace_lite/benchmark/summaries.py`
 
-The prior report-only hotspots (`docs_channel.py`, `mcp_server/service.py`,
-`runtime.py`, and related slices) were retired from the summary set after the
-March 11 helper-extraction wave reduced their local maintainability risk.
+The prior report-only hotspots (`benchmark/case_evaluation.py`,
+`cli_app/orchestrator_factory.py`, `config_models.py`, `runtime.py`,
+`mcp_server/service.py`, and related slices) were retired or demoted after the
+March 14-15 helper-extraction waves reduced the local shell-layer risk and
+shifted concentration into support/helper modules.
 
 The current hotspot set is intentionally report-only. Update the target list in
 `benchmark/quality/hotspot_baseline.json` together with `scripts/run_quality_gate.py`
@@ -37,6 +39,21 @@ Quality execution is unified via:
 - friction event log: `artifacts/friction/events.jsonl`
 - friction report builder: `scripts/build_friction_report.py`
 
+## Refactor Guard Suites
+
+When a change touches runtime assembly, stage boundaries, benchmark orchestration, or the maintainability seams documented in `docs/design/ARCHITECTURE_OVERVIEW.md` and `docs/design/ORCHESTRATOR_DESIGN.md`, run these focused suites before treating the tree as release-ready:
+
+```powershell
+python -m pytest tests/unit/test_architecture_golden.py tests/unit/test_stage_contracts.py -q
+python -m pytest tests/integration/test_cli_runtime.py tests/integration/test_cli_repomap.py tests/integration/test_cli_plan_output_json.py -q
+```
+
+These suites freeze three contracts that are easy to drift during refactors:
+
+- design docs stay aligned with the live pipeline and top-level stage payload contract
+- `validate_stage_output(...)` continues to accept real orchestrator stage payloads
+- CLI runtime / repomap / plan JSON surfaces keep the current shell-layer boundary shape
+
 ## Baseline (2026-02-14)
 
 - test result: `361 passed`
@@ -48,6 +65,14 @@ Quality execution is unified via:
 - test result: `492 passed`
 - freeze gates: passed (see `artifacts/release-freeze/s12-*`)
 - coverage gate: `fail_under = 83` (unchanged)
+
+## Hotspot Refresh (2026-03-15)
+
+- report-only hotspot targets were refreshed to match the post-Phase-4/5 codebase
+- blocking quality commands and coverage gate are unchanged
+- maintainers should update `benchmark/quality/hotspot_baseline.json` together
+  with `scripts/run_quality_gate.py` whenever a refactor wave moves the largest
+  remaining concentration risks into new helper/support modules
 
 ## Local Commands
 
