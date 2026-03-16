@@ -8,7 +8,6 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Callable
 
-from ace_lite.conventions import load_conventions
 from ace_lite.exceptions import StageContractError
 from ace_lite.memory import (
     MemoryProvider,
@@ -32,14 +31,18 @@ from ace_lite.orchestrator_replay import (
     build_skills_replay_fingerprint,
 )
 from ace_lite.orchestrator_runtime_support import (
-    run_post_source_plan_runtime,
-    run_pre_source_plan_stages,
-    run_source_plan_stage_with_replay,
+    run_orchestrator_finalization,
+    run_orchestrator_lifecycle,
+    run_orchestrator_preparation,
 )
 from ace_lite.pipeline.contracts import validate_stage_output
 from ace_lite.pipeline.hooks import HookBus
 from ace_lite.pipeline.plugin_runtime import PluginRuntime
-from ace_lite.pipeline.registry import CORE_PIPELINE_ORDER, StageRegistry
+from ace_lite.pipeline.registry import (
+    CORE_PIPELINE_ORDER,
+    StageRegistry,
+    iter_stage_descriptors,
+)
 from ace_lite.pipeline.stage_tags import build_stage_tags
 from ace_lite.pipeline.stages.augment import run_diagnostics_augment
 from ace_lite.pipeline.stages.index import IndexStageConfig, run_index
@@ -53,7 +56,7 @@ from ace_lite.plugins.loader import PluginLoader
 from ace_lite.profile_store import ProfileStore
 from ace_lite.runtime_manager import RuntimeManager
 from ace_lite.runtime_state import RuntimeState
-from ace_lite.schema import SCHEMA_VERSION, validate_context_plan
+from ace_lite.schema import SCHEMA_VERSION
 from ace_lite.scoring_config import (
     BM25_B,
     BM25_K1,
@@ -170,44 +173,27 @@ class AceOrchestrator:
         end_date: str | None = None,
         filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        root_path = str(Path(root).resolve())
-        conventions = load_conventions(
-            root_dir=root_path,
-            files=self._conventions_files,
-            previous_hashes=self._conventions_hashes,
-        )
-        self._runtime_state.update_conventions_hashes(
-            conventions.get("file_hashes", {})
-        )
-        hook_bus, plugins_loaded = self._load_plugins(root=root_path)
-
-        registry = self._build_registry()
-        temporal_input = {
-            "time_range": str(time_range or "").strip() or None,
-            "start_date": str(start_date or "").strip() or None,
-            "end_date": str(end_date or "").strip() or None,
-        }
-        ctx = StageContext(
+        preparation = run_orchestrator_preparation(
+            orchestrator=self,
             query=query,
             repo=repo,
-            root=root_path,
-            state={
-                "conventions": conventions,
-                "temporal": temporal_input,
-                "benchmark_filters": dict(filters) if isinstance(filters, dict) else {},
-            },
+            root=root,
+            time_range=time_range,
+            start_date=start_date,
+            end_date=end_date,
+            filters=filters,
         )
+        root_path = preparation.root_path
+        conventions = preparation.conventions
+        hook_bus = preparation.hook_bus
+        plugins_loaded = preparation.plugins_loaded
+        registry = preparation.registry
+        temporal_input = preparation.temporal_input
+        ctx = preparation.ctx
 
         started = perf_counter()
         started_at = datetime.now(timezone.utc)
-        stage_metrics, contract_error = run_pre_source_plan_stages(
-            orchestrator=self,
-            repo=repo,
-            ctx=ctx,
-            registry=registry,
-            hook_bus=hook_bus,
-        )
-        contract_error, replay_cache_info = run_source_plan_stage_with_replay(
+        lifecycle_result = run_orchestrator_lifecycle(
             orchestrator=self,
             query=query,
             repo=repo,
@@ -217,91 +203,45 @@ class AceOrchestrator:
             ctx=ctx,
             registry=registry,
             hook_bus=hook_bus,
-            stage_metrics=stage_metrics,
-            contract_error=contract_error,
         )
-        contract_error = run_post_source_plan_runtime(
-            orchestrator=self,
-            query=query,
-            repo=repo,
-            ctx=ctx,
-            registry=registry,
-            hook_bus=hook_bus,
-            stage_metrics=stage_metrics,
-            contract_error=contract_error,
-        )
+        stage_metrics = lifecycle_result.stage_metrics
+        contract_error = lifecycle_result.contract_error
+        replay_cache_info = lifecycle_result.replay_cache_info
 
         total_ms = (perf_counter() - started) * 1000.0
 
-        payload = self._build_plan_payload(
+        finalization_result = run_orchestrator_finalization(
+            orchestrator=self,
             query=query,
             repo=repo,
-            root=root_path,
+            root_path=root_path,
             conventions=conventions,
             ctx=ctx,
             stage_metrics=stage_metrics,
             plugins_loaded=plugins_loaded,
+            started_at=started_at,
             total_ms=total_ms,
             contract_error=contract_error,
             replay_cache_info=replay_cache_info,
         )
-
-        if contract_error is not None:
-            payload["observability"]["error"] = {
-                "type": "stage_contract_error",
-                "stage": contract_error.stage or "",
-                "error_code": contract_error.error_code,
-                "reason": contract_error.reason,
-                "message": contract_error.message,
-                "context": contract_error.context,
-            }
-            payload["observability"]["contract_errors"] = ctx.state.get(
-                "_contract_errors", []
-            )
-
-        validate_context_plan(payload)
-
-        trace_export = self._export_stage_trace(
-            query=query,
-            repo=repo,
-            root=root_path,
-            started_at=started_at,
-            total_ms=total_ms,
-            stage_metrics=stage_metrics,
-            plugin_policy_summary=payload["observability"].get("plugin_policy_summary", {}),
-        )
-        if trace_export.get("enabled"):
-            payload["observability"]["trace_export"] = trace_export
-
-        payload["observability"]["durable_stats"] = self._record_durable_stats(
-            query=query,
-            repo=repo,
-            root=root_path,
-            started_at=started_at,
-            total_ms=total_ms,
-            stage_metrics=stage_metrics,
-            contract_error=contract_error,
-            replay_cache_info=replay_cache_info,
-            trace_export=trace_export,
-        )
-        self._runtime_state.note_plan_root(root_path)
-        self._runtime_state.note_durable_stats(
-            payload["observability"]["durable_stats"]
-        )
-        if self._runtime_manager is not None:
-            self._runtime_manager.ensure_shutdown_hooks()
-
+        payload = finalization_result.payload
         return payload
 
     def _build_registry(self) -> StageRegistry:
         registry = StageRegistry()
-        registry.register("memory", lambda ctx: self._run_memory(ctx=ctx))
-        registry.register("index", lambda ctx: self._run_index(ctx=ctx))
-        registry.register("repomap", lambda ctx: self._run_repomap(ctx=ctx))
-        registry.register("augment", lambda ctx: self._run_augment(ctx=ctx))
-        registry.register("skills", lambda ctx: self._run_skills(ctx=ctx))
-        registry.register("source_plan", lambda ctx: self._run_source_plan(ctx=ctx))
-        registry.register("validation", lambda ctx: self._run_validation(ctx=ctx))
+        stage_handlers = {
+            "memory": lambda ctx: self._run_memory(ctx=ctx),
+            "index": lambda ctx: self._run_index(ctx=ctx),
+            "repomap": lambda ctx: self._run_repomap(ctx=ctx),
+            "augment": lambda ctx: self._run_augment(ctx=ctx),
+            "skills": lambda ctx: self._run_skills(ctx=ctx),
+            "source_plan": lambda ctx: self._run_source_plan(ctx=ctx),
+            "validation": lambda ctx: self._run_validation(ctx=ctx),
+        }
+        for descriptor in iter_stage_descriptors():
+            registry.register_descriptor(
+                descriptor.with_handler(stage_handlers[descriptor.name])
+            )
         return registry
 
     def _execute_stage(

@@ -21,6 +21,28 @@ from ace_lite.config_choices import (
     REMOTE_SLOT_POLICY_CHOICES,
     RETRIEVAL_POLICY_CHOICES,
 )
+from ace_lite.config_sections import (
+    ChunkCoreSectionSpec,
+    ChunkGuardSectionSpec,
+    ChunkTopologicalShieldSectionSpec,
+    EmbeddingsSectionSpec,
+    MemoryCaptureSectionSpec,
+    MemoryCoreSectionSpec,
+    MemoryFeedbackSectionSpec,
+    MemoryGateSectionSpec,
+    MemoryNamespaceSectionSpec,
+    MemoryNotesSectionSpec,
+    MemoryPostprocessSectionSpec,
+    MemoryProfileSectionSpec,
+    MemoryTemporalSectionSpec,
+    PlanReplayCacheSectionSpec,
+    PluginsSectionSpec,
+    RepomapSectionSpec,
+    ScipSectionSpec,
+    TestSignalsSectionSpec,
+    TokenizerSectionSpec,
+    TraceSectionSpec,
+)
 from ace_lite.config_model_shared import (
     validate_adaptive_router_mode,
     validate_candidate_ranker,
@@ -45,8 +67,8 @@ from ace_lite.config_value_normalizers import validate_choice_value
 from ace_lite.pydantic_utils import StrictModel as _StrictModel
 from ace_lite.runtime.scheduler import CronSchedule
 
-class TokenizerConfig(_StrictModel):
-    model: str | None = None
+class TokenizerConfig(TokenizerSectionSpec):
+    pass
 
 
 class MemoryCacheConfig(_StrictModel):
@@ -86,9 +108,7 @@ class AdaptiveRouterConfig(_StrictModel):
         )
 
 
-class MemoryNamespaceConfig(_StrictModel):
-    container_tag: str | None = None
-    auto_tag_mode: str | None = None
+class MemoryNamespaceConfig(MemoryNamespaceSectionSpec):
 
     @field_validator("container_tag")
     @classmethod
@@ -107,21 +127,11 @@ class MemoryNamespaceConfig(_StrictModel):
         )
 
 
-class MemoryProfileConfig(_StrictModel):
-    enabled: bool | None = None
-    path: str | None = None
-    top_n: int | None = None
-    token_budget: int | None = None
-    expiry_enabled: bool | None = None
-    ttl_days: int | None = None
-    max_age_days: int | None = None
+class MemoryProfileConfig(MemoryProfileSectionSpec):
+    pass
 
 
-class MemoryTemporalConfig(_StrictModel):
-    enabled: bool | None = None
-    recency_boost_enabled: bool | None = None
-    recency_boost_max: float | None = None
-    timezone_mode: str | None = None
+class MemoryTemporalConfig(MemoryTemporalSectionSpec):
 
     @field_validator("timezone_mode")
     @classmethod
@@ -132,31 +142,15 @@ class MemoryTemporalConfig(_StrictModel):
         )
 
 
-class MemoryFeedbackConfig(_StrictModel):
-    enabled: bool | None = None
-    path: str | None = None
-    max_entries: int | None = None
-    boost_per_select: float | None = None
-    max_boost: float | None = None
-    decay_days: float | None = None
+class MemoryFeedbackConfig(MemoryFeedbackSectionSpec):
+    pass
 
 
-class MemoryCaptureConfig(_StrictModel):
-    enabled: bool | None = None
-    notes_path: str | None = None
-    min_query_length: int | None = None
+class MemoryCaptureConfig(MemoryCaptureSectionSpec):
     keywords: list[str] | None = None
 
 
-class MemoryNotesConfig(_StrictModel):
-    enabled: bool | None = None
-    path: str | None = None
-    limit: int | None = None
-    mode: str | None = None
-    expiry_enabled: bool | None = None
-    ttl_days: int | None = None
-    max_age_days: int | None = None
-
+class MemoryNotesConfig(MemoryNotesSectionSpec):
     @field_validator("mode")
     @classmethod
     def _validate_mode(cls, value: str | None) -> str | None:
@@ -166,9 +160,7 @@ class MemoryNotesConfig(_StrictModel):
         )
 
 
-class MemoryGateConfig(_StrictModel):
-    enabled: bool | None = None
-    mode: str | None = None
+class MemoryGateConfig(MemoryGateSectionSpec):
 
     @field_validator("mode")
     @classmethod
@@ -179,20 +171,11 @@ class MemoryGateConfig(_StrictModel):
         )
 
 
-class MemoryPostprocessConfig(_StrictModel):
-    enabled: bool | None = None
-    noise_filter_enabled: bool | None = None
-    length_norm_anchor_chars: int | None = None
-    time_decay_half_life_days: float | None = None
-    hard_min_score: float | None = None
-    diversity_enabled: bool | None = None
-    diversity_similarity_threshold: float | None = None
+class MemoryPostprocessConfig(MemoryPostprocessSectionSpec):
+    pass
 
 
-class MemoryConfig(_StrictModel):
-    disclosure_mode: str | None = None
-    preview_max_chars: int | None = None
-    strategy: str | None = None
+class MemoryConfig(MemoryCoreSectionSpec):
     cache: MemoryCacheConfig | None = None
     timeline: MemoryTimelineConfig | None = None
     hybrid: MemoryHybridConfig | None = None
@@ -227,14 +210,7 @@ class ChunkSnippetConfig(_StrictModel):
     max_chars: int | None = None
 
 
-class ChunkGuardConfig(_StrictModel):
-    enabled: bool | None = None
-    mode: str | None = None
-    lambda_penalty: float | None = None
-    min_pool: int | None = None
-    max_pool: int | None = None
-    min_marginal_utility: float | None = None
-    compatibility_min_overlap: float | None = None
+class ChunkGuardConfig(ChunkGuardSectionSpec):
 
     @field_validator("mode")
     @classmethod
@@ -245,12 +221,7 @@ class ChunkGuardConfig(_StrictModel):
         )
 
 
-class ChunkTopologicalShieldConfig(_StrictModel):
-    enabled: bool | None = None
-    mode: str | None = None
-    max_attenuation: float | None = None
-    shared_parent_attenuation: float | None = None
-    adjacency_attenuation: float | None = None
+class ChunkTopologicalShieldConfig(ChunkTopologicalShieldSectionSpec):
 
     @field_validator("mode")
     @classmethod
@@ -261,13 +232,8 @@ class ChunkTopologicalShieldConfig(_StrictModel):
         )
 
 
-class ChunkConfig(_StrictModel):
-    top_k: int | None = None
-    per_file_limit: int | None = None
-    disclosure: str | None = None
-    signature: bool | None = None
+class ChunkConfig(ChunkCoreSectionSpec):
     snippet: ChunkSnippetConfig | None = None
-    token_budget: int | None = None
     topological_shield: ChunkTopologicalShieldConfig | None = None
     guard: ChunkGuardConfig | None = None
 
@@ -281,9 +247,7 @@ class SkillsConfig(_StrictModel):
     precomputed_routing_enabled: bool | None = None
 
 
-class PluginsConfig(_StrictModel):
-    enabled: bool | None = None
-    remote_slot_policy_mode: str | None = None
+class PluginsConfig(PluginsSectionSpec):
     remote_slot_allowlist: list[str] | str | None = None
 
     @field_validator("remote_slot_policy_mode", mode="before")
@@ -329,11 +293,7 @@ class SbflConfig(_StrictModel):
         return validate_sbfl_metric(value, field_name="sbfl.metric")
 
 
-class TestsCliConfig(_StrictModel):
-    junit_xml: str | None = None
-    coverage_json: str | None = None
-    sbfl_json: str | None = None
-    sbfl_metric: str | None = None
+class TestsCliConfig(TestSignalsSectionSpec):
     sbfl: SbflConfig | None = None
 
     @field_validator("sbfl_metric")
@@ -342,24 +302,15 @@ class TestsCliConfig(_StrictModel):
         return validate_sbfl_metric(value, field_name="tests.sbfl_metric")
 
 
-class TraceConfig(_StrictModel):
-    export_enabled: bool | None = None
-    export_path: str | None = None
-    otlp_enabled: bool | None = None
-    otlp_endpoint: str | None = None
-    otlp_timeout_seconds: float | None = None
+class TraceConfig(TraceSectionSpec):
+    pass
 
 
-class PlanReplayCacheConfig(_StrictModel):
-    enabled: bool | None = None
-    cache_path: str | None = None
+class PlanReplayCacheConfig(PlanReplayCacheSectionSpec):
+    pass
 
 
-class ScipCliConfig(_StrictModel):
-    enabled: bool | None = None
-    index_path: str | None = None
-    provider: str | None = None
-    generate_fallback: bool | None = None
+class ScipCliConfig(ScipSectionSpec):
 
     @field_validator("provider")
     @classmethod
@@ -367,13 +318,7 @@ class ScipCliConfig(_StrictModel):
         return validate_scip_provider(value, field_name="scip.provider")
 
 
-class RepomapConfig(_StrictModel):
-    enabled: bool | None = None
-    top_k: int | None = None
-    neighbor_limit: int | None = None
-    budget_tokens: int | None = None
-    ranking_profile: str | None = None
-    signal_weights: dict[str, float] | None = None
+class RepomapConfig(RepomapSectionSpec):
 
     @field_validator("ranking_profile")
     @classmethod
@@ -434,17 +379,7 @@ class RetrievalGroupConfig(_StrictModel):
         return resolved
 
 
-class EmbeddingsConfig(_StrictModel):
-    enabled: bool | None = None
-    provider: str | None = None
-    model: str | None = None
-    dimension: int | None = None
-    index_path: str | None = None
-    rerank_pool: int | None = None
-    lexical_weight: float | None = None
-    semantic_weight: float | None = None
-    min_similarity: float | None = None
-    fail_open: bool | None = None
+class EmbeddingsConfig(EmbeddingsSectionSpec):
 
     @field_validator("provider")
     @classmethod

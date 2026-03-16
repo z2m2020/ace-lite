@@ -29,3 +29,14 @@ def test_orchestrator_config_accepts_embedding_section_payload() -> None:
     assert config.embeddings.semantic_weight == 0.35
     assert config.embeddings.min_similarity == 0.05
     assert config.embeddings.fail_open is False
+
+
+def test_orchestrator_config_preserves_unknown_embedding_provider_for_fail_open() -> None:
+    config = OrchestratorConfig(
+        embeddings={
+            "enabled": True,
+            "provider": " unsupported-provider ",
+        }
+    )
+
+    assert config.embeddings.provider == "unsupported-provider"

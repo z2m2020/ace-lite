@@ -1,9 +1,12 @@
 ﻿from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from time import perf_counter
 from typing import Any
+
+
+StageCallable = Callable[["StageContext"], dict[str, Any]]
 
 
 @dataclass(slots=True)
@@ -39,9 +42,11 @@ class StageMetric:
 class StageDescriptor:
     name: str
     contract_enforced: bool = True
+    order: int = 0
+    handler: StageCallable | None = field(default=None, compare=False, repr=False)
 
-
-StageCallable = Callable[[StageContext], dict[str, Any]]
+    def with_handler(self, handler: StageCallable) -> StageDescriptor:
+        return replace(self, handler=handler)
 
 
 def run_stage(stage_name: str, func: StageCallable, ctx: StageContext) -> tuple[dict[str, Any], float]:

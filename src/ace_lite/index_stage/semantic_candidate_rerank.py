@@ -22,6 +22,9 @@ from ace_lite.embeddings import (
     rerank_candidates_with_embeddings,
 )
 
+_EMBEDDING_PROVIDERS = frozenset({"hash", "bge_m3", "ollama", "sentence_transformers"})
+_CROSS_ENCODER_PROVIDERS = frozenset({"hash_cross", "hash_colbert", "bge_reranker"})
+
 
 @dataclass(frozen=True, slots=True)
 class SemanticCandidateRerankResult:
@@ -166,9 +169,24 @@ def apply_semantic_candidate_rerank(
             fallback=False,
             warning="policy_disabled",
         )
+    elif embedding_enabled and runtime_provider not in (
+        _EMBEDDING_PROVIDERS | _CROSS_ENCODER_PROVIDERS
+    ):
+        embeddings_payload = build_embedding_stats(
+            enabled=False,
+            provider=runtime_provider,
+            model=runtime_model,
+            dimension=runtime_dimension,
+            index_path=embedding_index_path,
+            rerank_pool=semantic_rerank_pool,
+            lexical_weight=embedding_lexical_weight,
+            semantic_weight=embedding_semantic_weight,
+            fallback=True,
+            warning=f"unsupported_provider:{runtime_provider}",
+        )
     elif embedding_enabled and files_map and candidates:
         provider_name = runtime_provider
-        if provider_name in {"hash", "bge_m3", "ollama", "sentence_transformers"}:
+        if provider_name in _EMBEDDING_PROVIDERS:
             embedding_provider_impl: EmbeddingProvider
             if provider_name == "hash":
                 embedding_provider_impl = HashEmbeddingProvider(
@@ -220,7 +238,7 @@ def apply_semantic_candidate_rerank(
                     fallback=True,
                     warning=str(exc)[:240],
                 )
-        elif provider_name in {"hash_cross", "hash_colbert", "bge_reranker"}:
+        elif provider_name in _CROSS_ENCODER_PROVIDERS:
             cross_encoder_provider: CrossEncoderProvider
             if provider_name == "hash_cross":
                 cross_encoder_provider = HashCrossEncoderProvider(
@@ -285,19 +303,6 @@ def apply_semantic_candidate_rerank(
                 embeddings_payload["time_budget_exceeded"] = "time_budget_exceeded" in str(
                     exc
                 )
-        else:
-            embeddings_payload = build_embedding_stats(
-                enabled=False,
-                provider=provider_name,
-                model=runtime_model,
-                dimension=runtime_dimension,
-                index_path=embedding_index_path,
-                rerank_pool=semantic_rerank_pool,
-                lexical_weight=embedding_lexical_weight,
-                semantic_weight=embedding_semantic_weight,
-                fallback=True,
-                warning=f"unsupported_provider:{provider_name}",
-            )
     mark_timing("embeddings", timing_started)
 
     embeddings_payload.setdefault("time_budget_ms", semantic_rerank_budget_ms)
