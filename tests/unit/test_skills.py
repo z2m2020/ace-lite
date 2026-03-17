@@ -29,6 +29,18 @@ def _repo_skill_manifest() -> list[dict[str, Any]]:
     return manifest
 
 
+def _select_repo_skill_names(query: str, *, top_n: int = 1) -> list[str]:
+    manifest = _repo_skill_manifest()
+    query_ctx = {
+        "query": query,
+        "intent": infer_intent(query),
+        "module": "",
+        "error_keywords": extract_error_keywords(query),
+    }
+    selected = select_skills(query_ctx, manifest, top_n=top_n)
+    return [str(item["name"]) for item in selected]
+
+
 def test_build_manifest_and_select(fake_skill_manifest: list[dict[str, Any]]) -> None:
     manifest = fake_skill_manifest
     assert len(manifest) == 2
@@ -520,6 +532,8 @@ def test_ace_dev_skill_routes_ace_lite_operations() -> None:
         "Search prior ACE-Lite notes with ace_memory_search and persist a stable rule with ace_memory_store",
         "Build a structural dependency map with ace_repomap_build before changing ace-lite retrieval logic",
         "Capture trace_export artifacts and plan_replay_cache behavior while debugging ace-lite config drift",
+        "Inspect metadata_only_routing, selected_manifest_token_estimate_total, and hydrated_skill_count before changing ace-lite skills routing",
+        "Compare prompt_rendering_boundary_v1, chunk_contract, and subgraph_payload before editing ace-lite source-plan rendering",
     ]
 
     for query in cases:
@@ -548,9 +562,17 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "plan_replay_cache" in ace_dev_text
     assert "--trace-export-path" in ace_dev_text
     assert "--output-json" in ace_dev_text
+    assert "metadata_only_routing" in ace_dev_text
+    assert "selected_manifest_token_estimate_total" in ace_dev_text
+    assert "prompt_rendering_boundary_v1" in ace_dev_text
+    assert "chunk_contract" in ace_dev_text
+    assert "subgraph_payload" in ace_dev_text
+    assert "ace-lite runtime doctor-mcp" in ace_dev_text
     assert "Scenario Templates" in ace_dev_text
     assert "Trace-only diagnosis" in ace_dev_text
     assert "Failed-test triage" in ace_dev_text
+    assert "Skills-routing budget diagnosis" in ace_dev_text
+    assert "Prompt boundary contract check" in ace_dev_text
 
     manifest = _repo_skill_manifest()
     assert "ace-dev-flac-music-android-kotlin" not in {
@@ -595,14 +617,30 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     ).read_text(encoding="utf-8")
     assert "--failed-test-report" in bugfix_text
     assert "--scip-provider" in bugfix_text
+    assert "verify_version_install_sync()" in bugfix_text
+    assert "ace-lite runtime doctor-mcp" in bugfix_text
     assert "Scenario Templates" in bugfix_text
     assert "Timeout or trace incident" in bugfix_text
+    assert "Install-drift or MCP incident" in bugfix_text
 
     intake_text = (
         repo_root / "skills" / "cross-agent-intake-and-scope.md"
     ).read_text(encoding="utf-8")
     assert "Artifact Checklist" in intake_text
     assert "trace_export_path" in intake_text
+    assert "skills_token_budget" in intake_text
+    assert "metadata_only_routing" in intake_text
+    assert "prompt_rendering_boundary_v1" in intake_text
+    assert "verify_version_install_sync()" in intake_text
+
+    handoff_text = (
+        repo_root / "skills" / "cross-agent-handoff-and-context-sync.md"
+    ).read_text(encoding="utf-8")
+    assert "final_query" in handoff_text
+    assert "replay_fingerprint" in handoff_text
+    assert "metadata_only_routing" in handoff_text
+    assert "prompt_rendering_boundary_v1" in handoff_text
+    assert "ace-lite runtime doctor-mcp" in handoff_text
 
     refactor_text = (
         repo_root / "skills" / "cross-agent-refactor-safeguards.md"
@@ -611,6 +649,9 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "validation_result_v1" in refactor_text
     assert "agent_loop_summary_v1" in refactor_text
     assert "doctor-mcp" in refactor_text
+    assert "selected_manifest_token_estimate_total" in refactor_text
+    assert "prompt_rendering_boundary_v1" in refactor_text
+    assert "replay_fingerprint" in refactor_text
 
     mem0_iteration_text = (
         repo_root / "skills" / "mem0-iteration-loop.md"
@@ -733,6 +774,65 @@ def test_cross_agent_intake_routes_config_surface_queries() -> None:
     selected = select_skills(query_ctx, manifest, top_n=1)
     assert selected
     assert selected[0]["name"] == "cross-agent-intake-and-scope"
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_top1"),
+    [
+        (
+            "Prepare handoff with final_query, replay_fingerprint, metadata_only_routing, and prompt_rendering_boundary_v1 snapshot for the next session",
+            "cross-agent-handoff-and-context-sync",
+        ),
+        (
+            "Before coding, scope precomputed_skills_routing_enabled, skills_token_budget, metadata_only_routing, and prompt_rendering_boundary_v1 contract",
+            "cross-agent-intake-and-scope",
+        ),
+        (
+            "\u8303\u56f4\u4e0d\u4e00\u81f4\uff0c\u9700\u8981\u5148\u89c4\u5212\u7ea6\u675f\u548c\u9a8c\u8bc1\u518d\u6539\u4ee3\u7801",
+            "cross-agent-intake-and-scope",
+        ),
+        (
+            "Fix failing test regression after install drift using failed_test_report, verify_version_install_sync(), and ace-lite runtime doctor-mcp before rerunning tests",
+            "cross-agent-bugfix-and-regression",
+        ),
+        (
+            "\u4fee\u590d\u8d85\u65f6\u56de\u5f52\u5e76\u5148\u68c0\u67e5 install drift \u548c doctor-mcp",
+            "cross-agent-bugfix-and-regression",
+        ),
+    ],
+)
+def test_skill_routing_boundary_matrix_top1(query: str, expected_top1: str) -> None:
+    selected = _select_repo_skill_names(query, top_n=1)
+    assert selected
+    assert selected[0] == expected_top1
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_order"),
+    [
+        (
+            "Check install drift with verify_version_install_sync and doctor-mcp for ace-lite after reinstall",
+            ["ace-dev", "cross-agent-refactor-safeguards"],
+        ),
+        (
+            "Fix failing test regression after install drift with failed_test_report and doctor-mcp",
+            ["cross-agent-bugfix-and-regression", "ace-dev"],
+        ),
+        (
+            "Prepare handoff with prompt_rendering_boundary_v1 and replay_fingerprint",
+            ["cross-agent-handoff-and-context-sync", "cross-agent-refactor-safeguards"],
+        ),
+        (
+            "Before coding, scope validation constraints and prompt boundary changes",
+            ["cross-agent-intake-and-scope", "ace-dev"],
+        ),
+    ],
+)
+def test_skill_routing_boundary_matrix_top2(
+    query: str, expected_order: list[str]
+) -> None:
+    selected = _select_repo_skill_names(query, top_n=len(expected_order))
+    assert selected[: len(expected_order)] == expected_order
 
 
 def test_mem0_skills_route_lifecycle_queries() -> None:
