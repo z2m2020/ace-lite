@@ -1963,6 +1963,16 @@ def test_release_freeze_load_matrix_summary_and_render(tmp_path: Path) -> None:
                 "xref_budget_exhausted_ratio": {"count": 0, "rate": 0.0},
             },
         },
+        "decision_observability_summary": {
+            "case_count": 2,
+            "case_with_decisions_count": 1,
+            "case_with_decisions_rate": 0.5,
+            "decision_event_count": 2,
+            "actions": {"retry": 1, "skip": 1},
+            "targets": {"index": 1, "validation": 1},
+            "reasons": {"timeout": 1, "no_evidence": 1},
+            "outcomes": {"recovered": 1},
+        },
         "repos": [
             {
                 "name": "repo-a",
@@ -2040,6 +2050,16 @@ def test_release_freeze_load_matrix_summary_and_render(tmp_path: Path) -> None:
         "noise_rate": 0.0,
         "latency_p95_ms": 0.0,
         "chunk_hit_at_k": 0.0,
+    }
+    assert summary["decision_observability_summary"] == {
+        "case_count": 2,
+        "case_with_decisions_count": 1,
+        "case_with_decisions_rate": 0.5,
+        "decision_event_count": 2,
+        "actions": {"retry": 1, "skip": 1},
+        "targets": {"index": 1, "validation": 1},
+        "reasons": {"timeout": 1, "no_evidence": 1},
+        "outcomes": {"recovered": 1},
     }
     assert summary["memory_metrics_repos"] == [
         {
@@ -2558,6 +2578,56 @@ freeze:
     ]
 
 
+def test_release_freeze_decision_observability_gate_config_and_evaluation(
+    tmp_path: Path,
+) -> None:
+    module = _load_script("run_release_freeze_regression.py")
+    matrix_config = tmp_path / "matrix.yaml"
+    matrix_config.write_text(
+        """
+freeze:
+  decision_observability_gate:
+    mode: report_only
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    resolved = module._resolve_decision_observability_gate_config(
+        matrix_config_path=matrix_config
+    )
+    assert resolved == {
+        "enabled": True,
+        "mode": "report_only",
+        "report_only": True,
+        "enforced": False,
+        "source": "config_mode",
+    }
+
+    failures = module._evaluate_decision_observability_gate(
+        matrix_summary={
+            "decision_observability_summary": {
+                "case_count": 2,
+                "case_with_decisions_count": 3,
+                "case_with_decisions_rate": 1.0,
+                "decision_event_count": 2,
+                "actions": {"retry": 1, "skip": 1},
+                "targets": {"index": 2},
+                "reasons": {"timeout": 1, "no_evidence": 1},
+                "outcomes": {"recovered": 3},
+            }
+        }
+    )
+
+    assert {
+        (failure["metric"], failure["reason"])
+        for failure in failures
+    } == {
+        ("case_with_decisions_count", "count_exceeds_case_count"),
+        ("case_with_decisions_rate", "rate_mismatch"),
+        ("outcomes", "bucket_total_exceeds_event_count"),
+    }
+
+
 def test_release_freeze_markdown_includes_validation_rich_gate() -> None:
     module = _load_script("run_release_freeze_regression.py")
     markdown = module._render_markdown(
@@ -2604,6 +2674,56 @@ def test_release_freeze_markdown_includes_validation_rich_gate() -> None:
     assert "task_success_rate>=0.9000" in markdown
     assert "validation_test_count>=5.0000" in markdown
     assert "precision_at_k: actual=0.35, expected >= 0.4" in markdown
+
+
+def test_release_freeze_markdown_includes_decision_observability_gate() -> None:
+    module = _load_script("run_release_freeze_regression.py")
+    markdown = module._render_markdown(
+        payload={
+            "generated_at": "2026-03-17T00:00:00Z",
+            "passed": True,
+            "elapsed_seconds": 1.23,
+            "root": ".",
+            "steps": [],
+            "decision_observability_gate": {
+                "enabled": True,
+                "passed": False,
+                "mode": "report_only",
+                "report_only": True,
+                "enforced": False,
+                "source": "config_mode",
+                "summary_path": "artifacts/benchmark/matrix/latest/matrix_summary.json",
+                "summary_present": True,
+                "required_scalar_keys": [
+                    "case_count",
+                    "case_with_decisions_count",
+                ],
+                "required_mapping_keys": ["actions", "targets"],
+                "summary": {
+                    "case_count": 2,
+                    "case_with_decisions_count": 1,
+                    "case_with_decisions_rate": 0.5,
+                    "decision_event_count": 2,
+                },
+                "failures": [
+                    {
+                        "metric": "actions",
+                        "actual": 1.0,
+                        "operator": "==",
+                        "expected": 2.0,
+                        "reason": "bucket_total_mismatch",
+                    }
+                ],
+            },
+        }
+    )
+
+    assert "## Decision Observability Gate" in markdown
+    assert "Mode: report_only" in markdown
+    assert "Summary present: True" in markdown
+    assert "Cases with decisions: 1/2 (0.5000)" in markdown
+    assert "Decision events: 2" in markdown
+    assert "actions: actual=1.0, expected == 2.0 (bucket_total_mismatch)" in markdown
 
 
 def test_release_freeze_main_includes_validation_rich_gate(
@@ -2724,6 +2844,94 @@ freeze:
         },
         "failures": [],
     }
+
+
+def test_release_freeze_main_blocks_on_enforced_decision_observability_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_release_freeze_regression.py")
+
+    matrix_config = tmp_path / "matrix.yaml"
+    matrix_config.write_text(
+        """
+freeze:
+  decision_observability_gate:
+    mode: enforced
+""".lstrip(),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "freeze-output"
+
+    def fake_run_step(*, name: str, command: list[str], cwd: Path, logs_dir: Path):
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        stdout_path = logs_dir / f"{name}.stdout.log"
+        stderr_path = logs_dir / f"{name}.stderr.log"
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text("", encoding="utf-8")
+        return module.StepResult(
+            name=name,
+            command=command,
+            returncode=0,
+            elapsed_seconds=0.01,
+            stdout_path=str(stdout_path),
+            stderr_path=str(stderr_path),
+        )
+
+    def fake_load_matrix_summary(*, summary_path: Path):
+        _ = summary_path
+        return {
+            "passed": True,
+            "benchmark_regression_detected": False,
+            "repo_count": 1,
+            "plugin_policy_summary": {
+                "totals": {
+                    "applied": 0,
+                    "conflicts": 0,
+                    "blocked": 0,
+                    "warn": 0,
+                    "remote_applied": 0,
+                }
+            },
+            "decision_observability_summary": {
+                "case_count": 1,
+                "case_with_decisions_count": 0,
+                "case_with_decisions_rate": 0.0,
+                "decision_event_count": 1,
+                "actions": {"retry": 1},
+                "targets": {"index": 1},
+                "reasons": {"timeout": 1},
+                "outcomes": {},
+            },
+        }
+
+    monkeypatch.setattr(module, "_run_step", fake_run_step)
+    monkeypatch.setattr(module, "_load_matrix_summary", fake_load_matrix_summary)
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "run_release_freeze_regression.py",
+            "--matrix-config",
+            str(matrix_config),
+            "--output-dir",
+            str(output_dir),
+            "--skip-skill-validation",
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 1
+
+    payload = json.loads((output_dir / "freeze_regression.json").read_text(encoding="utf-8"))
+    assert payload["passed"] is False
+    assert payload["decision_observability_gate"]["enabled"] is True
+    assert payload["decision_observability_gate"]["mode"] == "enforced"
+    assert payload["decision_observability_gate"]["enforced"] is True
+    assert payload["decision_observability_gate"]["passed"] is False
+    assert {
+        failure["reason"] for failure in payload["decision_observability_gate"]["failures"]
+    } == {"events_without_cases"}
 
 
 def test_release_freeze_main_fails_when_validation_rich_gate_enforced_and_thresholds_fail(

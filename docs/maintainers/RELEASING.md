@@ -101,6 +101,22 @@ raw config:
 - gate mode: `disabled`, `report_only`, or `enforced`
 - gate result: passed / failed, plus rollback reason if `enforced` was reverted
 
+If the release candidate depends on retry/downgrade visibility or any logic that
+changes `decision_trace`, require the same freeze run to carry a
+`decision_observability_gate` section:
+
+```yaml
+freeze:
+  decision_observability_gate:
+    mode: report_only
+```
+
+Required checks for that gate:
+- `summary_present = true`
+- the summary exposes the expected scalar keys (`case_count`, `case_with_decisions_count`, `case_with_decisions_rate`, `decision_event_count`)
+- the summary exposes the expected mapping keys (`actions`, `targets`, `reasons`, `outcomes`)
+- the freeze artifact does not report structural mismatches such as negative bucket totals or rate/count disagreement
+
 If the release candidate depends on more than one dated validation-rich run,
 also build the report-only trend artifact for the same evidence set:
 
@@ -258,6 +274,17 @@ without the skip flag and review these additional artifacts together with the
 normal freeze result:
 
 - `artifacts/release-freeze/latest/skill-validation/skill_validation_matrix.json`
+
+When `freeze.decision_observability_gate.mode` is enabled, also review:
+
+- `decision_observability_gate.summary_present`
+- `decision_observability_gate.required_scalar_keys`
+- `decision_observability_gate.required_mapping_keys`
+- `decision_observability_gate.failures`
+
+Recommended rollout policy:
+- keep `decision_observability_gate.mode: report_only` while a lane is still proving that every benchmark matrix emits the summary consistently
+- only switch to `enforced` once missing/malformed summaries are treated as release blockers for that lane
 - `artifacts/release-freeze/latest/skill-validation/skill_validation_index.json`
 
 When skill validation is enabled, require:

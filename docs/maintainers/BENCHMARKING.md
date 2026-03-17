@@ -66,6 +66,7 @@ Decision observability is also additive and report-only in the current lane:
 - per-case rows carry `decision_trace_count` and `decision_trace`
 - each decision event records `stage`, `action`, `target`, `reason`, and optional `outcome`
 - benchmark summaries aggregate action/target/reason/outcome counts so maintainers can see why retries or downgrades happened before any adaptive feature promotion
+- `scripts/run_release_freeze_regression.py` can now gate on the presence and structural integrity of `decision_observability_summary` without turning any of its counts into hard promotion thresholds
 
 ## Run benchmarks
 
@@ -209,6 +210,25 @@ If an `enforced` rollout proves noisy, revert `freeze.validation_rich_gate.mode`
 to `report_only`, rerun `./scripts/run_full_validation.ps1 -IncludeValidationRichBenchmark`
 or the equivalent freeze command, and record the rollback reason alongside the
 failing metrics.
+
+`decision_observability_gate` mode guidance for the current repo:
+- `disabled`: freeze ignores the summary completely
+- `report_only`: recommended default; freeze records missing or malformed decision-observability summaries without failing the release
+- `enforced`: only use when every release checkpoint in the current lane is already expected to emit a stable `decision_observability_summary`
+
+Example config:
+
+```yaml
+freeze:
+  decision_observability_gate:
+    mode: report_only
+```
+
+This gate is intentionally structural, not threshold-based:
+- it requires the summary to exist
+- it requires scalar keys such as `case_count` and `decision_event_count`
+- it requires mapping keys such as `actions`, `targets`, `reasons`, and `outcomes`
+- it checks basic internal consistency such as count/rate agreement and non-negative bucket totals
 
 Validation-rich dated artifact and trend convention:
 - latest lane output: `artifacts/benchmark/validation_rich/latest`

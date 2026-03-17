@@ -18,6 +18,19 @@ from ace_lite.release_freeze import (
     run_step as _run_step,
 )
 
+_DECISION_OBSERVABILITY_SCALAR_KEYS = (
+    "case_count",
+    "case_with_decisions_count",
+    "case_with_decisions_rate",
+    "decision_event_count",
+)
+_DECISION_OBSERVABILITY_MAPPING_KEYS = (
+    "actions",
+    "targets",
+    "reasons",
+    "outcomes",
+)
+
 
 def _load_matrix_summary(*, summary_path: Path) -> dict[str, Any]:
     if not summary_path.exists() or not summary_path.is_file():
@@ -252,6 +265,12 @@ def _load_matrix_summary(*, summary_path: Path) -> dict[str, Any]:
     slo_budget_summary = (
         slo_budget_summary_raw if isinstance(slo_budget_summary_raw, dict) else {}
     )
+    decision_observability_summary_raw = payload.get("decision_observability_summary")
+    decision_observability_summary = (
+        decision_observability_summary_raw
+        if isinstance(decision_observability_summary_raw, dict)
+        else {}
+    )
 
     return {
         "path": str(summary_path),
@@ -367,6 +386,7 @@ def _load_matrix_summary(*, summary_path: Path) -> dict[str, Any]:
             },
             "repos": plugin_repos,
         },
+        "decision_observability_summary": decision_observability_summary,
         "stage_latency_summary": stage_latency_summary,
         "slo_budget_summary": slo_budget_summary,
     }
@@ -1564,6 +1584,291 @@ def _evaluate_validation_rich_gate(
     return failures
 
 
+def _resolve_decision_observability_gate_config(
+    *, matrix_config_path: Path
+) -> dict[str, Any]:
+    config = _load_yaml_config(path=matrix_config_path)
+    freeze_raw = config.get("freeze")
+    freeze = freeze_raw if isinstance(freeze_raw, dict) else {}
+    gate_raw = freeze.get(
+        "decision_observability_gate",
+        config.get("decision_observability_gate", {}),
+    )
+    gate = gate_raw if isinstance(gate_raw, dict) else {}
+
+    configured_mode_raw = str(gate.get("mode") or "").strip().lower()
+    configured_mode = configured_mode_raw.replace("-", "_")
+    if configured_mode not in {"disabled", "report_only", "enforced"}:
+        configured_mode = ""
+
+    if configured_mode:
+        mode = configured_mode
+        enabled = mode != "disabled"
+        report_only = mode == "report_only"
+        enforced = mode == "enforced"
+        source = "config_mode"
+    else:
+        enabled = bool(gate.get("enabled", False))
+        report_only = False
+        enforced = enabled
+        mode = "enforced" if enabled else "disabled"
+        source = "config_flag" if enabled else "disabled"
+
+    return {
+        "enabled": enabled,
+        "mode": mode,
+        "report_only": report_only,
+        "enforced": enforced,
+        "source": source,
+    }
+
+
+def _evaluate_decision_observability_gate(
+    *,
+    matrix_summary: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if not matrix_summary:
+        return [
+            {
+                "repo": "decision_observability_gate",
+                "metric": "summary",
+                "actual": "missing",
+                "operator": "==",
+                "expected": "present",
+                "reason": "summary_missing",
+            }
+        ]
+
+    summary_raw = matrix_summary.get("decision_observability_summary")
+    if not isinstance(summary_raw, dict) or not summary_raw:
+        return [
+            {
+                "repo": "decision_observability_gate",
+                "metric": "decision_observability_summary",
+                "actual": (
+                    "missing"
+                    if summary_raw is None or summary_raw == {}
+                    else type(summary_raw).__name__
+                ),
+                "operator": "==",
+                "expected": "present",
+                "reason": "summary_missing",
+            }
+        ]
+
+    summary = summary_raw
+    failures: list[dict[str, Any]] = []
+    scalar_values: dict[str, float] = {}
+    bucket_totals: dict[str, float] = {}
+
+    for key in _DECISION_OBSERVABILITY_SCALAR_KEYS:
+        if key not in summary:
+            failures.append(
+                {
+                    "repo": "decision_observability_gate",
+                    "metric": key,
+                    "actual": "missing",
+                    "operator": "==",
+                    "expected": "present",
+                    "reason": "missing_field",
+                }
+            )
+            continue
+        value = summary.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            failures.append(
+                {
+                    "repo": "decision_observability_gate",
+                    "metric": key,
+                    "actual": type(value).__name__,
+                    "operator": "==",
+                    "expected": "number",
+                    "reason": "invalid_type",
+                }
+            )
+            continue
+        numeric_value = float(value)
+        scalar_values[key] = numeric_value
+        if numeric_value < 0.0:
+            failures.append(
+                {
+                    "repo": "decision_observability_gate",
+                    "metric": key,
+                    "actual": numeric_value,
+                    "operator": ">=",
+                    "expected": 0.0,
+                    "reason": "negative_value",
+                }
+            )
+
+    for key in _DECISION_OBSERVABILITY_MAPPING_KEYS:
+        if key not in summary:
+            failures.append(
+                {
+                    "repo": "decision_observability_gate",
+                    "metric": key,
+                    "actual": "missing",
+                    "operator": "==",
+                    "expected": "mapping",
+                    "reason": "missing_field",
+                }
+            )
+            continue
+        counts_raw = summary.get(key)
+        if not isinstance(counts_raw, dict):
+            failures.append(
+                {
+                    "repo": "decision_observability_gate",
+                    "metric": key,
+                    "actual": type(counts_raw).__name__,
+                    "operator": "==",
+                    "expected": "mapping",
+                    "reason": "invalid_type",
+                }
+            )
+            continue
+
+        bucket_total = 0.0
+        for bucket_name, bucket_value in counts_raw.items():
+            if not isinstance(bucket_name, str) or not bucket_name.strip():
+                failures.append(
+                    {
+                        "repo": "decision_observability_gate",
+                        "metric": key,
+                        "actual": repr(bucket_name),
+                        "operator": "==",
+                        "expected": "non_empty_bucket_key",
+                        "reason": "invalid_bucket_key",
+                    }
+                )
+                continue
+            if isinstance(bucket_value, bool) or not isinstance(bucket_value, (int, float)):
+                failures.append(
+                    {
+                        "repo": "decision_observability_gate",
+                        "metric": key,
+                        "bucket": bucket_name,
+                        "actual": type(bucket_value).__name__,
+                        "operator": "==",
+                        "expected": "number",
+                        "reason": "invalid_bucket_count",
+                    }
+                )
+                continue
+            numeric_bucket_value = float(bucket_value)
+            if numeric_bucket_value < 0.0:
+                failures.append(
+                    {
+                        "repo": "decision_observability_gate",
+                        "metric": key,
+                        "bucket": bucket_name,
+                        "actual": numeric_bucket_value,
+                        "operator": ">=",
+                        "expected": 0.0,
+                        "reason": "negative_bucket_count",
+                    }
+                )
+                continue
+            bucket_total += numeric_bucket_value
+        bucket_totals[key] = bucket_total
+
+    case_count = scalar_values.get("case_count")
+    case_with_decisions_count = scalar_values.get("case_with_decisions_count")
+    case_with_decisions_rate = scalar_values.get("case_with_decisions_rate")
+    decision_event_count = scalar_values.get("decision_event_count")
+
+    if (
+        case_count is not None
+        and case_with_decisions_count is not None
+        and case_with_decisions_count > case_count
+    ):
+        failures.append(
+            {
+                "repo": "decision_observability_gate",
+                "metric": "case_with_decisions_count",
+                "actual": case_with_decisions_count,
+                "operator": "<=",
+                "expected": case_count,
+                "reason": "count_exceeds_case_count",
+            }
+        )
+
+    if (
+        case_count is not None
+        and case_with_decisions_count is not None
+        and case_with_decisions_rate is not None
+    ):
+        expected_rate = (
+            float(case_with_decisions_count) / float(case_count)
+            if case_count > 0.0
+            else 0.0
+        )
+        if not 0.0 <= case_with_decisions_rate <= 1.0:
+            failures.append(
+                {
+                    "repo": "decision_observability_gate",
+                    "metric": "case_with_decisions_rate",
+                    "actual": case_with_decisions_rate,
+                    "operator": "within",
+                    "expected": "[0.0, 1.0]",
+                    "reason": "rate_out_of_range",
+                }
+            )
+        elif abs(case_with_decisions_rate - expected_rate) > 1e-6:
+            failures.append(
+                {
+                    "repo": "decision_observability_gate",
+                    "metric": "case_with_decisions_rate",
+                    "actual": case_with_decisions_rate,
+                    "operator": "==",
+                    "expected": expected_rate,
+                    "reason": "rate_mismatch",
+                }
+            )
+
+    if decision_event_count is not None and case_with_decisions_count is not None:
+        if decision_event_count > 0.0 and case_with_decisions_count <= 0.0:
+            failures.append(
+                {
+                    "repo": "decision_observability_gate",
+                    "metric": "decision_event_count",
+                    "actual": decision_event_count,
+                    "operator": "==",
+                    "expected": 0.0,
+                    "reason": "events_without_cases",
+                }
+            )
+        for key in ("actions", "targets", "reasons"):
+            bucket_total = bucket_totals.get(key)
+            if bucket_total is None:
+                continue
+            if abs(bucket_total - decision_event_count) > 1e-6:
+                failures.append(
+                    {
+                        "repo": "decision_observability_gate",
+                        "metric": key,
+                        "actual": bucket_total,
+                        "operator": "==",
+                        "expected": decision_event_count,
+                        "reason": "bucket_total_mismatch",
+                    }
+                )
+        outcomes_total = bucket_totals.get("outcomes")
+        if outcomes_total is not None and outcomes_total > decision_event_count:
+            failures.append(
+                {
+                    "repo": "decision_observability_gate",
+                    "metric": "outcomes",
+                    "actual": outcomes_total,
+                    "operator": "<=",
+                    "expected": decision_event_count,
+                    "reason": "bucket_total_exceeds_event_count",
+                }
+            )
+
+    return failures
+
+
 def _policy_guard_blocks_release(
     *,
     config: dict[str, Any],
@@ -2034,6 +2339,93 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
     validation_rich_gate = (
         validation_rich_gate_raw if isinstance(validation_rich_gate_raw, dict) else {}
     )
+    decision_observability_gate_raw = payload.get("decision_observability_gate")
+    decision_observability_gate = (
+        decision_observability_gate_raw
+        if isinstance(decision_observability_gate_raw, dict)
+        else {}
+    )
+    if bool(decision_observability_gate.get("enabled", False)):
+        lines.append("## Decision Observability Gate")
+        lines.append("")
+        lines.append(
+            f"- Passed: {bool(decision_observability_gate.get('passed', True))}"
+        )
+        lines.append(
+            "- Mode: {mode}".format(
+                mode=str(decision_observability_gate.get("mode", "disabled") or "disabled")
+            )
+        )
+        lines.append(
+            f"- Enforced: {bool(decision_observability_gate.get('enforced', False))}"
+        )
+        source_name = str(decision_observability_gate.get("source", "") or "").strip()
+        if source_name:
+            lines.append(f"- Source: {source_name}")
+        summary_path = str(
+            decision_observability_gate.get("summary_path", "") or ""
+        ).strip()
+        if summary_path:
+            lines.append(f"- Summary: {summary_path}")
+        lines.append(
+            "- Summary present: {present}".format(
+                present=bool(decision_observability_gate.get("summary_present", False))
+            )
+        )
+        required_scalar_keys = decision_observability_gate.get("required_scalar_keys")
+        if isinstance(required_scalar_keys, list) and required_scalar_keys:
+            lines.append(
+                "- Required scalar keys: "
+                + ", ".join(str(item) for item in required_scalar_keys)
+            )
+        required_mapping_keys = decision_observability_gate.get("required_mapping_keys")
+        if isinstance(required_mapping_keys, list) and required_mapping_keys:
+            lines.append(
+                "- Required mapping keys: "
+                + ", ".join(str(item) for item in required_mapping_keys)
+            )
+        summary_raw = decision_observability_gate.get("summary")
+        summary = summary_raw if isinstance(summary_raw, dict) else {}
+        if summary:
+            lines.append(
+                "- Cases with decisions: {count}/{case_count} ({rate:.4f})".format(
+                    count=int(summary.get("case_with_decisions_count", 0) or 0),
+                    case_count=int(summary.get("case_count", 0) or 0),
+                    rate=float(summary.get("case_with_decisions_rate", 0.0) or 0.0),
+                )
+            )
+            lines.append(
+                "- Decision events: {count}".format(
+                    count=int(summary.get("decision_event_count", 0) or 0)
+                )
+            )
+        failures_raw = decision_observability_gate.get("failures")
+        failures = failures_raw if isinstance(failures_raw, list) else []
+        if failures:
+            lines.append("- Failures:")
+            for item in failures:
+                if not isinstance(item, dict):
+                    continue
+                bucket = str(item.get("bucket", "") or "").strip()
+                bucket_suffix = f", bucket={bucket}" if bucket else ""
+                lines.append(
+                    "  - {metric}: actual={actual}, expected {operator} {expected}{bucket}{reason}".format(
+                        metric=str(item.get("metric", "")),
+                        actual=item.get("actual"),
+                        operator=str(item.get("operator", "")),
+                        expected=item.get("expected"),
+                        bucket=bucket_suffix,
+                        reason=(
+                            f" ({str(item.get('reason', '')).strip()})"
+                            if str(item.get("reason", "")).strip()
+                            else ""
+                        ),
+                    )
+                )
+        else:
+            lines.append("- Failures: (none)")
+        lines.append("")
+
     if bool(validation_rich_gate.get("enabled", False)):
         lines.append("## Validation-Rich Gate")
         lines.append("")
@@ -3412,6 +3804,51 @@ def main() -> int:
         },
         "failures": retrieval_policy_guard_failures,
     }
+    decision_observability_gate_config = _resolve_decision_observability_gate_config(
+        matrix_config_path=matrix_config_path,
+    )
+    decision_observability_gate_enabled = bool(
+        decision_observability_gate_config.get("enabled", False)
+    )
+    decision_observability_gate_failures: list[dict[str, Any]] = []
+    if decision_observability_gate_enabled:
+        decision_observability_gate_failures.extend(
+            _evaluate_decision_observability_gate(matrix_summary=matrix_summary)
+        )
+    decision_observability_summary_raw = matrix_summary.get(
+        "decision_observability_summary"
+    )
+    decision_observability_summary = (
+        decision_observability_summary_raw
+        if isinstance(decision_observability_summary_raw, dict)
+        else {}
+    )
+    decision_observability_gate_payload = {
+        "enabled": decision_observability_gate_enabled,
+        "passed": len(decision_observability_gate_failures) == 0,
+        "mode": str(
+            decision_observability_gate_config.get("mode", "disabled") or "disabled"
+        ),
+        "report_only": bool(
+            decision_observability_gate_config.get("report_only", False)
+        ),
+        "enforced": bool(
+            decision_observability_gate_config.get("enforced", False)
+        ),
+        "source": str(
+            decision_observability_gate_config.get("source", "") or "disabled"
+        ),
+        "summary_path": str(matrix_summary.get("path", "") or ""),
+        "summary_present": bool(decision_observability_summary),
+        "required_scalar_keys": list(_DECISION_OBSERVABILITY_SCALAR_KEYS),
+        "required_mapping_keys": list(_DECISION_OBSERVABILITY_MAPPING_KEYS),
+        "summary": (
+            dict(decision_observability_summary)
+            if decision_observability_summary
+            else {}
+        ),
+        "failures": decision_observability_gate_failures,
+    }
 
     tabiv3_gate_failures: list[dict[str, Any]] = []
     if tabiv3_gate_enabled:
@@ -3853,6 +4290,12 @@ def main() -> int:
                 failures=retrieval_policy_guard_failures,
             )
         )
+        and (
+            not _policy_guard_blocks_release(
+                config=decision_observability_gate_config,
+                failures=decision_observability_gate_failures,
+            )
+        )
         and (not e2e_gate_enabled or len(e2e_gate_failures) == 0)
         and (not memory_gate_enabled or len(memory_gate_failures) == 0)
         and (not embedding_gate_enabled or len(embedding_gate_failures) == 0)
@@ -3930,6 +4373,7 @@ def main() -> int:
             ),
             "delta": validation_rich_delta,
         },
+        "decision_observability_gate": decision_observability_gate_payload,
         "validation_rich_gate": validation_rich_gate_payload,
         "external_concept_matrix_summary": external_concept_summary,
         "feature_slices_summary": feature_slices_summary,
@@ -4013,6 +4457,27 @@ def main() -> int:
                 enforced=bool(validation_rich_gate_payload.get("enforced", False)),
                 passed=len(validation_rich_gate_failures) == 0,
                 count=len(validation_rich_gate_failures),
+            )
+        )
+    if decision_observability_gate_enabled:
+        print(
+            "[freeze] decision-observability gate: mode={mode} source={source} enforced={enforced} present={present} passed={passed} failures={count}".format(
+                mode=str(
+                    decision_observability_gate_payload.get("mode", "disabled")
+                    or "disabled"
+                ),
+                source=str(
+                    decision_observability_gate_payload.get("source", "")
+                    or "disabled"
+                ),
+                enforced=bool(
+                    decision_observability_gate_payload.get("enforced", False)
+                ),
+                present=bool(
+                    decision_observability_gate_payload.get("summary_present", False)
+                ),
+                passed=len(decision_observability_gate_failures) == 0,
+                count=len(decision_observability_gate_failures),
             )
         )
 
