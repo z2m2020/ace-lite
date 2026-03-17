@@ -14,6 +14,7 @@ from pydantic import Field, ValidationError, field_validator
 from ace_lite.config_choices import (
     ADAPTIVE_ROUTER_MODE_CHOICES,
     CHUNK_GUARD_MODE_CHOICES,
+    EMBEDDING_PROVIDER_CHOICES,
     MEMORY_AUTO_TAG_MODE_CHOICES,
     MEMORY_GATE_MODE_CHOICES,
     MEMORY_TIMEZONE_MODE_CHOICES,
