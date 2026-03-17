@@ -46,6 +46,22 @@ def test_stage_registry_register_descriptor_preserves_order() -> None:
     assert registry.run("earlier", _stage_ctx())["stage"] == "earlier"
 
 
+def test_stage_registry_register_descriptor_normalizes_name() -> None:
+    registry = StageRegistry(descriptors=())
+    descriptor = StageDescriptor(
+        name=" Skills ",
+        order=4,
+        handler=lambda ctx: {"stage": "skills", "query": ctx.query},
+    )
+
+    registry.register_descriptor(descriptor)
+
+    normalized = registry.get_descriptor("skills")
+    assert normalized is not None
+    assert normalized.name == "skills"
+    assert registry.run(" SKILLS ", _stage_ctx()) == {"stage": "skills", "query": "q"}
+
+
 def test_stage_registry_register_legacy_handler_reuses_core_descriptor() -> None:
     registry = StageRegistry()
 
@@ -75,3 +91,18 @@ def test_stage_registry_register_unknown_stage_appends_with_unenforced_contract(
     assert registry.has_descriptor("custom_stage") is True
     assert registry.has("custom_stage") is True
     assert registry.run("custom_stage", _stage_ctx()) == {"query": "q"}
+
+
+def test_stage_registry_register_unknown_stage_normalizes_name() -> None:
+    registry = StageRegistry(descriptors=())
+    registry.register(" Custom_Stage ", lambda ctx: {"stage": "custom", "query": ctx.query})
+
+    descriptor = registry.get_descriptor("custom_stage")
+    assert descriptor is not None
+    assert descriptor.name == "custom_stage"
+    assert descriptor.order == 0
+    assert descriptor.contract_enforced is False
+    assert registry.run(" custom_stage ", _stage_ctx()) == {
+        "stage": "custom",
+        "query": "q",
+    }

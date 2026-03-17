@@ -1,18 +1,51 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any
 
 from ace_lite.pipeline.types import StageCallable, StageContext, StageDescriptor
 
+
+def _normalize_stage_name(stage: str) -> str:
+    return str(stage or "").strip().lower()
+
+
+def _build_stage_descriptor(
+    stage: str,
+    *,
+    order: int,
+    contract_enforced: bool = True,
+    handler: StageCallable | None = None,
+) -> StageDescriptor:
+    return StageDescriptor(
+        name=_normalize_stage_name(stage),
+        contract_enforced=contract_enforced,
+        order=order,
+        handler=handler,
+    )
+
+
+def _build_dynamic_stage_descriptor(stage: str, *, order: int) -> StageDescriptor:
+    return _build_stage_descriptor(
+        stage,
+        order=order,
+        contract_enforced=False,
+    )
+
+
+def _normalize_descriptor(descriptor: StageDescriptor) -> StageDescriptor:
+    normalized = _normalize_stage_name(descriptor.name)
+    if normalized == descriptor.name:
+        return descriptor
+    return replace(descriptor, name=normalized)
+
 CORE_STAGE_DESCRIPTORS = (
-    StageDescriptor("memory", order=0),
-    StageDescriptor("index", order=1),
-    StageDescriptor("repomap", order=2),
-    StageDescriptor("augment", order=3),
-    StageDescriptor("skills", order=4),
-    StageDescriptor("source_plan", order=5),
-    StageDescriptor("validation", order=6),
+    _build_stage_descriptor("memory", order=0),
+    _build_stage_descriptor("index", order=1),
+    _build_stage_descriptor("repomap", order=2),
+    _build_stage_descriptor("augment", order=3),
+    _build_stage_descriptor("skills", order=4),
+    _build_stage_descriptor("source_plan", order=5),
+    _build_stage_descriptor("validation", order=6),
 )
 CORE_STAGE_DESCRIPTOR_MAP = {
     descriptor.name: descriptor for descriptor in CORE_STAGE_DESCRIPTORS
@@ -41,18 +74,15 @@ class StageRegistry:
         normalized = _normalize_stage_name(stage)
         descriptor = self.get_descriptor(normalized)
         if descriptor is None:
-            descriptor = StageDescriptor(
-                name=normalized,
-                contract_enforced=False,
+            descriptor = _build_dynamic_stage_descriptor(
+                normalized,
                 order=self._next_order(),
             )
         self._stages[normalized] = descriptor.with_handler(handler)
 
     def register_descriptor(self, descriptor: StageDescriptor) -> None:
-        normalized = _normalize_stage_name(descriptor.name)
-        if normalized != descriptor.name:
-            descriptor = replace(descriptor, name=normalized)
-        self._stages[normalized] = descriptor
+        normalized = _normalize_descriptor(descriptor)
+        self._stages[normalized.name] = normalized
 
     def get_descriptor(self, stage: str) -> StageDescriptor | None:
         normalized = _normalize_stage_name(stage)
@@ -83,10 +113,6 @@ class StageRegistry:
         if not self._stages:
             return 0
         return max(descriptor.order for descriptor in self._stages.values()) + 1
-
-
-def _normalize_stage_name(stage: str) -> str:
-    return str(stage or "").strip().lower()
 
 
 __all__ = [
