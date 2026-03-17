@@ -20,6 +20,7 @@ from ace_lite.config_sections import (
     DEFAULT_EMBEDDINGS_INDEX_PATH,
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_PLAN_REPLAY_CACHE_PATH,
+    DEFAULT_SCIP_INDEX_PATH,
     DEFAULT_TOKENIZER_MODEL,
     DEFAULT_TRACE_EXPORT_PATH,
     normalize_clamped_float,
@@ -151,6 +152,14 @@ def resolve_embedding_index_path(
     return str(normalize_default_path(value, default=default))
 
 
+def resolve_scip_index_path(
+    value: Any,
+    *,
+    default: str = DEFAULT_SCIP_INDEX_PATH,
+) -> str:
+    return str(normalize_default_path(value, default=default))
+
+
 def resolve_trace_export_path(
     value: Any,
     *,
@@ -177,6 +186,11 @@ def resolve_trace_otlp_endpoint(value: Any) -> str:
     return str(value or "").strip()
 
 
+def resolve_optional_path(value: Any) -> str | None:
+    normalized = normalize_optional_str(value)
+    return normalized or None
+
+
 def resolve_plan_replay_cache_path(
     value: Any,
     *,
@@ -193,8 +207,10 @@ __all__ = [
     "resolve_memory_auto_tag_mode",
     "resolve_memory_gate_mode",
     "resolve_memory_notes_mode",
+    "resolve_optional_path",
     "resolve_plan_replay_cache_path",
     "resolve_ranking_profile",
+    "resolve_scip_index_path",
     "resolve_scip_provider",
     "resolve_tokenizer_model",
     "resolve_trace_export_path",

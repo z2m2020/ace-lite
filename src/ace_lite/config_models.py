@@ -68,8 +68,10 @@ from ace_lite.shared_plan_runtime_config import (
     resolve_memory_auto_tag_mode,
     resolve_memory_gate_mode,
     resolve_memory_notes_mode,
+    resolve_optional_path,
     resolve_plan_replay_cache_path,
     resolve_ranking_profile,
+    resolve_scip_index_path,
     resolve_scip_provider,
     resolve_tokenizer_model,
     resolve_trace_export_path,
@@ -307,6 +309,11 @@ class SbflConfig(_StrictModel):
 class TestsCliConfig(TestSignalsSectionSpec):
     sbfl: SbflConfig | None = None
 
+    @field_validator("junit_xml", "coverage_json", "sbfl_json", mode="before")
+    @classmethod
+    def _normalize_optional_path(cls, value: Any) -> str | None:
+        return resolve_optional_path(value)
+
     @field_validator("sbfl_metric")
     @classmethod
     def _validate_sbfl_metric(cls, value: str | None) -> str | None:
@@ -340,6 +347,11 @@ class PlanReplayCacheConfig(PlanReplayCacheSectionSpec):
 
 
 class ScipCliConfig(ScipSectionSpec):
+
+    @field_validator("index_path", mode="before")
+    @classmethod
+    def _normalize_index_path(cls, value: Any) -> str:
+        return resolve_scip_index_path(value)
 
     @field_validator("provider", mode="before")
     @classmethod
@@ -778,6 +790,11 @@ class SharedPlanConfig(_StrictModel):
     def _validate_scip_provider(cls, value: Any) -> str | None:
         return resolve_scip_provider(value, field_name="scip_provider")
 
+    @field_validator("scip_index_path", mode="before")
+    @classmethod
+    def _normalize_scip_index_path(cls, value: Any) -> str:
+        return resolve_scip_index_path(value)
+
     @field_validator("embedding_provider", mode="before")
     @classmethod
     def _validate_embedding_provider(cls, value: Any) -> str | None:
@@ -817,6 +834,11 @@ class SharedPlanConfig(_StrictModel):
     @classmethod
     def _normalize_plan_replay_cache_path(cls, value: Any) -> str:
         return resolve_plan_replay_cache_path(value)
+
+    @field_validator("junit_xml", "coverage_json", "sbfl_json", mode="before")
+    @classmethod
+    def _normalize_test_output_paths(cls, value: Any) -> str | None:
+        return resolve_optional_path(value)
 
 
 class BenchmarkThresholdsConfig(_StrictModel):

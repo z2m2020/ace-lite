@@ -12,8 +12,10 @@ from ace_lite.shared_plan_runtime_config import (
     resolve_memory_auto_tag_mode,
     resolve_memory_gate_mode,
     resolve_memory_notes_mode,
+    resolve_optional_path,
     resolve_plan_replay_cache_path,
     resolve_ranking_profile,
+    resolve_scip_index_path,
     resolve_scip_provider,
     resolve_tokenizer_model,
     resolve_trace_export_path,
@@ -62,6 +64,11 @@ def test_shared_plan_runtime_config_helpers_support_validate_and_runtime_modes()
         == "context-map/embeddings/custom-index.json"
     )
     assert resolve_embedding_index_path(" ") == "context-map/embeddings/index.json"
+    assert (
+        resolve_scip_index_path(" context-map/scip/custom-index.json ")
+        == "context-map/scip/custom-index.json"
+    )
+    assert resolve_scip_index_path(" ") == "context-map/scip/index.json"
     assert resolve_tokenizer_model(" gpt-4.1-mini ") == "gpt-4.1-mini"
     assert resolve_tokenizer_model(" ") == "gpt-4o-mini"
     assert (
@@ -73,6 +80,9 @@ def test_shared_plan_runtime_config_helpers_support_validate_and_runtime_modes()
     assert resolve_trace_otlp_endpoint(None) == ""
     assert resolve_trace_otlp_timeout_seconds("0") == 0.1
     assert resolve_trace_otlp_timeout_seconds("bad") == 1.5
+    assert resolve_optional_path(" artifacts/junit.xml ") == "artifacts/junit.xml"
+    assert resolve_optional_path(" ") is None
+    assert resolve_optional_path(None) is None
     assert (
         resolve_plan_replay_cache_path(" custom/plan-replay/cache.json ")
         == "custom/plan-replay/cache.json"
@@ -101,7 +111,10 @@ def test_shared_plan_runtime_config_aligns_cli_and_runtime_memory_sections() -> 
         },
     }
     repomap_payload = {"ranking_profile": "GRAPH"}
-    scip_payload = {"provider": "AUTO"}
+    scip_payload = {
+        "provider": "AUTO",
+        "index_path": " context-map/scip/custom-index.json ",
+    }
     embeddings_payload = {
         "provider": "OLLAMA",
         "model": " hash-v2 ",
@@ -117,6 +130,11 @@ def test_shared_plan_runtime_config_aligns_cli_and_runtime_memory_sections() -> 
         "enabled": True,
         "cache_path": " custom/plan-replay/cache.json ",
     }
+    tests_payload = {
+        "junit_xml": " artifacts/junit.xml ",
+        "coverage_json": " artifacts/coverage.json ",
+        "sbfl_json": " artifacts/sbfl.json ",
+    }
 
     cli_validated = validate_cli_config(
         {
@@ -128,6 +146,7 @@ def test_shared_plan_runtime_config_aligns_cli_and_runtime_memory_sections() -> 
                 "tokenizer": tokenizer_payload,
                 "trace": trace_payload,
                 "plan_replay_cache": plan_replay_cache_payload,
+                "tests": tests_payload,
             }
         }
     )
@@ -139,6 +158,7 @@ def test_shared_plan_runtime_config_aligns_cli_and_runtime_memory_sections() -> 
         tokenizer=tokenizer_payload,
         trace=trace_payload,
         plan_replay_cache=plan_replay_cache_payload,
+        tests=tests_payload,
     )
 
     assert cli_validated["plan"]["memory"]["namespace"]["container_tag"] == "repo/demo"
@@ -147,6 +167,7 @@ def test_shared_plan_runtime_config_aligns_cli_and_runtime_memory_sections() -> 
     assert cli_validated["plan"]["memory"]["notes"]["mode"] == "prefer_local"
     assert cli_validated["plan"]["repomap"]["ranking_profile"] == "graph"
     assert cli_validated["plan"]["scip"]["provider"] == "auto"
+    assert cli_validated["plan"]["scip"]["index_path"] == "context-map/scip/custom-index.json"
     assert cli_validated["plan"]["embeddings"]["provider"] == "ollama"
     assert cli_validated["plan"]["embeddings"]["model"] == "hash-v2"
     assert (
@@ -161,12 +182,16 @@ def test_shared_plan_runtime_config_aligns_cli_and_runtime_memory_sections() -> 
     )
     assert cli_validated["plan"]["trace"]["otlp_timeout_seconds"] == 0.1
     assert cli_validated["plan"]["plan_replay_cache"]["cache_path"] == "custom/plan-replay/cache.json"
+    assert cli_validated["plan"]["tests"]["junit_xml"] == "artifacts/junit.xml"
+    assert cli_validated["plan"]["tests"]["coverage_json"] == "artifacts/coverage.json"
+    assert cli_validated["plan"]["tests"]["sbfl_json"] == "artifacts/sbfl.json"
     assert runtime.memory.namespace.container_tag == "repo/demo"
     assert runtime.memory.namespace.auto_tag_mode == "user"
     assert runtime.memory.gate.mode == "never"
     assert runtime.memory.notes.mode == "prefer_local"
     assert runtime.repomap.ranking_profile == "graph"
     assert runtime.scip.provider == "auto"
+    assert str(runtime.scip.index_path) == "context-map/scip/custom-index.json"
     assert runtime.embeddings.provider == "ollama"
     assert runtime.embeddings.model == "hash-v2"
     assert str(runtime.embeddings.index_path) == "context-map/embeddings/custom-index.json"
@@ -178,6 +203,9 @@ def test_shared_plan_runtime_config_aligns_cli_and_runtime_memory_sections() -> 
         str(runtime.plan_replay_cache.cache_path)
         == "custom/plan-replay/cache.json"
     )
+    assert runtime.tests.junit_xml == "artifacts/junit.xml"
+    assert runtime.tests.coverage_json == "artifacts/coverage.json"
+    assert runtime.tests.sbfl_json == "artifacts/sbfl.json"
 
 
 def test_shared_plan_runtime_config_aligns_flat_cli_aliases_with_runtime_defaults() -> None:
@@ -187,7 +215,11 @@ def test_shared_plan_runtime_config_aligns_flat_cli_aliases_with_runtime_default
                 "embedding_provider": " OLLAMA ",
                 "embedding_model": " ",
                 "embedding_index_path": " ",
+                "scip_index_path": " ",
                 "tokenizer_model": " ",
+                "junit_xml": " ",
+                "coverage_json": " ",
+                "sbfl_json": " ",
                 "trace_export_path": " ",
                 "trace_otlp_endpoint": " ",
                 "trace_otlp_timeout_seconds": "0",
@@ -196,8 +228,10 @@ def test_shared_plan_runtime_config_aligns_flat_cli_aliases_with_runtime_default
         }
     )
     runtime = OrchestratorConfig(
+        scip={"index_path": " "},
         embeddings={"provider": " OLLAMA ", "model": " ", "index_path": " "},
         tokenizer={"model": " "},
+        tests={"junit_xml": " ", "coverage_json": " ", "sbfl_json": " "},
         trace={"export_path": " ", "otlp_endpoint": " ", "otlp_timeout_seconds": "0"},
         plan_replay_cache={"cache_path": " "},
     )
@@ -210,6 +244,11 @@ def test_shared_plan_runtime_config_aligns_flat_cli_aliases_with_runtime_default
     assert cli_validated["plan"]["trace_otlp_endpoint"] == ""
     assert cli_validated["plan"]["trace_otlp_timeout_seconds"] == 0.1
     assert cli_validated["plan"]["plan_replay_cache_path"] == "context-map/plan-replay/cache.json"
+    assert cli_validated["plan"]["scip_index_path"] == "context-map/scip/index.json"
+    assert "junit_xml" not in cli_validated["plan"]
+    assert "coverage_json" not in cli_validated["plan"]
+    assert "sbfl_json" not in cli_validated["plan"]
+    assert str(runtime.scip.index_path) == "context-map/scip/index.json"
     assert runtime.embeddings.provider == "ollama"
     assert runtime.embeddings.model == "hash-v1"
     assert str(runtime.embeddings.index_path) == "context-map/embeddings/index.json"
@@ -218,3 +257,6 @@ def test_shared_plan_runtime_config_aligns_flat_cli_aliases_with_runtime_default
     assert runtime.trace.otlp_endpoint == ""
     assert runtime.trace.otlp_timeout_seconds == 0.1
     assert str(runtime.plan_replay_cache.cache_path) == "context-map/plan-replay/cache.json"
+    assert runtime.tests.junit_xml is None
+    assert runtime.tests.coverage_json is None
+    assert runtime.tests.sbfl_json is None

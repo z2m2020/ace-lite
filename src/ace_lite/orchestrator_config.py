@@ -82,8 +82,10 @@ from ace_lite.shared_plan_runtime_config import (
     resolve_memory_auto_tag_mode,
     resolve_memory_gate_mode,
     resolve_memory_notes_mode,
+    resolve_optional_path,
     resolve_plan_replay_cache_path,
     resolve_ranking_profile,
+    resolve_scip_index_path,
     resolve_scip_provider,
     resolve_tokenizer_model,
     resolve_trace_export_path,
@@ -843,10 +845,7 @@ class TestSignalsConfig(TestSignalsSectionSpec):
     @field_validator("junit_xml", "coverage_json", "sbfl_json", mode="before")
     @classmethod
     def _normalize_optional_path(cls, value: Any) -> str | None:
-        if not isinstance(value, str):
-            return None
-        normalized = value.strip()
-        return normalized or None
+        return resolve_optional_path(value)
 
     @field_validator("sbfl_metric", mode="before")
     @classmethod
@@ -863,6 +862,11 @@ class ScipConfig(ScipSectionSpec):
     index_path: str | Path = DEFAULT_SCIP_INDEX_PATH
     provider: str = "auto"
     generate_fallback: bool = True
+
+    @field_validator("index_path", mode="before")
+    @classmethod
+    def _normalize_index_path(cls, value: Any) -> str:
+        return resolve_scip_index_path(value, default=DEFAULT_SCIP_INDEX_PATH)
 
     @field_validator("provider", mode="before")
     @classmethod
