@@ -53,6 +53,9 @@ class ChunkMetrics:
     dedup_ratio: float = 0.0
     unique_files_in_chunks: int = 0
     unique_symbol_families_in_chunks: int = 0
+    retrieval_context_chunk_count: int = 0
+    retrieval_context_coverage_ratio: float = 0.0
+    retrieval_context_char_count_mean: float = 0.0
     robust_signature_count: int = 0
     robust_signature_coverage_ratio: float = 0.0
     graph_prior_chunk_count: int = 0
@@ -88,6 +91,9 @@ class ChunkMetrics:
             "dedup_ratio": self.dedup_ratio,
             "unique_files_in_chunks": float(self.unique_files_in_chunks),
             "unique_symbol_families_in_chunks": float(self.unique_symbol_families_in_chunks),
+            "retrieval_context_chunk_count": float(self.retrieval_context_chunk_count),
+            "retrieval_context_coverage_ratio": self.retrieval_context_coverage_ratio,
+            "retrieval_context_char_count_mean": self.retrieval_context_char_count_mean,
             "robust_signature_count": float(self.robust_signature_count),
             "robust_signature_coverage_ratio": self.robust_signature_coverage_ratio,
             "graph_prior_chunk_count": float(self.graph_prior_chunk_count),

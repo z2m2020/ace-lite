@@ -145,7 +145,7 @@ def test_build_candidate_chunks_attaches_internal_retrieval_context(
         encoding="utf-8",
     )
 
-    chunks, _ = chunk_builder.build_candidate_chunks(
+    chunks, metrics = chunk_builder.build_candidate_chunks(
         root=str(tmp_path),
         files_map={
             "src/demo.py": {
@@ -212,3 +212,6 @@ def test_build_candidate_chunks_attaches_internal_retrieval_context(
     assert "symbol=src.demo.DemoService.run" in retrieval_context
     assert "parent=class DemoService:" in retrieval_context
     assert "imports=from pkg.auth import validate" in retrieval_context
+    assert metrics["retrieval_context_chunk_count"] == 2.0
+    assert metrics["retrieval_context_coverage_ratio"] == 1.0
+    assert metrics["retrieval_context_char_count_mean"] > 0.0

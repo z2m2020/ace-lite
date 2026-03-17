@@ -27,6 +27,9 @@ def test_evaluate_case_result_and_aggregate() -> None:
                 {"path": "src/token.py", "module": "src.token"},
             ],
             "chunk_metrics": {
+                "retrieval_context_chunk_count": 2.0,
+                "retrieval_context_coverage_ratio": 1.0,
+                "retrieval_context_char_count_mean": 84.0,
                 "robust_signature_count": 1.0,
                 "robust_signature_coverage_ratio": 0.5,
                 "graph_prior_chunk_count": 1.0,
@@ -143,6 +146,9 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert row["embedding_rerank_ratio"] == 0.5
     assert row["embedding_cache_hit"] == 1.0
     assert row["embedding_fallback"] == 0.0
+    assert row["retrieval_context_chunk_count"] == 2.0
+    assert row["retrieval_context_coverage_ratio"] == 1.0
+    assert row["retrieval_context_char_count_mean"] == 84.0
     assert row["skills_selected_count"] == 1.0
     assert row["skills_token_budget"] == 600.0
     assert row["skills_token_budget_used"] == 250.0
@@ -273,6 +279,11 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "unsupported_language_fallback_count": 0,
         "unsupported_language_fallback_ratio": 0.0,
     }
+    assert row["retrieval_context"] == {
+        "chunk_count": 2,
+        "coverage_ratio": 1.0,
+        "char_count_mean": 84.0,
+    }
     assert row["year2_normalized_kpis"] == {
         "skills_token_budget_utilization_ratio": round(250.0 / 600.0, 6),
         "source_plan_chunk_retention_ratio": 0.0,
@@ -309,6 +320,9 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "chunk_hit_at_k",
         "chunks_per_file_mean",
         "chunk_budget_used",
+        "retrieval_context_chunk_count_mean",
+        "retrieval_context_coverage_ratio",
+        "retrieval_context_char_count_mean",
         "chunk_contract_fallback_count_mean",
         "chunk_contract_skeleton_chunk_count_mean",
         "chunk_contract_fallback_ratio",
@@ -406,6 +420,9 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["chunk_contract_skeleton_ratio"] == 0.0
     assert metrics["unsupported_language_fallback_count_mean"] == 0.0
     assert metrics["unsupported_language_fallback_ratio"] == 0.0
+    assert metrics["retrieval_context_chunk_count_mean"] == 2.0
+    assert metrics["retrieval_context_coverage_ratio"] == 1.0
+    assert metrics["retrieval_context_char_count_mean"] == 84.0
     assert metrics["subgraph_payload_enabled_ratio"] == 0.0
     assert metrics["subgraph_seed_path_count_mean"] == 0.0
     assert metrics["subgraph_edge_type_count_mean"] == 0.0

@@ -63,6 +63,17 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     chunk_hits = [float(item.get("chunk_hit_at_k", 0.0)) for item in case_results]
     chunks_per_file = [float(item.get("chunks_per_file_mean", 0.0)) for item in case_results]
     chunk_budget = [float(item.get("chunk_budget_used", 0.0)) for item in case_results]
+    retrieval_context_chunk_counts = [
+        float(item.get("retrieval_context_chunk_count", 0.0)) for item in case_results
+    ]
+    retrieval_context_coverage = [
+        float(item.get("retrieval_context_coverage_ratio", 0.0))
+        for item in case_results
+    ]
+    retrieval_context_char_counts = [
+        float(item.get("retrieval_context_char_count_mean", 0.0))
+        for item in case_results
+    ]
     chunk_contract_fallback_counts = [
         float(item.get("chunk_contract_fallback_count", 0.0))
         for item in case_results
@@ -362,6 +373,9 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "chunk_hit_at_k": mean(chunk_hits),
         "chunks_per_file_mean": mean(chunks_per_file),
         "chunk_budget_used": mean(chunk_budget),
+        "retrieval_context_chunk_count_mean": mean(retrieval_context_chunk_counts),
+        "retrieval_context_coverage_ratio": mean(retrieval_context_coverage),
+        "retrieval_context_char_count_mean": mean(retrieval_context_char_counts),
         "chunk_contract_fallback_count_mean": mean(
             chunk_contract_fallback_counts
         ),

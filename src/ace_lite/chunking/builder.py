@@ -777,6 +777,12 @@ def build_candidate_chunks(
         for item in selected
         if chunk_symbol_family(str(item.get("qualified_name") or ""))
     }
+    retrieval_context_lengths = [
+        len(str(item.get("_retrieval_context") or "").strip())
+        for item in selected
+        if isinstance(item, dict) and str(item.get("_retrieval_context") or "").strip()
+    ]
+    retrieval_context_chunk_count = len(retrieval_context_lengths)
     robust_signature_count = sum(
         1
         for item in selected
@@ -852,6 +858,21 @@ def build_candidate_chunks(
         dedup_ratio=float(dedup_ratio),
         unique_files_in_chunks=len(unique_files),
         unique_symbol_families_in_chunks=len(unique_families),
+        retrieval_context_chunk_count=int(retrieval_context_chunk_count),
+        retrieval_context_coverage_ratio=(
+            float(retrieval_context_chunk_count) / float(selected_count)
+            if selected_count > 0
+            else 0.0
+        ),
+        retrieval_context_char_count_mean=(
+            round(
+                float(sum(retrieval_context_lengths))
+                / float(retrieval_context_chunk_count),
+                6,
+            )
+            if retrieval_context_chunk_count > 0
+            else 0.0
+        ),
         robust_signature_count=int(robust_signature_count),
         robust_signature_coverage_ratio=(
             float(robust_signature_count) / float(selected_count)

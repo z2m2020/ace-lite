@@ -31,6 +31,9 @@ def build_case_evaluation_row(
     chunk_hit_at_k: float,
     chunks_per_file_mean: float,
     chunk_budget_used: float,
+    retrieval_context_chunk_count: int,
+    retrieval_context_coverage_ratio: float,
+    retrieval_context_char_count_mean: float,
     chunk_contract_fallback_count: int,
     chunk_contract_skeleton_chunk_count: int,
     chunk_contract_fallback_ratio: float,
@@ -169,6 +172,9 @@ def build_case_evaluation_row(
         "chunk_hit_at_k": chunk_hit_at_k,
         "chunks_per_file_mean": chunks_per_file_mean,
         "chunk_budget_used": chunk_budget_used,
+        "retrieval_context_chunk_count": float(retrieval_context_chunk_count),
+        "retrieval_context_coverage_ratio": retrieval_context_coverage_ratio,
+        "retrieval_context_char_count_mean": retrieval_context_char_count_mean,
         "chunk_contract_fallback_count": float(chunk_contract_fallback_count),
         "chunk_contract_skeleton_chunk_count": float(
             chunk_contract_skeleton_chunk_count

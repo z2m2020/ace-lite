@@ -197,6 +197,9 @@ def evaluate_case_result(
     xref_budget_exhausted = metrics.xref_budget_exhausted
     chunk_budget_used = metrics.chunk_budget_used
     chunks_per_file_mean = metrics.chunks_per_file_mean
+    retrieval_context_chunk_count = metrics.retrieval_context_chunk_count
+    retrieval_context_coverage_ratio = metrics.retrieval_context_coverage_ratio
+    retrieval_context_char_count_mean = metrics.retrieval_context_char_count_mean
     robust_signature_count = metrics.robust_signature_count
     robust_signature_coverage_ratio = metrics.robust_signature_coverage_ratio
     graph_prior_chunk_count = metrics.graph_prior_chunk_count
@@ -345,6 +348,9 @@ def evaluate_case_result(
         chunk_hit_at_k=chunk_hit_at_k,
         chunks_per_file_mean=chunks_per_file_mean,
         chunk_budget_used=chunk_budget_used,
+        retrieval_context_chunk_count=retrieval_context_chunk_count,
+        retrieval_context_coverage_ratio=retrieval_context_coverage_ratio,
+        retrieval_context_char_count_mean=retrieval_context_char_count_mean,
         chunk_contract_fallback_count=chunk_contract_fallback_count,
         chunk_contract_skeleton_chunk_count=chunk_contract_skeleton_chunk_count,
         chunk_contract_fallback_ratio=chunk_contract_fallback_ratio,
@@ -497,6 +503,9 @@ def evaluate_case_result(
                 augment_latency_ms=augment_latency_ms,
                 skills_latency_ms=skills_latency_ms,
                 source_plan_latency_ms=source_plan_latency_ms,
+                retrieval_context_chunk_count=retrieval_context_chunk_count,
+                retrieval_context_coverage_ratio=retrieval_context_coverage_ratio,
+                retrieval_context_char_count_mean=retrieval_context_char_count_mean,
                 chunk_contract_fallback_count=chunk_contract_fallback_count,
                 chunk_contract_skeleton_chunk_count=chunk_contract_skeleton_chunk_count,
                 chunk_contract_fallback_ratio=chunk_contract_fallback_ratio,

@@ -26,6 +26,9 @@ def build_case_detail_payload(
     augment_latency_ms: float,
     skills_latency_ms: float,
     source_plan_latency_ms: float,
+    retrieval_context_chunk_count: int,
+    retrieval_context_coverage_ratio: float,
+    retrieval_context_char_count_mean: float,
     chunk_contract_fallback_count: int,
     chunk_contract_skeleton_chunk_count: int,
     chunk_contract_fallback_ratio: float,
@@ -126,6 +129,11 @@ def build_case_detail_payload(
             "augment": round(augment_latency_ms, 3),
             "skills": round(skills_latency_ms, 3),
             "source_plan": round(source_plan_latency_ms, 3),
+        },
+        "retrieval_context": {
+            "chunk_count": int(retrieval_context_chunk_count),
+            "coverage_ratio": round(retrieval_context_coverage_ratio, 6),
+            "char_count_mean": round(retrieval_context_char_count_mean, 6),
         },
         "chunk_contract": {
             "fallback_count": chunk_contract_fallback_count,

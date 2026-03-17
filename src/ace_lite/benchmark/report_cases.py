@@ -129,6 +129,14 @@ def _append_case_section(
     lines.append(
         f"- robust_signature_coverage_ratio: {float(case.get('robust_signature_coverage_ratio', 0.0)):.4f}"
     )
+    lines.append(
+        "- retrieval_context_chunk_count: "
+        f"{float(case.get('retrieval_context_chunk_count', 0.0)):.4f}"
+    )
+    lines.append(
+        "- retrieval_context_coverage_ratio: "
+        f"{float(case.get('retrieval_context_coverage_ratio', 0.0)):.4f}"
+    )
     chunk_stage_miss = str(case.get("chunk_stage_miss") or "").strip()
     if chunk_stage_miss:
         lines.append(f"- chunk_stage_miss: {chunk_stage_miss}")
