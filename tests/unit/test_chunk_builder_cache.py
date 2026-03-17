@@ -130,3 +130,85 @@ def test_build_candidate_chunks_reference_hits_cache_miss_on_different_key(
     )
 
     assert calls["count"] == 2
+
+
+def test_build_candidate_chunks_attaches_internal_retrieval_context(
+    tmp_path,
+) -> None:
+    source_dir = tmp_path / "src"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    (source_dir / "demo.py").write_text(
+        "from pkg.auth import validate\n\n"
+        "class DemoService:\n"
+        "    def run(self, token: str) -> bool:\n"
+        "        return validate(token)\n",
+        encoding="utf-8",
+    )
+
+    chunks, _ = chunk_builder.build_candidate_chunks(
+        root=str(tmp_path),
+        files_map={
+            "src/demo.py": {
+                "module": "src.demo",
+                "language": "python",
+                "symbols": [
+                    {
+                        "kind": "class",
+                        "name": "DemoService",
+                        "qualified_name": "src.demo.DemoService",
+                        "lineno": 3,
+                        "end_lineno": 5,
+                    },
+                    {
+                        "kind": "method",
+                        "name": "run",
+                        "qualified_name": "src.demo.DemoService.run",
+                        "lineno": 4,
+                        "end_lineno": 5,
+                    },
+                ],
+                "references": [
+                    {
+                        "name": "validate",
+                        "qualified_name": "pkg.auth.validate",
+                    }
+                ],
+                "imports": [
+                    {
+                        "type": "from",
+                        "module": "pkg.auth",
+                        "name": "validate",
+                    }
+                ],
+            }
+        },
+        candidates=[{"path": "src/demo.py", "score": 3.0}],
+        terms=["run", "token"],
+        top_k_files=1,
+        top_k_chunks=4,
+        per_file_limit=2,
+        token_budget=512,
+        disclosure_mode="refs",
+        snippet_max_lines=4,
+        snippet_max_chars=240,
+        policy={"chunk_weight": 1.0},
+        tokenizer_model="gpt-4o-mini",
+        diversity_enabled=False,
+        diversity_path_penalty=0.0,
+        diversity_symbol_family_penalty=0.0,
+        diversity_kind_penalty=0.0,
+        diversity_locality_penalty=0.0,
+        diversity_locality_window=32,
+    )
+
+    method_chunk = next(
+        item for item in chunks if item["qualified_name"] == "src.demo.DemoService.run"
+    )
+    retrieval_context = str(method_chunk.get("_retrieval_context") or "")
+
+    assert "module=src.demo" in retrieval_context
+    assert "language=python" in retrieval_context
+    assert "kind=method" in retrieval_context
+    assert "symbol=src.demo.DemoService.run" in retrieval_context
+    assert "parent=class DemoService:" in retrieval_context
+    assert "imports=from pkg.auth import validate" in retrieval_context

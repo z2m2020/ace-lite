@@ -174,7 +174,8 @@ def apply_chunk_selection(
                 qualified = str(item.get("qualified_name") or "").strip()
                 signature = str(item.get("signature") or "").strip()[:240]
                 snippet = str(item.get("snippet") or "").strip()[:600]
-                parts = [path, qualified, signature, snippet]
+                retrieval_context = str(item.get("_retrieval_context") or "").strip()[:600]
+                parts = [retrieval_context, path, qualified, signature, snippet]
                 chunk_texts.append("\n".join(part for part in parts if part))
 
         try:

@@ -232,6 +232,61 @@ def _extract_snippet(
     return snippet
 
 
+def _build_retrieval_context(
+    *,
+    path: str,
+    qualified_name: str,
+    kind: str,
+    signature: str,
+    lines: list[str],
+    start_line: int,
+    symbol: dict[str, Any] | None,
+    all_symbols: list[Any] | None,
+    file_entry: dict[str, Any] | None,
+) -> str:
+    context_parts: list[str] = []
+
+    module = str((file_entry or {}).get("module") or "").strip()
+    language = str((file_entry or {}).get("language") or "").strip().lower()
+    if module:
+        context_parts.append(f"module={module}")
+    if language:
+        context_parts.append(f"language={language}")
+    if kind:
+        context_parts.append(f"kind={kind}")
+    if path:
+        context_parts.append(f"path={path}")
+    if qualified_name:
+        context_parts.append(f"symbol={qualified_name}")
+    if signature:
+        context_parts.append(f"signature={signature[:240]}")
+
+    class_sig = _resolve_parent_class_signature(
+        lines=lines,
+        start_line=start_line,
+        symbol=symbol,
+        all_symbols=all_symbols,
+    )
+    if class_sig:
+        context_parts.append(f"parent={class_sig[:240]}")
+
+    imports = (
+        file_entry.get("imports", [])
+        if isinstance(file_entry, dict) and isinstance(file_entry.get("imports"), list)
+        else []
+    )
+    import_values = [
+        rendered for rendered in (_format_import_entry(item) for item in imports) if rendered
+    ]
+    if import_values:
+        joined = ", ".join(import_values[:3])
+        if len(import_values) > 3:
+            joined += ", ..."
+        context_parts.append(f"imports={joined}")
+
+    return "\n".join(context_parts).strip()
+
+
 def estimate_chunk_tokens(
     *,
     path: str,
@@ -333,7 +388,7 @@ def build_candidate_chunks(
     raw_chunk_candidates: list[dict[str, Any]] = []
     policy_chunk_weight = max(0.1, float(policy.get("chunk_weight", 1.0) or 1.0))
     disclosure = normalize_chunk_disclosure(disclosure_mode)
-    needs_source_lines = disclosure in {"signature", "snippet", "skeleton_full"}
+    needs_source_lines = True
     snippet_lines_limit = max(1, int(snippet_max_lines))
     snippet_chars_limit = max(0, int(snippet_max_chars))
 
@@ -406,12 +461,23 @@ def build_candidate_chunks(
                     all_symbols=symbols,
                     file_entry=file_entry,
                 )
+            retrieval_context = _build_retrieval_context(
+                path=path,
+                qualified_name=qualified_name or name,
+                kind=kind,
+                signature=signature,
+                lines=file_lines,
+                start_line=lineno,
+                symbol=symbol,
+                all_symbols=symbols,
+                file_entry=file_entry,
+            )
             score, breakdown = score_chunk_candidate(
-                    path=path,
-                    module=str(file_entry.get("module") or ""),
-                    qualified_name=qualified_name,
-                    name=name,
-                    signature=signature,
+                path=path,
+                module=str(file_entry.get("module") or ""),
+                qualified_name=qualified_name,
+                name=name,
+                signature=signature,
                 terms=terms,
                 file_score=float(file_candidate.get("score") or 0.0),
                 reference_hits=reference_hits,
@@ -436,6 +502,7 @@ def build_candidate_chunks(
                     "references_count": len(references),
                     "signature": signature,
                     "snippet": snippet,
+                    "_retrieval_context": retrieval_context,
                     "_requested_disclosure": disclosure,
                     "_resolved_disclosure": resolved_disclosure,
                     "_disclosure_fallback_reason": fallback_reason,
@@ -545,6 +612,9 @@ def build_candidate_chunks(
         if robust_signature_summary.get("available", False):
             payload["robust_signature_summary"] = robust_signature_summary
             payload["_robust_signature_lite"] = robust_signature
+        retrieval_context = str(item.get("_retrieval_context") or "").strip()
+        if retrieval_context:
+            payload["_retrieval_context"] = retrieval_context
         if is_skeleton_disclosure(resolved_disclosure):
             payload["skeleton"] = build_chunk_skeleton(
                 chunk=item,

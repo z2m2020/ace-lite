@@ -21,6 +21,7 @@ def _build_chunks(**kwargs: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 "qualified_name": "app.handler",
                 "signature": "def handler() -> None",
                 "snippet": "def handler() -> None:\n    pass",
+                "_retrieval_context": "module=src.app\nimports=from src.deps import helper",
                 "robust_signature_summary": {
                     "version": "v1",
                     "available": True,
@@ -362,6 +363,7 @@ def test_apply_chunk_selection_reranks_rows_with_embeddings() -> None:
     def _rerank_rows_embeddings(**kwargs: Any) -> tuple[list[dict[str, Any]], _FakeStats]:
         captured["rerank_pool"] = kwargs["rerank_pool"]
         captured["index_path"] = str(kwargs["index_path"])
+        captured["texts"] = list(kwargs["texts"])
         return list(reversed(kwargs["rows"])), _FakeStats(
             reranked_count=1,
             similarity_mean=0.5,
@@ -427,9 +429,12 @@ def test_apply_chunk_selection_reranks_rows_with_embeddings() -> None:
     assert captured["index_path"].replace("\\", "/").endswith(
         "context-map/embeddings/chunks.index.json"
     )
+    assert "module=src.app" in captured["texts"][0]
+    assert "imports=from src.deps import helper" in captured["texts"][0]
     assert result.chunk_semantic_rerank_payload["reason"] == "ok"
     assert result.chunk_semantic_rerank_payload["reranked_count"] == 1
     assert result.chunk_guard_payload["retained_count"] == 1
+    assert "_retrieval_context" not in result.candidate_chunks[0]
 
 
 def test_apply_chunk_selection_enforce_filters_conflicting_chunks() -> None:
