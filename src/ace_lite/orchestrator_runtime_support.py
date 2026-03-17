@@ -28,10 +28,12 @@ from ace_lite.orchestrator_runtime_source_plan import (
     execute_prepare_source_plan_replay,
     execute_source_plan_stage_with_replay,
 )
+from ace_lite.orchestrator_runtime_support_compat import (
+    build_orchestrator_runtime_support_compat,
+)
 from ace_lite.orchestrator_runtime_support_shared import (
     apply_contract_error_to_payload,
     get_stage_state,
-    resolve_agent_loop_rerun_stages,
     run_stage_sequence,
 )
 from ace_lite.orchestrator_runtime_support_types import (
@@ -53,6 +55,13 @@ from ace_lite.pipeline.registry import StageRegistry
 from ace_lite.pipeline.stage_tags import build_stage_tags
 from ace_lite.pipeline.types import StageContext, StageMetric
 from ace_lite.schema import validate_context_plan
+
+
+_RUNTIME_SUPPORT_COMPAT = build_orchestrator_runtime_support_compat(
+    pre_stage_names=PRE_SOURCE_PLAN_LIFECYCLE.stage_names,
+    source_plan_stage_names=SOURCE_PLAN_LIFECYCLE.stage_names,
+    post_stage_names=POST_SOURCE_PLAN_LIFECYCLE.stage_names,
+)
 
 
 def run_orchestrator_lifecycle(
@@ -287,17 +296,14 @@ def run_post_source_plan_agent_loop(
     )
 
 
-_run_stage_sequence = run_stage_sequence
-_get_stage_state = get_stage_state
-_apply_contract_error_to_payload = apply_contract_error_to_payload
+_run_stage_sequence = _RUNTIME_SUPPORT_COMPAT.run_stage_sequence
+_get_stage_state = _RUNTIME_SUPPORT_COMPAT.get_stage_state
+_apply_contract_error_to_payload = _RUNTIME_SUPPORT_COMPAT.apply_contract_error_to_payload
 
 
 def _resolve_agent_loop_rerun_stages(*, action_type: str) -> list[str]:
-    return resolve_agent_loop_rerun_stages(
-        action_type=action_type,
-        pre_stage_names=PRE_SOURCE_PLAN_LIFECYCLE.stage_names,
-        source_plan_stage_names=SOURCE_PLAN_LIFECYCLE.stage_names,
-        post_stage_names=POST_SOURCE_PLAN_LIFECYCLE.stage_names,
+    return _RUNTIME_SUPPORT_COMPAT.resolve_agent_loop_rerun_stages(
+        action_type=action_type
     )
 
 
