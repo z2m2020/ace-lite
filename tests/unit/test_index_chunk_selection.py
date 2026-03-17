@@ -433,6 +433,13 @@ def test_apply_chunk_selection_reranks_rows_with_embeddings() -> None:
     assert "imports=from src.deps import helper" in captured["texts"][0]
     assert result.chunk_semantic_rerank_payload["reason"] == "ok"
     assert result.chunk_semantic_rerank_payload["reranked_count"] == 1
+    assert result.chunk_semantic_rerank_payload["retrieval_context_chunk_count"] == 1
+    assert result.chunk_semantic_rerank_payload["retrieval_context_coverage_ratio"] == 1.0
+    assert result.chunk_semantic_rerank_payload["retrieval_context_pool_chunk_count"] == 1
+    assert (
+        result.chunk_semantic_rerank_payload["retrieval_context_pool_coverage_ratio"]
+        == 1.0
+    )
     assert result.chunk_guard_payload["retained_count"] == 1
     assert "_retrieval_context" not in result.candidate_chunks[0]
 

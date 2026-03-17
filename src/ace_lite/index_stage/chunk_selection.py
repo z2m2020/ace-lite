@@ -149,7 +149,42 @@ def apply_chunk_selection(
         "warning": "",
         "similarity_mean": 0.0,
         "similarity_max": 0.0,
+        "retrieval_context_chunk_count": 0,
+        "retrieval_context_coverage_ratio": 0.0,
+        "retrieval_context_pool_chunk_count": 0,
+        "retrieval_context_pool_coverage_ratio": 0.0,
     }
+
+    if isinstance(candidate_chunks, list) and candidate_chunks:
+        total_chunk_count = len(candidate_chunks)
+        pool_size = int(chunk_semantic_rerank_payload.get("rerank_pool_effective", 0) or 0)
+        retrieval_context_chunk_count = 0
+        retrieval_context_pool_chunk_count = 0
+        for index, item in enumerate(candidate_chunks):
+            if not isinstance(item, dict):
+                continue
+            retrieval_context = str(item.get("_retrieval_context") or "").strip()
+            if not retrieval_context:
+                continue
+            retrieval_context_chunk_count += 1
+            if index < pool_size:
+                retrieval_context_pool_chunk_count += 1
+        chunk_semantic_rerank_payload["retrieval_context_chunk_count"] = int(
+            retrieval_context_chunk_count
+        )
+        chunk_semantic_rerank_payload["retrieval_context_coverage_ratio"] = (
+            float(retrieval_context_chunk_count) / float(total_chunk_count)
+            if total_chunk_count > 0
+            else 0.0
+        )
+        chunk_semantic_rerank_payload["retrieval_context_pool_chunk_count"] = int(
+            retrieval_context_pool_chunk_count
+        )
+        chunk_semantic_rerank_payload["retrieval_context_pool_coverage_ratio"] = (
+            float(retrieval_context_pool_chunk_count) / float(pool_size)
+            if pool_size > 0
+            else 0.0
+        )
 
     timing_started = perf_counter_fn()
     if not bool(chunk_semantic_rerank_payload.get("enabled", False)):
