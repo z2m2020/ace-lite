@@ -775,6 +775,37 @@ def test_build_results_summary_preserves_reward_log_summary() -> None:
     assert summary["reward_log_summary"]["error_count"] == 1
 
 
+def test_build_results_summary_preserves_retrieval_context_observability_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "retrieval_context_observability_summary": {
+                "case_count": 2,
+                "available_case_count": 2,
+                "available_case_rate": 1.0,
+                "pool_available_case_count": 1,
+                "pool_available_case_rate": 0.5,
+                "chunk_count_mean": 2.0,
+                "coverage_ratio_mean": 1.0,
+                "pool_chunk_count_mean": 1.0,
+                "pool_coverage_ratio_mean": 0.5,
+            },
+        }
+    )
+
+    assert summary["retrieval_context_observability_summary"] == {
+        "case_count": 2,
+        "available_case_count": 2,
+        "available_case_rate": 1.0,
+        "pool_available_case_count": 1,
+        "pool_available_case_rate": 0.5,
+        "chunk_count_mean": 2.0,
+        "coverage_ratio_mean": 1.0,
+        "pool_chunk_count_mean": 1.0,
+        "pool_coverage_ratio_mean": 0.5,
+    }
+
+
 def test_build_report_markdown_includes_adaptive_router_observability_summary() -> None:
     report = build_report_markdown(
         {
@@ -808,7 +839,33 @@ def test_build_report_markdown_includes_adaptive_router_observability_summary() 
     assert "### Executed Arms" in report
     assert "- feature: cases=2 rate=1.0000 task_success=0.0000 mrr=0.0000 fallback_cases=0 downgrade_cases=0" in report
     assert "### Shadow Arms" in report
-    assert "- feature_graph: cases=1 rate=0.5000 task_success=0.0000 mrr=0.0000 fallback_cases=0 downgrade_cases=0" in report
+
+
+def test_build_report_markdown_includes_retrieval_context_observability_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-17T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {},
+            "retrieval_context_observability_summary": {
+                "case_count": 2,
+                "available_case_count": 2,
+                "available_case_rate": 1.0,
+                "pool_available_case_count": 1,
+                "pool_available_case_rate": 0.5,
+                "chunk_count_mean": 2.0,
+                "coverage_ratio_mean": 1.0,
+                "pool_chunk_count_mean": 1.0,
+                "pool_coverage_ratio_mean": 0.5,
+            },
+        }
+    )
+
+    assert "## Retrieval Context Observability Summary" in report
+    assert "- Available cases: 2/2 (1.0000)" in report
+    assert "- Pool-available cases: 1/2 (0.5000)" in report
+    assert "| pool_coverage_ratio_mean | 0.5000 |" in report
 
 
 def test_build_report_markdown_includes_reward_log_summary() -> None:

@@ -88,6 +88,8 @@ class CaseEvaluationMetrics:
     retrieval_context_chunk_count: int
     retrieval_context_coverage_ratio: float
     retrieval_context_char_count_mean: float
+    retrieval_context_pool_chunk_count: int
+    retrieval_context_pool_coverage_ratio: float
     chunk_contract_fallback_count: int
     chunk_contract_skeleton_chunk_count: int
     chunk_contract_fallback_ratio: float
@@ -491,6 +493,16 @@ def build_case_evaluation_metrics(
     )
     retrieval_context_char_count_mean = float(
         chunk_metrics.get("retrieval_context_char_count_mean", 0.0) or 0.0
+    )
+    retrieval_context_pool_chunk_count = max(
+        0,
+        int(
+            chunk_semantic_payload.get("retrieval_context_pool_chunk_count", 0.0) or 0
+        ),
+    )
+    retrieval_context_pool_coverage_ratio = float(
+        chunk_semantic_payload.get("retrieval_context_pool_coverage_ratio", 0.0)
+        or 0.0
     )
     robust_signature_count = max(
         0,
@@ -989,6 +1001,8 @@ def build_case_evaluation_metrics(
         retrieval_context_chunk_count=retrieval_context_chunk_count,
         retrieval_context_coverage_ratio=retrieval_context_coverage_ratio,
         retrieval_context_char_count_mean=retrieval_context_char_count_mean,
+        retrieval_context_pool_chunk_count=retrieval_context_pool_chunk_count,
+        retrieval_context_pool_coverage_ratio=retrieval_context_pool_coverage_ratio,
         chunk_contract_fallback_count=chunk_contract_fallback_count,
         chunk_contract_skeleton_chunk_count=chunk_contract_skeleton_chunk_count,
         chunk_contract_fallback_ratio=chunk_contract_fallback_ratio,

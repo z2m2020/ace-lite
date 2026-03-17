@@ -971,6 +971,59 @@ def test_benchmark_runner_aggregates_decision_observability_summary() -> None:
     }
 
 
+class _RetrievalContextStubOrchestrator(_StubOrchestrator):
+    def plan(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        _ = (query, repo, root, time_range, start_date, end_date)
+        return {
+            "index": {
+                "candidate_files": [{"path": "src/app.py", "module": "src.app"}],
+                "chunk_metrics": {
+                    "retrieval_context_chunk_count": 2.0,
+                    "retrieval_context_coverage_ratio": 1.0,
+                    "retrieval_context_char_count_mean": 84.0,
+                },
+                "chunk_semantic_rerank": {
+                    "reason": "ok",
+                    "retrieval_context_pool_chunk_count": 1.0,
+                    "retrieval_context_pool_coverage_ratio": 0.5,
+                },
+            },
+            "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
+            "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+        }
+
+
+def test_benchmark_runner_aggregates_retrieval_context_observability_summary() -> None:
+    orchestrator = _RetrievalContextStubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "find app", "expected_keys": ["app"], "top_k": 4},
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    assert results["retrieval_context_observability_summary"] == {
+        "case_count": 1,
+        "available_case_count": 1,
+        "available_case_rate": 1.0,
+        "pool_available_case_count": 1,
+        "pool_available_case_rate": 1.0,
+        "chunk_count_mean": 2.0,
+        "coverage_ratio_mean": 1.0,
+        "pool_chunk_count_mean": 1.0,
+        "pool_coverage_ratio_mean": 0.5,
+    }
+
+
 class _DecisionSkipStubOrchestrator(_StubOrchestrator):
     def plan(
         self,

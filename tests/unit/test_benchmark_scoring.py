@@ -26,6 +26,11 @@ def test_evaluate_case_result_and_aggregate() -> None:
                 {"path": "src/auth.py", "module": "src.auth"},
                 {"path": "src/token.py", "module": "src.token"},
             ],
+            "chunk_semantic_rerank": {
+                "reason": "ok",
+                "retrieval_context_pool_chunk_count": 1.0,
+                "retrieval_context_pool_coverage_ratio": 0.5,
+            },
             "chunk_metrics": {
                 "retrieval_context_chunk_count": 2.0,
                 "retrieval_context_coverage_ratio": 1.0,
@@ -149,6 +154,8 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert row["retrieval_context_chunk_count"] == 2.0
     assert row["retrieval_context_coverage_ratio"] == 1.0
     assert row["retrieval_context_char_count_mean"] == 84.0
+    assert row["retrieval_context_pool_chunk_count"] == 1.0
+    assert row["retrieval_context_pool_coverage_ratio"] == 0.5
     assert row["skills_selected_count"] == 1.0
     assert row["skills_token_budget"] == 600.0
     assert row["skills_token_budget_used"] == 250.0

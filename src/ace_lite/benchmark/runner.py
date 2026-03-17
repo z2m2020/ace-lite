@@ -17,6 +17,7 @@ from ace_lite.benchmark.scoring import (
     build_chunk_stage_miss_summary,
     build_decision_observability_summary,
     build_evidence_insufficiency_summary,
+    build_retrieval_context_observability_summary,
     build_slo_budget_summary,
     build_stage_latency_summary,
     compare_metrics,
@@ -553,6 +554,9 @@ class BenchmarkRunner:
             "comparison_lane_summary": build_comparison_lane_summary(case_results),
             "evidence_insufficiency_summary": build_evidence_insufficiency_summary(
                 case_results
+            ),
+            "retrieval_context_observability_summary": (
+                build_retrieval_context_observability_summary(case_results)
             ),
             "chunk_stage_miss_summary": build_chunk_stage_miss_summary(case_results),
             "cases": case_results,

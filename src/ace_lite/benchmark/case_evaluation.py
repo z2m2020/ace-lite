@@ -200,6 +200,10 @@ def evaluate_case_result(
     retrieval_context_chunk_count = metrics.retrieval_context_chunk_count
     retrieval_context_coverage_ratio = metrics.retrieval_context_coverage_ratio
     retrieval_context_char_count_mean = metrics.retrieval_context_char_count_mean
+    retrieval_context_pool_chunk_count = metrics.retrieval_context_pool_chunk_count
+    retrieval_context_pool_coverage_ratio = (
+        metrics.retrieval_context_pool_coverage_ratio
+    )
     robust_signature_count = metrics.robust_signature_count
     robust_signature_coverage_ratio = metrics.robust_signature_coverage_ratio
     graph_prior_chunk_count = metrics.graph_prior_chunk_count
@@ -351,6 +355,8 @@ def evaluate_case_result(
         retrieval_context_chunk_count=retrieval_context_chunk_count,
         retrieval_context_coverage_ratio=retrieval_context_coverage_ratio,
         retrieval_context_char_count_mean=retrieval_context_char_count_mean,
+        retrieval_context_pool_chunk_count=retrieval_context_pool_chunk_count,
+        retrieval_context_pool_coverage_ratio=retrieval_context_pool_coverage_ratio,
         chunk_contract_fallback_count=chunk_contract_fallback_count,
         chunk_contract_skeleton_chunk_count=chunk_contract_skeleton_chunk_count,
         chunk_contract_fallback_ratio=chunk_contract_fallback_ratio,

@@ -294,6 +294,56 @@ def _append_evidence_insufficiency_summary(
         lines.append("")
 
 
+def _append_retrieval_context_observability_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("retrieval_context_observability_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    lines.append("## Retrieval Context Observability Summary")
+    lines.append("")
+    lines.append(
+        "- Available cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("available_case_count", 0) or 0),
+            total=int(summary.get("case_count", 0) or 0),
+            rate=float(summary.get("available_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Pool-available cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("pool_available_case_count", 0) or 0),
+            total=int(summary.get("case_count", 0) or 0),
+            rate=float(summary.get("pool_available_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("| --- | ---: |")
+    lines.append(
+        "| chunk_count_mean | {value:.4f} |".format(
+            value=float(summary.get("chunk_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| coverage_ratio_mean | {value:.4f} |".format(
+            value=float(summary.get("coverage_ratio_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| pool_chunk_count_mean | {value:.4f} |".format(
+            value=float(summary.get("pool_chunk_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| pool_coverage_ratio_mean | {value:.4f} |".format(
+            value=float(summary.get("pool_coverage_ratio_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append("")
+
+
 def _append_adaptive_router_observability_summary(
     lines: list[str],
     results: dict[str, Any],
@@ -846,6 +896,7 @@ def build_report_markdown(results: dict[str, Any]) -> str:
 
     _append_comparison_lane_summary(lines, results)
     _append_evidence_insufficiency_summary(lines, results)
+    _append_retrieval_context_observability_summary(lines, results)
     _append_chunk_stage_miss_summary(lines, results)
     _append_decision_observability_summary(lines, results)
     _append_stage_latency_summary(lines, results)

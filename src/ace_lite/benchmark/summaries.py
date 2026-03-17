@@ -16,6 +16,7 @@ from ace_lite.benchmark.summary_quality import (
     build_comparison_lane_summary as _build_comparison_lane_summary_impl,
     build_decision_observability_summary as _build_decision_observability_summary_impl,
     build_evidence_insufficiency_summary as _build_evidence_insufficiency_summary_impl,
+    build_retrieval_context_observability_summary as _build_retrieval_context_observability_summary_impl,
     build_slo_budget_summary as _build_slo_budget_summary_impl,
     build_stage_latency_summary as _build_stage_latency_summary_impl,
 )
@@ -529,6 +530,12 @@ def build_decision_observability_summary(
     return _build_decision_observability_summary_impl(case_results)
 
 
+def build_retrieval_context_observability_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return _build_retrieval_context_observability_summary_impl(case_results)
+
+
 def build_adaptive_router_arm_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -567,6 +574,7 @@ __all__ = [
     "build_chunk_stage_miss_summary",
     "build_decision_observability_summary",
     "build_evidence_insufficiency_summary",
+    "build_retrieval_context_observability_summary",
     "build_slo_budget_summary",
     "build_stage_latency_summary",
     "compare_metrics",

@@ -179,6 +179,73 @@ def build_decision_observability_summary(
     }
 
 
+def build_retrieval_context_observability_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {
+            "case_count": 0,
+            "available_case_count": 0,
+            "available_case_rate": 0.0,
+            "pool_available_case_count": 0,
+            "pool_available_case_rate": 0.0,
+            "chunk_count_mean": 0.0,
+            "coverage_ratio_mean": 0.0,
+            "pool_chunk_count_mean": 0.0,
+            "pool_coverage_ratio_mean": 0.0,
+        }
+
+    available_case_count = 0
+    pool_available_case_count = 0
+    chunk_counts: list[float] = []
+    coverage_ratios: list[float] = []
+    pool_chunk_counts: list[float] = []
+    pool_coverage_ratios: list[float] = []
+
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        chunk_count = float(item.get("retrieval_context_chunk_count", 0.0) or 0.0)
+        coverage_ratio = float(
+            item.get("retrieval_context_coverage_ratio", 0.0) or 0.0
+        )
+        pool_chunk_count = float(
+            item.get("retrieval_context_pool_chunk_count", 0.0) or 0.0
+        )
+        pool_coverage_ratio = float(
+            item.get("retrieval_context_pool_coverage_ratio", 0.0) or 0.0
+        )
+        if chunk_count > 0.0:
+            available_case_count += 1
+        if pool_chunk_count > 0.0:
+            pool_available_case_count += 1
+        chunk_counts.append(chunk_count)
+        coverage_ratios.append(coverage_ratio)
+        pool_chunk_counts.append(pool_chunk_count)
+        pool_coverage_ratios.append(pool_coverage_ratio)
+
+    return {
+        "case_count": case_count,
+        "available_case_count": available_case_count,
+        "available_case_rate": (
+            float(available_case_count) / float(case_count) if case_count > 0 else 0.0
+        ),
+        "pool_available_case_count": pool_available_case_count,
+        "pool_available_case_rate": (
+            float(pool_available_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
+        "chunk_count_mean": mean(chunk_counts) if chunk_counts else 0.0,
+        "coverage_ratio_mean": mean(coverage_ratios) if coverage_ratios else 0.0,
+        "pool_chunk_count_mean": mean(pool_chunk_counts) if pool_chunk_counts else 0.0,
+        "pool_coverage_ratio_mean": (
+            mean(pool_coverage_ratios) if pool_coverage_ratios else 0.0
+        ),
+    }
+
+
 def build_comparison_lane_summary(case_results: list[dict[str, Any]]) -> dict[str, Any]:
     total_case_count = len(case_results)
     if total_case_count <= 0:
