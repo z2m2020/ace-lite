@@ -14,7 +14,6 @@ from pydantic import Field, ValidationError, field_validator
 from ace_lite.config_choices import (
     ADAPTIVE_ROUTER_MODE_CHOICES,
     CHUNK_GUARD_MODE_CHOICES,
-    EMBEDDING_PROVIDER_CHOICES,
     MEMORY_AUTO_TAG_MODE_CHOICES,
     MEMORY_GATE_MODE_CHOICES,
     MEMORY_TIMEZONE_MODE_CHOICES,
@@ -48,27 +47,41 @@ from ace_lite.config_model_shared import (
     validate_candidate_ranker,
     validate_chunk_guard_mode,
     validate_chunk_disclosure,
-    validate_embedding_provider,
     validate_hybrid_fusion_mode,
-    validate_memory_auto_tag_mode,
     validate_memory_disclosure_mode,
-    validate_memory_gate_mode,
-    validate_memory_notes_mode,
     validate_memory_strategy,
     validate_memory_timezone_mode,
     validate_remote_slot_policy_mode,
-    validate_ranking_profile,
     validate_retrieval_policy,
     validate_sbfl_metric,
-    validate_scip_provider,
     validate_topological_shield_mode,
 )
 from ace_lite.config_value_normalizers import validate_choice_value
 from ace_lite.pydantic_utils import StrictModel as _StrictModel
 from ace_lite.runtime.scheduler import CronSchedule
+from ace_lite.shared_plan_runtime_config import (
+    normalize_container_tag,
+    resolve_embedding_index_path,
+    resolve_embedding_model,
+    resolve_embedding_provider,
+    resolve_memory_auto_tag_mode,
+    resolve_memory_gate_mode,
+    resolve_memory_notes_mode,
+    resolve_plan_replay_cache_path,
+    resolve_ranking_profile,
+    resolve_scip_provider,
+    resolve_tokenizer_model,
+    resolve_trace_export_path,
+    resolve_trace_otlp_endpoint,
+    resolve_trace_otlp_timeout_seconds,
+)
 
 class TokenizerConfig(TokenizerSectionSpec):
-    pass
+
+    @field_validator("model", mode="before")
+    @classmethod
+    def _normalize_model(cls, value: Any) -> str:
+        return resolve_tokenizer_model(value)
 
 
 class MemoryCacheConfig(_StrictModel):
@@ -110,18 +123,15 @@ class AdaptiveRouterConfig(_StrictModel):
 
 class MemoryNamespaceConfig(MemoryNamespaceSectionSpec):
 
-    @field_validator("container_tag")
+    @field_validator("container_tag", mode="before")
     @classmethod
-    def _normalize_container_tag(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        normalized = str(value).strip()
-        return normalized or None
+    def _normalize_container_tag(cls, value: Any) -> str | None:
+        return normalize_container_tag(value)
 
-    @field_validator("auto_tag_mode")
+    @field_validator("auto_tag_mode", mode="before")
     @classmethod
-    def _validate_auto_tag_mode(cls, value: str | None) -> str | None:
-        return validate_memory_auto_tag_mode(
+    def _validate_auto_tag_mode(cls, value: Any) -> str | None:
+        return resolve_memory_auto_tag_mode(
             value,
             field_name="memory.namespace.auto_tag_mode",
         )
@@ -151,10 +161,10 @@ class MemoryCaptureConfig(MemoryCaptureSectionSpec):
 
 
 class MemoryNotesConfig(MemoryNotesSectionSpec):
-    @field_validator("mode")
+    @field_validator("mode", mode="before")
     @classmethod
-    def _validate_mode(cls, value: str | None) -> str | None:
-        return validate_memory_notes_mode(
+    def _validate_mode(cls, value: Any) -> str | None:
+        return resolve_memory_notes_mode(
             value,
             field_name="memory.notes.mode",
         )
@@ -162,10 +172,10 @@ class MemoryNotesConfig(MemoryNotesSectionSpec):
 
 class MemoryGateConfig(MemoryGateSectionSpec):
 
-    @field_validator("mode")
+    @field_validator("mode", mode="before")
     @classmethod
-    def _validate_mode(cls, value: str | None) -> str | None:
-        return validate_memory_gate_mode(
+    def _validate_mode(cls, value: Any) -> str | None:
+        return resolve_memory_gate_mode(
             value,
             field_name="memory.gate.mode",
         )
@@ -303,27 +313,48 @@ class TestsCliConfig(TestSignalsSectionSpec):
 
 
 class TraceConfig(TraceSectionSpec):
-    pass
+
+    @field_validator("otlp_endpoint", mode="before")
+    @classmethod
+    def _normalize_otlp_endpoint(cls, value: Any) -> str:
+        return resolve_trace_otlp_endpoint(value)
+
+    @field_validator("export_path", mode="before")
+    @classmethod
+    def _normalize_export_path(cls, value: Any) -> str:
+        return resolve_trace_export_path(value)
+
+    @field_validator("otlp_timeout_seconds", mode="before")
+    @classmethod
+    def _normalize_otlp_timeout_seconds(cls, value: Any) -> float:
+        return resolve_trace_otlp_timeout_seconds(value)
 
 
 class PlanReplayCacheConfig(PlanReplayCacheSectionSpec):
-    pass
+
+    @field_validator("cache_path", mode="before")
+    @classmethod
+    def _normalize_cache_path(cls, value: Any) -> str:
+        return resolve_plan_replay_cache_path(value)
 
 
 class ScipCliConfig(ScipSectionSpec):
 
-    @field_validator("provider")
+    @field_validator("provider", mode="before")
     @classmethod
-    def _validate_provider(cls, value: str | None) -> str | None:
-        return validate_scip_provider(value, field_name="scip.provider")
+    def _validate_provider(cls, value: Any) -> str | None:
+        return resolve_scip_provider(value, field_name="scip.provider")
 
 
 class RepomapConfig(RepomapSectionSpec):
 
-    @field_validator("ranking_profile")
+    @field_validator("ranking_profile", mode="before")
     @classmethod
-    def _validate_ranking_profile(cls, value: str | None) -> str | None:
-        return validate_ranking_profile(value, field_name="repomap.ranking_profile")
+    def _validate_ranking_profile(cls, value: Any) -> str | None:
+        return resolve_ranking_profile(
+            value,
+            field_name="repomap.ranking_profile",
+        )
 
 
 class LspConfig(_StrictModel):
@@ -381,10 +412,23 @@ class RetrievalGroupConfig(_StrictModel):
 
 class EmbeddingsConfig(EmbeddingsSectionSpec):
 
-    @field_validator("provider")
+    @field_validator("provider", mode="before")
     @classmethod
-    def _validate_provider(cls, value: str | None) -> str | None:
-        return validate_embedding_provider(value, field_name="embeddings.provider")
+    def _validate_provider(cls, value: Any) -> str | None:
+        return resolve_embedding_provider(
+            value,
+            field_name="embeddings.provider",
+        )
+
+    @field_validator("model", mode="before")
+    @classmethod
+    def _normalize_model(cls, value: Any) -> str:
+        return resolve_embedding_model(value)
+
+    @field_validator("index_path", mode="before")
+    @classmethod
+    def _normalize_index_path(cls, value: Any) -> str:
+        return resolve_embedding_index_path(value)
 
 
 class TeamSyncConfig(_StrictModel):
@@ -673,10 +717,10 @@ class SharedPlanConfig(_StrictModel):
             field_name="remote_slot_policy_mode",
         )
 
-    @field_validator("repomap_ranking_profile")
+    @field_validator("repomap_ranking_profile", mode="before")
     @classmethod
-    def _validate_repomap_ranking_profile(cls, value: str | None) -> str | None:
-        return validate_ranking_profile(
+    def _validate_repomap_ranking_profile(cls, value: Any) -> str | None:
+        return resolve_ranking_profile(
             value,
             field_name="repomap_ranking_profile",
         )
@@ -728,15 +772,50 @@ class SharedPlanConfig(_StrictModel):
     def _validate_sbfl_metric(cls, value: str | None) -> str | None:
         return validate_sbfl_metric(value, field_name="sbfl_metric")
 
-    @field_validator("scip_provider")
+    @field_validator("scip_provider", mode="before")
     @classmethod
-    def _validate_scip_provider(cls, value: str | None) -> str | None:
-        return validate_scip_provider(value, field_name="scip_provider")
+    def _validate_scip_provider(cls, value: Any) -> str | None:
+        return resolve_scip_provider(value, field_name="scip_provider")
 
-    @field_validator("embedding_provider")
+    @field_validator("embedding_provider", mode="before")
     @classmethod
-    def _validate_embedding_provider(cls, value: str | None) -> str | None:
-        return validate_embedding_provider(value, field_name="embedding_provider")
+    def _validate_embedding_provider(cls, value: Any) -> str | None:
+        return resolve_embedding_provider(value, field_name="embedding_provider")
+
+    @field_validator("embedding_model", mode="before")
+    @classmethod
+    def _normalize_embedding_model(cls, value: Any) -> str:
+        return resolve_embedding_model(value)
+
+    @field_validator("embedding_index_path", mode="before")
+    @classmethod
+    def _normalize_embedding_index_path(cls, value: Any) -> str:
+        return resolve_embedding_index_path(value)
+
+    @field_validator("tokenizer_model", mode="before")
+    @classmethod
+    def _normalize_tokenizer_model(cls, value: Any) -> str:
+        return resolve_tokenizer_model(value)
+
+    @field_validator("trace_export_path", mode="before")
+    @classmethod
+    def _normalize_trace_export_path(cls, value: Any) -> str:
+        return resolve_trace_export_path(value)
+
+    @field_validator("trace_otlp_endpoint", mode="before")
+    @classmethod
+    def _normalize_trace_otlp_endpoint(cls, value: Any) -> str:
+        return resolve_trace_otlp_endpoint(value)
+
+    @field_validator("trace_otlp_timeout_seconds", mode="before")
+    @classmethod
+    def _normalize_trace_otlp_timeout_seconds(cls, value: Any) -> float:
+        return resolve_trace_otlp_timeout_seconds(value)
+
+    @field_validator("plan_replay_cache_path", mode="before")
+    @classmethod
+    def _normalize_plan_replay_cache_path(cls, value: Any) -> str:
+        return resolve_plan_replay_cache_path(value)
 
 
 class BenchmarkThresholdsConfig(_StrictModel):
@@ -777,10 +856,13 @@ class RepoMapConfig(_StrictModel):
     top_k: int | None = None
     ranking_profile: str | None = None
 
-    @field_validator("ranking_profile")
+    @field_validator("ranking_profile", mode="before")
     @classmethod
-    def _validate_ranking_profile(cls, value: str | None) -> str | None:
-        return validate_ranking_profile(value, field_name="repomap.ranking_profile")
+    def _validate_ranking_profile(cls, value: Any) -> str | None:
+        return resolve_ranking_profile(
+            value,
+            field_name="repomap.ranking_profile",
+        )
 
 
 class AceLiteConfig(SharedPlanConfig):

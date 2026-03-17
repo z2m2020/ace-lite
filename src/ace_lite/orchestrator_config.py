@@ -12,7 +12,7 @@ from typing import Any, cast
 
 from pydantic import Field, field_validator, model_validator
 
-from ace_lite.config_choices import EMBEDDING_PROVIDER_CHOICES, MEMORY_NOTES_MODE_CHOICES
+from ace_lite.config_choices import MEMORY_NOTES_MODE_CHOICES
 from ace_lite.config_sections import (
     ChunkCoreSectionSpec,
     ChunkGuardSectionSpec,
@@ -59,20 +59,14 @@ from ace_lite.config_model_shared import (
     TopologicalShieldMode,
     normalize_adaptive_router_mode,
     normalize_candidate_ranker,
-    normalize_embedding_provider,
     normalize_chunk_guard_mode,
     normalize_chunk_disclosure,
-    normalize_memory_auto_tag_mode,
     normalize_memory_disclosure_mode,
-    normalize_memory_gate_mode,
-    normalize_memory_notes_mode,
-    normalize_ranking_profile,
     normalize_retrieval_policy,
     normalize_memory_strategy,
     normalize_memory_timezone_mode,
     normalize_topological_shield_mode,
     validate_sbfl_metric,
-    validate_scip_provider,
 )
 from ace_lite.pipeline.plugin_runtime import (
     normalize_remote_slot_allowlist,
@@ -80,6 +74,22 @@ from ace_lite.pipeline.plugin_runtime import (
 )
 from ace_lite.pydantic_utils import StrictModel as _StrictModel
 from ace_lite.rankers import normalize_fusion_mode
+from ace_lite.shared_plan_runtime_config import (
+    normalize_container_tag,
+    resolve_embedding_index_path,
+    resolve_embedding_model,
+    resolve_embedding_provider,
+    resolve_memory_auto_tag_mode,
+    resolve_memory_gate_mode,
+    resolve_memory_notes_mode,
+    resolve_plan_replay_cache_path,
+    resolve_ranking_profile,
+    resolve_scip_provider,
+    resolve_tokenizer_model,
+    resolve_trace_export_path,
+    resolve_trace_otlp_endpoint,
+    resolve_trace_otlp_timeout_seconds,
+)
 from ace_lite.scoring_config import (
     CHUNK_DIVERSITY_KIND_PENALTY,
     CHUNK_DIVERSITY_LOCALITY_PENALTY,
@@ -92,12 +102,7 @@ from ace_lite.scoring_config import (
     HYBRID_HEURISTIC_WEIGHT,
     HYBRID_RRF_K_DEFAULT,
 )
-from ace_lite.token_estimator import normalize_tokenizer_model
-from ace_lite.utils import (
-    normalize_optional_str,
-    to_float,
-    to_lower_list,
-)
+from ace_lite.utils import to_float, to_lower_list
 
 
 def _normalize_positive_int(value: Any, default: int) -> int:
@@ -110,12 +115,12 @@ class MemoryNamespaceConfig(MemoryNamespaceSectionSpec):
     @field_validator("container_tag", mode="before")
     @classmethod
     def _normalize_container_tag(cls, value: Any) -> str | None:
-        return normalize_optional_str(value)
+        return normalize_container_tag(value)
 
     @field_validator("auto_tag_mode", mode="before")
     @classmethod
     def _normalize_auto_tag_mode(cls, value: Any) -> MemoryAutoTagMode | None:
-        normalized = normalize_memory_auto_tag_mode(value)
+        normalized = resolve_memory_auto_tag_mode(value)
         return cast(MemoryAutoTagMode, normalized)
 
 
@@ -126,7 +131,7 @@ class MemoryGateConfig(MemoryGateSectionSpec):
     @field_validator("mode", mode="before")
     @classmethod
     def _normalize_mode(cls, value: Any) -> MemoryGateMode:
-        normalized = normalize_memory_gate_mode(value, default="auto")
+        normalized = resolve_memory_gate_mode(value, default="auto")
         return cast(MemoryGateMode, normalized)
 
 
@@ -297,7 +302,7 @@ class MemoryNotesConfig(MemoryNotesSectionSpec):
     @field_validator("mode", mode="before")
     @classmethod
     def _normalize_mode(cls, value: Any) -> str:
-        return normalize_memory_notes_mode(value, default="supplement")
+        return str(resolve_memory_notes_mode(value, default="supplement"))
 
     @field_validator("ttl_days", mode="before")
     @classmethod
@@ -513,7 +518,7 @@ class RepomapConfig(RepomapSectionSpec):
     @field_validator("ranking_profile", mode="before")
     @classmethod
     def _normalize_ranking_profile(cls, value: Any) -> str:
-        return normalize_ranking_profile(value, default="graph")
+        return str(resolve_ranking_profile(value, default="graph"))
 
     @field_validator("signal_weights", mode="before")
     @classmethod
@@ -796,9 +801,7 @@ class TokenizerConfig(TokenizerSectionSpec):
     @field_validator("model", mode="before")
     @classmethod
     def _normalize_model(cls, value: Any) -> str:
-        return normalize_tokenizer_model(
-            normalize_string_default(value, default=DEFAULT_TOKENIZER_MODEL)
-        )
+        return resolve_tokenizer_model(value, default=DEFAULT_TOKENIZER_MODEL)
 
 
 class CochangeConfig(_StrictModel):
@@ -864,8 +867,9 @@ class ScipConfig(ScipSectionSpec):
     @field_validator("provider", mode="before")
     @classmethod
     def _normalize_provider(cls, value: Any) -> str:
-        normalized = validate_scip_provider(
-            str(value or "auto").strip().lower() or "auto",
+        normalized = resolve_scip_provider(
+            value,
+            default="auto",
             field_name="scip.provider",
         )
         return str(normalized or "auto")
@@ -886,17 +890,20 @@ class EmbeddingsConfig(EmbeddingsSectionSpec):
     @field_validator("provider", mode="before")
     @classmethod
     def _normalize_provider(cls, value: Any) -> str:
-        normalized = str(value or "").strip().lower()
-        if not normalized:
-            return "hash"
-        if normalized in EMBEDDING_PROVIDER_CHOICES:
-            return normalize_embedding_provider(normalized, default="hash")
-        return normalized
+        return str(resolve_embedding_provider(value, default="hash") or "hash")
 
     @field_validator("model", mode="before")
     @classmethod
     def _normalize_model(cls, value: Any) -> str:
-        return normalize_string_default(value, default=DEFAULT_EMBEDDING_MODEL)
+        return resolve_embedding_model(value, default=DEFAULT_EMBEDDING_MODEL)
+
+    @field_validator("index_path", mode="before")
+    @classmethod
+    def _normalize_index_path(cls, value: Any) -> str:
+        return resolve_embedding_index_path(
+            value,
+            default=DEFAULT_EMBEDDINGS_INDEX_PATH,
+        )
 
     @field_validator("dimension", mode="before")
     @classmethod
@@ -932,16 +939,20 @@ class TraceConfig(TraceSectionSpec):
     @field_validator("otlp_endpoint", mode="before")
     @classmethod
     def _normalize_otlp_endpoint(cls, value: Any) -> str:
-        return str(value or "").strip()
+        return resolve_trace_otlp_endpoint(value)
+
+    @field_validator("export_path", mode="before")
+    @classmethod
+    def _normalize_export_path(cls, value: Any) -> str:
+        return resolve_trace_export_path(value, default=DEFAULT_TRACE_EXPORT_PATH)
 
     @field_validator("otlp_timeout_seconds", mode="before")
     @classmethod
     def _normalize_otlp_timeout_seconds(cls, value: Any) -> float:
-        return normalize_clamped_float(
+        return resolve_trace_otlp_timeout_seconds(
             value,
             default=1.5,
             minimum=0.1,
-            maximum=float("inf"),
         )
 
 
@@ -952,7 +963,10 @@ class PlanReplayCacheConfig(PlanReplayCacheSectionSpec):
     @field_validator("cache_path", mode="before")
     @classmethod
     def _normalize_cache_path(cls, value: Any) -> str | Path:
-        return normalize_default_path(value, default=DEFAULT_PLAN_REPLAY_CACHE_PATH)
+        return resolve_plan_replay_cache_path(
+            value,
+            default=DEFAULT_PLAN_REPLAY_CACHE_PATH,
+        )
 
 
 class OrchestratorConfig(_StrictModel):
