@@ -176,12 +176,17 @@ def runtime_settings_show_command(
     help="Optional profile filter.",
 )
 @click.option(
+    "--user-id",
+    default="",
+    help="Optional user_id filter for preference capture summary.",
+)
+@click.option(
     "--db-path",
     default=DEFAULT_RUNTIME_STATS_DB_PATH,
     show_default=True,
     help="User-scope durable runtime stats SQLite path.",
 )
-def runtime_stats_command(repo: str, profile: str, db_path: str) -> None:
+def runtime_stats_command(repo: str, profile: str, user_id: str, db_path: str) -> None:
     echo_json(
         {
             "ok": True,
@@ -190,6 +195,7 @@ def runtime_stats_command(repo: str, profile: str, db_path: str) -> None:
                 db_path=db_path,
                 repo_key=repo,
                 profile_key=profile,
+                user_id=user_id,
                 home_path=os.environ.get("HOME")
                 or os.environ.get("USERPROFILE")
                 or Path.home(),
@@ -242,6 +248,11 @@ def runtime_stats_command(repo: str, profile: str, db_path: str) -> None:
     show_default=True,
     help="User-scope durable runtime stats SQLite path.",
 )
+@click.option(
+    "--user-id",
+    default="",
+    help="Optional user_id filter for preference capture summary.",
+)
 def runtime_status_command(
     root: str,
     config_file: str,
@@ -251,6 +262,7 @@ def runtime_status_command(
     current_path: str,
     last_known_good_path: str,
     db_path: str,
+    user_id: str,
 ) -> None:
     echo_json(
         collect_runtime_status_payload(
@@ -262,6 +274,7 @@ def runtime_status_command(
             current_path=current_path,
             last_known_good_path=last_known_good_path,
             db_path=db_path,
+            user_id=user_id,
             extract_memory_channels_fn=_extract_memory_channels,
             memory_channels_disabled_fn=_memory_channels_disabled,
             memory_config_recommendations_fn=_memory_config_recommendations,
@@ -808,6 +821,11 @@ def runtime_cache_vacuum_command(
     help="User-scope durable runtime stats SQLite path.",
 )
 @click.option(
+    "--user-id",
+    default="",
+    help="Optional user_id filter for preference capture summary.",
+)
+@click.option(
     "--cache-db-path",
     default="",
     help="Optional stage artifact cache SQLite override path.",
@@ -836,6 +854,7 @@ def runtime_doctor_command(
     current_path: str,
     last_known_good_path: str,
     stats_db_path: str,
+    user_id: str,
     cache_db_path: str,
     payload_root: str,
     temp_root: str,
@@ -854,6 +873,7 @@ def runtime_doctor_command(
         current_path=current_path,
         last_known_good_path=last_known_good_path,
         stats_db_path=stats_db_path,
+        user_id=user_id,
         cache_db_path=cache_db_path,
         payload_root=payload_root,
         temp_root=temp_root,

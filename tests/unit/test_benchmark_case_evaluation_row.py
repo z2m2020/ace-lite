@@ -33,6 +33,11 @@ def _base_row_kwargs() -> dict[str, object]:
         "chunk_hit_at_k": 1.0,
         "chunks_per_file_mean": 1.0,
         "chunk_budget_used": 9.0,
+        "retrieval_context_chunk_count": 2,
+        "retrieval_context_coverage_ratio": 1.0,
+        "retrieval_context_char_count_mean": 84.0,
+        "retrieval_context_pool_chunk_count": 1,
+        "retrieval_context_pool_coverage_ratio": 0.5,
         "chunk_contract_fallback_count": 1,
         "chunk_contract_skeleton_chunk_count": 0,
         "chunk_contract_fallback_ratio": 0.5,
@@ -94,6 +99,12 @@ def _base_row_kwargs() -> dict[str, object]:
         "notes_hit_ratio": 0.25,
         "profile_selected_count": 2,
         "capture_triggered": True,
+        "feedback_enabled": True,
+        "feedback_reason": "ok",
+        "feedback_event_count": 4,
+        "feedback_matched_event_count": 2,
+        "feedback_boosted_count": 1,
+        "feedback_boosted_paths": 1,
         "policy_profile": "doc_intent",
         "graph_transfer_per_seed_ratio": 2.0,
         "router_enabled": True,
@@ -171,3 +182,16 @@ def test_build_case_evaluation_row_contract() -> None:
     assert row["docs_enabled"] == 1.0
     assert row["chunk_guard_mode"] == "strict"
     assert row["decision_trace_count"] == 1
+    assert row["preference_capture"] == {
+        "notes_hit_ratio": 0.25,
+        "profile_selected_count": 2,
+        "capture_triggered": True,
+    }
+    assert row["feedback_boost"] == {
+        "enabled": True,
+        "reason": "ok",
+        "event_count": 4,
+        "matched_event_count": 2,
+        "boosted_candidate_count": 1,
+        "boosted_unique_paths": 1,
+    }

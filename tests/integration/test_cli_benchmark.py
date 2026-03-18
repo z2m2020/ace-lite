@@ -8,6 +8,7 @@ import click
 from click.testing import CliRunner
 
 from ace_lite.cli import cli
+from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.router_reward_store import append_reward_event
 from ace_lite.router_reward_store import DEFAULT_REWARD_LOG_PATH
 from ace_lite.router_reward_store import make_reward_event
@@ -119,6 +120,27 @@ def test_cli_benchmark_run_and_report(tmp_path: Path) -> None:
 def test_cli_benchmark_run_can_export_runtime_stats_snapshot(tmp_path: Path) -> None:
     _seed_repo(tmp_path)
     output_dir = tmp_path / "artifacts" / "benchmark" / "latest"
+    feedback_path = tmp_path / "runtime-feedback" / "profile.json"
+    SelectionFeedbackStore(profile_path=feedback_path, max_entries=8).record(
+        query="where validate token",
+        repo="demo",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+    (tmp_path / ".ace-lite.yml").write_text(
+        f"""
+benchmark:
+  memory:
+    feedback:
+      enabled: true
+      path: runtime-feedback/profile.json
+      boost_per_select: 0.4
+      max_boost: 0.4
+      decay_days: 60.0
+""".lstrip(),
+        encoding="utf-8",
+    )
 
     runner = CliRunner()
     result = runner.invoke(
@@ -156,7 +178,315 @@ def test_cli_benchmark_run_can_export_runtime_stats_snapshot(tmp_path: Path) -> 
     assert runtime_stats["latest_match"]["repo_key"] == "demo"
     assert runtime_stats["summary"]["session"]["counters"]["invocation_count"] == 1
     assert runtime_stats["summary"]["all_time"]["counters"]["invocation_count"] == 1
+    assert runtime_stats["preference_snapshot"]["preference_observability_summary"][
+        "case_count"
+    ] == 1
+    assert runtime_stats["preference_snapshot"]["feedback_observability_summary"][
+        "case_count"
+    ] == 1
+    assert runtime_stats["preference_snapshot"]["durable_preference_capture_summary"][
+        "event_count"
+    ] == 1
+    assert runtime_stats["preference_snapshot"]["durable_preference_capture_summary"][
+        "distinct_target_path_count"
+    ] == 1
+    assert runtime_stats["preference_snapshot"]["durable_preference_capture_summary"][
+        "configured_path"
+    ] == "runtime-feedback/profile.json"
+    assert (
+        runtime_stats["preference_snapshot"]["durable_preference_capture_summary"][
+            "resolved_configured_path"
+        ]
+        == str((tmp_path / "runtime-feedback" / "profile.json").resolve())
+    )
+    assert (
+        runtime_stats["preference_snapshot"]["durable_preference_capture_summary"][
+            "store_path"
+        ]
+        == str((tmp_path / "runtime-feedback" / "preference_capture.db").resolve())
+    )
+    assert runtime_stats["preference_snapshot"]["durable_retrieval_preference_summary"][
+        "event_count"
+    ] == 1
+    assert runtime_stats["preference_snapshot"]["durable_retrieval_preference_summary"][
+        "preference_kind"
+    ] == "retrieval_preference"
+    assert runtime_stats["preference_snapshot"]["durable_retrieval_preference_summary"][
+        "signal_source"
+    ] == "benchmark"
+    assert (
+        runtime_stats["preference_snapshot"]["durable_retrieval_preference_summary"][
+            "store_path"
+        ]
+        == str((tmp_path / "runtime-feedback" / "preference_capture.db").resolve())
+    )
+    assert runtime_stats["preference_snapshot"]["durable_packing_preference_summary"][
+        "event_count"
+    ] == 1
+    assert runtime_stats["preference_snapshot"]["durable_packing_preference_summary"][
+        "preference_kind"
+    ] == "packing_preference"
+    assert runtime_stats["preference_snapshot"]["durable_packing_preference_summary"][
+        "signal_source"
+    ] == "benchmark"
+    assert (
+        runtime_stats["preference_snapshot"]["durable_packing_preference_summary"][
+            "store_path"
+        ]
+        == str((tmp_path / "runtime-feedback" / "preference_capture.db").resolve())
+    )
+    assert runtime_stats["preference_snapshot"]["durable_validation_preference_summary"][
+        "event_count"
+    ] == 1
+    assert runtime_stats["preference_snapshot"]["durable_validation_preference_summary"][
+        "preference_kind"
+    ] == "validation_preference"
+    assert runtime_stats["preference_snapshot"]["durable_validation_preference_summary"][
+        "signal_source"
+    ] == "benchmark"
+    assert (
+        runtime_stats["preference_snapshot"]["durable_validation_preference_summary"][
+            "store_path"
+        ]
+        == str((tmp_path / "runtime-feedback" / "preference_capture.db").resolve())
+    )
     assert "## Runtime Stats Summary" in report_md.read_text(encoding="utf-8")
+
+
+def test_cli_benchmark_runtime_profile_scopes_benchmark_durable_preference_events(
+    tmp_path: Path,
+) -> None:
+    _seed_repo(tmp_path)
+    output_dir = tmp_path / "artifacts" / "benchmark" / "latest"
+    feedback_path = tmp_path / "runtime-feedback" / "profile.json"
+    SelectionFeedbackStore(profile_path=feedback_path, max_entries=8).record(
+        query="where validate token",
+        repo="demo",
+        profile_key="bugfix",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+    (tmp_path / ".ace-lite.yml").write_text(
+        f"""
+memory:
+  feedback:
+    enabled: true
+    path: runtime-feedback/profile.json
+    boost_per_select: 0.4
+    max_boost: 0.4
+    decay_days: 60.0
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "benchmark",
+            "run",
+            "--cases",
+            str(tmp_path / "benchmark" / "cases" / "default.yaml"),
+            "--repo",
+            "demo",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(tmp_path / "skills"),
+            "--languages",
+            "python",
+            "--memory-primary",
+            "none",
+            "--memory-secondary",
+            "none",
+            "--runtime-profile",
+            "bugfix",
+            "--runtime-stats",
+            "--output",
+            str(output_dir),
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    summary_json = Path(payload["summary_json"])
+    summary_payload = json.loads(summary_json.read_text(encoding="utf-8"))
+    runtime_stats = summary_payload["runtime_stats_summary"]
+    snapshot = runtime_stats["preference_snapshot"]
+
+    assert snapshot["durable_preference_capture_summary"]["event_count"] == 1
+    assert snapshot["durable_preference_capture_summary"]["profile_key"] == ""
+    assert snapshot["durable_preference_capture_scoped_summary"]["event_count"] == 1
+    assert snapshot["durable_preference_capture_scoped_summary"]["profile_key"] == (
+        "bugfix"
+    )
+    assert snapshot["durable_retrieval_preference_summary"]["event_count"] == 1
+    assert snapshot["durable_retrieval_preference_summary"]["profile_key"] == "bugfix"
+    assert snapshot["durable_packing_preference_summary"]["event_count"] == 1
+    assert snapshot["durable_packing_preference_summary"]["profile_key"] == "bugfix"
+    assert snapshot["durable_validation_preference_summary"]["event_count"] == 1
+    assert snapshot["durable_validation_preference_summary"]["profile_key"] == "bugfix"
+
+
+def test_cli_benchmark_runtime_profile_preserves_benchmark_feedback_config(
+    tmp_path: Path,
+) -> None:
+    _seed_repo(tmp_path)
+    output_dir = tmp_path / "artifacts" / "benchmark" / "latest"
+    feedback_path = tmp_path / "runtime-feedback" / "profile.json"
+    SelectionFeedbackStore(profile_path=feedback_path, max_entries=8).record(
+        query="where validate token",
+        repo="demo",
+        profile_key="bugfix",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+    (tmp_path / ".ace-lite.yml").write_text(
+        f"""
+benchmark:
+  memory:
+    feedback:
+      enabled: true
+      path: runtime-feedback/profile.json
+      boost_per_select: 0.4
+      max_boost: 0.4
+      decay_days: 60.0
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "benchmark",
+            "run",
+            "--cases",
+            str(tmp_path / "benchmark" / "cases" / "default.yaml"),
+            "--repo",
+            "demo",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(tmp_path / "skills"),
+            "--languages",
+            "python",
+            "--memory-primary",
+            "none",
+            "--memory-secondary",
+            "none",
+            "--runtime-profile",
+            "bugfix",
+            "--runtime-stats",
+            "--output",
+            str(output_dir),
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    summary_json = Path(payload["summary_json"])
+    summary_payload = json.loads(summary_json.read_text(encoding="utf-8"))
+    snapshot = summary_payload["runtime_stats_summary"]["preference_snapshot"]
+
+    assert snapshot["feedback_observability_summary"]["enabled_case_count"] == 1
+    assert snapshot["durable_preference_capture_summary"]["enabled"] is True
+    assert snapshot["durable_preference_capture_summary"]["configured_path"] == (
+        "runtime-feedback/profile.json"
+    )
+    assert snapshot["durable_preference_capture_summary"]["event_count"] == 1
+    assert snapshot["durable_preference_capture_scoped_summary"]["configured_path"] == (
+        "runtime-feedback/profile.json"
+    )
+    assert snapshot["durable_preference_capture_scoped_summary"]["profile_key"] == (
+        "bugfix"
+    )
+    assert snapshot["durable_retrieval_preference_summary"]["profile_key"] == "bugfix"
+
+
+def test_cli_benchmark_user_id_scopes_benchmark_durable_preference_events(
+    tmp_path: Path,
+) -> None:
+    _seed_repo(tmp_path)
+    output_dir = tmp_path / "artifacts" / "benchmark" / "latest"
+    feedback_path = tmp_path / "runtime-feedback" / "profile.json"
+    SelectionFeedbackStore(profile_path=feedback_path, max_entries=8).record(
+        query="where validate token",
+        repo="demo",
+        user_id="bench-user",
+        profile_key="bugfix",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+    (tmp_path / ".ace-lite.yml").write_text(
+        f"""
+memory:
+  feedback:
+    enabled: true
+    path: runtime-feedback/profile.json
+    boost_per_select: 0.4
+    max_boost: 0.4
+    decay_days: 60.0
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "benchmark",
+            "run",
+            "--cases",
+            str(tmp_path / "benchmark" / "cases" / "default.yaml"),
+            "--repo",
+            "demo",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(tmp_path / "skills"),
+            "--languages",
+            "python",
+            "--memory-primary",
+            "none",
+            "--memory-secondary",
+            "none",
+            "--user-id",
+            "bench-user",
+            "--runtime-profile",
+            "bugfix",
+            "--runtime-stats",
+            "--output",
+            str(output_dir),
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    summary_json = Path(payload["summary_json"])
+    summary_payload = json.loads(summary_json.read_text(encoding="utf-8"))
+    snapshot = summary_payload["runtime_stats_summary"]["preference_snapshot"]
+
+    assert snapshot["durable_preference_capture_summary"]["user_id"] == ""
+    assert snapshot["durable_preference_capture_scoped_summary"]["event_count"] == 1
+    assert snapshot["durable_preference_capture_scoped_summary"]["user_id"] == (
+        "bench-user"
+    )
+    assert snapshot["durable_preference_capture_scoped_summary"]["profile_key"] == (
+        "bugfix"
+    )
+    assert snapshot["durable_retrieval_preference_summary"]["event_count"] == 1
+    assert snapshot["durable_retrieval_preference_summary"]["user_id"] == "bench-user"
+    assert snapshot["durable_packing_preference_summary"]["event_count"] == 1
+    assert snapshot["durable_packing_preference_summary"]["user_id"] == "bench-user"
+    assert snapshot["durable_validation_preference_summary"]["event_count"] == 1
+    assert snapshot["durable_validation_preference_summary"]["user_id"] == "bench-user"
 
 
 def test_cli_benchmark_fail_on_regression(tmp_path: Path) -> None:

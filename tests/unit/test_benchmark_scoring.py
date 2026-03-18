@@ -1436,6 +1436,17 @@ def test_evaluate_case_result_extracts_memory_metrics() -> None:
             "profile": {"selected_count": 3},
             "capture": {"triggered": True},
         },
+        "index": {
+            "candidate_files": [{"path": "src/auth.py", "module": "src.auth"}],
+            "candidate_ranking": {
+                "feedback_enabled": True,
+                "feedback_reason": "ok",
+                "feedback_event_count": 4,
+                "feedback_matched_event_count": 2,
+                "feedback_boosted_count": 1,
+                "feedback_boosted_paths": 1,
+            },
+        },
     }
 
     row = evaluate_case_result(case=case, plan_payload=payload, latency_ms=9.0)
@@ -1443,6 +1454,12 @@ def test_evaluate_case_result_extracts_memory_metrics() -> None:
     assert row["notes_hit_ratio"] == 0.5
     assert row["profile_selected_count"] == 3.0
     assert row["capture_triggered"] == 1.0
+    assert row["feedback_enabled"] == 1.0
+    assert row["feedback_reason"] == "ok"
+    assert row["feedback_event_count"] == 4.0
+    assert row["feedback_matched_event_count"] == 2.0
+    assert row["feedback_boosted_count"] == 1.0
+    assert row["feedback_boosted_paths"] == 1.0
 
 
 def test_detect_regression_for_memory_metric_drop() -> None:

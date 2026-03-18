@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 import pytest
 
+from ace_lite.pipeline.contracts import validate_stage_output
+from ace_lite.pipeline.stages.source_plan import run_source_plan
+from ace_lite.pipeline.types import StageContext
 from ace_lite.schema import (
     SCHEMA_VERSION,
     validate_context_plan,
@@ -83,6 +87,85 @@ def _valid_payload() -> dict[str, Any]:
     }
     payload["schema_version"] = SCHEMA_VERSION
     return payload
+
+
+def _build_source_plan_payload_with_internal_sidecars() -> dict[str, Any]:
+    ctx = StageContext(query="trace schema roundtrip boundary", repo="r", root="/tmp/repo")
+    ctx.state = {
+        "memory": {},
+        "index": {
+            "candidate_files": [{"path": "src/app.py"}],
+            "candidate_chunks": [
+                {
+                    "path": "src/app.py",
+                    "qualified_name": "Auth.validate",
+                    "kind": "method",
+                    "lineno": 10,
+                    "end_lineno": 20,
+                    "score": 9.5,
+                    "disclosure": "skeleton_light",
+                    "skeleton": {
+                        "schema_version": "y2-freeze-v1",
+                        "mode": "skeleton_light",
+                        "language": "python",
+                        "module": "src.app",
+                        "symbol": {
+                            "name": "validate",
+                            "qualified_name": "Auth.validate",
+                            "kind": "method",
+                        },
+                        "span": {
+                            "start_line": 10,
+                            "end_line": 20,
+                            "line_count": 11,
+                        },
+                        "anchors": {
+                            "path": "src/app.py",
+                            "signature": "def validate(token: str) -> bool:",
+                            "robust_signature_available": True,
+                        },
+                    },
+                    "_retrieval_context": "module=src.app\nsymbol=Auth.validate",
+                    "_contextual_chunking_sidecar": {
+                        "schema_version": "contextual_chunking_sidecar_v1",
+                        "symbol_path": "src.app:Auth.validate",
+                        "module_hint": "src.app",
+                        "import_hints": ["typing.Any"],
+                    },
+                    "_robust_signature_lite": {
+                        "available": True,
+                        "compatibility_domain": "src/app.py::method",
+                    },
+                    "_topological_shield": {"enabled": True, "attenuation": 0.2},
+                }
+            ],
+            "chunk_metrics": {"chunk_budget_used": 48.0},
+        },
+        "repomap": {"focused_files": ["src/app.py"]},
+        "augment": {
+            "diagnostics": [],
+            "xref": {"count": 0, "results": []},
+            "tests": {"suspicious_chunks": [], "suggested_tests": []},
+        },
+        "skills": {"selected": []},
+        "__policy": {"name": "general", "version": "v1", "test_signal_weight": 1.0},
+    }
+    return run_source_plan(
+        ctx=ctx,
+        pipeline_order=[
+            "memory",
+            "index",
+            "repomap",
+            "augment",
+            "skills",
+            "source_plan",
+        ],
+        chunk_top_k=4,
+        chunk_per_file_limit=2,
+        chunk_token_budget=256,
+        chunk_disclosure="skeleton_light",
+        policy_version="v1",
+    )
 
 
 def test_schema_version_is_3_3() -> None:
@@ -239,6 +322,33 @@ def test_validate_context_plan_accepts_optional_validation_result_payload() -> N
     ).as_dict()
 
     validate_context_plan(payload)
+
+
+def test_validate_context_plan_accepts_source_plan_roundtrip_without_internal_sidecar_leaks() -> None:
+    payload = _valid_payload()
+    source_plan = _build_source_plan_payload_with_internal_sidecars()
+
+    validate_stage_output("source_plan", source_plan)
+
+    payload["source_plan"] = copy.deepcopy(source_plan)
+    validate_context_plan(payload)
+
+    assert len(source_plan["candidate_chunks"]) == 1
+    candidate = source_plan["candidate_chunks"][0]
+    chunk_ref = source_plan["chunk_steps"][0]["chunk_ref"]
+    source_plan_step = next(
+        item for item in source_plan["steps"] if item.get("stage") == "source_plan"
+    )
+
+    for forbidden_key in (
+        "_retrieval_context",
+        "_contextual_chunking_sidecar",
+        "_robust_signature_lite",
+        "_topological_shield",
+    ):
+        assert forbidden_key not in candidate
+        assert forbidden_key not in chunk_ref
+        assert forbidden_key not in source_plan_step["candidate_chunks"][0]
 
 
 def test_validate_context_plan_rejects_invalid_validation_stage_payload() -> None:

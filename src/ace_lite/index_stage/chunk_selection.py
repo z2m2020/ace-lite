@@ -10,6 +10,12 @@ from ace_lite.chunking.robust_signature import (
     build_chunk_robust_signature_sidecar,
     count_available_robust_signatures,
 )
+from ace_lite.chunking.types import (
+    CONTEXTUAL_CHUNKING_SIDECAR_KEY,
+    RETRIEVAL_CONTEXT_SIDECAR_KEY,
+    resolve_retrieval_context_text,
+    strip_internal_chunk_sidecars,
+)
 from ace_lite.embeddings import CrossEncoderProvider, EmbeddingProvider
 from ace_lite.index_stage.chunk_guard import apply_chunk_guard
 
@@ -21,22 +27,6 @@ class ChunkSelectionResult:
     chunk_semantic_rerank_payload: dict[str, Any]
     topological_shield_payload: dict[str, Any]
     chunk_guard_payload: dict[str, Any]
-
-
-def _strip_internal_chunk_sidecars(
-    candidate_chunks: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    sanitized: list[dict[str, Any]] = []
-    for item in candidate_chunks:
-        if not isinstance(item, dict):
-            continue
-        payload = {
-            key: value
-            for key, value in item.items()
-            if not str(key).startswith("_")
-        }
-        sanitized.append(payload)
-    return sanitized
 
 
 def apply_chunk_selection(
@@ -163,7 +153,7 @@ def apply_chunk_selection(
         for index, item in enumerate(candidate_chunks):
             if not isinstance(item, dict):
                 continue
-            retrieval_context = str(item.get("_retrieval_context") or "").strip()
+            retrieval_context = resolve_retrieval_context_text(item)
             if not retrieval_context:
                 continue
             retrieval_context_chunk_count += 1
@@ -209,8 +199,35 @@ def apply_chunk_selection(
                 qualified = str(item.get("qualified_name") or "").strip()
                 signature = str(item.get("signature") or "").strip()[:240]
                 snippet = str(item.get("snippet") or "").strip()[:600]
-                retrieval_context = str(item.get("_retrieval_context") or "").strip()[:600]
-                parts = [retrieval_context, path, qualified, signature, snippet]
+                retrieval_context = resolve_retrieval_context_text(item)[:600]
+                sidecar = (
+                    item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
+                    if isinstance(item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY), dict)
+                    else {}
+                )
+                parent_symbol = str(sidecar.get("parent_symbol") or "").strip()
+                reference_values = (
+                    [
+                        str(value).strip()
+                        for value in sidecar.get("references", [])
+                        if str(value).strip()
+                    ]
+                    if isinstance(sidecar.get("references"), list)
+                    else []
+                )
+                parts = [
+                    retrieval_context,
+                    f"parent_symbol={parent_symbol}" if parent_symbol else "",
+                    (
+                        "references=" + ", ".join(reference_values[:3])
+                        if reference_values
+                        else ""
+                    ),
+                    path,
+                    qualified,
+                    signature,
+                    snippet,
+                ]
                 chunk_texts.append("\n".join(part for part in parts if part))
 
         try:
@@ -333,7 +350,7 @@ def apply_chunk_selection(
         min_marginal_utility=float(chunk_guard_min_marginal_utility),
         compatibility_min_overlap=float(chunk_guard_compatibility_min_overlap),
     )
-    candidate_chunks = _strip_internal_chunk_sidecars(
+    candidate_chunks = strip_internal_chunk_sidecars(
         chunk_guard_result.candidate_chunks
     )
     chunk_guard_payload = chunk_guard_result.chunk_guard_payload

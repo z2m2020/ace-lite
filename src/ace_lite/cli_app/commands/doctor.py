@@ -82,6 +82,11 @@ from ace_lite.cli_app.commands import runtime as runtime_module
     help="User-scope durable runtime stats SQLite path.",
 )
 @click.option(
+    "--user-id",
+    default="",
+    help="Optional user_id filter for preference capture summary.",
+)
+@click.option(
     "--cache-db-path",
     default="",
     help="Optional stage artifact cache SQLite override path.",
@@ -110,6 +115,7 @@ def doctor_command(
     current_path: str,
     last_known_good_path: str,
     stats_db_path: str,
+    user_id: str,
     cache_db_path: str,
     payload_root: str,
     temp_root: str,
@@ -128,6 +134,7 @@ def doctor_command(
         current_path=current_path,
         last_known_good_path=last_known_good_path,
         stats_db_path=stats_db_path,
+        user_id=user_id,
         cache_db_path=cache_db_path,
         payload_root=payload_root,
         temp_root=temp_root,

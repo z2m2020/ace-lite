@@ -1024,6 +1024,111 @@ def test_benchmark_runner_aggregates_retrieval_context_observability_summary() -
     }
 
 
+class _PreferenceObservabilityStubOrchestrator(_StubOrchestrator):
+    def plan(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        _ = (query, repo, root, time_range, start_date, end_date)
+        return {
+            "index": {
+                "candidate_files": [{"path": "src/app.py", "module": "src.app"}],
+            },
+            "memory": {
+                "count": 1,
+                "notes": {"selected_count": 1},
+                "profile": {"selected_count": 2},
+                "capture": {"triggered": True},
+            },
+            "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
+            "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+        }
+
+
+def test_benchmark_runner_aggregates_preference_observability_summary() -> None:
+    orchestrator = _PreferenceObservabilityStubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "find app", "expected_keys": ["app"], "top_k": 2},
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    assert results["preference_observability_summary"] == {
+        "case_count": 1,
+        "observed_case_count": 1,
+        "observed_case_rate": 1.0,
+        "notes_hit_case_count": 1,
+        "notes_hit_case_rate": 1.0,
+        "profile_selected_case_count": 1,
+        "profile_selected_case_rate": 1.0,
+        "capture_triggered_case_count": 1,
+        "capture_triggered_case_rate": 1.0,
+        "notes_hit_ratio_mean": 1.0,
+        "profile_selected_count_mean": 2.0,
+    }
+
+
+class _FeedbackObservabilityStubOrchestrator(_StubOrchestrator):
+    def plan(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, object]:
+        _ = (query, repo, root, time_range, start_date, end_date)
+        return {
+            "index": {
+                "candidate_files": [{"path": "src/app.py", "module": "src.app"}],
+                "candidate_ranking": {
+                    "feedback_enabled": True,
+                    "feedback_reason": "ok",
+                    "feedback_event_count": 5,
+                    "feedback_matched_event_count": 3,
+                    "feedback_boosted_count": 2,
+                    "feedback_boosted_paths": 1,
+                },
+            },
+            "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
+            "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+        }
+
+
+def test_benchmark_runner_aggregates_feedback_observability_summary() -> None:
+    orchestrator = _FeedbackObservabilityStubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "find app", "expected_keys": ["app"], "top_k": 2},
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    assert results["feedback_observability_summary"] == {
+        "case_count": 1,
+        "enabled_case_count": 1,
+        "enabled_case_rate": 1.0,
+        "matched_case_count": 1,
+        "matched_case_rate": 1.0,
+        "boosted_case_count": 1,
+        "boosted_case_rate": 1.0,
+        "event_count_mean": 5.0,
+        "matched_event_count_mean": 3.0,
+        "boosted_candidate_count_mean": 2.0,
+        "boosted_unique_paths_mean": 1.0,
+        "reasons": {"ok": 1},
+    }
+
+
 class _DecisionSkipStubOrchestrator(_StubOrchestrator):
     def plan(
         self,

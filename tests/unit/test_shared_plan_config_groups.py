@@ -323,3 +323,33 @@ def test_apply_plan_namespace_overlays_merges_runtime_profile_preset_and_config_
     assert plan_config["top_k_files"] == 2
     assert plan_config["candidate_ranker"] == "bm25_lite"
     assert plan_config["plan_replay_cache_enabled"] is False
+
+
+def test_apply_plan_namespace_overlays_deep_merges_nested_memory_config() -> None:
+    config = {
+        "benchmark": {
+            "memory": {
+                "feedback": {
+                    "enabled": True,
+                    "path": "runtime-feedback/profile.json",
+                }
+            }
+        }
+    }
+
+    resolved_profile_name = _apply_plan_namespace_overlays(
+        config=config,
+        namespace="benchmark",
+        runtime_profile="bugfix",
+        retrieval_preset="none",
+        config_pack=None,
+    )
+
+    benchmark_config = config["benchmark"]
+    assert resolved_profile_name == "bugfix"
+    assert benchmark_config["runtime_profile"] == "bugfix"
+    assert benchmark_config["memory"]["cache"]["enabled"] is True
+    assert benchmark_config["memory"]["feedback"] == {
+        "enabled": True,
+        "path": "runtime-feedback/profile.json",
+    }

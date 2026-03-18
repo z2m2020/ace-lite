@@ -246,6 +246,163 @@ def build_retrieval_context_observability_summary(
     }
 
 
+def build_preference_observability_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {
+            "case_count": 0,
+            "observed_case_count": 0,
+            "observed_case_rate": 0.0,
+            "notes_hit_case_count": 0,
+            "notes_hit_case_rate": 0.0,
+            "profile_selected_case_count": 0,
+            "profile_selected_case_rate": 0.0,
+            "capture_triggered_case_count": 0,
+            "capture_triggered_case_rate": 0.0,
+            "notes_hit_ratio_mean": 0.0,
+            "profile_selected_count_mean": 0.0,
+        }
+
+    observed_case_count = 0
+    notes_hit_case_count = 0
+    profile_selected_case_count = 0
+    capture_triggered_case_count = 0
+    notes_hit_ratios: list[float] = []
+    profile_selected_counts: list[float] = []
+
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        notes_hit_ratio = float(item.get("notes_hit_ratio", 0.0) or 0.0)
+        profile_selected_count = float(
+            item.get("profile_selected_count", 0.0) or 0.0
+        )
+        capture_triggered = float(item.get("capture_triggered", 0.0) or 0.0)
+        if (
+            notes_hit_ratio > 0.0
+            or profile_selected_count > 0.0
+            or capture_triggered > 0.0
+        ):
+            observed_case_count += 1
+        if notes_hit_ratio > 0.0:
+            notes_hit_case_count += 1
+        if profile_selected_count > 0.0:
+            profile_selected_case_count += 1
+        if capture_triggered > 0.0:
+            capture_triggered_case_count += 1
+        notes_hit_ratios.append(notes_hit_ratio)
+        profile_selected_counts.append(profile_selected_count)
+
+    return {
+        "case_count": case_count,
+        "observed_case_count": observed_case_count,
+        "observed_case_rate": (
+            float(observed_case_count) / float(case_count) if case_count > 0 else 0.0
+        ),
+        "notes_hit_case_count": notes_hit_case_count,
+        "notes_hit_case_rate": (
+            float(notes_hit_case_count) / float(case_count) if case_count > 0 else 0.0
+        ),
+        "profile_selected_case_count": profile_selected_case_count,
+        "profile_selected_case_rate": (
+            float(profile_selected_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
+        "capture_triggered_case_count": capture_triggered_case_count,
+        "capture_triggered_case_rate": (
+            float(capture_triggered_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
+        "notes_hit_ratio_mean": mean(notes_hit_ratios) if notes_hit_ratios else 0.0,
+        "profile_selected_count_mean": (
+            mean(profile_selected_counts) if profile_selected_counts else 0.0
+        ),
+    }
+
+
+def build_feedback_observability_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {
+            "case_count": 0,
+            "enabled_case_count": 0,
+            "enabled_case_rate": 0.0,
+            "matched_case_count": 0,
+            "matched_case_rate": 0.0,
+            "boosted_case_count": 0,
+            "boosted_case_rate": 0.0,
+            "event_count_mean": 0.0,
+            "matched_event_count_mean": 0.0,
+            "boosted_candidate_count_mean": 0.0,
+            "boosted_unique_paths_mean": 0.0,
+            "reasons": {},
+        }
+
+    enabled_case_count = 0
+    matched_case_count = 0
+    boosted_case_count = 0
+    event_counts: list[float] = []
+    matched_event_counts: list[float] = []
+    boosted_counts: list[float] = []
+    boosted_paths_counts: list[float] = []
+    reasons: dict[str, int] = {}
+
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        enabled = float(item.get("feedback_enabled", 0.0) or 0.0) > 0.0
+        matched_event_count = float(
+            item.get("feedback_matched_event_count", 0.0) or 0.0
+        )
+        boosted_count = float(item.get("feedback_boosted_count", 0.0) or 0.0)
+        event_count = float(item.get("feedback_event_count", 0.0) or 0.0)
+        boosted_paths = float(item.get("feedback_boosted_paths", 0.0) or 0.0)
+        reason = str(item.get("feedback_reason") or "").strip()
+        if enabled:
+            enabled_case_count += 1
+        if matched_event_count > 0.0:
+            matched_case_count += 1
+        if boosted_count > 0.0:
+            boosted_case_count += 1
+        if reason:
+            reasons[reason] = reasons.get(reason, 0) + 1
+        event_counts.append(event_count)
+        matched_event_counts.append(matched_event_count)
+        boosted_counts.append(boosted_count)
+        boosted_paths_counts.append(boosted_paths)
+
+    return {
+        "case_count": case_count,
+        "enabled_case_count": enabled_case_count,
+        "enabled_case_rate": (
+            float(enabled_case_count) / float(case_count) if case_count > 0 else 0.0
+        ),
+        "matched_case_count": matched_case_count,
+        "matched_case_rate": (
+            float(matched_case_count) / float(case_count) if case_count > 0 else 0.0
+        ),
+        "boosted_case_count": boosted_case_count,
+        "boosted_case_rate": (
+            float(boosted_case_count) / float(case_count) if case_count > 0 else 0.0
+        ),
+        "event_count_mean": mean(event_counts) if event_counts else 0.0,
+        "matched_event_count_mean": (
+            mean(matched_event_counts) if matched_event_counts else 0.0
+        ),
+        "boosted_candidate_count_mean": mean(boosted_counts) if boosted_counts else 0.0,
+        "boosted_unique_paths_mean": (
+            mean(boosted_paths_counts) if boosted_paths_counts else 0.0
+        ),
+        "reasons": dict(sorted(reasons.items())),
+    }
+
+
 def build_comparison_lane_summary(case_results: list[dict[str, Any]]) -> dict[str, Any]:
     total_case_count = len(case_results)
     if total_case_count <= 0:

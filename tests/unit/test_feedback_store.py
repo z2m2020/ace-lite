@@ -8,6 +8,7 @@ from ace_lite.feedback_store import (
     SelectionFeedbackStore,
     build_feedback_boosts,
 )
+from ace_lite.profile_store import ProfileStore
 
 
 def test_feedback_store_records_and_prunes(tmp_path: Path) -> None:
@@ -17,12 +18,19 @@ def test_feedback_store_records_and_prunes(tmp_path: Path) -> None:
     first = store.record(
         query="fix openmemory provider",
         repo="demo",
+        user_id="user-a",
+        profile_key="bugfix",
         selected_path="src/demo.py",
         captured_at="2026-01-01T00:00:00+00:00",
         position=1,
     )
     assert first["ok"] is True
     assert first["event_count"] == 1
+    assert first["configured_path"] == str(profile_path.resolve())
+    assert first["store_path"].endswith("preference_capture.db")
+    assert first["path"] == first["store_path"]
+    assert first["event"]["user_id"] == "user-a"
+    assert first["event"]["profile_key"] == "bugfix"
 
     second = store.record(
         query="fix openmemory provider",
@@ -48,6 +56,8 @@ def test_feedback_store_records_and_prunes(tmp_path: Path) -> None:
         "src/other.py",
         "src/third.py",
     ]
+    assert events[-1]["user_id"] == ""
+    assert events[-1]["profile_key"] == ""
 
 
 def test_build_feedback_boosts_applies_decay_and_caps(tmp_path: Path) -> None:
@@ -110,6 +120,8 @@ def test_feedback_store_export_and_replay_roundtrip(tmp_path: Path) -> None:
     store.record(
         query="validate token",
         repo="demo",
+        user_id="bench-user",
+        profile_key="bugfix",
         selected_path="src/app/beta.py",
         captured_at="2026-02-14T00:00:00+00:00",
         position=1,
@@ -124,6 +136,10 @@ def test_feedback_store_export_and_replay_roundtrip(tmp_path: Path) -> None:
 
     exported = store.export(repo="demo")
     assert exported["event_count"] == 2
+    assert exported["configured_path"] == str(source_profile.resolve())
+    assert exported["store_path"].endswith(".feedback.db")
+    assert exported["events"][0]["user_id"] == "bench-user"
+    assert exported["events"][0]["profile_key"] == "bugfix"
 
     replay_store = SelectionFeedbackStore(profile_path=replay_profile, max_entries=8)
     replayed = replay_store.replay(
@@ -134,4 +150,112 @@ def test_feedback_store_export_and_replay_roundtrip(tmp_path: Path) -> None:
     assert replayed["imported"] == 2
     assert replayed["skipped"] == 0
     assert replayed["event_count"] == 2
+    assert replayed["configured_path"] == str(replay_profile.resolve())
+    assert replayed["store_path"].endswith(".feedback.db")
     assert replay_store.export(repo="demo")["events"] == exported["events"]
+
+
+def test_feedback_store_stats_and_export_support_scope_filters(tmp_path: Path) -> None:
+    profile_path = tmp_path / "profile.json"
+    store = SelectionFeedbackStore(profile_path=profile_path, max_entries=8)
+    store.record(
+        query="scoped feedback",
+        repo="demo",
+        user_id="user-a",
+        profile_key="bugfix",
+        selected_path="src/a.py",
+        captured_at="2026-02-14T00:00:00+00:00",
+    )
+    store.record(
+        query="scoped feedback",
+        repo="demo",
+        user_id="user-b",
+        profile_key="docs",
+        selected_path="src/b.py",
+        captured_at="2026-02-15T00:00:00+00:00",
+    )
+
+    exported = store.export(repo="demo", user_id="user-a", profile_key="bugfix")
+    assert exported["event_count"] == 1
+    assert exported["events"][0]["selected_path"] == "src/a.py"
+
+    stats = store.stats(
+        repo="demo",
+        user_id="user-b",
+        profile_key="docs",
+        query_terms=["scoped"],
+        boost=FeedbackBoostConfig(boost_per_select=0.2, max_boost=0.5, decay_days=30.0),
+        top_n=5,
+    )
+    assert stats["matched_event_count"] == 1
+    assert stats["paths"][0]["selected_path"] == "src/b.py"
+
+
+def test_feedback_store_reads_legacy_profile_payload_when_durable_store_is_empty(
+    tmp_path: Path,
+) -> None:
+    profile_path = tmp_path / "profile.json"
+    ProfileStore(path=profile_path).save(
+        {
+            "preferences": {
+                "selection_feedback": {
+                    "version": 1,
+                    "events": [
+                        {
+                            "query": "legacy feedback",
+                            "repo": "demo",
+                            "selected_path": "src/legacy.py",
+                            "position": 1,
+                            "captured_at": "2026-02-01T00:00:00+00:00",
+                            "terms": ["legacy", "feedback"],
+                        }
+                    ],
+                }
+            }
+        }
+    )
+
+    store = SelectionFeedbackStore(profile_path=profile_path, max_entries=8)
+    events = store.load_events()
+
+    assert len(events) == 1
+    assert events[0]["selected_path"] == "src/legacy.py"
+    assert events[0]["query"] == "legacy feedback"
+
+
+def test_feedback_store_reset_clears_durable_and_legacy_payload(tmp_path: Path) -> None:
+    profile_path = tmp_path / "profile.json"
+    store = SelectionFeedbackStore(profile_path=profile_path, max_entries=8)
+    store.record(
+        query="reset durable event",
+        repo="demo",
+        selected_path="src/demo.py",
+        captured_at="2026-02-14T00:00:00+00:00",
+    )
+    ProfileStore(path=profile_path).save(
+        {
+            "preferences": {
+                "selection_feedback": {
+                    "version": 1,
+                    "events": [
+                        {
+                            "query": "legacy feedback",
+                            "repo": "demo",
+                            "selected_path": "src/legacy.py",
+                            "position": 1,
+                            "captured_at": "2026-02-01T00:00:00+00:00",
+                            "terms": ["legacy", "feedback"],
+                        }
+                    ],
+                }
+            }
+        }
+    )
+
+    payload = store.reset()
+
+    assert payload["ok"] is True
+    assert payload["configured_path"] == str(profile_path.resolve())
+    assert payload["store_path"].endswith("preference_capture.db")
+    assert store.load_events() == []
+    assert ProfileStore(path=profile_path).load().get("preferences", {}) == {}

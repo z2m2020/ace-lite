@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -86,6 +87,24 @@ def _load_command_config(root: str) -> dict[str, Any]:
     return validated
 
 
+def _deep_merge_overlay(
+    base: dict[str, Any],
+    overlay: Mapping[str, Any],
+) -> None:
+    for raw_key, value in overlay.items():
+        key = str(raw_key)
+        current = base.get(key)
+        if isinstance(current, dict) and isinstance(value, Mapping):
+            _deep_merge_overlay(current, value)
+            continue
+        if isinstance(value, Mapping):
+            nested: dict[str, Any] = {}
+            _deep_merge_overlay(nested, value)
+            base[key] = nested
+            continue
+        base[key] = value
+
+
 def _apply_plan_namespace_overlays(
     *,
     config: dict[str, Any],
@@ -113,14 +132,11 @@ def _apply_plan_namespace_overlays(
         config[namespace] = scoped_config
 
     if runtime_profile_payload:
-        for key, value in runtime_profile_payload.items():
-            scoped_config[str(key)] = value
+        _deep_merge_overlay(scoped_config, runtime_profile_payload)
         scoped_config["runtime_profile"] = resolved_profile_name
     if preset_payload is not None:
-        for key, value in preset_payload.items():
-            scoped_config[str(key)] = value
+        _deep_merge_overlay(scoped_config, preset_payload)
     if pack_result.enabled:
-        for key, value in pack_result.overrides.items():
-            scoped_config[str(key)] = value
+        _deep_merge_overlay(scoped_config, pack_result.overrides)
 
     return resolved_profile_name

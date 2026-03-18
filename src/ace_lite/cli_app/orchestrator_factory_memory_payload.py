@@ -1,0 +1,301 @@
+"""Memory payload builder for orchestrator factory wiring."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from ace_lite.cli_app.orchestrator_factory_payload_core import (
+    CanonicalFieldSpec,
+    build_canonical_payload,
+)
+
+
+def build_memory_payload(
+    *,
+    memory_group: dict[str, Any],
+    memory_disclosure_mode: str = "compact",
+    memory_preview_max_chars: int = 280,
+    memory_strategy: str = "hybrid",
+    memory_gate_enabled: bool = False,
+    memory_gate_mode: str = "auto",
+    memory_timeline_enabled: bool = True,
+    memory_container_tag: str | None = None,
+    memory_auto_tag_mode: str | None = None,
+    memory_profile_enabled: bool = False,
+    memory_profile_path: str = "~/.ace-lite/profile.json",
+    memory_profile_top_n: int = 4,
+    memory_profile_token_budget: int = 160,
+    memory_profile_expiry_enabled: bool = True,
+    memory_profile_ttl_days: int = 90,
+    memory_profile_max_age_days: int = 365,
+    memory_feedback_enabled: bool = False,
+    memory_feedback_path: str = "~/.ace-lite/profile.json",
+    memory_feedback_max_entries: int = 512,
+    memory_feedback_boost_per_select: float = 0.15,
+    memory_feedback_max_boost: float = 0.6,
+    memory_feedback_decay_days: float = 60.0,
+    memory_capture_enabled: bool = False,
+    memory_capture_notes_path: str = "context-map/memory_notes.jsonl",
+    memory_capture_min_query_length: int = 24,
+    memory_capture_keywords: list[str] | tuple[str, ...] | None = None,
+    memory_notes_enabled: bool = False,
+    memory_notes_path: str = "context-map/memory_notes.jsonl",
+    memory_notes_limit: int = 8,
+    memory_notes_mode: str = "supplement",
+    memory_notes_expiry_enabled: bool = True,
+    memory_notes_ttl_days: int = 90,
+    memory_notes_max_age_days: int = 365,
+    memory_postprocess_enabled: bool = False,
+    memory_postprocess_noise_filter_enabled: bool = True,
+    memory_postprocess_length_norm_anchor_chars: int = 500,
+    memory_postprocess_time_decay_half_life_days: float = 0.0,
+    memory_postprocess_hard_min_score: float = 0.0,
+    memory_postprocess_diversity_enabled: bool = True,
+    memory_postprocess_diversity_similarity_threshold: float = 0.9,
+) -> dict[str, Any]:
+    return build_canonical_payload(
+        field_specs=(
+            CanonicalFieldSpec(
+                ("disclosure_mode",),
+                memory_disclosure_mode,
+                "compact",
+                ((memory_group, (("disclosure_mode",),)),),
+            ),
+            CanonicalFieldSpec(
+                ("preview_max_chars",),
+                memory_preview_max_chars,
+                280,
+                ((memory_group, (("preview_max_chars",),)),),
+            ),
+            CanonicalFieldSpec(
+                ("strategy",),
+                memory_strategy,
+                "hybrid",
+                ((memory_group, (("strategy",),)),),
+            ),
+            CanonicalFieldSpec(
+                ("gate", "enabled"),
+                memory_gate_enabled,
+                False,
+                ((memory_group, (("gate", "enabled"), ("gate_enabled",))),),
+            ),
+            CanonicalFieldSpec(
+                ("gate", "mode"),
+                memory_gate_mode,
+                "auto",
+                ((memory_group, (("gate", "mode"), ("gate_mode",))),),
+            ),
+            CanonicalFieldSpec(
+                ("timeline_enabled",),
+                memory_timeline_enabled,
+                True,
+                ((memory_group, (("timeline", "enabled"), ("timeline_enabled",))),),
+            ),
+            CanonicalFieldSpec(
+                ("namespace", "container_tag"),
+                memory_container_tag,
+                None,
+                ((memory_group, (("namespace", "container_tag"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("namespace", "auto_tag_mode"),
+                memory_auto_tag_mode,
+                None,
+                ((memory_group, (("namespace", "auto_tag_mode"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("profile", "enabled"),
+                memory_profile_enabled,
+                False,
+                ((memory_group, (("profile", "enabled"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("profile", "path"),
+                memory_profile_path,
+                "~/.ace-lite/profile.json",
+                ((memory_group, (("profile", "path"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("profile", "top_n"),
+                memory_profile_top_n,
+                4,
+                ((memory_group, (("profile", "top_n"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("profile", "token_budget"),
+                memory_profile_token_budget,
+                160,
+                ((memory_group, (("profile", "token_budget"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("profile", "expiry_enabled"),
+                memory_profile_expiry_enabled,
+                True,
+                ((memory_group, (("profile", "expiry_enabled"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("profile", "ttl_days"),
+                memory_profile_ttl_days,
+                90,
+                ((memory_group, (("profile", "ttl_days"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("profile", "max_age_days"),
+                memory_profile_max_age_days,
+                365,
+                ((memory_group, (("profile", "max_age_days"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("feedback", "enabled"),
+                memory_feedback_enabled,
+                False,
+                ((memory_group, (("feedback", "enabled"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("feedback", "path"),
+                memory_feedback_path,
+                "~/.ace-lite/profile.json",
+                ((memory_group, (("feedback", "path"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("feedback", "max_entries"),
+                memory_feedback_max_entries,
+                512,
+                ((memory_group, (("feedback", "max_entries"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("feedback", "boost_per_select"),
+                memory_feedback_boost_per_select,
+                0.15,
+                ((memory_group, (("feedback", "boost_per_select"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("feedback", "max_boost"),
+                memory_feedback_max_boost,
+                0.6,
+                ((memory_group, (("feedback", "max_boost"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("feedback", "decay_days"),
+                memory_feedback_decay_days,
+                60.0,
+                ((memory_group, (("feedback", "decay_days"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("capture", "enabled"),
+                memory_capture_enabled,
+                False,
+                ((memory_group, (("capture", "enabled"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("capture", "notes_path"),
+                memory_capture_notes_path,
+                "context-map/memory_notes.jsonl",
+                ((memory_group, (("capture", "notes_path"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("capture", "min_query_length"),
+                memory_capture_min_query_length,
+                24,
+                ((memory_group, (("capture", "min_query_length"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("capture", "keywords"),
+                memory_capture_keywords,
+                None,
+                ((memory_group, (("capture", "keywords"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("notes", "enabled"),
+                memory_notes_enabled,
+                False,
+                ((memory_group, (("notes", "enabled"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("notes", "path"),
+                memory_notes_path,
+                "context-map/memory_notes.jsonl",
+                ((memory_group, (("notes", "path"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("notes", "limit"),
+                memory_notes_limit,
+                8,
+                ((memory_group, (("notes", "limit"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("notes", "mode"),
+                memory_notes_mode,
+                "supplement",
+                ((memory_group, (("notes", "mode"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("notes", "expiry_enabled"),
+                memory_notes_expiry_enabled,
+                True,
+                ((memory_group, (("notes", "expiry_enabled"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("notes", "ttl_days"),
+                memory_notes_ttl_days,
+                90,
+                ((memory_group, (("notes", "ttl_days"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("notes", "max_age_days"),
+                memory_notes_max_age_days,
+                365,
+                ((memory_group, (("notes", "max_age_days"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("postprocess", "enabled"),
+                memory_postprocess_enabled,
+                False,
+                ((memory_group, (("postprocess", "enabled"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("postprocess", "noise_filter_enabled"),
+                memory_postprocess_noise_filter_enabled,
+                True,
+                ((memory_group, (("postprocess", "noise_filter_enabled"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("postprocess", "length_norm_anchor_chars"),
+                memory_postprocess_length_norm_anchor_chars,
+                500,
+                ((memory_group, (("postprocess", "length_norm_anchor_chars"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("postprocess", "time_decay_half_life_days"),
+                memory_postprocess_time_decay_half_life_days,
+                0.0,
+                ((memory_group, (("postprocess", "time_decay_half_life_days"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("postprocess", "hard_min_score"),
+                memory_postprocess_hard_min_score,
+                0.0,
+                ((memory_group, (("postprocess", "hard_min_score"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("postprocess", "diversity_enabled"),
+                memory_postprocess_diversity_enabled,
+                True,
+                ((memory_group, (("postprocess", "diversity_enabled"),)),),
+            ),
+            CanonicalFieldSpec(
+                ("postprocess", "diversity_similarity_threshold"),
+                memory_postprocess_diversity_similarity_threshold,
+                0.9,
+                (
+                    (
+                        memory_group,
+                        (("postprocess", "diversity_similarity_threshold"),),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+__all__ = ["build_memory_payload"]

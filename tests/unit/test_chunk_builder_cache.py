@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ace_lite.chunking import builder as chunk_builder
+from ace_lite.chunking.types import CONTEXTUAL_CHUNKING_SIDECAR_KEY
 
 
 def _sample_files_map() -> dict[str, dict[str, object]]:
@@ -205,13 +206,28 @@ def test_build_candidate_chunks_attaches_internal_retrieval_context(
         item for item in chunks if item["qualified_name"] == "src.demo.DemoService.run"
     )
     retrieval_context = str(method_chunk.get("_retrieval_context") or "")
+    contextual_sidecar = method_chunk.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
 
     assert "module=src.demo" in retrieval_context
     assert "language=python" in retrieval_context
     assert "kind=method" in retrieval_context
     assert "symbol=src.demo.DemoService.run" in retrieval_context
+    assert "parent_symbol=src.demo.DemoService" in retrieval_context
     assert "parent=class DemoService:" in retrieval_context
     assert "imports=from pkg.auth import validate" in retrieval_context
+    assert "references=pkg.auth.validate" in retrieval_context
+    assert isinstance(contextual_sidecar, dict)
+    assert contextual_sidecar["schema_version"] == "v1"
+    assert contextual_sidecar["module"] == "src.demo"
+    assert contextual_sidecar["language"] == "python"
+    assert contextual_sidecar["kind"] == "method"
+    assert contextual_sidecar["symbol"] == "src.demo.DemoService.run"
+    assert contextual_sidecar["parent_symbol"] == "src.demo.DemoService"
+    assert contextual_sidecar["parent_signature"] == "class DemoService:"
+    assert contextual_sidecar["imports"] == ["from pkg.auth import validate"]
+    assert contextual_sidecar["imports_truncated"] is False
+    assert contextual_sidecar["references"] == ["pkg.auth.validate"]
+    assert contextual_sidecar["references_truncated"] is False
     assert metrics["retrieval_context_chunk_count"] == 2.0
     assert metrics["retrieval_context_coverage_ratio"] == 1.0
     assert metrics["retrieval_context_char_count_mean"] > 0.0

@@ -1,13 +1,7 @@
 {
   "mode": "report_only",
-  "updated_at": "2026-03-15T00:00:00+00:00",
+  "updated_at": "2026-03-18T00:00:00+00:00",
   "hotspots": [
-    {
-      "path": "src/ace_lite/cli_app/orchestrator_factory_support.py",
-      "coverage_percent": null,
-      "complexity_score": null,
-      "complexity_ceiling": null
-    },
     {
       "path": "src/ace_lite/cli_app/runtime_command_support.py",
       "coverage_percent": null,
@@ -27,7 +21,19 @@
       "complexity_ceiling": null
     },
     {
-      "path": "src/ace_lite/cli_app/params_option_groups.py",
+      "path": "src/ace_lite/cli_app/params_option_retrieval_groups.py",
+      "coverage_percent": null,
+      "complexity_score": null,
+      "complexity_ceiling": null
+    },
+    {
+      "path": "src/ace_lite/cli_app/orchestrator_factory_misc_payloads.py",
+      "coverage_percent": null,
+      "complexity_score": null,
+      "complexity_ceiling": null
+    },
+    {
+      "path": "src/ace_lite/cli_app/orchestrator_factory_memory_payload.py",
       "coverage_percent": null,
       "complexity_score": null,
       "complexity_ceiling": null

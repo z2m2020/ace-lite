@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ace_lite.chunking.types import CONTEXTUAL_CHUNKING_SIDECAR_KEY
 from ace_lite.index_stage.chunk_selection import apply_chunk_selection
 
 
@@ -21,6 +22,13 @@ def _build_chunks(**kwargs: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 "qualified_name": "app.handler",
                 "signature": "def handler() -> None",
                 "snippet": "def handler() -> None:\n    pass",
+                CONTEXTUAL_CHUNKING_SIDECAR_KEY: {
+                    "schema_version": "v1",
+                    "module": "src.app",
+                    "parent_symbol": "src.handlers",
+                    "imports": ["from src.deps import helper"],
+                    "references": ["src.deps.helper"],
+                },
                 "_retrieval_context": "module=src.app\nimports=from src.deps import helper",
                 "robust_signature_summary": {
                     "version": "v1",
@@ -430,7 +438,9 @@ def test_apply_chunk_selection_reranks_rows_with_embeddings() -> None:
         "context-map/embeddings/chunks.index.json"
     )
     assert "module=src.app" in captured["texts"][0]
+    assert "parent_symbol=src.handlers" in captured["texts"][0]
     assert "imports=from src.deps import helper" in captured["texts"][0]
+    assert "references=src.deps.helper" in captured["texts"][0]
     assert result.chunk_semantic_rerank_payload["reason"] == "ok"
     assert result.chunk_semantic_rerank_payload["reranked_count"] == 1
     assert result.chunk_semantic_rerank_payload["retrieval_context_chunk_count"] == 1
@@ -440,7 +450,56 @@ def test_apply_chunk_selection_reranks_rows_with_embeddings() -> None:
         result.chunk_semantic_rerank_payload["retrieval_context_pool_coverage_ratio"]
         == 1.0
     )
+
+
+def _build_chunks_with_structured_sidecar_only(
+    **kwargs: Any,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    _ = kwargs
+    return (
+        [
+            {
+                "path": "src/app.py",
+                "qualified_name": "app.handler",
+                "signature": "def handler() -> None",
+                "snippet": "def handler() -> None:\n    pass",
+                CONTEXTUAL_CHUNKING_SIDECAR_KEY: {
+                    "schema_version": "v1",
+                    "module": "src.app",
+                    "language": "python",
+                    "kind": "function",
+                    "path": "src/app.py",
+                    "symbol": "app.handler",
+                    "parent_symbol": "app",
+                    "imports": ["from src.deps import helper"],
+                    "references": ["src.deps.helper"],
+                },
+                "robust_signature_summary": {
+                    "version": "v1",
+                    "available": True,
+                    "compatibility_domain": "src/app.py::function",
+                    "shape_hash": "shape123",
+                    "entity_vocab_count": 4,
+                },
+                "_robust_signature_lite": {
+                    "version": "v1",
+                    "available": True,
+                    "compatibility_domain": "src/app.py::function",
+                    "entity_vocab": ("app", "handler"),
+                    "shape_hash": "shape123",
+                    "shape_features_count": 3,
+                    "entity_vocab_count": 2,
+                },
+            }
+        ],
+        {
+            "chunk_count": 1,
+            "robust_signature_count": 1.0,
+            "robust_signature_coverage_ratio": 1.0,
+        },
+    )
     assert result.chunk_guard_payload["retained_count"] == 1
+    assert CONTEXTUAL_CHUNKING_SIDECAR_KEY not in result.candidate_chunks[0]
     assert "_retrieval_context" not in result.candidate_chunks[0]
 
 
@@ -512,6 +571,82 @@ def test_apply_chunk_selection_enforce_filters_conflicting_chunks() -> None:
     assert result.chunk_guard_payload["filtered_count"] == 1
     assert result.chunk_guard_payload["retained_count"] == 2
     assert "_robust_signature_lite" not in result.candidate_chunks[0]
+
+
+def test_apply_chunk_selection_can_consume_structured_sidecar_without_text_sidecar() -> None:
+    captured: dict[str, Any] = {}
+
+    def _rerank_rows_embeddings(**kwargs: Any) -> tuple[list[dict[str, Any]], _FakeStats]:
+        captured["texts"] = list(kwargs["texts"])
+        return list(kwargs["rows"]), _FakeStats(
+            reranked_count=1,
+            similarity_mean=0.4,
+            similarity_max=0.8,
+        )
+
+    result = apply_chunk_selection(
+        root=".",
+        query="explain the handler",
+        files_map={"src/app.py": {"path": "src/app.py"}},
+        candidates=[{"path": "src/app.py", "score": 1.0}],
+        terms=["explain", "handler"],
+        top_k_files=4,
+        chunk_top_k=8,
+        chunk_per_file_limit=2,
+        chunk_token_budget=500,
+        chunk_guard_enabled=True,
+        chunk_guard_mode="report_only",
+        chunk_guard_lambda_penalty=0.8,
+        chunk_guard_min_pool=4,
+        chunk_guard_max_pool=32,
+        chunk_guard_min_marginal_utility=0.0,
+        chunk_guard_compatibility_min_overlap=0.3,
+        chunk_disclosure="snippet",
+        chunk_snippet_max_lines=8,
+        chunk_snippet_max_chars=400,
+        policy={
+            "chunk_semantic_rerank_enabled": True,
+            "chunk_semantic_rerank_time_budget_ms": 40,
+            "embedding_enabled": True,
+        },
+        tokenizer_model="gpt-4o-mini",
+        chunk_diversity_enabled=True,
+        chunk_diversity_path_penalty=0.1,
+        chunk_diversity_symbol_family_penalty=0.1,
+        chunk_diversity_kind_penalty=0.1,
+        chunk_diversity_locality_penalty=0.1,
+        chunk_diversity_locality_window=64,
+        chunk_topological_shield_enabled=False,
+        chunk_topological_shield_mode="off",
+        chunk_topological_shield_max_attenuation=0.6,
+        chunk_topological_shield_shared_parent_attenuation=0.2,
+        chunk_topological_shield_adjacency_attenuation=0.5,
+        index_hash="idx",
+        embedding_enabled=True,
+        embedding_lexical_weight=0.7,
+        embedding_semantic_weight=0.3,
+        embedding_min_similarity=0.0,
+        embeddings_payload={
+            "runtime_provider": "hash",
+            "runtime_model": "hash-v1",
+            "runtime_dimension": 16,
+        },
+        semantic_embedding_provider_impl=object(),
+        semantic_cross_encoder_provider=None,
+        mark_timing=lambda name, started: None,
+        rerank_rows_embeddings_with_time_budget=_rerank_rows_embeddings,
+        rerank_rows_cross_encoder_with_time_budget=lambda **kwargs: ([], _FakeStats()),
+        build_candidate_chunks_fn=_build_chunks_with_structured_sidecar_only,
+    )
+
+    assert "module=src.app" in captured["texts"][0]
+    assert "language=python" in captured["texts"][0]
+    assert "symbol=app.handler" in captured["texts"][0]
+    assert "parent_symbol=app" in captured["texts"][0]
+    assert "imports=from src.deps import helper" in captured["texts"][0]
+    assert "references=src.deps.helper" in captured["texts"][0]
+    assert CONTEXTUAL_CHUNKING_SIDECAR_KEY not in result.candidate_chunks[0]
+    assert "_retrieval_context" not in result.candidate_chunks[0]
 
 
 def test_apply_chunk_selection_marks_timeout_fail_open() -> None:

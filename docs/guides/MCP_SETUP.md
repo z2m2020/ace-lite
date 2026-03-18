@@ -127,20 +127,21 @@ Notes:
 - `ACE_LITE_MCP_BASE_URL` / `ACE_LITE_REST_BASE_URL` refer to the OpenMemory service endpoints (not the ACE-Lite MCP server).
 - Some config formats require escaping backslashes (`\\`) for Windows paths.
 
-## Feedback profile guidance for MCP hosts
+## Feedback store guidance for MCP hosts
 
-Selection feedback is stored in the local profile file, not in the MCP transport layer. Keep these rules explicit:
+Selection feedback is stored in the local durable feedback store, not in the MCP transport layer. Keep these rules explicit:
 
-- Use one profile path per repo or workspace if you want reproducible offline replay.
-- Share the same profile across plan-time usage and benchmark replay only when that coupling is intentional.
+- Use one feedback store path per repo or workspace if you want reproducible offline replay.
+- Share the same feedback store across plan-time usage and benchmark replay only when that coupling is intentional.
+- Prefer a canonical SQLite path such as `~/.ace-lite/preference_capture.db`; legacy `profile.json` paths remain compatible but are no longer the primary storage format.
 - If your MCP client returns absolute file paths, call `ace_feedback_record` with the same `root` that the ACE-Lite server uses so paths are stored repo-relative.
 
 Typical lifecycle:
 
 1. The host calls `ace_feedback_record` after the user confirms the correct file.
-2. The profile file accumulates deterministic feedback events.
-3. You export the profile events with `ace-lite feedback export`.
-4. You replay that snapshot into a clean profile with `ace-lite feedback replay --reset` for offline evaluation.
+2. The durable feedback store accumulates deterministic feedback events.
+3. You export the feedback events with `ace-lite feedback export`.
+4. You replay that snapshot into a clean feedback store with `ace-lite feedback replay --reset` for offline evaluation.
 
 ## WSL + Claude Code (reuse Windows-hosted services)
 

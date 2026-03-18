@@ -12,6 +12,8 @@ class FeedbackRecordResponse(TypedDict):
     root: str
     repo: str
     profile_path: str
+    configured_path: str
+    store_path: str
     recorded: dict[str, Any]
 
 
@@ -20,6 +22,8 @@ class FeedbackStatsResponse(TypedDict):
     root: str
     repo: str
     profile_path: str
+    configured_path: str
+    store_path: str
     stats: dict[str, Any]
 
 
@@ -43,6 +47,8 @@ def handle_feedback_record_request(
     query: str,
     selected_path: str,
     repo: str | None,
+    user_id: str | None,
+    profile_key: str | None,
     root_path: Path,
     default_repo: str,
     profile_path: str | None,
@@ -68,6 +74,8 @@ def handle_feedback_record_request(
     recorded = store.record(
         query=normalized_query,
         repo=resolved_repo,
+        user_id=user_id,
+        profile_key=profile_key,
         selected_path=normalized_selected_path,
         position=position,
         root_path=root_path,
@@ -76,7 +84,9 @@ def handle_feedback_record_request(
         "ok": True,
         "root": str(root_path),
         "repo": resolved_repo,
-        "profile_path": str(profile),
+        "profile_path": str(store.path),
+        "configured_path": str(store.configured_path),
+        "store_path": str(store.path),
         "recorded": recorded,
     }
 
@@ -84,6 +94,8 @@ def handle_feedback_record_request(
 def handle_feedback_stats_request(
     *,
     repo: str | None,
+    user_id: str | None,
+    profile_key: str | None,
     root_path: Path,
     default_repo: str,
     profile_path: str | None,
@@ -109,6 +121,8 @@ def handle_feedback_stats_request(
         query_terms = extract_terms(query=normalized_query, memory_stage={})
     stats = store.stats(
         repo=resolved_repo if repo is not None else None,
+        user_id=user_id,
+        profile_key=profile_key,
         query_terms=query_terms,
         boost=FeedbackBoostConfig(
             boost_per_select=max(0.0, float(boost_per_select)),
@@ -121,7 +135,9 @@ def handle_feedback_stats_request(
         "ok": True,
         "root": str(root_path),
         "repo": resolved_repo,
-        "profile_path": str(profile),
+        "profile_path": str(store.path),
+        "configured_path": str(store.configured_path),
+        "store_path": str(store.path),
         "stats": stats,
     }
 

@@ -202,6 +202,8 @@ def _register_feedback_tools(*, server: FastMCP, service: AceLiteMcpService) -> 
         query: str,
         selected_path: str,
         repo: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
         root: str | None = None,
         profile_path: str | None = None,
         position: int | None = None,
@@ -211,6 +213,8 @@ def _register_feedback_tools(*, server: FastMCP, service: AceLiteMcpService) -> 
             query=query,
             selected_path=selected_path,
             repo=repo,
+            user_id=user_id,
+            profile_key=profile_key,
             root=root,
             profile_path=profile_path,
             position=position,
@@ -220,6 +224,8 @@ def _register_feedback_tools(*, server: FastMCP, service: AceLiteMcpService) -> 
     @_tool(server, "ace_feedback_stats")
     def ace_feedback_stats(
         repo: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
         root: str | None = None,
         profile_path: str | None = None,
         query: str | None = None,
@@ -231,6 +237,8 @@ def _register_feedback_tools(*, server: FastMCP, service: AceLiteMcpService) -> 
     ) -> dict[str, Any]:
         return service.feedback_stats(
             repo=repo,
+            user_id=user_id,
+            profile_key=profile_key,
             root=root,
             profile_path=profile_path,
             query=query,

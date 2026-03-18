@@ -16,7 +16,7 @@ plan:
   memory:
     feedback:
       enabled: true
-      path: "~/.ace-lite/profile.json"
+      path: "~/.ace-lite/preference_capture.db"
       max_entries: 512
       boost_per_select: 0.15
       max_boost: 0.6
@@ -30,7 +30,7 @@ benchmark:
   memory:
     feedback:
       enabled: true
-      path: "~/.ace-lite/profile.json"
+      path: "~/.ace-lite/preference_capture.db"
       max_entries: 512
       boost_per_select: 0.15
       max_boost: 0.6
@@ -39,9 +39,11 @@ benchmark:
 
 Notes:
 
-- Feedback events are stored locally under the profile file (`path`).
+- Feedback events are stored locally in the durable feedback/preference store at `path`.
+- Canonical new installs should point `path` at a SQLite store such as `~/.ace-lite/preference_capture.db`.
+- Legacy `profile.json` paths are still accepted for compatibility; ACE-Lite will resolve the durable feedback store next to that file.
 - Decay is time-based (half-life days) and applied deterministically.
-- Use the same profile path only when you intentionally want plan-time usage and benchmark replay to share the exact same feedback corpus.
+- Use the same feedback store path only when you intentionally want plan-time usage and benchmark replay to share the exact same feedback corpus.
 
 ## 2) Record feedback from CLI or MCP hosts
 
@@ -97,14 +99,14 @@ ace-lite feedback export --repo demo --output artifacts/feedback/demo.jsonl
 Replay the exact corpus into a clean profile for offline experiments:
 
 ```bash
-ace-lite feedback replay --input artifacts/feedback/demo.jsonl --repo demo --reset --profile-path artifacts/feedback/replay-profile.json
+ace-lite feedback replay --input artifacts/feedback/demo.jsonl --repo demo --reset --profile-path artifacts/feedback/replay-preference.db
 ```
 
 Replay tips:
 
-- Use `--reset` when you want deterministic reproduction instead of appending to an existing profile.
+- Use `--reset` when you want deterministic reproduction instead of appending to an existing feedback store.
 - Pass `--root` during replay if the exported events contain absolute file paths from an MCP host.
-- Keep exported feedback under `artifacts/` or another disposable path; the profile file remains the runtime source of truth.
+- Keep exported feedback under `artifacts/` or another disposable path; the durable feedback store remains the runtime source of truth.
 
 ## 5) Verify feedback is applied in a plan
 

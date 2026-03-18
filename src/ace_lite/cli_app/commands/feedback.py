@@ -98,7 +98,7 @@ def _write_export_payload(
     "--profile-path",
     default="~/.ace-lite/profile.json",
     show_default=True,
-    help="Path to local profile JSON file (feedback stored under preferences).",
+    help="Feedback store path. Legacy profile JSON paths are still accepted for compatibility.",
 )
 @click.option(
     "--max-entries",
@@ -112,6 +112,12 @@ def _write_export_payload(
     default=None,
     help="Optional repo root used to convert absolute selected paths into repo-relative paths.",
 )
+@click.option("--user-id", default=None, help="Optional user scope stored with the feedback event.")
+@click.option(
+    "--profile-key",
+    default=None,
+    help="Optional runtime profile scope stored with the feedback event.",
+)
 def feedback_record_command(
     selected_path: str,
     query: str,
@@ -120,11 +126,15 @@ def feedback_record_command(
     profile_path: str,
     max_entries: int,
     root: str | None,
+    user_id: str | None,
+    profile_key: str | None,
 ) -> None:
     store = SelectionFeedbackStore(profile_path=profile_path, max_entries=max(0, int(max_entries)))
     payload = store.record(
         query=query,
         repo=repo,
+        user_id=user_id,
+        profile_key=profile_key,
         selected_path=selected_path,
         position=position,
         root_path=root,
@@ -175,8 +185,10 @@ def feedback_record_command(
     "--profile-path",
     default="~/.ace-lite/profile.json",
     show_default=True,
-    help="Path to local profile JSON file (feedback stored under preferences).",
+    help="Feedback store path. Legacy profile JSON paths are still accepted for compatibility.",
 )
+@click.option("--user-id", default=None, help="Optional user filter.")
+@click.option("--profile-key", default=None, help="Optional profile filter.")
 @click.option(
     "--max-entries",
     default=512,
@@ -192,6 +204,8 @@ def feedback_stats_command(
     decay_days: float,
     top_n: int,
     profile_path: str,
+    user_id: str | None,
+    profile_key: str | None,
     max_entries: int,
 ) -> None:
     store = SelectionFeedbackStore(profile_path=profile_path, max_entries=max(0, int(max_entries)))
@@ -201,6 +215,8 @@ def feedback_stats_command(
         query_terms = extract_terms(query=normalized_query, memory_stage={})
     payload = store.stats(
         repo=repo,
+        user_id=user_id,
+        profile_key=profile_key,
         query_terms=query_terms,
         boost=FeedbackBoostConfig(
             boost_per_select=max(0.0, float(boost_per_select)),
@@ -237,8 +253,10 @@ def feedback_stats_command(
     "--profile-path",
     default="~/.ace-lite/profile.json",
     show_default=True,
-    help="Path to local profile JSON file (feedback stored under preferences).",
+    help="Feedback store path. Legacy profile JSON paths are still accepted for compatibility.",
 )
+@click.option("--user-id", default=None, help="Optional user filter.")
+@click.option("--profile-key", default=None, help="Optional profile filter.")
 @click.option(
     "--max-entries",
     default=512,
@@ -251,10 +269,12 @@ def feedback_export_command(
     output_path: Path,
     output_format: str,
     profile_path: str,
+    user_id: str | None,
+    profile_key: str | None,
     max_entries: int,
 ) -> None:
     store = SelectionFeedbackStore(profile_path=profile_path, max_entries=max(0, int(max_entries)))
-    payload = store.export(repo=repo)
+    payload = store.export(repo=repo, user_id=user_id, profile_key=profile_key)
     resolved_format = _resolve_output_format(
         output_path=output_path,
         requested=str(output_format).lower(),
@@ -303,7 +323,13 @@ def feedback_export_command(
     "--profile-path",
     default="~/.ace-lite/profile.json",
     show_default=True,
-    help="Path to local profile JSON file (feedback stored under preferences).",
+    help="Feedback store path. Legacy profile JSON paths are still accepted for compatibility.",
+)
+@click.option("--user-id", default=None, help="Optional user override for replayed events.")
+@click.option(
+    "--profile-key",
+    default=None,
+    help="Optional profile override for replayed events.",
 )
 @click.option(
     "--max-entries",
@@ -318,6 +344,8 @@ def feedback_replay_command(
     root: str | None,
     reset: bool,
     profile_path: str,
+    user_id: str | None,
+    profile_key: str | None,
     max_entries: int,
 ) -> None:
     events, input_format = _load_feedback_events(input_path)
@@ -325,6 +353,8 @@ def feedback_replay_command(
     payload = store.replay(
         events=events,
         repo=repo,
+        user_id=user_id,
+        profile_key=profile_key,
         root_path=root,
         reset=reset,
     )
@@ -338,7 +368,7 @@ def feedback_replay_command(
     "--profile-path",
     default="~/.ace-lite/profile.json",
     show_default=True,
-    help="Path to local profile JSON file (feedback stored under preferences).",
+    help="Feedback store path. Legacy profile JSON paths are still accepted for compatibility.",
 )
 def feedback_reset_command(profile_path: str) -> None:
     store = SelectionFeedbackStore(profile_path=profile_path)

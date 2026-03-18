@@ -48,6 +48,12 @@ class CaseEvaluationMetrics:
     notes_hit_ratio: float
     profile_selected_count: int
     capture_triggered: bool
+    feedback_enabled: bool
+    feedback_reason: str
+    feedback_event_count: int
+    feedback_matched_event_count: int
+    feedback_boosted_count: int
+    feedback_boosted_paths: int
     embedding_enabled: bool
     embedding_fallback: bool
     embedding_cache_hit: bool
@@ -265,6 +271,24 @@ def build_case_evaluation_metrics(
         int(profile_payload.get("selected_count", 0) or 0),
     )
     capture_triggered = bool(capture_payload.get("triggered", False))
+    feedback_enabled = bool(candidate_ranking_payload.get("feedback_enabled", False))
+    feedback_reason = str(candidate_ranking_payload.get("feedback_reason", "") or "").strip()
+    feedback_event_count = max(
+        0,
+        int(candidate_ranking_payload.get("feedback_event_count", 0) or 0),
+    )
+    feedback_matched_event_count = max(
+        0,
+        int(candidate_ranking_payload.get("feedback_matched_event_count", 0) or 0),
+    )
+    feedback_boosted_count = max(
+        0,
+        int(candidate_ranking_payload.get("feedback_boosted_count", 0) or 0),
+    )
+    feedback_boosted_paths = max(
+        0,
+        int(candidate_ranking_payload.get("feedback_boosted_paths", 0) or 0),
+    )
     embedding_enabled = bool(embeddings_payload.get("enabled", False))
     embedding_fallback = bool(embeddings_payload.get("fallback", False))
     embedding_cache_hit = bool(embeddings_payload.get("cache_hit", False))
@@ -961,6 +985,12 @@ def build_case_evaluation_metrics(
         notes_hit_ratio=notes_hit_ratio,
         profile_selected_count=profile_selected_count,
         capture_triggered=capture_triggered,
+        feedback_enabled=feedback_enabled,
+        feedback_reason=feedback_reason,
+        feedback_event_count=feedback_event_count,
+        feedback_matched_event_count=feedback_matched_event_count,
+        feedback_boosted_count=feedback_boosted_count,
+        feedback_boosted_paths=feedback_boosted_paths,
         embedding_enabled=embedding_enabled,
         embedding_fallback=embedding_fallback,
         embedding_cache_hit=embedding_cache_hit,

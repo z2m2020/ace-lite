@@ -11,9 +11,11 @@ from ace_lite.cli_app.runtime_command_support import (
     collect_runtime_status_payload,
     execute_codex_mcp_setup_plan,
     iter_runtime_command_domains,
+    load_runtime_preference_capture_summary,
     resolve_runtime_settings_bundle,
     resolve_effective_runtime_skills_dir,
 )
+from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.runtime_settings_store import (
     build_runtime_settings_record,
     persist_runtime_settings_record,
@@ -164,6 +166,64 @@ def test_build_runtime_status_snapshot_matches_collect_payload(tmp_path: Path) -
     assert {key: value for key, value in payload.items() if key not in {"ok", "event"}} == (
         expected_snapshot
     )
+
+
+def test_load_runtime_preference_capture_summary_reads_durable_feedback_store(
+    tmp_path: Path,
+) -> None:
+    feedback_path = tmp_path / "profile.json"
+    SelectionFeedbackStore(profile_path=feedback_path, max_entries=8).record(
+        query="runtime summary",
+        repo="repo-alpha",
+        profile_key="bugfix",
+        selected_path="src/app.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+
+    payload = load_runtime_preference_capture_summary(
+        feedback_path=feedback_path,
+        repo_key="repo-alpha",
+        profile_key="bugfix",
+    )
+
+    assert payload["event_count"] == 1
+    assert payload["distinct_target_path_count"] == 1
+    assert payload["store_path"].endswith("preference_capture.db")
+    assert payload["profile_key"] == "bugfix"
+
+
+def test_load_runtime_preference_capture_summary_applies_user_id_filter(
+    tmp_path: Path,
+) -> None:
+    feedback_path = tmp_path / "profile.json"
+    store = SelectionFeedbackStore(profile_path=feedback_path, max_entries=8)
+    store.record(
+        query="runtime summary bench",
+        repo="repo-alpha",
+        user_id="bench-user",
+        selected_path="src/app.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+    store.record(
+        query="runtime summary other",
+        repo="repo-alpha",
+        user_id="other-user",
+        selected_path="src/docs.py",
+        captured_at="2026-03-18T00:01:00+00:00",
+        position=1,
+    )
+
+    payload = load_runtime_preference_capture_summary(
+        feedback_path=feedback_path,
+        repo_key="repo-alpha",
+        user_id="bench-user",
+    )
+
+    assert payload["event_count"] == 1
+    assert payload["distinct_target_path_count"] == 1
+    assert payload["user_id"] == "bench-user"
 
 
 def test_execute_codex_mcp_setup_plan_dry_run_does_not_run_commands() -> None:

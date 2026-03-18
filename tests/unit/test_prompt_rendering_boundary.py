@@ -237,3 +237,83 @@ def test_run_source_plan_exposes_top_level_contract_metadata() -> None:
     }
     assert payload["subgraph_payload"]["payload_version"] == "subgraph_payload_v1"
     assert payload["subgraph_payload"]["taxonomy_version"] == "subgraph_edge_taxonomy_v1"
+
+
+def test_run_source_plan_keeps_prompt_boundary_isolated_from_internal_sidecars() -> None:
+    ctx = StageContext(
+        query="trace prompt boundary sidecar isolation",
+        repo="demo",
+        root="/tmp/demo",
+        state={
+            "memory": {"hits_preview": []},
+            "index": {
+                "candidate_files": [{"path": "src/auth.py"}],
+                "candidate_chunks": [
+                    {
+                        "path": "src/auth.py",
+                        "qualified_name": "validate_token",
+                        "kind": "function",
+                        "lineno": 10,
+                        "end_lineno": 20,
+                        "score": 1.0,
+                        "disclosure": "refs",
+                        "_retrieval_context": "module=src.auth\nsymbol=validate_token",
+                        "_contextual_chunking_sidecar": {
+                            "schema_version": "contextual_chunking_sidecar_v1",
+                            "symbol_path": "src.auth:validate_token",
+                            "module_hint": "src.auth",
+                        },
+                        "_robust_signature_lite": {
+                            "available": True,
+                            "compatibility_domain": "src/auth.py::function",
+                        },
+                        "_topological_shield": {
+                            "enabled": True,
+                            "attenuation": 0.15,
+                        },
+                    }
+                ],
+                "chunk_metrics": {"chunk_budget_used": 24},
+            },
+            "repomap": {
+                "focused_files": ["src/auth.py"],
+                "seed_count": 1,
+                "neighbor_count": 0,
+            },
+            "augment": {
+                "tests": {},
+                "xref": {},
+                "diagnostics": [],
+                "vcs_history": {},
+                "vcs_worktree": {},
+            },
+            "skills": {"selected": []},
+            "__policy": {"name": "general", "version": "v1"},
+        },
+    )
+
+    payload = run_source_plan(
+        ctx=ctx,
+        pipeline_order=["memory", "index", "repomap", "augment", "skills", "source_plan"],
+        chunk_top_k=8,
+        chunk_per_file_limit=2,
+        chunk_token_budget=256,
+        chunk_disclosure="refs",
+        policy_version="v1",
+    )
+
+    source_plan_step = next(
+        item for item in payload["steps"] if item.get("stage") == "source_plan"
+    )
+
+    assert payload["prompt_rendering_boundary"] == build_prompt_rendering_boundary()
+    assert source_plan_step["prompt_rendering_boundary"] == build_prompt_rendering_boundary()
+
+    for forbidden_key in (
+        "_retrieval_context",
+        "_contextual_chunking_sidecar",
+        "_robust_signature_lite",
+        "_topological_shield",
+    ):
+        assert forbidden_key not in payload["candidate_chunks"][0]
+        assert forbidden_key not in source_plan_step["candidate_chunks"][0]

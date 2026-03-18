@@ -248,6 +248,67 @@ def test_run_source_plan_preserves_mixed_chunk_disclosure_contracts() -> None:
     ] == [True, False]
 
 
+def test_run_source_plan_does_not_leak_internal_chunk_sidecars() -> None:
+    ctx = StageContext(query="trace internal sidecar boundary", repo="demo", root=".")
+    ctx.state = {
+        "memory": {},
+        "index": {
+            "candidate_files": [{"path": "src/auth.py"}],
+            "candidate_chunks": [
+                {
+                    "path": "src/auth.py",
+                    "qualified_name": "validate_token",
+                    "kind": "function",
+                    "lineno": 10,
+                    "end_lineno": 20,
+                    "score": 10.0,
+                    "disclosure": "refs",
+                    "_retrieval_context": "module=src.auth\nsymbol=validate_token",
+                    "_robust_signature_lite": {
+                        "available": True,
+                        "compatibility_domain": "src/auth.py::function",
+                    },
+                    "_topological_shield": {"enabled": True, "attenuation": 0.2},
+                }
+            ],
+            "chunk_metrics": {"chunk_budget_used": 32.0},
+        },
+        "repomap": {"focused_files": ["src/auth.py"]},
+        "augment": {
+            "diagnostics": [],
+            "xref": {"count": 0, "results": []},
+            "tests": {"suspicious_chunks": [], "suggested_tests": []},
+        },
+        "skills": {"selected": []},
+        "__policy": {"name": "general", "version": "v1", "test_signal_weight": 1.0},
+    }
+
+    result = run_source_plan(
+        ctx=ctx,
+        pipeline_order=["memory", "index", "repomap", "augment", "skills", "source_plan"],
+        chunk_top_k=4,
+        chunk_per_file_limit=2,
+        chunk_token_budget=256,
+        chunk_disclosure="refs",
+        policy_version="v1",
+    )
+
+    assert len(result["candidate_chunks"]) == 1
+    assert "_retrieval_context" not in result["candidate_chunks"][0]
+    assert "_robust_signature_lite" not in result["candidate_chunks"][0]
+    assert "_topological_shield" not in result["candidate_chunks"][0]
+    assert "_retrieval_context" not in result["chunk_steps"][0]["chunk_ref"]
+    assert "_robust_signature_lite" not in result["chunk_steps"][0]["chunk_ref"]
+    assert "_topological_shield" not in result["chunk_steps"][0]["chunk_ref"]
+
+    source_plan_step = next(
+        item for item in result["steps"] if item.get("stage") == "source_plan"
+    )
+    assert "_retrieval_context" not in source_plan_step["candidate_chunks"][0]
+    assert "_robust_signature_lite" not in source_plan_step["candidate_chunks"][0]
+    assert "_topological_shield" not in source_plan_step["candidate_chunks"][0]
+
+
 def test_run_source_plan_promotes_focused_file_coverage() -> None:
     candidate_chunks = [
         {

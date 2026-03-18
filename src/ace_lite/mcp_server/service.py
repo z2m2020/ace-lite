@@ -391,17 +391,22 @@ class AceLiteMcpService:
         query: str,
         selected_path: str,
         repo: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
         root: str | None = None,
         profile_path: str | None = None,
         position: int | None = None,
         max_entries: int = 512,
     ) -> dict[str, Any]:
+        resolved_user_id = user_id if user_id is not None else self._config.user_id
         return self._run_tracked(
             "ace_feedback_record",
             lambda: handle_feedback_record_request(
                 query=query,
                 selected_path=selected_path,
                 repo=repo,
+                user_id=resolved_user_id,
+                profile_key=profile_key,
                 root_path=self._resolve_root(root),
                 default_repo=self._config.default_repo,
                 profile_path=profile_path,
@@ -414,6 +419,8 @@ class AceLiteMcpService:
         self,
         *,
         repo: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
         root: str | None = None,
         profile_path: str | None = None,
         query: str | None = None,
@@ -427,6 +434,8 @@ class AceLiteMcpService:
             "ace_feedback_stats",
             lambda: handle_feedback_stats_request(
                 repo=repo,
+                user_id=user_id,
+                profile_key=profile_key,
                 root_path=self._resolve_root(root),
                 default_repo=self._config.default_repo,
                 profile_path=profile_path,

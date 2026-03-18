@@ -370,6 +370,12 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                     "precision_at_k": 0.5,
                     "noise_rate": 0.5,
                     "dependency_recall": 0.8,
+                    "notes_hit_ratio": 0.5,
+                    "profile_selected_count": 2.0,
+                    "capture_triggered": 1.0,
+                    "feedback_enabled": 1.0,
+                    "feedback_matched_event_count": 2.0,
+                    "feedback_boosted_count": 1.0,
                     "source_plan_direct_evidence_ratio": 0.75,
                     "source_plan_neighbor_context_ratio": 0.25,
                     "source_plan_hint_only_ratio": 0.0,
@@ -430,6 +436,19 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                         "packed_path_count": 2,
                         "reason": "graph_closure_preferred",
                     },
+                    "preference_capture": {
+                        "notes_hit_ratio": 0.5,
+                        "profile_selected_count": 2,
+                        "capture_triggered": True,
+                    },
+                    "feedback_boost": {
+                        "enabled": True,
+                        "reason": "ok",
+                        "event_count": 4,
+                        "matched_event_count": 2,
+                        "boosted_candidate_count": 1,
+                        "boosted_unique_paths": 1,
+                    },
                     "chunk_guard": {
                         "mode": "report_only",
                         "reason": "report_only",
@@ -485,6 +504,11 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "task_success_failed_checks: validation_tests" in report
     assert "evidence_insufficiency_reason: missing_validation" in report
     assert "evidence_insufficiency_signals: missing_validation_tests, noisy_hit" in report
+    assert "notes_hit_ratio: 0.5000" in report
+    assert "profile_selected_count: 2.0000" in report
+    assert "capture_triggered: 1.0000" in report
+    assert "feedback_enabled: 1.0000" in report
+    assert "feedback_boosted_count: 1.0000" in report
     assert "chunk_stage_miss: source_plan_pack_miss" in report
     assert "decision_event: index | retry | candidate_postprocess | reason=low_candidate_count | outcome=applied" in report
     assert "decision_event: skills | skip | skills_hydration | reason=token_budget_exhausted" in report
@@ -523,6 +547,8 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "robust_signature: count=1, coverage_ratio=0.5000" in report
     assert "graph_closure: enabled=True, boosted_chunk_count=2, coverage_ratio=0.5000, anchor_count=1, support_edge_count=3, total=0.1400" in report
     assert "source_plan_packing: graph_closure_preference_enabled=True, graph_closure_bonus_candidate_count=2, graph_closure_preferred_count=1, focused_file_promoted_count=1, packed_path_count=2, reason=graph_closure_preferred" in report
+    assert "preference_capture: notes_hit_ratio=0.5000, profile_selected_count=2, capture_triggered=True" in report
+    assert "feedback_boost: enabled=True, reason=ok, event_count=4, matched_event_count=2, boosted_candidate_count=1, boosted_unique_paths=1" in report
     assert "chunk_stage_miss_details: oracle_file_path=src/ace_lite/benchmark/case_evaluation.py, file_present=True, raw_chunk_present=True, source_plan_chunk_present=False" in report
     assert "embedding_similarity_mean" in report
     assert "latency_median_ms" in report
@@ -806,6 +832,78 @@ def test_build_results_summary_preserves_retrieval_context_observability_summary
     }
 
 
+def test_build_results_summary_preserves_preference_observability_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "preference_observability_summary": {
+                "case_count": 2,
+                "observed_case_count": 2,
+                "observed_case_rate": 1.0,
+                "notes_hit_case_count": 1,
+                "notes_hit_case_rate": 0.5,
+                "profile_selected_case_count": 2,
+                "profile_selected_case_rate": 1.0,
+                "capture_triggered_case_count": 1,
+                "capture_triggered_case_rate": 0.5,
+                "notes_hit_ratio_mean": 0.5,
+                "profile_selected_count_mean": 1.5,
+            },
+        }
+    )
+
+    assert summary["preference_observability_summary"] == {
+        "case_count": 2,
+        "observed_case_count": 2,
+        "observed_case_rate": 1.0,
+        "notes_hit_case_count": 1,
+        "notes_hit_case_rate": 0.5,
+        "profile_selected_case_count": 2,
+        "profile_selected_case_rate": 1.0,
+        "capture_triggered_case_count": 1,
+        "capture_triggered_case_rate": 0.5,
+        "notes_hit_ratio_mean": 0.5,
+        "profile_selected_count_mean": 1.5,
+    }
+
+
+def test_build_results_summary_preserves_feedback_observability_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "feedback_observability_summary": {
+                "case_count": 2,
+                "enabled_case_count": 2,
+                "enabled_case_rate": 1.0,
+                "matched_case_count": 1,
+                "matched_case_rate": 0.5,
+                "boosted_case_count": 1,
+                "boosted_case_rate": 0.5,
+                "event_count_mean": 4.0,
+                "matched_event_count_mean": 1.5,
+                "boosted_candidate_count_mean": 0.5,
+                "boosted_unique_paths_mean": 0.5,
+                "reasons": {"ok": 1, "no_events": 1},
+            },
+        }
+    )
+
+    assert summary["feedback_observability_summary"] == {
+        "case_count": 2,
+        "enabled_case_count": 2,
+        "enabled_case_rate": 1.0,
+        "matched_case_count": 1,
+        "matched_case_rate": 0.5,
+        "boosted_case_count": 1,
+        "boosted_case_rate": 0.5,
+        "event_count_mean": 4.0,
+        "matched_event_count_mean": 1.5,
+        "boosted_candidate_count_mean": 0.5,
+        "boosted_unique_paths_mean": 0.5,
+        "reasons": {"ok": 1, "no_events": 1},
+    }
+
+
 def test_build_report_markdown_includes_adaptive_router_observability_summary() -> None:
     report = build_report_markdown(
         {
@@ -868,6 +966,67 @@ def test_build_report_markdown_includes_retrieval_context_observability_summary(
     assert "| pool_coverage_ratio_mean | 0.5000 |" in report
 
 
+def test_build_report_markdown_includes_preference_observability_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-17T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {},
+            "preference_observability_summary": {
+                "case_count": 2,
+                "observed_case_count": 2,
+                "observed_case_rate": 1.0,
+                "notes_hit_case_count": 1,
+                "notes_hit_case_rate": 0.5,
+                "profile_selected_case_count": 2,
+                "profile_selected_case_rate": 1.0,
+                "capture_triggered_case_count": 1,
+                "capture_triggered_case_rate": 0.5,
+                "notes_hit_ratio_mean": 0.5,
+                "profile_selected_count_mean": 1.5,
+            },
+        }
+    )
+
+    assert "## Preference Observability Summary" in report
+    assert "- Observed cases: 2/2 (1.0000)" in report
+    assert "- Notes-hit cases: 1/2 (0.5000)" in report
+    assert "- Capture-triggered cases: 1/2 (0.5000)" in report
+    assert "| profile_selected_count_mean | 1.5000 |" in report
+
+
+def test_build_report_markdown_includes_feedback_observability_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-17T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {},
+            "feedback_observability_summary": {
+                "case_count": 2,
+                "enabled_case_count": 2,
+                "enabled_case_rate": 1.0,
+                "matched_case_count": 1,
+                "matched_case_rate": 0.5,
+                "boosted_case_count": 1,
+                "boosted_case_rate": 0.5,
+                "event_count_mean": 4.0,
+                "matched_event_count_mean": 1.5,
+                "boosted_candidate_count_mean": 0.5,
+                "boosted_unique_paths_mean": 0.5,
+                "reasons": {"ok": 1, "no_events": 1},
+            },
+        }
+    )
+
+    assert "## Feedback Observability Summary" in report
+    assert "- Enabled cases: 2/2 (1.0000)" in report
+    assert "- Matched cases: 1/2 (0.5000)" in report
+    assert "| boosted_candidate_count_mean | 0.5000 |" in report
+    assert "| no_events | 1 |" in report
+
+
 def test_build_report_markdown_includes_reward_log_summary() -> None:
     report = build_report_markdown(
         {
@@ -896,6 +1055,150 @@ def test_build_report_markdown_includes_reward_log_summary() -> None:
     assert "- Path: context-map/router/rewards.jsonl" in report
     assert "- Error count: 1" in report
     assert "- Last error: disk full" in report
+
+
+def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-17T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {},
+            "runtime_stats_summary": {
+                "db_path": "runtime_state.db",
+                "latest_match": {
+                    "session_id": "sess-1",
+                    "repo_key": "demo",
+                    "profile_key": "default",
+                    "finished_at": "2026-03-17T00:00:00Z",
+                },
+                "summary": {
+                    "session": {
+                        "counters": {
+                            "invocation_count": 1,
+                            "success_count": 1,
+                            "degraded_count": 0,
+                            "failure_count": 0,
+                        },
+                        "latency": {"latency_ms_avg": 12.0},
+                    }
+                },
+                "preference_snapshot": {
+                    "preference_observability_summary": {
+                        "case_count": 2,
+                        "observed_case_count": 2,
+                        "observed_case_rate": 1.0,
+                        "notes_hit_ratio_mean": 0.5,
+                        "profile_selected_count_mean": 1.5,
+                    },
+                    "feedback_observability_summary": {
+                        "case_count": 2,
+                        "boosted_case_count": 1,
+                        "boosted_case_rate": 0.5,
+                        "matched_event_count_mean": 1.5,
+                        "boosted_candidate_count_mean": 0.5,
+                    },
+                    "durable_preference_capture_summary": {
+                        "enabled": True,
+                        "store_path": "preference_capture.db",
+                        "configured_path": "profile.json",
+                        "repo_key": "demo",
+                        "preference_kind": "selection_feedback",
+                        "signal_source": "feedback_store",
+                        "event_count": 3,
+                        "distinct_target_path_count": 2,
+                        "total_weight": 3.0,
+                        "latest_created_at": "2026-03-18T00:00:00Z",
+                        "by_kind": {"selection_feedback": 3},
+                        "by_signal_source": {"feedback_store": 3},
+                    },
+                    "durable_preference_capture_scoped_summary": {
+                        "enabled": True,
+                        "store_path": "preference_capture.db",
+                        "configured_path": "profile.json",
+                        "user_id": "bench-user",
+                        "repo_key": "demo",
+                        "profile_key": "bugfix",
+                        "preference_kind": "selection_feedback",
+                        "signal_source": "feedback_store",
+                        "event_count": 1,
+                        "distinct_target_path_count": 1,
+                        "total_weight": 1.0,
+                        "latest_created_at": "2026-03-18T00:00:00Z",
+                        "by_kind": {"selection_feedback": 1},
+                        "by_signal_source": {"feedback_store": 1},
+                    },
+                    "durable_retrieval_preference_summary": {
+                        "enabled": True,
+                        "store_path": "preference_capture.db",
+                        "configured_path": "profile.json",
+                        "user_id": "bench-user",
+                        "repo_key": "demo",
+                        "preference_kind": "retrieval_preference",
+                        "signal_source": "benchmark",
+                        "event_count": 1,
+                        "distinct_target_path_count": 1,
+                        "total_weight": 0.75,
+                        "latest_created_at": "2026-03-18T00:00:00Z",
+                        "by_kind": {"retrieval_preference": 1},
+                        "by_signal_source": {"benchmark": 1},
+                    },
+                    "durable_packing_preference_summary": {
+                        "enabled": True,
+                        "store_path": "preference_capture.db",
+                        "configured_path": "profile.json",
+                        "user_id": "bench-user",
+                        "repo_key": "demo",
+                        "preference_kind": "packing_preference",
+                        "signal_source": "benchmark",
+                        "event_count": 1,
+                        "distinct_target_path_count": 1,
+                        "total_weight": 1.0,
+                        "latest_created_at": "2026-03-18T00:00:00Z",
+                        "by_kind": {"packing_preference": 1},
+                        "by_signal_source": {"benchmark": 1},
+                    },
+                    "durable_validation_preference_summary": {
+                        "enabled": True,
+                        "store_path": "preference_capture.db",
+                        "configured_path": "profile.json",
+                        "user_id": "bench-user",
+                        "repo_key": "demo",
+                        "preference_kind": "validation_preference",
+                        "signal_source": "benchmark",
+                        "event_count": 1,
+                        "distinct_target_path_count": 1,
+                        "total_weight": 0.25,
+                        "latest_created_at": "2026-03-18T00:00:00Z",
+                        "by_kind": {"validation_preference": 1},
+                        "by_signal_source": {"benchmark": 1},
+                    },
+                },
+            },
+        }
+    )
+
+    assert "## Runtime Stats Summary" in report
+    assert "### Preference Snapshot" in report
+    assert "- Preference observed cases: 2/2 (1.0000)" in report
+    assert "- Preference profile-selected mean: 1.5000" in report
+    assert "- Feedback boosted cases: 1/2 (0.5000)" in report
+    assert "- Feedback boosted-candidate mean: 0.5000" in report
+    assert "- Durable preference store: preference_capture.db" in report
+    assert "- Durable preference events: 3 paths=2 total_weight=3.0000" in report
+    assert "- Durable preference scoped store: preference_capture.db" in report
+    assert "- Durable preference scoped user_id: bench-user" in report
+    assert "- Durable preference scoped profile_key: bugfix" in report
+    assert "- Durable preference scoped events: 1 paths=1 total_weight=1.0000" in report
+    assert "- Durable retrieval-preference store: preference_capture.db" in report
+    assert "- Durable retrieval-preference user_id: bench-user" in report
+    assert "- Durable retrieval-preference events: 1 paths=1 total_weight=0.7500" in report
+    assert "- Durable packing-preference store: preference_capture.db" in report
+    assert "- Durable packing-preference user_id: bench-user" in report
+    assert "- Durable packing-preference events: 1 paths=1 total_weight=1.0000" in report
+    assert "- Durable validation-preference store: preference_capture.db" in report
+    assert "- Durable validation-preference user_id: bench-user" in report
+    assert "- Durable validation-preference events: 1 paths=1 total_weight=0.2500" in report
 
 
 def test_build_results_summary_backfills_task_success_alias() -> None:

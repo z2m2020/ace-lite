@@ -243,6 +243,8 @@ def test_mcp_service_feedback_record_and_stats(tmp_path: Path) -> None:
         query="openmemory 405 dimension mismatch",
         selected_path=str(selected),
         repo="demo-repo",
+        user_id="svc-user",
+        profile_key="bugfix",
         root=str(tmp_path),
         profile_path="context-map/profile.json",
         position=1,
@@ -251,11 +253,15 @@ def test_mcp_service_feedback_record_and_stats(tmp_path: Path) -> None:
     assert recorded["ok"] is True
     assert Path(recorded["profile_path"]).exists()
     assert recorded["recorded"]["event"]["selected_path"] == "src/sample.py"
+    assert recorded["recorded"]["event"]["user_id"] == "svc-user"
+    assert recorded["recorded"]["event"]["profile_key"] == "bugfix"
     health_after_record = service.health()
     assert health_after_record["request_stats"]["last_request_tool"] == "ace_feedback_record"
 
     stats = service.feedback_stats(
         repo="demo-repo",
+        user_id="svc-user",
+        profile_key="bugfix",
         root=str(tmp_path),
         profile_path="context-map/profile.json",
         query="openmemory 405",
@@ -266,8 +272,32 @@ def test_mcp_service_feedback_record_and_stats(tmp_path: Path) -> None:
     stats_payload = stats["stats"]
     assert stats_payload["matched_event_count"] == 1
     assert stats_payload["unique_paths"] == 1
+    assert stats_payload["user_id_filter"] == "svc-user"
+    assert stats_payload["profile_key_filter"] == "bugfix"
     health_after_stats = service.health()
     assert health_after_stats["request_stats"]["last_request_tool"] == "ace_feedback_stats"
+
+
+def test_mcp_service_feedback_record_falls_back_to_config_user_id(tmp_path: Path) -> None:
+    _write_sample_repo(tmp_path)
+    base_service = _make_service(tmp_path)
+    service = AceLiteMcpService(
+        config=replace(base_service.config, user_id="default-mcp-user"),
+    )
+    selected = tmp_path / "src" / "sample.py"
+
+    recorded = service.feedback_record(
+        query="runtime status profile alignment",
+        selected_path=str(selected),
+        repo="demo-repo",
+        root=str(tmp_path),
+        profile_path="context-map/profile.json",
+        position=1,
+        max_entries=8,
+    )
+
+    assert recorded["ok"] is True
+    assert recorded["recorded"]["event"]["user_id"] == "default-mcp-user"
 
 
 def test_mcp_service_plan_smoke_returns_summary(tmp_path: Path) -> None:

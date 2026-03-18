@@ -64,14 +64,15 @@ def apply_feedback_boost(
         return rows, payload
 
     profile_path = _resolve_profile_path(root=root, configured_path=configured_path)
-    payload["path"] = str(profile_path)
     try:
         store = SelectionFeedbackStore(
             profile_path=profile_path,
             max_entries=max(0, int(max_entries)),
         )
         events = store.load_events()
+        payload["path"] = str(store.path)
     except Exception as exc:
+        payload["path"] = str(profile_path)
         payload["reason"] = "load_error"
         payload["error"] = f"{exc.__class__.__name__}:{exc}"
         return rows, payload

@@ -741,6 +741,8 @@ def benchmark_run_command(
         runtime_stats_enabled=bool(run_settings["runtime_stats_enabled"]),
         runtime_stats_db_path=str(run_settings["runtime_stats_db_path"]),
         home_path=os.environ.get("HOME") or os.environ.get("USERPROFILE"),
+        user_id=user_id,
+        profile_key=str(resolved.get("runtime_profile") or "").strip() or None,
         output_dir=output_dir,
         runner_cls=BenchmarkRunner,
         reward_log_writer_cls=AsyncRewardLogWriter,

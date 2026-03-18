@@ -26,6 +26,10 @@ src/*.egg-info/
 test_output.*
 pytest_out.txt
 tmp_review*/
+tmp/
 tmp_runtime_repo/
 /.ace-lite/runtime_state.db
 /~/.ace-lite/runtime_state.db
+/.ace-lite/preference_capture.db
+/~/.ace-lite/preference_capture.db
+/runtime-feedback/

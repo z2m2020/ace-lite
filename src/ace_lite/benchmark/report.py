@@ -187,6 +187,12 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
     latest: dict[str, Any] = latest_raw if isinstance(latest_raw, dict) else {}
     scopes_raw = summary.get("summary")
     scopes: dict[str, Any] = scopes_raw if isinstance(scopes_raw, dict) else {}
+    preference_snapshot_raw = summary.get("preference_snapshot")
+    preference_snapshot: dict[str, Any] = (
+        preference_snapshot_raw
+        if isinstance(preference_snapshot_raw, dict)
+        else {}
+    )
 
     lines.append("## Runtime Stats Summary")
     lines.append("")
@@ -218,6 +224,263 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
             f" | {float(latency.get('latency_ms_avg', 0.0) or 0.0):.2f} |"
         )
     lines.append("")
+    if preference_snapshot:
+        lines.append("### Preference Snapshot")
+        lines.append("")
+        preference_summary_raw = preference_snapshot.get(
+            "preference_observability_summary"
+        )
+        preference_summary: dict[str, Any] = (
+            preference_summary_raw
+            if isinstance(preference_summary_raw, dict)
+            else {}
+        )
+        if preference_summary:
+            lines.append(
+                "- Preference observed cases: {count}/{total} ({rate:.4f})".format(
+                    count=int(preference_summary.get("observed_case_count", 0) or 0),
+                    total=int(preference_summary.get("case_count", 0) or 0),
+                    rate=float(preference_summary.get("observed_case_rate", 0.0) or 0.0),
+                )
+            )
+            lines.append(
+                "- Preference notes-hit mean: {value:.4f}".format(
+                    value=float(
+                        preference_summary.get("notes_hit_ratio_mean", 0.0) or 0.0
+                    )
+                )
+            )
+            lines.append(
+                "- Preference profile-selected mean: {value:.4f}".format(
+                    value=float(
+                        preference_summary.get("profile_selected_count_mean", 0.0)
+                        or 0.0
+                    )
+                )
+            )
+        feedback_summary_raw = preference_snapshot.get("feedback_observability_summary")
+        feedback_summary: dict[str, Any] = (
+            feedback_summary_raw if isinstance(feedback_summary_raw, dict) else {}
+        )
+        if feedback_summary:
+            lines.append(
+                "- Feedback boosted cases: {count}/{total} ({rate:.4f})".format(
+                    count=int(feedback_summary.get("boosted_case_count", 0) or 0),
+                    total=int(feedback_summary.get("case_count", 0) or 0),
+                    rate=float(feedback_summary.get("boosted_case_rate", 0.0) or 0.0),
+                )
+            )
+            lines.append(
+                "- Feedback matched-event mean: {value:.4f}".format(
+                    value=float(
+                        feedback_summary.get("matched_event_count_mean", 0.0) or 0.0
+                    )
+                )
+            )
+            lines.append(
+                "- Feedback boosted-candidate mean: {value:.4f}".format(
+                    value=float(
+                        feedback_summary.get("boosted_candidate_count_mean", 0.0)
+                        or 0.0
+                    )
+                )
+            )
+        durable_summary_raw = preference_snapshot.get(
+            "durable_preference_capture_summary"
+        )
+        durable_summary: dict[str, Any] = (
+            durable_summary_raw if isinstance(durable_summary_raw, dict) else {}
+        )
+        if durable_summary:
+            lines.append(
+                "- Durable preference store: {path}".format(
+                    path=str(durable_summary.get("store_path") or "")
+                )
+            )
+            durable_user = str(durable_summary.get("user_id") or "").strip()
+            if durable_user:
+                lines.append(f"- Durable preference user_id: {durable_user}")
+            lines.append(
+                "- Durable preference events: {count} paths={paths} total_weight={weight:.4f}".format(
+                    count=int(durable_summary.get("event_count", 0) or 0),
+                    paths=int(
+                        durable_summary.get("distinct_target_path_count", 0) or 0
+                    ),
+                    weight=float(durable_summary.get("total_weight", 0.0) or 0.0),
+                )
+            )
+            latest_created_at = str(durable_summary.get("latest_created_at") or "").strip()
+            if latest_created_at:
+                lines.append(
+                    "- Durable preference latest_created_at: {value}".format(
+                        value=latest_created_at
+                )
+            )
+            lines.append("")
+        durable_scoped_summary_raw = preference_snapshot.get(
+            "durable_preference_capture_scoped_summary"
+        )
+        durable_scoped_summary: dict[str, Any] = (
+            durable_scoped_summary_raw
+            if isinstance(durable_scoped_summary_raw, dict)
+            else {}
+        )
+        if durable_scoped_summary:
+            lines.append(
+                "- Durable preference scoped store: {path}".format(
+                    path=str(durable_scoped_summary.get("store_path") or "")
+                )
+            )
+            durable_user = str(durable_scoped_summary.get("user_id") or "").strip()
+            if durable_user:
+                lines.append(f"- Durable preference scoped user_id: {durable_user}")
+            durable_profile = str(durable_scoped_summary.get("profile_key") or "").strip()
+            if durable_profile:
+                lines.append(
+                    f"- Durable preference scoped profile_key: {durable_profile}"
+                )
+            lines.append(
+                "- Durable preference scoped events: {count} paths={paths} total_weight={weight:.4f}".format(
+                    count=int(durable_scoped_summary.get("event_count", 0) or 0),
+                    paths=int(
+                        durable_scoped_summary.get("distinct_target_path_count", 0)
+                        or 0
+                    ),
+                    weight=float(
+                        durable_scoped_summary.get("total_weight", 0.0) or 0.0
+                    ),
+                )
+            )
+            latest_created_at = str(
+                durable_scoped_summary.get("latest_created_at") or ""
+            ).strip()
+            if latest_created_at:
+                lines.append(
+                    "- Durable preference scoped latest_created_at: {value}".format(
+                        value=latest_created_at
+                    )
+                )
+            lines.append("")
+        durable_retrieval_summary_raw = preference_snapshot.get(
+            "durable_retrieval_preference_summary"
+        )
+        durable_retrieval_summary: dict[str, Any] = (
+            durable_retrieval_summary_raw
+            if isinstance(durable_retrieval_summary_raw, dict)
+            else {}
+        )
+        if durable_retrieval_summary:
+            lines.append(
+                "- Durable retrieval-preference store: {path}".format(
+                    path=str(durable_retrieval_summary.get("store_path") or "")
+                )
+            )
+            durable_user = str(durable_retrieval_summary.get("user_id") or "").strip()
+            if durable_user:
+                lines.append(f"- Durable retrieval-preference user_id: {durable_user}")
+            lines.append(
+                "- Durable retrieval-preference events: {count} paths={paths} total_weight={weight:.4f}".format(
+                    count=int(durable_retrieval_summary.get("event_count", 0) or 0),
+                    paths=int(
+                        durable_retrieval_summary.get("distinct_target_path_count", 0)
+                        or 0
+                    ),
+                    weight=float(
+                        durable_retrieval_summary.get("total_weight", 0.0) or 0.0
+                    ),
+                )
+            )
+            latest_created_at = str(
+                durable_retrieval_summary.get("latest_created_at") or ""
+            ).strip()
+            if latest_created_at:
+                lines.append(
+                    "- Durable retrieval-preference latest_created_at: {value}".format(
+                        value=latest_created_at
+                    )
+                )
+            lines.append("")
+        durable_packing_summary_raw = preference_snapshot.get(
+            "durable_packing_preference_summary"
+        )
+        durable_packing_summary: dict[str, Any] = (
+            durable_packing_summary_raw
+            if isinstance(durable_packing_summary_raw, dict)
+            else {}
+        )
+        if durable_packing_summary:
+            lines.append(
+                "- Durable packing-preference store: {path}".format(
+                    path=str(durable_packing_summary.get("store_path") or "")
+                )
+            )
+            durable_user = str(durable_packing_summary.get("user_id") or "").strip()
+            if durable_user:
+                lines.append(f"- Durable packing-preference user_id: {durable_user}")
+            lines.append(
+                "- Durable packing-preference events: {count} paths={paths} total_weight={weight:.4f}".format(
+                    count=int(durable_packing_summary.get("event_count", 0) or 0),
+                    paths=int(
+                        durable_packing_summary.get("distinct_target_path_count", 0)
+                        or 0
+                    ),
+                    weight=float(
+                        durable_packing_summary.get("total_weight", 0.0) or 0.0
+                    ),
+                )
+            )
+            latest_created_at = str(
+                durable_packing_summary.get("latest_created_at") or ""
+            ).strip()
+            if latest_created_at:
+                lines.append(
+                    "- Durable packing-preference latest_created_at: {value}".format(
+                        value=latest_created_at
+                    )
+                )
+            lines.append("")
+        durable_validation_summary_raw = preference_snapshot.get(
+            "durable_validation_preference_summary"
+        )
+        durable_validation_summary: dict[str, Any] = (
+            durable_validation_summary_raw
+            if isinstance(durable_validation_summary_raw, dict)
+            else {}
+        )
+        if durable_validation_summary:
+            lines.append(
+                "- Durable validation-preference store: {path}".format(
+                    path=str(durable_validation_summary.get("store_path") or "")
+                )
+            )
+            durable_user = str(durable_validation_summary.get("user_id") or "").strip()
+            if durable_user:
+                lines.append(f"- Durable validation-preference user_id: {durable_user}")
+            lines.append(
+                "- Durable validation-preference events: {count} paths={paths} total_weight={weight:.4f}".format(
+                    count=int(durable_validation_summary.get("event_count", 0) or 0),
+                    paths=int(
+                        durable_validation_summary.get(
+                            "distinct_target_path_count", 0
+                        )
+                        or 0
+                    ),
+                    weight=float(
+                        durable_validation_summary.get("total_weight", 0.0) or 0.0
+                    ),
+                )
+            )
+            latest_created_at = str(
+                durable_validation_summary.get("latest_created_at") or ""
+            ).strip()
+            if latest_created_at:
+                lines.append(
+                    "- Durable validation-preference latest_created_at: {value}".format(
+                        value=latest_created_at
+                    )
+                )
+            lines.append("")
+        lines.append("")
 
 
 def _append_evidence_insufficiency_summary(
@@ -341,6 +604,133 @@ def _append_retrieval_context_observability_summary(
             value=float(summary.get("pool_coverage_ratio_mean", 0.0) or 0.0)
         )
     )
+    lines.append("")
+
+
+def _append_preference_observability_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("preference_observability_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    lines.append("## Preference Observability Summary")
+    lines.append("")
+    lines.append(
+        "- Observed cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("observed_case_count", 0) or 0),
+            total=int(summary.get("case_count", 0) or 0),
+            rate=float(summary.get("observed_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Notes-hit cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("notes_hit_case_count", 0) or 0),
+            total=int(summary.get("case_count", 0) or 0),
+            rate=float(summary.get("notes_hit_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Profile-selected cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("profile_selected_case_count", 0) or 0),
+            total=int(summary.get("case_count", 0) or 0),
+            rate=float(summary.get("profile_selected_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Capture-triggered cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("capture_triggered_case_count", 0) or 0),
+            total=int(summary.get("case_count", 0) or 0),
+            rate=float(summary.get("capture_triggered_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("| --- | ---: |")
+    lines.append(
+        "| notes_hit_ratio_mean | {value:.4f} |".format(
+            value=float(summary.get("notes_hit_ratio_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| profile_selected_count_mean | {value:.4f} |".format(
+            value=float(summary.get("profile_selected_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append("")
+
+
+def _append_feedback_observability_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("feedback_observability_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    reasons_raw = summary.get("reasons")
+    reasons: dict[str, Any] = reasons_raw if isinstance(reasons_raw, dict) else {}
+
+    lines.append("## Feedback Observability Summary")
+    lines.append("")
+    lines.append(
+        "- Enabled cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("enabled_case_count", 0) or 0),
+            total=int(summary.get("case_count", 0) or 0),
+            rate=float(summary.get("enabled_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Matched cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("matched_case_count", 0) or 0),
+            total=int(summary.get("case_count", 0) or 0),
+            rate=float(summary.get("matched_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Boosted cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("boosted_case_count", 0) or 0),
+            total=int(summary.get("case_count", 0) or 0),
+            rate=float(summary.get("boosted_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("| --- | ---: |")
+    lines.append(
+        "| event_count_mean | {value:.4f} |".format(
+            value=float(summary.get("event_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| matched_event_count_mean | {value:.4f} |".format(
+            value=float(summary.get("matched_event_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| boosted_candidate_count_mean | {value:.4f} |".format(
+            value=float(summary.get("boosted_candidate_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| boosted_unique_paths_mean | {value:.4f} |".format(
+            value=float(summary.get("boosted_unique_paths_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append("")
+    lines.append("### Reasons")
+    lines.append("")
+    if not reasons:
+        lines.append("- None")
+        lines.append("")
+        return
+    lines.append("| Reason | Count |")
+    lines.append("| --- | ---: |")
+    for name, count in sorted(
+        reasons.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))
+    ):
+        lines.append(f"| {name} | {int(count or 0)} |")
     lines.append("")
 
 
@@ -896,6 +1286,8 @@ def build_report_markdown(results: dict[str, Any]) -> str:
 
     _append_comparison_lane_summary(lines, results)
     _append_evidence_insufficiency_summary(lines, results)
+    _append_feedback_observability_summary(lines, results)
+    _append_preference_observability_summary(lines, results)
     _append_retrieval_context_observability_summary(lines, results)
     _append_chunk_stage_miss_summary(lines, results)
     _append_decision_observability_summary(lines, results)

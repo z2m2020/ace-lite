@@ -43,6 +43,23 @@ def _append_case_section(
     lines.append(f"- task_success_mode: {case.get('task_success_mode', 'positive')}")
     lines.append(f"- precision_at_k: {float(case.get('precision_at_k', 0.0)):.4f}")
     lines.append(f"- noise_rate: {float(case.get('noise_rate', 0.0)):.4f}")
+    lines.append(f"- notes_hit_ratio: {float(case.get('notes_hit_ratio', 0.0)):.4f}")
+    lines.append(
+        f"- profile_selected_count: {float(case.get('profile_selected_count', 0.0)):.4f}"
+    )
+    lines.append(
+        f"- capture_triggered: {float(case.get('capture_triggered', 0.0)):.4f}"
+    )
+    lines.append(
+        f"- feedback_enabled: {float(case.get('feedback_enabled', 0.0)):.4f}"
+    )
+    lines.append(
+        "- feedback_matched_event_count: "
+        f"{float(case.get('feedback_matched_event_count', 0.0)):.4f}"
+    )
+    lines.append(
+        f"- feedback_boosted_count: {float(case.get('feedback_boosted_count', 0.0)):.4f}"
+    )
     lines.append(
         f"- source_plan_direct_evidence_ratio: {float(case.get('source_plan_direct_evidence_ratio', 0.0)):.4f}"
     )
@@ -187,6 +204,8 @@ def _append_case_section(
     _append_graph_prior_details(lines, case=case)
     _append_graph_closure_details(lines, case=case)
     _append_source_plan_packing_details(lines, case=case)
+    _append_preference_capture_details(lines, case=case)
+    _append_feedback_boost_details(lines, case=case)
     _append_chunk_stage_miss_details(lines, case=case)
     lines.append(f"- latency_ms: {float(case.get('latency_ms', 0.0)):.2f}")
     lines.append("")
@@ -398,6 +417,59 @@ def _append_source_plan_packing_details(
                 ),
                 "reason={value}".format(
                     value=str(source_plan_packing.get("reason", "") or "(none)")
+                ),
+            ]
+        )
+    )
+
+
+def _append_preference_capture_details(lines: list[str], *, case: dict[str, Any]) -> None:
+    preference_capture = case.get("preference_capture")
+    if not isinstance(preference_capture, dict) or not preference_capture:
+        return
+    lines.append(
+        "- preference_capture: "
+        + ", ".join(
+            [
+                "notes_hit_ratio={value}".format(
+                    value=f"{float(preference_capture.get('notes_hit_ratio', 0.0) or 0.0):.4f}"
+                ),
+                "profile_selected_count={value}".format(
+                    value=int(preference_capture.get("profile_selected_count", 0) or 0)
+                ),
+                "capture_triggered={value}".format(
+                    value=bool(preference_capture.get("capture_triggered", False))
+                ),
+            ]
+        )
+    )
+
+
+def _append_feedback_boost_details(lines: list[str], *, case: dict[str, Any]) -> None:
+    feedback_boost = case.get("feedback_boost")
+    if not isinstance(feedback_boost, dict) or not feedback_boost:
+        return
+    lines.append(
+        "- feedback_boost: "
+        + ", ".join(
+            [
+                "enabled={value}".format(
+                    value=bool(feedback_boost.get("enabled", False))
+                ),
+                "reason={value}".format(
+                    value=str(feedback_boost.get("reason", "") or "(none)")
+                ),
+                "event_count={value}".format(
+                    value=int(feedback_boost.get("event_count", 0) or 0)
+                ),
+                "matched_event_count={value}".format(
+                    value=int(feedback_boost.get("matched_event_count", 0) or 0)
+                ),
+                "boosted_candidate_count={value}".format(
+                    value=int(feedback_boost.get("boosted_candidate_count", 0) or 0)
+                ),
+                "boosted_unique_paths={value}".format(
+                    value=int(feedback_boost.get("boosted_unique_paths", 0) or 0)
                 ),
             ]
         )

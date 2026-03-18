@@ -5,6 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+RETRIEVAL_CONTEXT_SIDECAR_KEY = "_retrieval_context"
+CONTEXTUAL_CHUNKING_SIDECAR_KEY = "_contextual_chunking_sidecar"
+ROBUST_SIGNATURE_SIDECAR_KEY = "_robust_signature_lite"
+TOPOLOGICAL_SHIELD_SIDECAR_KEY = "_topological_shield"
+INTERNAL_CHUNK_SIDECAR_KEYS = frozenset(
+    {
+        RETRIEVAL_CONTEXT_SIDECAR_KEY,
+        CONTEXTUAL_CHUNKING_SIDECAR_KEY,
+        ROBUST_SIGNATURE_SIDECAR_KEY,
+        TOPOLOGICAL_SHIELD_SIDECAR_KEY,
+    }
+)
+
 
 @dataclass(slots=True)
 class ChunkCandidate:
@@ -18,10 +31,15 @@ class ChunkCandidate:
     score: float = 0.0
     signature: str = ""
     snippet: str = ""
+    retrieval_context: str = ""
     score_breakdown: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(
-        self, *, include_signature: bool = True, include_snippet: bool = False
+        self,
+        *,
+        include_signature: bool = True,
+        include_snippet: bool = False,
+        include_internal_sidecars: bool = False,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "path": self.path,
@@ -37,8 +55,81 @@ class ChunkCandidate:
             payload["signature"] = self.signature
         if include_snippet and self.snippet:
             payload["snippet"] = self.snippet
+        if include_internal_sidecars and self.retrieval_context:
+            payload[RETRIEVAL_CONTEXT_SIDECAR_KEY] = self.retrieval_context
 
         return payload
+
+
+def strip_internal_chunk_sidecars(
+    candidate_chunks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    sanitized: list[dict[str, Any]] = []
+    for item in candidate_chunks:
+        if not isinstance(item, dict):
+            continue
+        payload = {
+            key: value
+            for key, value in item.items()
+            if str(key) not in INTERNAL_CHUNK_SIDECAR_KEYS
+            and not str(key).startswith("_")
+        }
+        sanitized.append(payload)
+    return sanitized
+
+
+def render_retrieval_context_from_sidecar(*, sidecar: dict[str, Any]) -> str:
+    if not isinstance(sidecar, dict):
+        return ""
+
+    context_parts: list[str] = []
+    for field in ("module", "language", "kind", "path", "symbol", "signature"):
+        value = str(sidecar.get(field) or "").strip()
+        if value:
+            context_parts.append(f"{field}={value}")
+
+    parent_symbol = str(sidecar.get("parent_symbol") or "").strip()
+    if parent_symbol:
+        context_parts.append(f"parent_symbol={parent_symbol}")
+
+    parent_signature = str(sidecar.get("parent_signature") or "").strip()
+    if parent_signature:
+        context_parts.append(f"parent={parent_signature}")
+
+    imports = sidecar.get("imports", [])
+    if isinstance(imports, list):
+        import_values = [str(item).strip() for item in imports if str(item).strip()]
+        if import_values:
+            joined = ", ".join(import_values)
+            if bool(sidecar.get("imports_truncated", False)):
+                joined += ", ..."
+            context_parts.append(f"imports={joined}")
+
+    references = sidecar.get("references", [])
+    if isinstance(references, list):
+        reference_values = [str(item).strip() for item in references if str(item).strip()]
+        if reference_values:
+            joined = ", ".join(reference_values)
+            if bool(sidecar.get("references_truncated", False)):
+                joined += ", ..."
+            context_parts.append(f"references={joined}")
+
+    return "\n".join(context_parts).strip()
+
+
+def resolve_retrieval_context_text(candidate_chunk: dict[str, Any]) -> str:
+    if not isinstance(candidate_chunk, dict):
+        return ""
+
+    retrieval_context = str(candidate_chunk.get(RETRIEVAL_CONTEXT_SIDECAR_KEY) or "").strip()
+    if retrieval_context:
+        return retrieval_context
+
+    sidecar = candidate_chunk.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
+    if isinstance(sidecar, dict):
+        return render_retrieval_context_from_sidecar(sidecar=sidecar)
+
+    return ""
 
 
 @dataclass(slots=True)
@@ -141,4 +232,15 @@ class ChunkMetrics:
         }
 
 
-__all__ = ["ChunkCandidate", "ChunkMetrics"]
+__all__ = [
+    "ChunkCandidate",
+    "ChunkMetrics",
+    "CONTEXTUAL_CHUNKING_SIDECAR_KEY",
+    "INTERNAL_CHUNK_SIDECAR_KEYS",
+    "RETRIEVAL_CONTEXT_SIDECAR_KEY",
+    "ROBUST_SIGNATURE_SIDECAR_KEY",
+    "TOPOLOGICAL_SHIELD_SIDECAR_KEY",
+    "render_retrieval_context_from_sidecar",
+    "resolve_retrieval_context_text",
+    "strip_internal_chunk_sidecars",
+]

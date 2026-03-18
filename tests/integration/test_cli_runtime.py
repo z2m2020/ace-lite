@@ -9,6 +9,7 @@ from click.testing import CliRunner
 
 import ace_lite.cli as cli_module
 from ace_lite.cli_app.commands import runtime as runtime_module
+from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.runtime_stats import RuntimeInvocationStats
 from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.runtime_settings import RuntimeSettingsManager
@@ -331,6 +332,115 @@ def test_cli_doctor_alias_runs_grouped_runtime_doctor(tmp_path: Path) -> None:
     payload = json.loads(lines[-1])
     assert payload["event"] == "runtime_doctor"
     assert payload["ok"] is True
+
+
+def test_cli_runtime_doctor_applies_user_id_filter_to_preference_capture_summary(
+    tmp_path: Path,
+) -> None:
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    db_path = tmp_path / "runtime-stats.db"
+    _seed_runtime_stats_db(db_path)
+    store = SelectionFeedbackStore(
+        profile_path=tmp_path / ".ace-lite" / "profile.json",
+        max_entries=8,
+    )
+    store.record(
+        query="doctor bench",
+        repo="repo-alpha",
+        user_id="bench-user",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+    store.record(
+        query="doctor other",
+        repo="repo-alpha",
+        user_id="other-user",
+        selected_path="src/docs.py",
+        captured_at="2026-03-18T00:01:00+00:00",
+        position=1,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "doctor",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(skills_dir),
+            "--stats-db-path",
+            str(db_path),
+            "--user-id",
+            "bench-user",
+            "--no-probe-endpoints",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["stats"]["filters"]["user_id"] == "bench-user"
+    assert payload["stats"]["preference_capture_summary"]["event_count"] == 1
+    assert payload["stats"]["preference_capture_summary"]["user_id"] == "bench-user"
+
+
+def test_cli_doctor_alias_applies_user_id_filter_to_preference_capture_summary(
+    tmp_path: Path,
+) -> None:
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    db_path = tmp_path / "runtime-stats.db"
+    _seed_runtime_stats_db(db_path)
+    store = SelectionFeedbackStore(
+        profile_path=tmp_path / ".ace-lite" / "profile.json",
+        max_entries=8,
+    )
+    store.record(
+        query="doctor alias bench",
+        repo="repo-alpha",
+        user_id="bench-user",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+    store.record(
+        query="doctor alias other",
+        repo="repo-alpha",
+        user_id="other-user",
+        selected_path="src/docs.py",
+        captured_at="2026-03-18T00:01:00+00:00",
+        position=1,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "doctor",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(skills_dir),
+            "--stats-db-path",
+            str(db_path),
+            "--user-id",
+            "bench-user",
+            "--no-probe-endpoints",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["stats"]["filters"]["user_id"] == "bench-user"
+    assert payload["stats"]["preference_capture_summary"]["event_count"] == 1
+    assert payload["stats"]["preference_capture_summary"]["user_id"] == "bench-user"
 
 
 def test_cli_runtime_doctor_mcp_uses_snapshot_when_available(tmp_path: Path) -> None:
@@ -1027,6 +1137,16 @@ def test_cli_runtime_stats_honors_repo_and_profile_filters(tmp_path: Path) -> No
 def test_cli_runtime_stats_uses_default_user_scope_db_path(tmp_path: Path) -> None:
     db_path = tmp_path / ".ace-lite" / "runtime_state.db"
     _seed_runtime_stats_db(db_path)
+    SelectionFeedbackStore(
+        profile_path=tmp_path / ".ace-lite" / "profile.json",
+        max_entries=8,
+    ).record(
+        query="repo alpha runtime",
+        repo="repo-alpha",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
 
     runner = CliRunner()
     result = runner.invoke(
@@ -1045,12 +1165,118 @@ def test_cli_runtime_stats_uses_default_user_scope_db_path(tmp_path: Path) -> No
     payload = json.loads(lines[-1])
     assert payload["db_path"] == str(db_path.resolve())
     assert payload["latest_match"]["repo_key"] == "repo-alpha"
+    assert payload["preference_capture_summary"]["event_count"] == 1
+    assert payload["preference_capture_summary"]["distinct_target_path_count"] == 1
+
+
+def test_cli_runtime_stats_profile_filter_applies_to_preference_capture_summary(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / ".ace-lite" / "runtime_state.db"
+    _seed_runtime_stats_db(db_path)
+    profile_path = tmp_path / ".ace-lite" / "profile.json"
+    SelectionFeedbackStore(
+        profile_path=profile_path,
+        max_entries=8,
+    ).record(
+        query="repo alpha runtime bugfix",
+        repo="repo-alpha",
+        profile_key="bugfix",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+    SelectionFeedbackStore(
+        profile_path=profile_path,
+        max_entries=8,
+    ).record(
+        query="repo alpha runtime docs",
+        repo="repo-alpha",
+        profile_key="docs",
+        selected_path="src/docs.py",
+        captured_at="2026-03-18T00:01:00+00:00",
+        position=1,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "stats",
+            "--repo",
+            "repo-alpha",
+            "--profile",
+            "bugfix",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["filters"]["profile"] == "bugfix"
+    assert payload["preference_capture_summary"]["event_count"] == 1
+    assert payload["preference_capture_summary"]["profile_key"] == "bugfix"
+
+
+def test_cli_runtime_stats_user_id_filter_applies_to_preference_capture_summary(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / ".ace-lite" / "runtime_state.db"
+    _seed_runtime_stats_db(db_path)
+    profile_path = tmp_path / ".ace-lite" / "profile.json"
+    store = SelectionFeedbackStore(
+        profile_path=profile_path,
+        max_entries=8,
+    )
+    store.record(
+        query="repo alpha runtime bench",
+        repo="repo-alpha",
+        user_id="bench-user",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+    store.record(
+        query="repo alpha runtime other",
+        repo="repo-alpha",
+        user_id="other-user",
+        selected_path="src/docs.py",
+        captured_at="2026-03-18T00:01:00+00:00",
+        position=1,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "stats",
+            "--repo",
+            "repo-alpha",
+            "--user-id",
+            "bench-user",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["filters"]["user_id"] == "bench-user"
+    assert payload["preference_capture_summary"]["event_count"] == 1
+    assert payload["preference_capture_summary"]["user_id"] == "bench-user"
 
 
 def test_cli_runtime_status_reports_service_health_and_cache_paths(tmp_path: Path) -> None:
     (tmp_path / ".ace-lite.yml").write_text(
         (
             "plan:\n"
+            "  memory:\n"
+            "    feedback:\n"
+            "      enabled: true\n"
+            "      path: runtime-feedback/profile.json\n"
             "  plan_replay_cache:\n"
             "    enabled: true\n"
             "    cache_path: context-map/runtime-cache/replay.json\n"
@@ -1062,6 +1288,16 @@ def test_cli_runtime_status_reports_service_health_and_cache_paths(tmp_path: Pat
     )
     db_path = tmp_path / "runtime-stats.db"
     _seed_runtime_stats_db(db_path)
+    SelectionFeedbackStore(
+        profile_path=tmp_path / "runtime-feedback" / "profile.json",
+        max_entries=8,
+    ).record(
+        query="repo beta runtime status",
+        repo="repo-beta",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
     runner = CliRunner()
     result = runner.invoke(
         cli_module.cli,
@@ -1087,6 +1323,7 @@ def test_cli_runtime_status_reports_service_health_and_cache_paths(tmp_path: Pat
         "skills",
         "embeddings",
         "plan_replay_cache",
+        "preference_capture",
         "trace_export",
         "durable_stats",
     }.issubset(service_health)
@@ -1100,21 +1337,152 @@ def test_cli_runtime_status_reports_service_health_and_cache_paths(tmp_path: Pat
     )
     assert service_health["memory"]["status"] == "disabled"
     assert service_health["plan_replay_cache"]["status"] == "ok"
+    assert service_health["preference_capture"]["status"] == "ok"
     assert service_health["trace_export"]["status"] == "ok"
     assert service_health["durable_stats"]["status"] == "ok"
     assert payload["latest_runtime"]["latest_match"]["session_id"] == "session-gamma"
+    assert payload["latest_runtime"]["preference_capture_summary"]["event_count"] == 1
+
+
+def test_cli_runtime_status_scopes_preference_capture_to_selected_profile(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  memory:\n"
+            "    feedback:\n"
+            "      enabled: true\n"
+            "      path: runtime-feedback/profile.json\n"
+        ),
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "runtime-stats.db"
+    _seed_runtime_stats_db(db_path)
+    profile_path = tmp_path / "runtime-feedback" / "profile.json"
+    SelectionFeedbackStore(
+        profile_path=profile_path,
+        max_entries=8,
+    ).record(
+        query="repo beta runtime bugfix",
+        repo="repo-beta",
+        profile_key="bugfix",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+    SelectionFeedbackStore(
+        profile_path=profile_path,
+        max_entries=8,
+    ).record(
+        query="repo beta runtime docs",
+        repo="repo-beta",
+        profile_key="docs",
+        selected_path="src/docs.py",
+        captured_at="2026-03-18T00:01:00+00:00",
+        position=1,
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "status",
+            "--root",
+            str(tmp_path),
+            "--db-path",
+            str(db_path),
+            "--runtime-profile",
+            "bugfix",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["selected_profile"] == "bugfix"
+    assert payload["stats_tags"]["profile_key"] == "bugfix"
+    assert payload["latest_runtime"]["preference_capture_summary"]["event_count"] == 1
+    assert payload["latest_runtime"]["preference_capture_summary"]["profile_key"] == "bugfix"
+
+
+def test_cli_runtime_status_applies_user_id_filter_to_preference_capture_summary(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  memory:\n"
+            "    feedback:\n"
+            "      enabled: true\n"
+            "      path: runtime-feedback/profile.json\n"
+        ),
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "runtime-stats.db"
+    _seed_runtime_stats_db(db_path)
+    profile_path = tmp_path / "runtime-feedback" / "profile.json"
+    store = SelectionFeedbackStore(
+        profile_path=profile_path,
+        max_entries=8,
+    )
+    store.record(
+        query="repo beta runtime bench",
+        repo="repo-beta",
+        user_id="bench-user",
+        selected_path="src/auth.py",
+        captured_at="2026-03-18T00:00:00+00:00",
+        position=1,
+    )
+    store.record(
+        query="repo beta runtime other",
+        repo="repo-beta",
+        user_id="other-user",
+        selected_path="src/docs.py",
+        captured_at="2026-03-18T00:01:00+00:00",
+        position=1,
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "status",
+            "--root",
+            str(tmp_path),
+            "--db-path",
+            str(db_path),
+            "--user-id",
+            "bench-user",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["latest_runtime"]["filters"]["user_id"] == "bench-user"
+    assert payload["latest_runtime"]["preference_capture_summary"]["event_count"] == 1
+    assert payload["latest_runtime"]["preference_capture_summary"]["user_id"] == (
+        "bench-user"
+    )
 
 
 def test_cli_runtime_help_lists_runtime_profile_flags() -> None:
     runner = CliRunner()
 
     settings_help = runner.invoke(cli_module.cli, ["runtime", "settings", "show", "--help"])
+    stats_help = runner.invoke(cli_module.cli, ["runtime", "stats", "--help"])
     status_help = runner.invoke(cli_module.cli, ["runtime", "status", "--help"])
 
     assert settings_help.exit_code == 0
     assert "--runtime-profile" in settings_help.output
+    assert stats_help.exit_code == 0
+    assert "--user-id" in stats_help.output
     assert status_help.exit_code == 0
     assert "--runtime-profile" in status_help.output
+    assert "--user-id" in status_help.output
 
 
 def test_cli_runtime_status_reports_degraded_services_for_bad_lsp_config(

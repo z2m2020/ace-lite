@@ -18,11 +18,12 @@ RUFF_TARGETS = ["src/ace_lite", "scripts", "tests"]
 BANDIT_TARGETS = ["src/ace_lite"]
 
 HOTSPOT_TARGETS = [
-    "src/ace_lite/cli_app/orchestrator_factory_support.py",
     "src/ace_lite/cli_app/runtime_command_support.py",
     "src/ace_lite/pipeline/stages/index.py",
     "src/ace_lite/orchestrator.py",
-    "src/ace_lite/cli_app/params_option_groups.py",
+    "src/ace_lite/cli_app/params_option_retrieval_groups.py",
+    "src/ace_lite/cli_app/orchestrator_factory_misc_payloads.py",
+    "src/ace_lite/cli_app/orchestrator_factory_memory_payload.py",
     "src/ace_lite/benchmark/report.py",
     "src/ace_lite/benchmark/summaries.py",
 ]

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ace-lite-engine"
-version = "0.3.44"
+version = "0.3.45"
 description = "Local-first Active Context Engine for AI coding"
 readme = "README.md"
 requires-python = ">=3.10"

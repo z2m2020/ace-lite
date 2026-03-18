@@ -26,7 +26,14 @@ from ace_lite.chunking.robust_signature import (
 from ace_lite.chunking.scoring import score_chunk_candidate
 from ace_lite.chunking.skeleton import build_chunk_skeleton
 from ace_lite.chunking.topological_shield import compute_topological_shield
-from ace_lite.chunking.types import ChunkMetrics
+from ace_lite.chunking.types import (
+    CONTEXTUAL_CHUNKING_SIDECAR_KEY,
+    RETRIEVAL_CONTEXT_SIDECAR_KEY,
+    ROBUST_SIGNATURE_SIDECAR_KEY,
+    TOPOLOGICAL_SHIELD_SIDECAR_KEY,
+    ChunkMetrics,
+    render_retrieval_context_from_sidecar,
+)
 from ace_lite.token_estimator import estimate_tokens
 
 _REFERENCE_HITS_CACHE: OrderedDict[str, dict[str, int]] = OrderedDict()
@@ -164,6 +171,23 @@ def _format_import_entry(item: Any) -> str:
     return rendered
 
 
+def _format_reference_entry(item: Any) -> str:
+    if isinstance(item, str):
+        return str(item).strip()
+    if not isinstance(item, dict):
+        return ""
+
+    qualified_name = str(item.get("qualified_name") or "").strip()
+    if qualified_name:
+        return qualified_name
+
+    name = str(item.get("name") or "").strip()
+    if name:
+        return name
+
+    return ""
+
+
 def _extract_snippet(
     *,
     lines: list[str],
@@ -232,7 +256,7 @@ def _extract_snippet(
     return snippet
 
 
-def _build_retrieval_context(
+def _build_contextual_chunking_sidecar(
     *,
     path: str,
     qualified_name: str,
@@ -243,23 +267,25 @@ def _build_retrieval_context(
     symbol: dict[str, Any] | None,
     all_symbols: list[Any] | None,
     file_entry: dict[str, Any] | None,
-) -> str:
-    context_parts: list[str] = []
+) -> dict[str, Any]:
+    sidecar: dict[str, Any] = {"schema_version": "v1"}
 
     module = str((file_entry or {}).get("module") or "").strip()
     language = str((file_entry or {}).get("language") or "").strip().lower()
     if module:
-        context_parts.append(f"module={module}")
+        sidecar["module"] = module
     if language:
-        context_parts.append(f"language={language}")
+        sidecar["language"] = language
     if kind:
-        context_parts.append(f"kind={kind}")
+        sidecar["kind"] = kind
     if path:
-        context_parts.append(f"path={path}")
+        sidecar["path"] = path
     if qualified_name:
-        context_parts.append(f"symbol={qualified_name}")
+        sidecar["symbol"] = qualified_name
     if signature:
-        context_parts.append(f"signature={signature[:240]}")
+        sidecar["signature"] = signature[:240]
+    if "." in qualified_name:
+        sidecar["parent_symbol"] = qualified_name.rsplit(".", 1)[0]
 
     class_sig = _resolve_parent_class_signature(
         lines=lines,
@@ -268,7 +294,7 @@ def _build_retrieval_context(
         all_symbols=all_symbols,
     )
     if class_sig:
-        context_parts.append(f"parent={class_sig[:240]}")
+        sidecar["parent_signature"] = class_sig[:240]
 
     imports = (
         file_entry.get("imports", [])
@@ -279,13 +305,27 @@ def _build_retrieval_context(
         rendered for rendered in (_format_import_entry(item) for item in imports) if rendered
     ]
     if import_values:
-        joined = ", ".join(import_values[:3])
-        if len(import_values) > 3:
-            joined += ", ..."
-        context_parts.append(f"imports={joined}")
+        sidecar["imports"] = import_values[:3]
+        sidecar["imports_truncated"] = len(import_values) > 3
 
-    return "\n".join(context_parts).strip()
+    references = (
+        file_entry.get("references", [])
+        if isinstance(file_entry, dict) and isinstance(file_entry.get("references"), list)
+        else []
+    )
+    reference_values: list[str] = []
+    seen_references: set[str] = set()
+    for item in references:
+        rendered = _format_reference_entry(item)
+        if not rendered or rendered in seen_references:
+            continue
+        seen_references.add(rendered)
+        reference_values.append(rendered)
+    if reference_values:
+        sidecar["references"] = reference_values[:3]
+        sidecar["references_truncated"] = len(reference_values) > 3
 
+    return sidecar
 
 def estimate_chunk_tokens(
     *,
@@ -461,7 +501,7 @@ def build_candidate_chunks(
                     all_symbols=symbols,
                     file_entry=file_entry,
                 )
-            retrieval_context = _build_retrieval_context(
+            retrieval_context_sidecar = _build_contextual_chunking_sidecar(
                 path=path,
                 qualified_name=qualified_name or name,
                 kind=kind,
@@ -471,6 +511,9 @@ def build_candidate_chunks(
                 symbol=symbol,
                 all_symbols=symbols,
                 file_entry=file_entry,
+            )
+            retrieval_context = render_retrieval_context_from_sidecar(
+                sidecar=retrieval_context_sidecar
             )
             score, breakdown = score_chunk_candidate(
                 path=path,
@@ -502,11 +545,12 @@ def build_candidate_chunks(
                     "references_count": len(references),
                     "signature": signature,
                     "snippet": snippet,
-                    "_retrieval_context": retrieval_context,
+                    CONTEXTUAL_CHUNKING_SIDECAR_KEY: retrieval_context_sidecar,
+                    RETRIEVAL_CONTEXT_SIDECAR_KEY: retrieval_context,
                     "_requested_disclosure": disclosure,
                     "_resolved_disclosure": resolved_disclosure,
                     "_disclosure_fallback_reason": fallback_reason,
-                    "_robust_signature_lite": build_robust_signature_lite(
+                    ROBUST_SIGNATURE_SIDECAR_KEY: build_robust_signature_lite(
                         path=path,
                         qualified_name=qualified_name or name,
                         name=name,
@@ -586,8 +630,8 @@ def build_candidate_chunks(
         if not isinstance(score_breakdown, dict):
             score_breakdown = {}
         robust_signature = (
-            item.get("_robust_signature_lite")
-            if isinstance(item.get("_robust_signature_lite"), dict)
+            item.get(ROBUST_SIGNATURE_SIDECAR_KEY)
+            if isinstance(item.get(ROBUST_SIGNATURE_SIDECAR_KEY), dict)
             else None
         )
         robust_signature_summary = summarize_robust_signature(robust_signature)
@@ -611,10 +655,15 @@ def build_candidate_chunks(
             payload["disclosure_fallback_reason"] = fallback_reason
         if robust_signature_summary.get("available", False):
             payload["robust_signature_summary"] = robust_signature_summary
-            payload["_robust_signature_lite"] = robust_signature
-        retrieval_context = str(item.get("_retrieval_context") or "").strip()
+            payload[ROBUST_SIGNATURE_SIDECAR_KEY] = robust_signature
+        retrieval_context = str(item.get(RETRIEVAL_CONTEXT_SIDECAR_KEY) or "").strip()
         if retrieval_context:
-            payload["_retrieval_context"] = retrieval_context
+            payload[RETRIEVAL_CONTEXT_SIDECAR_KEY] = retrieval_context
+        retrieval_context_sidecar = item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
+        if isinstance(retrieval_context_sidecar, dict) and retrieval_context_sidecar:
+            payload[CONTEXTUAL_CHUNKING_SIDECAR_KEY] = dict(
+                retrieval_context_sidecar
+            )
         if is_skeleton_disclosure(resolved_disclosure):
             payload["skeleton"] = build_chunk_skeleton(
                 chunk=item,
@@ -723,7 +772,7 @@ def build_candidate_chunks(
         chosen_breakdown["diversity_adjusted_score"] = round(best_adjusted, 6)
         chosen_breakdown["diversity_selected"] = 1.0
         if isinstance(best_topological_shield, dict):
-            chosen["_topological_shield"] = dict(best_topological_shield)
+            chosen[TOPOLOGICAL_SHIELD_SIDECAR_KEY] = dict(best_topological_shield)
             chosen_breakdown["topological_shield_enabled"] = (
                 1.0 if best_topological_shield.get("enabled", False) else 0.0
             )

@@ -32,6 +32,8 @@ def test_handle_feedback_record_and_stats_round_trip(tmp_path: Path) -> None:
         query="openmemory 405 dimension mismatch",
         selected_path=str(selected),
         repo="demo-repo",
+        user_id="mcp-user",
+        profile_key="bugfix",
         root_path=tmp_path,
         default_repo="default-repo",
         profile_path="context-map/profile.json",
@@ -41,10 +43,18 @@ def test_handle_feedback_record_and_stats_round_trip(tmp_path: Path) -> None:
 
     assert recorded["ok"] is True
     assert Path(recorded["profile_path"]).exists()
+    assert recorded["store_path"] == recorded["profile_path"]
+    assert recorded["configured_path"] == str(
+        (tmp_path / "context-map" / "profile.json").resolve()
+    )
     assert recorded["recorded"]["event"]["selected_path"] == "src/sample.py"
+    assert recorded["recorded"]["event"]["user_id"] == "mcp-user"
+    assert recorded["recorded"]["event"]["profile_key"] == "bugfix"
 
     stats = handle_feedback_stats_request(
         repo="demo-repo",
+        user_id="mcp-user",
+        profile_key="bugfix",
         root_path=tmp_path,
         default_repo="default-repo",
         profile_path="context-map/profile.json",
@@ -57,8 +67,14 @@ def test_handle_feedback_record_and_stats_round_trip(tmp_path: Path) -> None:
     )
 
     assert stats["ok"] is True
+    assert stats["store_path"] == stats["profile_path"]
+    assert stats["configured_path"] == str(
+        (tmp_path / "context-map" / "profile.json").resolve()
+    )
     assert stats["stats"]["matched_event_count"] == 1
     assert stats["stats"]["unique_paths"] == 1
+    assert stats["stats"]["user_id_filter"] == "mcp-user"
+    assert stats["stats"]["profile_key_filter"] == "bugfix"
 
 
 def test_handle_feedback_record_requires_query_and_selected_path(
@@ -69,6 +85,8 @@ def test_handle_feedback_record_requires_query_and_selected_path(
             query=" ",
             selected_path="x.py",
             repo=None,
+            user_id=None,
+            profile_key=None,
             root_path=tmp_path,
             default_repo="default-repo",
             profile_path=None,
@@ -81,6 +99,8 @@ def test_handle_feedback_record_requires_query_and_selected_path(
             query="query",
             selected_path=" ",
             repo=None,
+            user_id=None,
+            profile_key=None,
             root_path=tmp_path,
             default_repo="default-repo",
             profile_path=None,
@@ -118,6 +138,8 @@ def test_handle_feedback_stats_without_query_skips_query_term_extraction(
 
     stats = handle_feedback_stats_request(
         repo=None,
+        user_id=None,
+        profile_key=None,
         root_path=tmp_path,
         default_repo="default-repo",
         profile_path="context-map/profile.json",

@@ -156,6 +156,12 @@ def evaluate_case_result(
     notes_hit_ratio = metrics.notes_hit_ratio
     profile_selected_count = metrics.profile_selected_count
     capture_triggered = metrics.capture_triggered
+    feedback_enabled = metrics.feedback_enabled
+    feedback_reason = metrics.feedback_reason
+    feedback_event_count = metrics.feedback_event_count
+    feedback_matched_event_count = metrics.feedback_matched_event_count
+    feedback_boosted_count = metrics.feedback_boosted_count
+    feedback_boosted_paths = metrics.feedback_boosted_paths
     embedding_enabled = metrics.embedding_enabled
     embedding_fallback = metrics.embedding_fallback
     embedding_cache_hit = metrics.embedding_cache_hit
@@ -428,6 +434,12 @@ def evaluate_case_result(
         notes_hit_ratio=notes_hit_ratio,
         profile_selected_count=profile_selected_count,
         capture_triggered=capture_triggered,
+        feedback_enabled=feedback_enabled,
+        feedback_reason=feedback_reason,
+        feedback_event_count=feedback_event_count,
+        feedback_matched_event_count=feedback_matched_event_count,
+        feedback_boosted_count=feedback_boosted_count,
+        feedback_boosted_paths=feedback_boosted_paths,
         policy_profile=policy_profile,
         graph_transfer_per_seed_ratio=graph_transfer_per_seed_ratio,
         router_enabled=router_enabled,
