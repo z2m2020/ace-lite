@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import time
@@ -300,6 +300,217 @@ def test_mcp_service_feedback_record_falls_back_to_config_user_id(tmp_path: Path
     assert recorded["recorded"]["event"]["user_id"] == "default-mcp-user"
 
 
+def test_mcp_service_issue_report_record_and_list(tmp_path: Path) -> None:
+    _write_sample_repo(tmp_path)
+    service = _make_service(tmp_path)
+    selected = tmp_path / "src" / "sample.py"
+
+    recorded = service.issue_report_record(
+        title="validation payload missing selected path",
+        query="validation missing selected path",
+        actual_behavior="selected path missing from validation payload",
+        repo="demo-repo",
+        user_id="svc-user",
+        profile_key="bugfix",
+        root=str(tmp_path),
+        category="validation",
+        severity="high",
+        status="open",
+        expected_behavior="selected path should be included",
+        repro_steps=["run ace_plan", "inspect output"],
+        selected_path=str(selected),
+        plan_payload_ref="run-123",
+        attachments=["artifact://validation.json"],
+        occurred_at="2026-03-19T00:00:00+00:00",
+    )
+
+    listed = service.issue_report_list(
+        repo="demo-repo",
+        user_id="svc-user",
+        profile_key="bugfix",
+        root=str(tmp_path),
+        status="open",
+        category="validation",
+        severity="high",
+        limit=10,
+    )
+
+    assert recorded["ok"] is True
+    assert recorded["report"]["selected_path"] == "src/sample.py"
+    assert listed["ok"] is True
+    assert listed["count"] == 1
+    assert listed["reports"][0]["plan_payload_ref"] == "run-123"
+
+
+def test_mcp_service_issue_report_export_case_and_apply_fix(tmp_path: Path) -> None:
+    _write_sample_repo(tmp_path)
+    service = _make_service(tmp_path)
+    selected = tmp_path / "src" / "sample.py"
+    issue_store_path = tmp_path / "context-map" / "issue_reports.db"
+    dev_feedback_path = tmp_path / "context-map" / "dev_feedback.db"
+
+    recorded = service.issue_report_record(
+        title="validation payload missing selected path",
+        query="validation missing selected path",
+        actual_behavior="selected path missing from validation payload",
+        repo="demo-repo",
+        user_id="svc-user",
+        profile_key="bugfix",
+        root=str(tmp_path),
+        category="validation",
+        severity="high",
+        status="open",
+        expected_behavior="selected path should be included",
+        repro_steps=["run ace_plan", "inspect output"],
+        selected_path=str(selected),
+        plan_payload_ref="run-123",
+        attachments=["artifact://validation.json"],
+        occurred_at="2026-03-19T00:00:00+00:00",
+        issue_id="iss_demo1234",
+    )
+    fix = service.dev_fix_record(
+        reason_code="memory_fallback",
+        repo="demo-repo",
+        resolution_note="patched validation payload",
+        store_path=str(dev_feedback_path),
+        user_id="svc-user",
+        profile_key="bugfix",
+        issue_id="iss_demo1234",
+        query="validation missing selected path",
+        selected_path="src/sample.py",
+        created_at="2026-03-19T00:05:00+00:00",
+        fix_id="devf_demo1234",
+    )
+    exported = service.issue_report_export_case(
+        issue_id="iss_demo1234",
+        root=str(tmp_path),
+        store_path=str(issue_store_path),
+        output_path="benchmark/cases/feedback_issue_reports.yaml",
+    )
+    resolved = service.issue_report_apply_fix(
+        issue_id="iss_demo1234",
+        fix_id="devf_demo1234",
+        root=str(tmp_path),
+        issue_store_path=str(issue_store_path),
+        dev_feedback_path=str(dev_feedback_path),
+    )
+
+    assert recorded["ok"] is True
+    assert fix["ok"] is True
+    assert exported["ok"] is True
+    assert exported["case"]["case_id"] == "issue-report-iss-demo1234"
+    assert Path(exported["output_path"]).exists() is True
+    assert resolved["ok"] is True
+    assert resolved["report"]["status"] == "resolved"
+    assert resolved["report"]["resolution_note"] == "patched validation payload"
+
+
+def test_mcp_service_dev_feedback_round_trip(tmp_path: Path) -> None:
+    service = _make_service(tmp_path)
+    store_path = tmp_path / "context-map" / "dev_feedback.db"
+
+    recorded_issue = service.dev_issue_record(
+        title="git fallback slows augment",
+        reason_code="memory_fallback",
+        repo="demo-repo",
+        store_path=str(store_path),
+        user_id="svc-user",
+        profile_key="bugfix",
+        query="augment latency",
+        selected_path="src/sample.py",
+        related_invocation_id="inv-123",
+        notes="seen in runtime doctor",
+        status="open",
+        created_at="2026-03-19T00:00:00+00:00",
+        updated_at="2026-03-19T00:01:00+00:00",
+        issue_id="dev-issue-1",
+    )
+    recorded_fix = service.dev_fix_record(
+        reason_code="memory_fallback",
+        repo="demo-repo",
+        resolution_note="added cache warming",
+        store_path=str(store_path),
+        user_id="svc-user",
+        profile_key="bugfix",
+        issue_id="dev-issue-1",
+        query="augment latency",
+        selected_path="src/sample.py",
+        related_invocation_id="inv-123",
+        created_at="2026-03-19T00:02:00+00:00",
+        fix_id="dev-fix-1",
+    )
+    summary = service.dev_feedback_summary(
+        repo="demo-repo",
+        user_id="svc-user",
+        profile_key="bugfix",
+        store_path=str(store_path),
+    )
+
+    assert recorded_issue["ok"] is True
+    assert recorded_issue["issue"]["issue_id"] == "dev-issue-1"
+    assert recorded_fix["ok"] is True
+    assert recorded_fix["fix"]["fix_id"] == "dev-fix-1"
+    assert summary["ok"] is True
+    assert summary["summary"]["issue_count"] == 1
+    assert summary["summary"]["open_issue_count"] == 1
+    assert summary["summary"]["fix_count"] == 1
+    assert summary["summary"]["by_reason_code"][0]["reason_code"] == "memory_fallback"
+
+
+
+def test_mcp_service_dev_feedback_record_fix_and_summary(tmp_path: Path) -> None:
+    _write_sample_repo(tmp_path)
+    service = _make_service(tmp_path)
+
+    recorded_issue = service.dev_issue_record(
+        title="Memory fallback while planning",
+        reason_code="memory_fallback",
+        repo="demo-repo",
+        store_path=str(tmp_path / "context-map" / "dev-feedback.db"),
+        user_id="svc-user",
+        profile_key="bugfix",
+        query="why did memory fallback",
+        selected_path="src/sample.py",
+        related_invocation_id="inv-123",
+        notes="first report",
+        status="open",
+        created_at="2026-03-19T00:00:00+00:00",
+        updated_at="2026-03-19T00:00:00+00:00",
+        issue_id="devi_memory_fallback",
+    )
+    recorded_fix = service.dev_fix_record(
+        reason_code="memory_fallback",
+        repo="demo-repo",
+        resolution_note="added fallback diagnostics",
+        store_path=str(tmp_path / "context-map" / "dev-feedback.db"),
+        user_id="svc-user",
+        profile_key="bugfix",
+        issue_id="devi_memory_fallback",
+        query="why did memory fallback",
+        selected_path="src/sample.py",
+        related_invocation_id="inv-123",
+        created_at="2026-03-19T00:05:00+00:00",
+        fix_id="devf_memory_fallback",
+    )
+    summary = service.dev_feedback_summary(
+        repo="demo-repo",
+        user_id="svc-user",
+        profile_key="bugfix",
+        store_path=str(tmp_path / "context-map" / "dev-feedback.db"),
+    )
+
+    assert recorded_issue["ok"] is True
+    assert recorded_issue["issue"]["reason_code"] == "memory_fallback"
+    assert recorded_fix["ok"] is True
+    assert recorded_fix["fix"]["issue_id"] == "devi_memory_fallback"
+    assert summary["ok"] is True
+    assert summary["summary"]["issue_count"] == 1
+    assert summary["summary"]["fix_count"] == 1
+    assert summary["summary"]["by_reason_code"][0]["reason_code"] == "memory_fallback"
+    health_after = service.health()
+    assert health_after["request_stats"]["last_request_tool"] == "ace_dev_feedback_summary"
+
+
 def test_mcp_service_plan_smoke_returns_summary(tmp_path: Path) -> None:
     _write_sample_repo(tmp_path)
     service = _make_service(tmp_path)
@@ -596,3 +807,4 @@ def test_mcp_service_plan_defaults_plugins_disabled(
 
     assert result["ok"] is True
     assert captured.get("plugins_enabled") is False
+

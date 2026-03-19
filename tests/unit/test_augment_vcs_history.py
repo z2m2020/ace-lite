@@ -21,5 +21,4 @@ def test_run_diagnostics_augment_includes_vcs_history_payload(tmp_path: Path) ->
     assert payload["enabled"] is False
     assert "vcs_history" in payload
     assert payload["vcs_history"]["enabled"] is False
-    assert payload["vcs_history"]["reason"] in {"not_git_repo", "no_paths"}
-
+    assert payload["vcs_history"]["reason"] == "disabled"

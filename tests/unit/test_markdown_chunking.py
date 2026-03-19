@@ -75,3 +75,140 @@ def test_chunk_builder_selects_markdown_sections(tmp_path: Path) -> None:
         for item in chunks
     )
 
+
+def test_chunk_builder_caps_markdown_sections_per_file_by_default(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "guide.md").write_text(
+        "# Title\nBody\n\n## Sub A\nA\n\n## Sub B\nB\n",
+        encoding="utf-8",
+    )
+
+    files_map = {
+        "docs/guide.md": {
+            "module": "docs.guide",
+            "language": "markdown",
+            "symbols": [
+                {
+                    "name": "Title",
+                    "qualified_name": "docs/guide.md#Title",
+                    "kind": "section",
+                    "lineno": 1,
+                    "end_lineno": 8,
+                },
+                {
+                    "name": "Sub A",
+                    "qualified_name": "docs/guide.md#Title/Sub A",
+                    "kind": "section",
+                    "lineno": 4,
+                    "end_lineno": 5,
+                },
+                {
+                    "name": "Sub B",
+                    "qualified_name": "docs/guide.md#Title/Sub B",
+                    "kind": "section",
+                    "lineno": 7,
+                    "end_lineno": 8,
+                },
+            ],
+            "references": [],
+            "imports": [],
+        }
+    }
+
+    chunks, _ = build_candidate_chunks(
+        root=str(tmp_path),
+        files_map=files_map,
+        candidates=[{"path": "docs/guide.md", "score": 10.0}],
+        terms=["title"],
+        top_k_files=1,
+        top_k_chunks=6,
+        per_file_limit=3,
+        token_budget=1200,
+        disclosure_mode="refs",
+        snippet_max_lines=18,
+        snippet_max_chars=1200,
+        policy={},
+        tokenizer_model="gpt-4o-mini",
+        diversity_enabled=False,
+        diversity_path_penalty=0.0,
+        diversity_symbol_family_penalty=0.0,
+        diversity_kind_penalty=0.0,
+        diversity_locality_penalty=0.0,
+        diversity_locality_window=24,
+    )
+
+    markdown_sections = [
+        item
+        for item in chunks
+        if item.get("path") == "docs/guide.md" and item.get("kind") == "section"
+    ]
+    assert len(markdown_sections) == 2
+
+
+def test_chunk_builder_allows_markdown_section_cap_override(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "guide.md").write_text(
+        "# Title\nBody\n\n## Sub A\nA\n\n## Sub B\nB\n",
+        encoding="utf-8",
+    )
+
+    files_map = {
+        "docs/guide.md": {
+            "module": "docs.guide",
+            "language": "markdown",
+            "symbols": [
+                {
+                    "name": "Title",
+                    "qualified_name": "docs/guide.md#Title",
+                    "kind": "section",
+                    "lineno": 1,
+                    "end_lineno": 8,
+                },
+                {
+                    "name": "Sub A",
+                    "qualified_name": "docs/guide.md#Title/Sub A",
+                    "kind": "section",
+                    "lineno": 4,
+                    "end_lineno": 5,
+                },
+                {
+                    "name": "Sub B",
+                    "qualified_name": "docs/guide.md#Title/Sub B",
+                    "kind": "section",
+                    "lineno": 7,
+                    "end_lineno": 8,
+                },
+            ],
+            "references": [],
+            "imports": [],
+        }
+    }
+
+    chunks, _ = build_candidate_chunks(
+        root=str(tmp_path),
+        files_map=files_map,
+        candidates=[{"path": "docs/guide.md", "score": 10.0}],
+        terms=["title"],
+        top_k_files=1,
+        top_k_chunks=6,
+        per_file_limit=3,
+        token_budget=1200,
+        disclosure_mode="refs",
+        snippet_max_lines=18,
+        snippet_max_chars=1200,
+        policy={"markdown_section_per_file_limit": 3},
+        tokenizer_model="gpt-4o-mini",
+        diversity_enabled=False,
+        diversity_path_penalty=0.0,
+        diversity_symbol_family_penalty=0.0,
+        diversity_kind_penalty=0.0,
+        diversity_locality_penalty=0.0,
+        diversity_locality_window=24,
+    )
+
+    markdown_sections = [
+        item
+        for item in chunks
+        if item.get("path") == "docs/guide.md" and item.get("kind") == "section"
+    ]
+    assert len(markdown_sections) == 3

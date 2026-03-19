@@ -156,6 +156,10 @@ def evaluate_case_result(
     notes_hit_ratio = metrics.notes_hit_ratio
     profile_selected_count = metrics.profile_selected_count
     capture_triggered = metrics.capture_triggered
+    ltm_selected_count = metrics.ltm_selected_count
+    ltm_attribution_count = metrics.ltm_attribution_count
+    ltm_graph_neighbor_count = metrics.ltm_graph_neighbor_count
+    ltm_plan_constraint_count = metrics.ltm_plan_constraint_count
     feedback_enabled = metrics.feedback_enabled
     feedback_reason = metrics.feedback_reason
     feedback_event_count = metrics.feedback_event_count
@@ -206,6 +210,18 @@ def evaluate_case_result(
     retrieval_context_chunk_count = metrics.retrieval_context_chunk_count
     retrieval_context_coverage_ratio = metrics.retrieval_context_coverage_ratio
     retrieval_context_char_count_mean = metrics.retrieval_context_char_count_mean
+    contextual_sidecar_parent_symbol_chunk_count = (
+        metrics.contextual_sidecar_parent_symbol_chunk_count
+    )
+    contextual_sidecar_parent_symbol_coverage_ratio = (
+        metrics.contextual_sidecar_parent_symbol_coverage_ratio
+    )
+    contextual_sidecar_reference_hint_chunk_count = (
+        metrics.contextual_sidecar_reference_hint_chunk_count
+    )
+    contextual_sidecar_reference_hint_coverage_ratio = (
+        metrics.contextual_sidecar_reference_hint_coverage_ratio
+    )
     retrieval_context_pool_chunk_count = metrics.retrieval_context_pool_chunk_count
     retrieval_context_pool_coverage_ratio = (
         metrics.retrieval_context_pool_coverage_ratio
@@ -361,6 +377,18 @@ def evaluate_case_result(
         retrieval_context_chunk_count=retrieval_context_chunk_count,
         retrieval_context_coverage_ratio=retrieval_context_coverage_ratio,
         retrieval_context_char_count_mean=retrieval_context_char_count_mean,
+        contextual_sidecar_parent_symbol_chunk_count=(
+            contextual_sidecar_parent_symbol_chunk_count
+        ),
+        contextual_sidecar_parent_symbol_coverage_ratio=(
+            contextual_sidecar_parent_symbol_coverage_ratio
+        ),
+        contextual_sidecar_reference_hint_chunk_count=(
+            contextual_sidecar_reference_hint_chunk_count
+        ),
+        contextual_sidecar_reference_hint_coverage_ratio=(
+            contextual_sidecar_reference_hint_coverage_ratio
+        ),
         retrieval_context_pool_chunk_count=retrieval_context_pool_chunk_count,
         retrieval_context_pool_coverage_ratio=retrieval_context_pool_coverage_ratio,
         chunk_contract_fallback_count=chunk_contract_fallback_count,
@@ -434,6 +462,10 @@ def evaluate_case_result(
         notes_hit_ratio=notes_hit_ratio,
         profile_selected_count=profile_selected_count,
         capture_triggered=capture_triggered,
+        ltm_selected_count=ltm_selected_count,
+        ltm_attribution_count=ltm_attribution_count,
+        ltm_graph_neighbor_count=ltm_graph_neighbor_count,
+        ltm_plan_constraint_count=ltm_plan_constraint_count,
         feedback_enabled=feedback_enabled,
         feedback_reason=feedback_reason,
         feedback_event_count=feedback_event_count,
@@ -524,6 +556,18 @@ def evaluate_case_result(
                 retrieval_context_chunk_count=retrieval_context_chunk_count,
                 retrieval_context_coverage_ratio=retrieval_context_coverage_ratio,
                 retrieval_context_char_count_mean=retrieval_context_char_count_mean,
+                contextual_sidecar_parent_symbol_chunk_count=(
+                    contextual_sidecar_parent_symbol_chunk_count
+                ),
+                contextual_sidecar_parent_symbol_coverage_ratio=(
+                    contextual_sidecar_parent_symbol_coverage_ratio
+                ),
+                contextual_sidecar_reference_hint_chunk_count=(
+                    contextual_sidecar_reference_hint_chunk_count
+                ),
+                contextual_sidecar_reference_hint_coverage_ratio=(
+                    contextual_sidecar_reference_hint_coverage_ratio
+                ),
                 chunk_contract_fallback_count=chunk_contract_fallback_count,
                 chunk_contract_skeleton_chunk_count=chunk_contract_skeleton_chunk_count,
                 chunk_contract_fallback_ratio=chunk_contract_fallback_ratio,

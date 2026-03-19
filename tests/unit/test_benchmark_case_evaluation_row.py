@@ -36,6 +36,10 @@ def _base_row_kwargs() -> dict[str, object]:
         "retrieval_context_chunk_count": 2,
         "retrieval_context_coverage_ratio": 1.0,
         "retrieval_context_char_count_mean": 84.0,
+        "contextual_sidecar_parent_symbol_chunk_count": 2,
+        "contextual_sidecar_parent_symbol_coverage_ratio": 1.0,
+        "contextual_sidecar_reference_hint_chunk_count": 1,
+        "contextual_sidecar_reference_hint_coverage_ratio": 0.5,
         "retrieval_context_pool_chunk_count": 1,
         "retrieval_context_pool_coverage_ratio": 0.5,
         "chunk_contract_fallback_count": 1,
@@ -99,6 +103,10 @@ def _base_row_kwargs() -> dict[str, object]:
         "notes_hit_ratio": 0.25,
         "profile_selected_count": 2,
         "capture_triggered": True,
+        "ltm_selected_count": 2,
+        "ltm_attribution_count": 1,
+        "ltm_graph_neighbor_count": 1,
+        "ltm_plan_constraint_count": 1,
         "feedback_enabled": True,
         "feedback_reason": "ok",
         "feedback_event_count": 4,
@@ -178,6 +186,8 @@ def test_build_case_evaluation_row_contract() -> None:
     assert row["skills_budget_exhausted"] == 1.0
     assert row["plan_replay_cache_hit"] == 1.0
     assert row["source_plan_packed_path_ratio"] == 0.5
+    assert row["contextual_sidecar_parent_symbol_chunk_count"] == 2.0
+    assert row["contextual_sidecar_reference_hint_coverage_ratio"] == 0.5
     assert row["router_fallback_reason"] == "low_confidence"
     assert row["docs_enabled"] == 1.0
     assert row["chunk_guard_mode"] == "strict"
@@ -186,6 +196,12 @@ def test_build_case_evaluation_row_contract() -> None:
         "notes_hit_ratio": 0.25,
         "profile_selected_count": 2,
         "capture_triggered": True,
+    }
+    assert row["ltm_explainability"] == {
+        "selected_count": 2,
+        "attribution_count": 1,
+        "graph_neighbor_count": 1,
+        "plan_constraint_count": 1,
     }
     assert row["feedback_boost"] == {
         "enabled": True,

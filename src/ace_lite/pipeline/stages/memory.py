@@ -336,6 +336,138 @@ def compact_memory_record(
     return payload
 
 
+def _build_ltm_selected_entry(hit: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = hit.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    memory_kind = str(metadata.get("memory_kind") or "").strip().lower()
+    if memory_kind not in {"fact", "observation"}:
+        return None
+
+    handle = str(hit.get("handle") or "").strip()
+    if not handle:
+        return None
+
+    payload: dict[str, Any] = {
+        "handle": handle,
+        "memory_kind": memory_kind,
+        "source": str(hit.get("source") or "memory"),
+    }
+    for key in ("as_of", "derived_from_observation_id"):
+        value = str(metadata.get(key) or "").strip()
+        if value:
+            payload[key] = value
+
+    if memory_kind == "fact":
+        for key in ("fact_type", "subject", "predicate", "object"):
+            value = str(metadata.get(key) or "").strip()
+            if value:
+                payload[key] = value
+    else:
+        for key in ("kind", "query", "status"):
+            value = str(metadata.get(key) or "").strip()
+            if value:
+                payload[key] = value
+    return payload
+
+
+def _build_ltm_attribution_entry(hit: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = hit.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    selected = _build_ltm_selected_entry(hit)
+    if selected is None:
+        return None
+
+    memory_kind = str(selected["memory_kind"])
+    summary = ""
+    if memory_kind == "fact":
+        summary = " ".join(
+            value
+            for value in (
+                str(selected.get("subject") or "").strip(),
+                str(selected.get("predicate") or "").strip(),
+                str(selected.get("object") or "").strip(),
+            )
+            if value
+        )
+    else:
+        summary = " ".join(
+            value
+            for value in (
+                str(selected.get("kind") or "").strip(),
+                str(selected.get("query") or "").strip(),
+            )
+            if value
+        )
+
+    payload: dict[str, Any] = {
+        "handle": str(selected["handle"]),
+        "memory_kind": memory_kind,
+        "signals": [memory_kind],
+    }
+    if summary:
+        payload["summary"] = summary
+
+    neighborhood = metadata.get("neighborhood")
+    if isinstance(neighborhood, dict):
+        triple_count = int(neighborhood.get("triple_count", 0) or 0)
+        payload["graph_neighborhood"] = {
+            "hops": int(neighborhood.get("hops", 0) or 0),
+            "limit": int(neighborhood.get("limit", 0) or 0),
+            "triple_count": triple_count,
+            "triples": (
+                neighborhood.get("triples")
+                if isinstance(neighborhood.get("triples"), list)
+                else []
+            ),
+        }
+        if triple_count > 0:
+            payload["signals"].append("graph_neighborhood")
+
+    derived_from = str(selected.get("derived_from_observation_id") or "").strip()
+    if derived_from:
+        payload["derived_from_observation_id"] = derived_from
+    return payload
+
+
+def build_ltm_explainability(
+    *,
+    hits_preview: list[dict[str, Any]],
+    hits: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    detail_by_handle: dict[str, dict[str, Any]] = {}
+    if isinstance(hits, list):
+        for item in hits:
+            if not isinstance(item, dict):
+                continue
+            handle = str(item.get("handle") or "").strip()
+            if handle:
+                detail_by_handle[handle] = item
+
+    selected: list[dict[str, Any]] = []
+    attribution: list[dict[str, Any]] = []
+    for preview_hit in hits_preview:
+        if not isinstance(preview_hit, dict):
+            continue
+        handle = str(preview_hit.get("handle") or "").strip()
+        effective_hit = detail_by_handle.get(handle, preview_hit)
+        selected_entry = _build_ltm_selected_entry(effective_hit)
+        if selected_entry is None:
+            continue
+        selected.append(selected_entry)
+        attribution_entry = _build_ltm_attribution_entry(effective_hit)
+        if attribution_entry is not None:
+            attribution.append(attribution_entry)
+
+    return {
+        "selected_count": len(selected),
+        "attribution_count": len(attribution),
+        "selected": selected,
+        "attribution": attribution,
+    }
+
+
 def build_memory_timeline(
     hits_preview: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -819,6 +951,7 @@ def run_memory(
                 notes_stats.get("namespace_filtered_count", 0) or 0
             ),
         },
+        "ltm": build_ltm_explainability(hits_preview=hits_preview, hits=hits),
         "disclosure": {
             "mode": disclosure_mode,
             "preview_max_chars": int(preview_max_chars),

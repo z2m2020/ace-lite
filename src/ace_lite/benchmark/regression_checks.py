@@ -10,12 +10,19 @@ REGRESSION_THRESHOLD_PROFILES: dict[str, dict[str, float]] = {
         "noise_tolerance": 0.0,
         "latency_growth_factor": 1.2,
         "dependency_recall_floor": 0.0,
+        "memory_helpful_task_success_tolerance": 0.05,
         "chunk_hit_tolerance": 0.05,
         "chunk_budget_growth_factor": 1.25,
         "validation_test_growth_factor": 1.50,
         "notes_hit_tolerance": 0.10,
         "profile_selected_tolerance": 1.0,
         "capture_trigger_tolerance": 0.20,
+        "ltm_false_help_tolerance": 0.05,
+        "ltm_stale_hit_tolerance": 0.05,
+        "plan_replay_cache_stale_hit_safe_tolerance": 0.10,
+        "issue_report_linked_plan_tolerance": 0.10,
+        "issue_to_benchmark_case_conversion_tolerance": 0.10,
+        "dev_feedback_resolution_tolerance": 0.10,
         "embedding_similarity_tolerance": 0.05,
         "embedding_rerank_ratio_tolerance": 0.10,
         "embedding_cache_hit_tolerance": 0.20,
@@ -26,12 +33,19 @@ REGRESSION_THRESHOLD_PROFILES: dict[str, dict[str, float]] = {
         "noise_tolerance": 0.0,
         "latency_growth_factor": 1.1,
         "dependency_recall_floor": 0.8,
+        "memory_helpful_task_success_tolerance": 0.02,
         "chunk_hit_tolerance": 0.02,
         "chunk_budget_growth_factor": 1.15,
         "validation_test_growth_factor": 1.30,
         "notes_hit_tolerance": 0.05,
         "profile_selected_tolerance": 0.5,
         "capture_trigger_tolerance": 0.10,
+        "ltm_false_help_tolerance": 0.02,
+        "ltm_stale_hit_tolerance": 0.02,
+        "plan_replay_cache_stale_hit_safe_tolerance": 0.05,
+        "issue_report_linked_plan_tolerance": 0.05,
+        "issue_to_benchmark_case_conversion_tolerance": 0.05,
+        "dev_feedback_resolution_tolerance": 0.05,
         "embedding_similarity_tolerance": 0.02,
         "embedding_rerank_ratio_tolerance": 0.05,
         "embedding_cache_hit_tolerance": 0.10,
@@ -42,12 +56,19 @@ REGRESSION_THRESHOLD_PROFILES: dict[str, dict[str, float]] = {
         "noise_tolerance": 0.02,
         "latency_growth_factor": 1.35,
         "dependency_recall_floor": 0.0,
+        "memory_helpful_task_success_tolerance": 0.10,
         "chunk_hit_tolerance": 0.08,
         "chunk_budget_growth_factor": 1.40,
         "validation_test_growth_factor": 2.00,
         "notes_hit_tolerance": 0.20,
         "profile_selected_tolerance": 2.0,
         "capture_trigger_tolerance": 0.30,
+        "ltm_false_help_tolerance": 0.10,
+        "ltm_stale_hit_tolerance": 0.10,
+        "plan_replay_cache_stale_hit_safe_tolerance": 0.20,
+        "issue_report_linked_plan_tolerance": 0.20,
+        "issue_to_benchmark_case_conversion_tolerance": 0.20,
+        "dev_feedback_resolution_tolerance": 0.20,
         "embedding_similarity_tolerance": 0.10,
         "embedding_rerank_ratio_tolerance": 0.20,
         "embedding_cache_hit_tolerance": 0.35,
@@ -82,12 +103,19 @@ def detect_regression(
     noise_tolerance: float = 0.0,
     latency_growth_factor: float = 1.2,
     dependency_recall_floor: float = 0.0,
+    memory_helpful_task_success_tolerance: float = 0.05,
     chunk_hit_tolerance: float = 0.05,
     chunk_budget_growth_factor: float = 1.25,
     validation_test_growth_factor: float = 1.50,
     notes_hit_tolerance: float = 0.10,
     profile_selected_tolerance: float = 1.0,
     capture_trigger_tolerance: float = 0.20,
+    ltm_false_help_tolerance: float = 0.05,
+    ltm_stale_hit_tolerance: float = 0.05,
+    plan_replay_cache_stale_hit_safe_tolerance: float = 0.10,
+    issue_report_linked_plan_tolerance: float = 0.10,
+    issue_to_benchmark_case_conversion_tolerance: float = 0.10,
+    dev_feedback_resolution_tolerance: float = 0.10,
     embedding_similarity_tolerance: float = 0.05,
     embedding_rerank_ratio_tolerance: float = 0.10,
     embedding_cache_hit_tolerance: float = 0.20,
@@ -100,6 +128,12 @@ def detect_regression(
     baseline_latency = float(baseline.get("latency_p95_ms", 0.0))
     current_latency = float(current.get("latency_p95_ms", 0.0))
     current_dependency_recall = float(current.get("dependency_recall", 0.0))
+    current_memory_helpful_task_success_rate = float(
+        current.get("memory_helpful_task_success_rate", 0.0)
+    )
+    baseline_memory_helpful_task_success_rate = float(
+        baseline.get("memory_helpful_task_success_rate", 0.0)
+    )
     current_chunk_hit = float(current.get("chunk_hit_at_k", 0.0))
     baseline_chunk_hit = float(baseline.get("chunk_hit_at_k", 0.0))
     current_chunk_budget = float(current.get("chunk_budget_used", 0.0))
@@ -112,6 +146,34 @@ def detect_regression(
     baseline_profile_selected = float(baseline.get("profile_selected_mean", 0.0))
     current_capture_trigger_ratio = float(current.get("capture_trigger_ratio", 0.0))
     baseline_capture_trigger_ratio = float(baseline.get("capture_trigger_ratio", 0.0))
+    current_ltm_false_help_rate = float(current.get("ltm_false_help_rate", 0.0))
+    baseline_ltm_false_help_rate = float(baseline.get("ltm_false_help_rate", 0.0))
+    current_ltm_stale_hit_rate = float(current.get("ltm_stale_hit_rate", 0.0))
+    baseline_ltm_stale_hit_rate = float(baseline.get("ltm_stale_hit_rate", 0.0))
+    current_plan_replay_cache_stale_hit_safe_ratio = float(
+        current.get("plan_replay_cache_stale_hit_safe_ratio", 0.0)
+    )
+    baseline_plan_replay_cache_stale_hit_safe_ratio = float(
+        baseline.get("plan_replay_cache_stale_hit_safe_ratio", 0.0)
+    )
+    current_issue_report_linked_plan_rate = float(
+        current.get("issue_report_linked_plan_rate", 0.0)
+    )
+    baseline_issue_report_linked_plan_rate = float(
+        baseline.get("issue_report_linked_plan_rate", 0.0)
+    )
+    current_issue_to_benchmark_case_conversion_rate = float(
+        current.get("issue_to_benchmark_case_conversion_rate", 0.0)
+    )
+    baseline_issue_to_benchmark_case_conversion_rate = float(
+        baseline.get("issue_to_benchmark_case_conversion_rate", 0.0)
+    )
+    current_dev_feedback_resolution_rate = float(
+        current.get("dev_feedback_resolution_rate", 0.0)
+    )
+    baseline_dev_feedback_resolution_rate = float(
+        baseline.get("dev_feedback_resolution_rate", 0.0)
+    )
     current_embedding_similarity = float(current.get("embedding_similarity_mean", 0.0))
     baseline_embedding_similarity = float(
         baseline.get("embedding_similarity_mean", 0.0)
@@ -134,6 +196,10 @@ def detect_regression(
     latency_threshold = (
         baseline_latency * latency_growth_factor if baseline_latency > 0 else 0.0
     )
+    memory_helpful_task_success_threshold = (
+        baseline_memory_helpful_task_success_rate
+        - memory_helpful_task_success_tolerance
+    )
     chunk_hit_threshold = baseline_chunk_hit - chunk_hit_tolerance
     chunk_budget_threshold = (
         baseline_chunk_budget * chunk_budget_growth_factor
@@ -149,6 +215,22 @@ def detect_regression(
     profile_selected_threshold = baseline_profile_selected - profile_selected_tolerance
     capture_trigger_threshold = (
         baseline_capture_trigger_ratio - capture_trigger_tolerance
+    )
+    ltm_false_help_threshold = baseline_ltm_false_help_rate + ltm_false_help_tolerance
+    ltm_stale_hit_threshold = baseline_ltm_stale_hit_rate + ltm_stale_hit_tolerance
+    plan_replay_cache_stale_hit_safe_threshold = (
+        baseline_plan_replay_cache_stale_hit_safe_ratio
+        - plan_replay_cache_stale_hit_safe_tolerance
+    )
+    issue_report_linked_plan_threshold = (
+        baseline_issue_report_linked_plan_rate - issue_report_linked_plan_tolerance
+    )
+    issue_to_benchmark_case_conversion_threshold = (
+        baseline_issue_to_benchmark_case_conversion_rate
+        - issue_to_benchmark_case_conversion_tolerance
+    )
+    dev_feedback_resolution_threshold = (
+        baseline_dev_feedback_resolution_rate - dev_feedback_resolution_tolerance
     )
     embedding_similarity_threshold = (
         baseline_embedding_similarity - embedding_similarity_tolerance
@@ -167,6 +249,10 @@ def detect_regression(
     noise_regressed = current_noise > noise_threshold
     latency_regressed = baseline_latency > 0 and current_latency > latency_threshold
     dependency_regressed = current_dependency_recall < dependency_recall_floor
+    memory_helpful_task_success_regressed = (
+        current_memory_helpful_task_success_rate
+        < memory_helpful_task_success_threshold
+    )
     chunk_hit_regressed = current_chunk_hit < chunk_hit_threshold
     chunk_budget_regressed = (
         baseline_chunk_budget > 0 and current_chunk_budget > chunk_budget_threshold
@@ -179,6 +265,22 @@ def detect_regression(
     profile_selected_regressed = current_profile_selected < profile_selected_threshold
     capture_trigger_regressed = (
         current_capture_trigger_ratio < capture_trigger_threshold
+    )
+    ltm_false_help_regressed = current_ltm_false_help_rate > ltm_false_help_threshold
+    ltm_stale_hit_regressed = current_ltm_stale_hit_rate > ltm_stale_hit_threshold
+    plan_replay_cache_stale_hit_safe_regressed = (
+        current_plan_replay_cache_stale_hit_safe_ratio
+        < plan_replay_cache_stale_hit_safe_threshold
+    )
+    issue_report_linked_plan_regressed = (
+        current_issue_report_linked_plan_rate < issue_report_linked_plan_threshold
+    )
+    issue_to_benchmark_case_conversion_regressed = (
+        current_issue_to_benchmark_case_conversion_rate
+        < issue_to_benchmark_case_conversion_threshold
+    )
+    dev_feedback_resolution_regressed = (
+        current_dev_feedback_resolution_rate < dev_feedback_resolution_threshold
     )
     embedding_similarity_regressed = (
         baseline_embedding_similarity > 0.0
@@ -239,6 +341,16 @@ def detect_regression(
                 "threshold": float(dependency_recall_floor),
             }
         )
+    if memory_helpful_task_success_regressed:
+        failed_checks.append("memory_helpful_task_success_rate")
+        failed_thresholds.append(
+            {
+                "metric": "memory_helpful_task_success_rate",
+                "operator": "<",
+                "current": current_memory_helpful_task_success_rate,
+                "threshold": memory_helpful_task_success_threshold,
+            }
+        )
     if chunk_hit_regressed:
         failed_checks.append("chunk_hit_at_k")
         failed_thresholds.append(
@@ -297,6 +409,66 @@ def detect_regression(
                 "operator": "<",
                 "current": current_capture_trigger_ratio,
                 "threshold": capture_trigger_threshold,
+            }
+        )
+    if ltm_false_help_regressed:
+        failed_checks.append("ltm_false_help_rate")
+        failed_thresholds.append(
+            {
+                "metric": "ltm_false_help_rate",
+                "operator": ">",
+                "current": current_ltm_false_help_rate,
+                "threshold": ltm_false_help_threshold,
+            }
+        )
+    if ltm_stale_hit_regressed:
+        failed_checks.append("ltm_stale_hit_rate")
+        failed_thresholds.append(
+            {
+                "metric": "ltm_stale_hit_rate",
+                "operator": ">",
+                "current": current_ltm_stale_hit_rate,
+                "threshold": ltm_stale_hit_threshold,
+            }
+        )
+    if plan_replay_cache_stale_hit_safe_regressed:
+        failed_checks.append("plan_replay_cache_stale_hit_safe_ratio")
+        failed_thresholds.append(
+            {
+                "metric": "plan_replay_cache_stale_hit_safe_ratio",
+                "operator": "<",
+                "current": current_plan_replay_cache_stale_hit_safe_ratio,
+                "threshold": plan_replay_cache_stale_hit_safe_threshold,
+            }
+        )
+    if issue_report_linked_plan_regressed:
+        failed_checks.append("issue_report_linked_plan_rate")
+        failed_thresholds.append(
+            {
+                "metric": "issue_report_linked_plan_rate",
+                "operator": "<",
+                "current": current_issue_report_linked_plan_rate,
+                "threshold": issue_report_linked_plan_threshold,
+            }
+        )
+    if issue_to_benchmark_case_conversion_regressed:
+        failed_checks.append("issue_to_benchmark_case_conversion_rate")
+        failed_thresholds.append(
+            {
+                "metric": "issue_to_benchmark_case_conversion_rate",
+                "operator": "<",
+                "current": current_issue_to_benchmark_case_conversion_rate,
+                "threshold": issue_to_benchmark_case_conversion_threshold,
+            }
+        )
+    if dev_feedback_resolution_regressed:
+        failed_checks.append("dev_feedback_resolution_rate")
+        failed_thresholds.append(
+            {
+                "metric": "dev_feedback_resolution_rate",
+                "operator": "<",
+                "current": current_dev_feedback_resolution_rate,
+                "threshold": dev_feedback_resolution_threshold,
             }
         )
     if embedding_similarity_regressed:

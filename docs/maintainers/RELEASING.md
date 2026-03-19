@@ -33,7 +33,7 @@ python scripts/run_quality_gate.py --root . --output-dir artifacts/quality/lates
 ## 2. Versioning And Release Notes
 
 - bump `pyproject.toml` `version`
-- rerun `./scripts/update.ps1` and require the install-sync check to stay green before collecting release evidence
+- rerun `python scripts/update.py` (or `./scripts/update.ps1` on Windows) and require the install-sync check to stay green before collecting release evidence
 - move `CHANGELOG.md` `[Unreleased]` entries into a dated version section
 - record which benchmark and freeze artifact directories will be treated as the release evidence set
 
@@ -328,7 +328,7 @@ Recommended config shape for release maintainers:
 ```yaml
 freeze:
   validation_rich_gate:
-    mode: report_only
+    mode: enforced
     thresholds:
       task_success_rate_min: 0.90
       precision_at_k_min: 0.40
@@ -341,12 +341,11 @@ freeze:
 
 Recommended default for the current release workflow:
 
-- keep `freeze.validation_rich_gate.mode: report_only` unless the release is
-  explicitly about validation-specific quality and there is already a stable
-  dated baseline to compare against
-- only switch to `enforced` when the team is prepared to treat missing
-  validation-rich evidence, missing summaries, or threshold regressions as a
-  hard release blocker
+- as of 2026-03-19, the current promotion artifact is
+  `eligible_for_enforced`, so `freeze.validation_rich_gate.mode: enforced` is
+  now the maintainer-facing default for this repo
+- revert to `report_only` if the lane becomes noisy again or the next
+  checkpoint loses stable promotion evidence
 
 Rollback rule for false positives or unstable evidence:
 

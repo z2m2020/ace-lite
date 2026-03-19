@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.preference_capture_store import DurablePreferenceCaptureStore
 from ace_lite.runtime_db import connect_runtime_db
@@ -176,6 +177,115 @@ def load_runtime_preference_capture_summary(
     return payload
 
 
+def load_runtime_dev_feedback_summary(
+    *,
+    dev_feedback_path: str | Path | None = None,
+    repo_key: str | None = None,
+    user_id: str | None = None,
+    profile_key: str | None = None,
+    home_path: str | Path | None = None,
+) -> dict[str, Any]:
+    store = DevFeedbackStore(
+        db_path=dev_feedback_path,
+        home_path=home_path,
+    )
+    payload = store.summarize(
+        repo=_normalize_filter_value(repo_key),
+        user_id=_normalize_filter_value(user_id),
+        profile_key=_normalize_filter_value(profile_key),
+    )
+    payload.update(
+        {
+            "repo_key": _normalize_filter_value(repo_key),
+            "user_id": _normalize_filter_value(user_id),
+            "profile_key": _normalize_filter_value(profile_key),
+        }
+    )
+    return payload
+
+
+def _build_runtime_top_pain_summary(
+    *,
+    runtime_scope_map: dict[str, dict[str, Any] | None],
+    dev_feedback_summary: dict[str, Any],
+) -> dict[str, Any]:
+    merged: dict[str, dict[str, Any]] = {}
+    preferred_scope = None
+    for scope_name in ("repo_profile", "repo", "profile", "session", "all_time"):
+        candidate = runtime_scope_map.get(scope_name)
+        if isinstance(candidate, dict):
+            preferred_scope = candidate
+            break
+    degraded_states = (
+        preferred_scope.get("degraded_states", [])
+        if isinstance(preferred_scope, dict)
+        else []
+    )
+    for item in degraded_states if isinstance(degraded_states, list) else []:
+        reason_code = str(item.get("reason_code") or "").strip()
+        if not reason_code:
+            continue
+        bucket = merged.setdefault(
+            reason_code,
+            {
+                "reason_code": reason_code,
+                "runtime_event_count": 0,
+                "manual_issue_count": 0,
+                "open_issue_count": 0,
+                "fix_count": 0,
+                "last_seen_at": "",
+            },
+        )
+        bucket["runtime_event_count"] += int(item.get("event_count", 0) or 0)
+        bucket["last_seen_at"] = max(
+            str(bucket["last_seen_at"]),
+            str(item.get("last_seen_at") or ""),
+        )
+
+    by_reason_code = dev_feedback_summary.get("by_reason_code", [])
+    for item in by_reason_code if isinstance(by_reason_code, list) else []:
+        if not isinstance(item, dict):
+            continue
+        reason_code = str(item.get("reason_code") or "").strip()
+        if not reason_code:
+            continue
+        bucket = merged.setdefault(
+            reason_code,
+            {
+                "reason_code": reason_code,
+                "runtime_event_count": 0,
+                "manual_issue_count": 0,
+                "open_issue_count": 0,
+                "fix_count": 0,
+                "last_seen_at": "",
+            },
+        )
+        bucket["manual_issue_count"] += int(item.get("issue_count", 0) or 0)
+        bucket["open_issue_count"] += int(item.get("open_issue_count", 0) or 0)
+        bucket["fix_count"] += int(item.get("fix_count", 0) or 0)
+        bucket["last_seen_at"] = max(
+            str(bucket["last_seen_at"]),
+            str(item.get("last_seen_at") or ""),
+        )
+
+    rows: list[dict[str, Any]] = []
+    for bucket in merged.values():
+        total_count = (
+            int(bucket["runtime_event_count"])
+            + int(bucket["manual_issue_count"])
+            + int(bucket["open_issue_count"])
+        )
+        rows.append({**bucket, "total_count": total_count})
+    rows.sort(
+        key=lambda item: (
+            -int(item.get("total_count", 0) or 0),
+            -int(item.get("fix_count", 0) or 0),
+            str(item.get("reason_code") or ""),
+        )
+    )
+    return {"count": len(rows), "items": rows[:10]}
+
+
 def load_runtime_stats_summary(
     *,
     db_path: str | Path | None = None,
@@ -184,6 +294,7 @@ def load_runtime_stats_summary(
     user_id: str | None = None,
     profile_key: str | None = None,
     feedback_path: str | Path | None = None,
+    dev_feedback_path: str | Path | None = None,
     home_path: str | Path | None = None,
 ) -> dict[str, Any]:
     resolved_path = resolve_user_runtime_stats_path(
@@ -232,6 +343,17 @@ def load_runtime_stats_summary(
         profile_key=normalized_profile,
         home_path=home_path,
     )
+    dev_feedback_summary = load_runtime_dev_feedback_summary(
+        dev_feedback_path=dev_feedback_path,
+        repo_key=normalized_repo,
+        user_id=normalized_user_id,
+        profile_key=normalized_profile,
+        home_path=home_path,
+    )
+    top_pain_summary = _build_runtime_top_pain_summary(
+        runtime_scope_map=scope_map,
+        dev_feedback_summary=dev_feedback_summary,
+    )
     filters = {
         "repo": normalized_repo,
         "profile": normalized_profile,
@@ -245,6 +367,8 @@ def load_runtime_stats_summary(
         "summary": scope_map,
         "scopes": scopes,
         "preference_capture_summary": preference_capture_summary,
+        "dev_feedback_summary": dev_feedback_summary,
+        "top_pain_summary": top_pain_summary,
     }
 
 
@@ -572,6 +696,8 @@ def build_runtime_status_payload(
             "preference_capture_summary": runtime_stats.get(
                 "preference_capture_summary"
             ),
+            "dev_feedback_summary": runtime_stats.get("dev_feedback_summary"),
+            "top_pain_summary": runtime_stats.get("top_pain_summary"),
         },
     }
 
@@ -640,6 +766,7 @@ __all__ = [
     "build_runtime_status_payload",
     "build_runtime_status_snapshot",
     "load_latest_runtime_stats_match",
+    "load_runtime_dev_feedback_summary",
     "load_runtime_preference_capture_summary",
     "load_runtime_stats_summary",
     "resolve_user_runtime_stats_path",

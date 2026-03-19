@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from ace_lite.benchmark.runner import BenchmarkRunner
+from ace_lite.benchmark.runner import load_baseline_metrics
 
 
 class _StubOrchestrator:
@@ -52,6 +56,47 @@ def test_benchmark_runner_warmup_runs_are_excluded_from_case_count() -> None:
     assert results["warmup_runs"] == 2
     assert results["warmup_plan_calls"] == 4
     assert len(orchestrator.calls) == 6
+
+
+def test_load_baseline_metrics_preserves_full_metric_contract_from_summary_json(
+    tmp_path: Path,
+) -> None:
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "metrics": {
+                    "hit_at_1": 0.75,
+                    "mrr": 0.88,
+                    "skills_route_latency_p95_ms": 1.2,
+                    "retrieval_context_chunk_count_mean": 13.5,
+                    "retrieval_context_coverage_ratio": 1.0,
+                    "contextual_sidecar_parent_symbol_chunk_count_mean": 4.5,
+                    "contextual_sidecar_parent_symbol_coverage_ratio": 0.3,
+                    "contextual_sidecar_reference_hint_chunk_count_mean": 10.0,
+                    "contextual_sidecar_reference_hint_coverage_ratio": 0.8,
+                    "robust_signature_count_mean": 13.5,
+                    "task_success_rate": 1.0,
+                    "utility_rate": 1.0,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    metrics = load_baseline_metrics(summary_path)
+
+    assert metrics is not None
+    assert metrics["hit_at_1"] == 0.75
+    assert metrics["mrr"] == 0.88
+    assert metrics["skills_route_latency_p95_ms"] == 1.2
+    assert metrics["retrieval_context_chunk_count_mean"] == 13.5
+    assert metrics["retrieval_context_coverage_ratio"] == 1.0
+    assert metrics["contextual_sidecar_parent_symbol_chunk_count_mean"] == 4.5
+    assert metrics["contextual_sidecar_parent_symbol_coverage_ratio"] == 0.3
+    assert metrics["contextual_sidecar_reference_hint_chunk_count_mean"] == 10.0
+    assert metrics["contextual_sidecar_reference_hint_coverage_ratio"] == 0.8
+    assert metrics["robust_signature_count_mean"] == 13.5
 
 
 def test_benchmark_runner_can_omit_plan_payloads() -> None:
@@ -990,6 +1035,10 @@ class _RetrievalContextStubOrchestrator(_StubOrchestrator):
                     "retrieval_context_chunk_count": 2.0,
                     "retrieval_context_coverage_ratio": 1.0,
                     "retrieval_context_char_count_mean": 84.0,
+                    "contextual_sidecar_parent_symbol_chunk_count": 2.0,
+                    "contextual_sidecar_parent_symbol_coverage_ratio": 1.0,
+                    "contextual_sidecar_reference_hint_chunk_count": 1.0,
+                    "contextual_sidecar_reference_hint_coverage_ratio": 0.5,
                 },
                 "chunk_semantic_rerank": {
                     "reason": "ok",
@@ -1015,10 +1064,18 @@ def test_benchmark_runner_aggregates_retrieval_context_observability_summary() -
         "case_count": 1,
         "available_case_count": 1,
         "available_case_rate": 1.0,
+        "parent_symbol_available_case_count": 1,
+        "parent_symbol_available_case_rate": 1.0,
+        "reference_hint_available_case_count": 1,
+        "reference_hint_available_case_rate": 1.0,
         "pool_available_case_count": 1,
         "pool_available_case_rate": 1.0,
         "chunk_count_mean": 2.0,
         "coverage_ratio_mean": 1.0,
+        "parent_symbol_chunk_count_mean": 2.0,
+        "parent_symbol_coverage_ratio_mean": 1.0,
+        "reference_hint_chunk_count_mean": 1.0,
+        "reference_hint_coverage_ratio_mean": 0.5,
         "pool_chunk_count_mean": 1.0,
         "pool_coverage_ratio_mean": 0.5,
     }

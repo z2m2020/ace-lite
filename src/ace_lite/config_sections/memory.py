@@ -40,6 +40,15 @@ class MemoryFeedbackSectionSpec(_StrictModel):
     decay_days: float | None = None
 
 
+class MemoryLongTermSectionSpec(_StrictModel):
+    enabled: bool | None = None
+    path: str | None = None
+    top_n: int | None = None
+    token_budget: int | None = None
+    write_enabled: bool | None = None
+    as_of_enabled: bool | None = None
+
+
 class MemoryCaptureSectionSpec(_StrictModel):
     enabled: bool | None = None
     notes_path: str | None = None
@@ -77,6 +86,7 @@ __all__ = [
     "MemoryCoreSectionSpec",
     "MemoryFeedbackSectionSpec",
     "MemoryGateSectionSpec",
+    "MemoryLongTermSectionSpec",
     "MemoryNamespaceSectionSpec",
     "MemoryNotesSectionSpec",
     "MemoryPostprocessSectionSpec",

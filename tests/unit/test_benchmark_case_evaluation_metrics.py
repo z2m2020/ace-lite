@@ -17,6 +17,12 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
         },
         "source_plan": {
             "validation_tests": ["tests.test_auth::test_token"],
+            "ltm_constraint_summary": {
+                "selected_count": 2,
+                "constraint_count": 1,
+                "graph_neighbor_count": 1,
+                "handles": ["fact-1"],
+            },
             "evidence_summary": {
                 "direct_count": 1.0,
                 "neighbor_context_count": 1.0,
@@ -47,6 +53,16 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
             "profile": {"selected_count": 1},
             "capture": {"triggered": True},
             "notes": {"selected_count": 1},
+            "ltm": {
+                "selected_count": 2,
+                "attribution_count": 1,
+                "attribution": [
+                    {
+                        "handle": "fact-1",
+                        "graph_neighborhood": {"triple_count": 1},
+                    }
+                ],
+            },
         },
         "observability": {
             "plan_replay_cache": {
@@ -181,6 +197,10 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
     assert metrics.docs_enabled_flag is True
     assert metrics.docs_hit == 1.0
     assert metrics.hint_inject == 1.0
+    assert metrics.ltm_selected_count == 2
+    assert metrics.ltm_attribution_count == 1
+    assert metrics.ltm_graph_neighbor_count == 1
+    assert metrics.ltm_plan_constraint_count == 1
     assert metrics.chunk_guard_mode == "strict"
     assert metrics.chunk_guard_filter_ratio == 0.25
     assert metrics.source_plan_evidence_summary == {

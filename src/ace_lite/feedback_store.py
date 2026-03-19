@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from ace_lite.index_stage.terms import extract_terms
+from ace_lite.memory_long_term import LongTermMemoryCaptureService
 from ace_lite.preference_capture_store import DurablePreferenceCaptureStore
 from ace_lite.profile_store import ProfileStore
 
@@ -208,6 +209,7 @@ class SelectionFeedbackStore:
         *,
         profile_path: str | Path = "~/.ace-lite/profile.json",
         max_entries: int = 512,
+        long_term_capture_service: LongTermMemoryCaptureService | None = None,
     ) -> None:
         self._configured_path = Path(profile_path).expanduser().resolve()
         self._store = ProfileStore(path=profile_path)
@@ -215,6 +217,7 @@ class SelectionFeedbackStore:
             db_path=_resolve_capture_store_path(profile_path),
         )
         self._max_entries = max(0, int(max_entries))
+        self._long_term_capture_service = long_term_capture_service
 
     @property
     def path(self) -> Path:
@@ -301,6 +304,26 @@ class SelectionFeedbackStore:
                 "created_at": event["captured_at"],
             }
         )
+        long_term_capture: dict[str, Any] | None = None
+        if self._long_term_capture_service is not None:
+            try:
+                long_term_capture = self._long_term_capture_service.capture_selection_feedback(
+                    query=normalized_query,
+                    repo=normalized_repo,
+                    root=str(_resolve_root_path(root_path) or Path.cwd().resolve()),
+                    selected_path=normalized_path,
+                    position=event["position"],
+                    captured_at=event["captured_at"],
+                    user_id=event["user_id"],
+                    profile_key=event["profile_key"],
+                )
+            except Exception as exc:
+                long_term_capture = {
+                    "ok": False,
+                    "skipped": False,
+                    "stage": "selection_feedback",
+                    "reason": f"capture_failed:{exc.__class__.__name__}",
+                }
         pruned = 0
         if self._max_entries > 0:
             pruned = self._capture_store.trim_events(
@@ -316,6 +339,8 @@ class SelectionFeedbackStore:
             "event_count": len(normalized_events),
             "pruned": pruned,
         }
+        if long_term_capture is not None:
+            payload["long_term_capture"] = dict(long_term_capture)
         payload.update(self._metadata_payload())
         return payload
 

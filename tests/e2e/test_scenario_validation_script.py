@@ -67,6 +67,76 @@ def test_scenario_expectations_helper_passes() -> None:
     assert all(bool(item.get("passed", False)) for item in checks)
 
 
+def test_scenario_expectations_treat_worktree_gate_as_cochange_enabled() -> None:
+    module = _load_script("run_scenario_validation.py")
+    payload = _plan_payload()
+    payload["index"]["cochange"] = {"enabled": False, "cache_mode": "git_unavailable"}
+    payload["index"]["worktree_prior"] = {"enabled": True, "reason": "error"}
+
+    checks = module._evaluate_plan_expectations(
+        payload=payload,
+        expected={"cochange_enabled": True},
+    )
+
+    assert checks == [
+        {
+            "metric": "candidate_files_count",
+            "operator": ">=",
+            "actual": 2,
+            "expected": 1,
+            "passed": True,
+        },
+        {
+            "metric": "candidate_chunks_count",
+            "operator": ">=",
+            "actual": 1,
+            "expected": 1,
+            "passed": True,
+        },
+        {
+            "metric": "source_plan_steps_count",
+            "operator": ">=",
+            "actual": 2,
+            "expected": 1,
+            "passed": True,
+        },
+        {
+            "metric": "chunk_steps_count",
+            "operator": ">=",
+            "actual": 2,
+            "expected": 1,
+            "passed": True,
+        },
+        {
+            "metric": "cochange_enabled",
+            "operator": "==",
+            "actual": True,
+            "expected": True,
+            "passed": True,
+        },
+    ]
+
+
+def test_scenario_expectations_respect_policy_disabled_cochange() -> None:
+    module = _load_script("run_scenario_validation.py")
+    payload = _plan_payload()
+    payload["index"]["cochange"] = {"enabled": False, "cache_mode": "policy_disabled"}
+    payload["index"]["worktree_prior"] = {"enabled": True, "reason": "error"}
+
+    checks = module._evaluate_plan_expectations(
+        payload=payload,
+        expected={"cochange_enabled": False},
+    )
+
+    assert checks[-1] == {
+        "metric": "cochange_enabled",
+        "operator": "==",
+        "actual": False,
+        "expected": False,
+        "passed": True,
+    }
+
+
 def test_scenario_main_writes_artifacts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     module = _load_script("run_scenario_validation.py")
     root = tmp_path / "repo"

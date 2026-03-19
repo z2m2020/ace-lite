@@ -17,6 +17,7 @@ from ace_lite.config_sections import (
     ChunkCoreSectionSpec,
     ChunkGuardSectionSpec,
     ChunkTopologicalShieldSectionSpec,
+    DEFAULT_LONG_TERM_MEMORY_PATH,
     DEFAULT_EMBEDDINGS_INDEX_PATH,
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_MEMORY_NOTES_PATH,
@@ -30,6 +31,7 @@ from ace_lite.config_sections import (
     MemoryCoreSectionSpec,
     MemoryFeedbackSectionSpec,
     MemoryGateSectionSpec,
+    MemoryLongTermSectionSpec,
     MemoryNamespaceSectionSpec,
     MemoryNotesSectionSpec,
     MemoryPostprocessSectionSpec,
@@ -79,6 +81,7 @@ from ace_lite.shared_plan_runtime_config import (
     resolve_embedding_index_path,
     resolve_embedding_model,
     resolve_embedding_provider,
+    resolve_long_term_memory_path,
     resolve_memory_auto_tag_mode,
     resolve_memory_gate_mode,
     resolve_memory_notes_mode,
@@ -236,6 +239,30 @@ class MemoryFeedbackConfig(MemoryFeedbackSectionSpec):
         return normalize_non_negative_float(value, default=60.0)
 
 
+class MemoryLongTermConfig(MemoryLongTermSectionSpec):
+    enabled: bool = False
+    path: str | Path = DEFAULT_LONG_TERM_MEMORY_PATH
+    top_n: int = 4
+    token_budget: int = 192
+    write_enabled: bool = False
+    as_of_enabled: bool = True
+
+    @field_validator("path", mode="before")
+    @classmethod
+    def _normalize_path(cls, value: Any) -> str | Path:
+        return resolve_long_term_memory_path(value)
+
+    @field_validator("top_n", mode="before")
+    @classmethod
+    def _normalize_top_n(cls, value: Any) -> int:
+        return normalize_positive_int(value, default=4, minimum=1)
+
+    @field_validator("token_budget", mode="before")
+    @classmethod
+    def _normalize_token_budget(cls, value: Any) -> int:
+        return normalize_positive_int(value, default=192, minimum=1)
+
+
 class MemoryTemporalConfig(MemoryTemporalSectionSpec):
     enabled: bool = True
     recency_boost_enabled: bool = False
@@ -327,6 +354,7 @@ class MemoryConfig(MemoryCoreSectionSpec):
     profile: MemoryProfileConfig = Field(default_factory=MemoryProfileConfig)
     temporal: MemoryTemporalConfig = Field(default_factory=MemoryTemporalConfig)
     feedback: MemoryFeedbackConfig = Field(default_factory=MemoryFeedbackConfig)
+    long_term: MemoryLongTermConfig = Field(default_factory=MemoryLongTermConfig)
     capture: MemoryCaptureConfig = Field(default_factory=MemoryCaptureConfig)
     notes: MemoryNotesConfig = Field(default_factory=MemoryNotesConfig)
     postprocess: MemoryPostprocessConfig = Field(default_factory=MemoryPostprocessConfig)

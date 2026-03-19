@@ -37,6 +37,12 @@ def _resolve_memory(**config: object) -> dict[str, object]:
         memory_feedback_boost_per_select=0.15,
         memory_feedback_max_boost=0.6,
         memory_feedback_decay_days=60.0,
+        memory_long_term_enabled=False,
+        memory_long_term_path="context-map/long_term_memory.db",
+        memory_long_term_top_n=4,
+        memory_long_term_token_budget=192,
+        memory_long_term_write_enabled=False,
+        memory_long_term_as_of_enabled=True,
         memory_capture_enabled=False,
         memory_capture_notes_path="context-map/memory_notes.jsonl",
         memory_capture_min_query_length=24,
@@ -85,6 +91,14 @@ def test_validate_cli_config_accepts_grouped_memory_fields() -> None:
                         "path": "feedback.json",
                         "max_entries": 64,
                         "boost_per_select": 0.2,
+                    },
+                    "long_term": {
+                        "enabled": True,
+                        "path": "context-map/custom-long-term.db",
+                        "top_n": 6,
+                        "token_budget": 240,
+                        "write_enabled": True,
+                        "as_of_enabled": False,
                     },
                     "capture": {
                         "enabled": True,
@@ -156,6 +170,14 @@ def test_resolve_memory_config_reads_grouped_memory_fields_and_emits_grouped_pay
                     "max_boost": 0.7,
                     "decay_days": 30.0,
                 },
+                "long_term": {
+                    "enabled": True,
+                    "path": "context-map/custom-long-term.db",
+                    "top_n": 6,
+                    "token_budget": 240,
+                    "write_enabled": True,
+                    "as_of_enabled": False,
+                },
                 "capture": {
                     "enabled": True,
                     "notes_path": "notes.jsonl",
@@ -192,6 +214,12 @@ def test_resolve_memory_config_reads_grouped_memory_fields_and_emits_grouped_pay
     assert resolved["memory_cache_path"] == "context-map/custom-memory-cache.jsonl"
     assert resolved["memory_hybrid_limit"] == 6
     assert resolved["memory_gate_mode"] == "never"
+    assert resolved["memory_long_term_enabled"] is True
+    assert resolved["memory_long_term_path"] == "context-map/custom-long-term.db"
+    assert resolved["memory_long_term_top_n"] == 6
+    assert resolved["memory_long_term_token_budget"] == 240
+    assert resolved["memory_long_term_write_enabled"] is True
+    assert resolved["memory_long_term_as_of_enabled"] is False
     assert resolved["memory_capture_keywords"] == ["alpha", "beta"]
     assert resolved["memory_notes_mode"] == "prefer_local"
     assert resolved["memory_postprocess_diversity_enabled"] is False
@@ -230,6 +258,14 @@ def test_resolve_memory_config_reads_grouped_memory_fields_and_emits_grouped_pay
             "boost_per_select": 0.2,
             "max_boost": 0.7,
             "decay_days": 30.0,
+        },
+        "long_term": {
+            "enabled": True,
+            "path": "context-map/custom-long-term.db",
+            "top_n": 6,
+            "token_budget": 240,
+            "write_enabled": True,
+            "as_of_enabled": False,
         },
         "capture": {
             "enabled": True,

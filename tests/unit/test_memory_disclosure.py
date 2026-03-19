@@ -5,6 +5,11 @@ import json
 import pytest
 
 from ace_lite.memory import MemoryRecord, MemoryRecordCompact
+from ace_lite.memory_long_term import (
+    LongTermMemoryProvider,
+    LongTermMemoryStore,
+    build_long_term_fact_contract_v1,
+)
 from ace_lite.orchestrator import AceOrchestrator
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.pipeline.types import StageContext
@@ -149,6 +154,105 @@ def test_run_memory_full_returns_hits_and_previews() -> None:
     assert payload["cost"]["full_est_tokens_total"] >= 1
     assert payload["cost"]["fetch_est_tokens_total"] >= 1
     assert payload["timeline"]["groups"][0]["date_bucket"] == "2026-02-11"
+
+
+def test_run_memory_exposes_ltm_selected_and_attribution_in_compact_mode(
+    tmp_path,
+) -> None:
+    store = LongTermMemoryStore(db_path=tmp_path / "context-map" / "long_term_memory.db")
+    store.upsert_fact(
+        build_long_term_fact_contract_v1(
+            fact_id="fact-1",
+            fact_type="repo_policy",
+            subject="runtime.validation.git",
+            predicate="fallback_policy",
+            object_value="reuse_checkout_or_skip",
+            repo="demo",
+            namespace="repo/demo",
+            as_of="2026-03-19T09:44:00+08:00",
+            valid_from="2026-03-19T09:44:00+08:00",
+            derived_from_observation_id="obs-1",
+        )
+    )
+    provider = LongTermMemoryProvider(store, limit=3, container_tag="repo/demo")
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(memory={"namespace": {"container_tag": "repo/demo"}}),
+    )
+
+    payload = _run_memory_stage(orch, query="fallback policy", repo="demo", root=str(tmp_path))
+
+    assert payload["ltm"]["selected_count"] == 1
+    assert payload["ltm"]["attribution_count"] == 1
+    selected = payload["ltm"]["selected"][0]
+    assert selected["memory_kind"] == "fact"
+    assert selected["fact_type"] == "repo_policy"
+    assert selected["subject"] == "runtime.validation.git"
+    assert selected["predicate"] == "fallback_policy"
+    assert selected["object"] == "reuse_checkout_or_skip"
+    attribution = payload["ltm"]["attribution"][0]
+    assert attribution["handle"] == selected["handle"]
+    assert attribution["signals"] == ["fact"]
+    assert attribution["summary"] == "runtime.validation.git fallback_policy reuse_checkout_or_skip"
+
+
+def test_run_memory_full_exposes_ltm_graph_neighborhood_in_attribution(tmp_path) -> None:
+    store = LongTermMemoryStore(db_path=tmp_path / "context-map" / "long_term_memory.db")
+    store.upsert_fact(
+        build_long_term_fact_contract_v1(
+            fact_id="fact-1",
+            fact_type="repo_policy",
+            subject="runtime.validation.git",
+            predicate="fallback_policy",
+            object_value="reuse_checkout_or_skip",
+            repo="demo",
+            namespace="repo/demo",
+            as_of="2026-03-19T09:44:00+08:00",
+            valid_from="2026-03-19T09:44:00+08:00",
+            derived_from_observation_id="obs-1",
+        )
+    )
+    store.upsert_fact(
+        build_long_term_fact_contract_v1(
+            fact_id="fact-2",
+            fact_type="repo_policy",
+            subject="reuse_checkout_or_skip",
+            predicate="recommended_for",
+            object_value="runtime.validation.git",
+            repo="demo",
+            namespace="repo/demo",
+            as_of="2026-03-19T09:43:00+08:00",
+            valid_from="2026-03-19T09:43:00+08:00",
+            derived_from_observation_id="obs-2",
+        )
+    )
+    provider = LongTermMemoryProvider(
+        store,
+        limit=3,
+        container_tag="repo/demo",
+        neighborhood_hops=1,
+        neighborhood_limit=4,
+    )
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(
+            memory={
+                "disclosure_mode": "full",
+                "namespace": {"container_tag": "repo/demo"},
+            }
+        ),
+    )
+
+    payload = _run_memory_stage(orch, query="fallback policy", repo="demo", root=str(tmp_path))
+
+    attribution = next(
+        item
+        for item in payload["ltm"]["attribution"]
+        if item["summary"] == "runtime.validation.git fallback_policy reuse_checkout_or_skip"
+    )
+    assert attribution["signals"] == ["fact", "graph_neighborhood"]
+    assert attribution["graph_neighborhood"]["triple_count"] == 1
+    assert attribution["graph_neighborhood"]["triples"][0]["fact_handle"] == "fact-2"
 
 
 def test_run_memory_requires_v2_provider() -> None:

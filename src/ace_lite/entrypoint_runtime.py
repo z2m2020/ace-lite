@@ -20,6 +20,12 @@ class MemoryProviderKwargs(TypedDict):
     memory_notes_expiry_enabled: bool
     memory_notes_ttl_days: int
     memory_notes_max_age_days: int
+    memory_long_term_enabled: bool
+    memory_long_term_path: str
+    memory_long_term_top_n: int
+    memory_long_term_token_budget: int
+    memory_long_term_write_enabled: bool
+    memory_long_term_as_of_enabled: bool
     mcp_base_url: str
     rest_base_url: str
     timeout_seconds: float
@@ -87,6 +93,12 @@ class SharedMemoryRuntimePayload(MemoryGatePostprocessRuntimeKwargs):
     memory_feedback_boost_per_select: float
     memory_feedback_max_boost: float
     memory_feedback_decay_days: float
+    memory_long_term_enabled: bool
+    memory_long_term_path: str
+    memory_long_term_top_n: int
+    memory_long_term_token_budget: int
+    memory_long_term_write_enabled: bool
+    memory_long_term_as_of_enabled: bool
     memory_capture_enabled: bool
     memory_capture_notes_path: str
     memory_capture_min_query_length: int
@@ -169,6 +181,12 @@ def build_memory_provider_kwargs(
     memory_notes_expiry_enabled: bool = True,
     memory_notes_ttl_days: int = 90,
     memory_notes_max_age_days: int = 365,
+    memory_long_term_enabled: bool = False,
+    memory_long_term_path: str = "context-map/long_term_memory.db",
+    memory_long_term_top_n: int = 4,
+    memory_long_term_token_budget: int = 192,
+    memory_long_term_write_enabled: bool = False,
+    memory_long_term_as_of_enabled: bool = True,
     mcp_base_url: str,
     rest_base_url: str,
     timeout_seconds: float,
@@ -194,6 +212,13 @@ def build_memory_provider_kwargs(
         "memory_notes_expiry_enabled": bool(memory_notes_expiry_enabled),
         "memory_notes_ttl_days": max(1, int(memory_notes_ttl_days)),
         "memory_notes_max_age_days": max(1, int(memory_notes_max_age_days)),
+        "memory_long_term_enabled": bool(memory_long_term_enabled),
+        "memory_long_term_path": str(memory_long_term_path).strip()
+        or "context-map/long_term_memory.db",
+        "memory_long_term_top_n": max(1, int(memory_long_term_top_n)),
+        "memory_long_term_token_budget": max(1, int(memory_long_term_token_budget)),
+        "memory_long_term_write_enabled": bool(memory_long_term_write_enabled),
+        "memory_long_term_as_of_enabled": bool(memory_long_term_as_of_enabled),
         "mcp_base_url": str(mcp_base_url),
         "rest_base_url": str(rest_base_url),
         "timeout_seconds": float(timeout_seconds),
@@ -233,6 +258,25 @@ def build_memory_provider_kwargs_from_resolved(
         memory_notes_expiry_enabled=bool(resolved["memory_notes_expiry_enabled"]),
         memory_notes_ttl_days=max(1, int(resolved["memory_notes_ttl_days"])),
         memory_notes_max_age_days=max(1, int(resolved["memory_notes_max_age_days"])),
+        memory_long_term_enabled=bool(resolved.get("memory_long_term_enabled", False)),
+        memory_long_term_path=str(
+            resolved.get("memory_long_term_path", "context-map/long_term_memory.db")
+        ).strip()
+        or "context-map/long_term_memory.db",
+        memory_long_term_top_n=max(
+            1,
+            int(resolved.get("memory_long_term_top_n", 4)),
+        ),
+        memory_long_term_token_budget=max(
+            1,
+            int(resolved.get("memory_long_term_token_budget", 192)),
+        ),
+        memory_long_term_write_enabled=bool(
+            resolved.get("memory_long_term_write_enabled", False)
+        ),
+        memory_long_term_as_of_enabled=bool(
+            resolved.get("memory_long_term_as_of_enabled", True)
+        ),
         mcp_base_url=mcp_base_url,
         rest_base_url=rest_base_url,
         timeout_seconds=timeout_seconds,
@@ -288,6 +332,27 @@ def _build_shared_memory_runtime_payload(
         "memory_feedback_decay_days": max(
             0.0,
             float(resolved["memory_feedback_decay_days"]),
+        ),
+        "memory_long_term_enabled": bool(
+            resolved.get("memory_long_term_enabled", False)
+        ),
+        "memory_long_term_path": str(
+            resolved.get("memory_long_term_path", "context-map/long_term_memory.db")
+        ).strip()
+        or "context-map/long_term_memory.db",
+        "memory_long_term_top_n": max(
+            1,
+            int(resolved.get("memory_long_term_top_n", 4)),
+        ),
+        "memory_long_term_token_budget": max(
+            1,
+            int(resolved.get("memory_long_term_token_budget", 192)),
+        ),
+        "memory_long_term_write_enabled": bool(
+            resolved.get("memory_long_term_write_enabled", False)
+        ),
+        "memory_long_term_as_of_enabled": bool(
+            resolved.get("memory_long_term_as_of_enabled", True)
         ),
         "memory_capture_enabled": bool(resolved["memory_capture_enabled"]),
         "memory_capture_notes_path": str(resolved["memory_capture_notes_path"])

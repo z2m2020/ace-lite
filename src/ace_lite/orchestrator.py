@@ -13,6 +13,7 @@ from ace_lite.memory import (
     MemoryProvider,
 )
 from ace_lite.memory.local_notes import append_capture_note
+from ace_lite.memory_long_term import LongTermMemoryCaptureService, LongTermMemoryStore
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.plan_replay_cache import (
     default_plan_replay_cache_path,
@@ -146,6 +147,20 @@ class AceOrchestrator:
         self._tokenizer_model = self._config.tokenizer.model
         self._signal_extractor = runtime_state.services.signal_extractor
         self._skill_manifest = runtime_state.services.skill_manifest
+        self._long_term_capture_service = (
+            LongTermMemoryCaptureService(
+                store=LongTermMemoryStore(db_path=self._config.memory.long_term.path),
+                enabled=(
+                    bool(self._config.memory.long_term.enabled)
+                    and bool(self._config.memory.long_term.write_enabled)
+                ),
+            )
+            if (
+                bool(self._config.memory.long_term.enabled)
+                and bool(self._config.memory.long_term.write_enabled)
+            )
+            else None
+        )
 
     @property
     def config(self) -> OrchestratorConfig:
@@ -281,6 +296,13 @@ class AceOrchestrator:
                 ctx.state["_skills_route"] = self._precompute_skills_route(ctx=ctx)
             else:
                 ctx.state.pop("_skills_route", None)
+        capture_payload = self._capture_long_term_stage_observation(
+            stage_name=stage_name,
+            ctx=ctx,
+            stage_payload=stage_payload,
+        )
+        if capture_payload is not None:
+            ctx.state.setdefault("_long_term_capture", []).append(capture_payload)
         logger.debug("stage.end", extra={"stage": stage_name, "repo": repo})
         return None
 
@@ -321,6 +343,8 @@ class AceOrchestrator:
             observability["plan_replay_cache"] = dict(replay_cache_info)
         if isinstance(ctx.state.get("_agent_loop"), dict):
             observability["agent_loop"] = dict(ctx.state.get("_agent_loop", {}))
+        if isinstance(ctx.state.get("_long_term_capture"), list):
+            observability["long_term_capture"] = list(ctx.state.get("_long_term_capture", []))
 
         payload = {
             "schema_version": SCHEMA_VERSION,
@@ -416,6 +440,35 @@ class AceOrchestrator:
             "policy_name": "general",
             "policy_version": str(self._config.retrieval.policy_version),
         }
+
+    def _capture_long_term_stage_observation(
+        self,
+        *,
+        stage_name: str,
+        ctx: StageContext,
+        stage_payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if self._long_term_capture_service is None:
+            return None
+        if stage_name not in {"source_plan", "validation"}:
+            return None
+        try:
+            return self._long_term_capture_service.capture_stage_observation(
+                stage_name=stage_name,
+                query=ctx.query,
+                repo=ctx.repo,
+                root=ctx.root,
+                profile_key=None,
+                source_run_id=self._durable_stats_session_id,
+                stage_payload=stage_payload,
+            )
+        except Exception as exc:
+            return {
+                "ok": False,
+                "stage": stage_name,
+                "reason": f"capture_failed:{exc.__class__.__name__}",
+                "message": str(exc),
+            }
 
     def _resolve_plan_replay_cache_path(self, *, root: str) -> Path:
         configured = str(self._config.plan_replay_cache.cache_path or "").strip()

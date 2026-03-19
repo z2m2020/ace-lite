@@ -44,6 +44,16 @@ PLAN_MEMORY_FEEDBACK_DEFAULTS: dict[str, Any] = {
 }
 
 
+PLAN_MEMORY_LONG_TERM_DEFAULTS: dict[str, Any] = {
+    "memory_long_term_enabled": False,
+    "memory_long_term_path": "context-map/long_term_memory.db",
+    "memory_long_term_top_n": 4,
+    "memory_long_term_token_budget": 192,
+    "memory_long_term_write_enabled": False,
+    "memory_long_term_as_of_enabled": True,
+}
+
+
 PLAN_MEMORY_GATE_DEFAULTS: dict[str, Any] = {
     "memory_gate_enabled": False,
     "memory_gate_mode": "auto",

@@ -69,6 +69,12 @@ def resolve_memory_config(
     memory_postprocess_diversity_similarity_threshold: float,
     memory_hybrid_limit: int,
     tokenizer_model: str,
+    memory_long_term_enabled: bool = False,
+    memory_long_term_path: str = "context-map/long_term_memory.db",
+    memory_long_term_top_n: int = 4,
+    memory_long_term_token_budget: int = 192,
+    memory_long_term_write_enabled: bool = False,
+    memory_long_term_as_of_enabled: bool = True,
 ) -> dict[str, Any]:
     memory_disclosure_mode = _resolve_from_config(
         ctx=ctx,
@@ -395,6 +401,84 @@ def resolve_memory_config(
         ],
         transform=_to_float,
     )
+    memory_long_term_enabled = _resolve_from_config(
+        ctx=ctx,
+        param_name="memory_long_term_enabled",
+        current=memory_long_term_enabled,
+        config=config,
+        paths=[
+            (namespace, "memory", "long_term", "enabled"),
+            ("memory", "long_term", "enabled"),
+            (namespace, "memory_long_term_enabled"),
+            ("memory_long_term_enabled",),
+        ],
+        transform=_to_bool,
+    )
+    memory_long_term_path = _resolve_from_config(
+        ctx=ctx,
+        param_name="memory_long_term_path",
+        current=memory_long_term_path,
+        config=config,
+        paths=[
+            (namespace, "memory", "long_term", "path"),
+            ("memory", "long_term", "path"),
+            (namespace, "memory_long_term_path"),
+            ("memory_long_term_path",),
+        ],
+        transform=str,
+    )
+    memory_long_term_top_n = _resolve_from_config(
+        ctx=ctx,
+        param_name="memory_long_term_top_n",
+        current=memory_long_term_top_n,
+        config=config,
+        paths=[
+            (namespace, "memory", "long_term", "top_n"),
+            ("memory", "long_term", "top_n"),
+            (namespace, "memory_long_term_top_n"),
+            ("memory_long_term_top_n",),
+        ],
+        transform=_to_int,
+    )
+    memory_long_term_token_budget = _resolve_from_config(
+        ctx=ctx,
+        param_name="memory_long_term_token_budget",
+        current=memory_long_term_token_budget,
+        config=config,
+        paths=[
+            (namespace, "memory", "long_term", "token_budget"),
+            ("memory", "long_term", "token_budget"),
+            (namespace, "memory_long_term_token_budget"),
+            ("memory_long_term_token_budget",),
+        ],
+        transform=_to_int,
+    )
+    memory_long_term_write_enabled = _resolve_from_config(
+        ctx=ctx,
+        param_name="memory_long_term_write_enabled",
+        current=memory_long_term_write_enabled,
+        config=config,
+        paths=[
+            (namespace, "memory", "long_term", "write_enabled"),
+            ("memory", "long_term", "write_enabled"),
+            (namespace, "memory_long_term_write_enabled"),
+            ("memory_long_term_write_enabled",),
+        ],
+        transform=_to_bool,
+    )
+    memory_long_term_as_of_enabled = _resolve_from_config(
+        ctx=ctx,
+        param_name="memory_long_term_as_of_enabled",
+        current=memory_long_term_as_of_enabled,
+        config=config,
+        paths=[
+            (namespace, "memory", "long_term", "as_of_enabled"),
+            ("memory", "long_term", "as_of_enabled"),
+            (namespace, "memory_long_term_as_of_enabled"),
+            ("memory_long_term_as_of_enabled",),
+        ],
+        transform=_to_bool,
+    )
     memory_capture_enabled = _resolve_from_config(
         ctx=ctx,
         param_name="memory_capture_enabled",
@@ -697,6 +781,14 @@ def resolve_memory_config(
             "max_boost": memory_feedback_max_boost,
             "decay_days": memory_feedback_decay_days,
         },
+        "long_term": {
+            "enabled": bool(memory_long_term_enabled),
+            "path": memory_long_term_path,
+            "top_n": memory_long_term_top_n,
+            "token_budget": memory_long_term_token_budget,
+            "write_enabled": bool(memory_long_term_write_enabled),
+            "as_of_enabled": bool(memory_long_term_as_of_enabled),
+        },
         "capture": {
             "enabled": bool(memory_capture_enabled),
             "notes_path": memory_capture_notes_path,
@@ -751,6 +843,12 @@ def resolve_memory_config(
         "memory_feedback_boost_per_select": memory_feedback_boost_per_select,
         "memory_feedback_max_boost": memory_feedback_max_boost,
         "memory_feedback_decay_days": memory_feedback_decay_days,
+        "memory_long_term_enabled": memory_long_term_enabled,
+        "memory_long_term_path": memory_long_term_path,
+        "memory_long_term_top_n": memory_long_term_top_n,
+        "memory_long_term_token_budget": memory_long_term_token_budget,
+        "memory_long_term_write_enabled": memory_long_term_write_enabled,
+        "memory_long_term_as_of_enabled": memory_long_term_as_of_enabled,
         "memory_capture_enabled": memory_capture_enabled,
         "memory_capture_notes_path": memory_capture_notes_path,
         "memory_capture_min_query_length": memory_capture_min_query_length,

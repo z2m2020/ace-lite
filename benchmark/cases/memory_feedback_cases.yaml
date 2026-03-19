@@ -1,0 +1,87 @@
+cases:
+  - case_id: ace-memory-neutral-routing-01
+    query: how does the planner resolve memory namespace tags and keep compact memory retrieval stable
+    expected_keys: [memory, namespace, orchestrator]
+    filters:
+      include_paths:
+        - src/ace_lite/orchestrator.py
+        - src/ace_lite/pipeline/stages/memory.py
+        - tests/unit/test_memory_disclosure.py
+        - tests/unit/test_memory_stage_temporal.py
+    top_k: 8
+    comparison_lane: memory-neutral
+    memory_surface: namespace_routing
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-memory-helpful-ltm-02
+    query: how do long-term memory facts become source_plan constraints and benchmark ltm explainability signals
+    expected_keys: [long_term, source_plan, benchmark]
+    filters:
+      include_paths:
+        - src/ace_lite/pipeline/stages/memory.py
+        - src/ace_lite/pipeline/stages/source_plan.py
+        - src/ace_lite/benchmark/case_evaluation_metrics.py
+        - src/ace_lite/benchmark/case_evaluation_row.py
+        - tests/unit/test_source_plan_properties.py
+        - tests/unit/test_benchmark_scoring.py
+    top_k: 8
+    comparison_lane: memory-helpful
+    memory_surface: ltm_plan_attribution
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-memory-harmful-negative-control-03
+    query: where are the maintainer docs for release benchmarking and upgrade guidance without relying on memory carry-over
+    expected_keys: [releasing, benchmarking, upgrade]
+    filters:
+      include_globs:
+        - docs/maintainers/*.md
+        - docs/reference/*.md
+      exclude_paths:
+        - src/ace_lite/memory_long_term/store.py
+        - src/ace_lite/pipeline/stages/memory.py
+        - tests/unit/test_memory_disclosure.py
+    top_k: 8
+    comparison_lane: memory-harmful-negative-control
+    memory_surface: docs_negative_control
+    task_success:
+      mode: negative_control
+      min_validation_tests: 1
+
+  - case_id: ace-memory-time-sensitive-asof-04
+    query: how does long-term memory enforce as_of boundaries to avoid stale or future fact leakage
+    expected_keys: [long_term, as_of, stale]
+    filters:
+      include_paths:
+        - src/ace_lite/memory_long_term/store.py
+        - src/ace_lite/memory_long_term/provider.py
+        - tests/unit/test_memory_long_term_store.py
+        - tests/unit/test_memory_disclosure.py
+    top_k: 8
+    comparison_lane: time-sensitive
+    memory_surface: as_of_boundary
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-memory-cross-session-recovery-05
+    query: how do feedback issue export resolution and long-term capture support cross-session recovery
+    expected_keys: [feedback, recovery, long_term]
+    filters:
+      include_paths:
+        - src/ace_lite/feedback_issue_linkage.py
+        - src/ace_lite/issue_report_store.py
+        - src/ace_lite/dev_feedback_store.py
+        - src/ace_lite/memory_long_term/capture.py
+        - tests/integration/test_cli_feedback.py
+        - tests/unit/test_memory_long_term_capture.py
+        - tests/unit/test_feedback_issue_linkage.py
+    top_k: 8
+    comparison_lane: cross-session-recovery
+    memory_surface: feedback_recovery
+    task_success:
+      mode: positive
+      min_validation_tests: 1

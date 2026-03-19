@@ -808,11 +808,11 @@ def _seed_perf_routing_repo(root: Path) -> Path:
             "cases:\n"
             "  - case_id: perf-routing-01\n"
             "    query: optimize index latency hotspot budget and profile slowdown paths\n"
-            "    expected_keys: [profile_index_stage, enforce_slo_budget]\n"
+            "    expected_keys: [src/indexing/stage_profiler.py, src/runtime/slo_budget.py]\n"
             "    top_k: 2\n"
             "  - case_id: perf-routing-02\n"
             "    query: trim context budget for hotspot ranking when latency exceeds the SLO\n"
-            "    expected_keys: [trim_context_for_latency, rank_latency_hotspots]\n"
+            "    expected_keys: [src/indexing/context_budget.py, src/runtime/hotspot_ranker.py]\n"
             "    top_k: 2\n"
         ),
         encoding="utf-8",
@@ -954,12 +954,12 @@ def _seed_topological_shield_repo(root: Path) -> Path:
             "cases:\n"
             "  - case_id: topological-shield-sibling-01\n"
             "    query: where service handle request resolves token through a graph-near sibling helper\n"
-            "    expected_keys: [resolve_token]\n"
+            "    expected_keys: [src/service.py]\n"
             "    top_k: 8\n"
             "    comparison_lane: topological_shield\n"
             "  - case_id: topological-shield-hub-heavy-02\n"
             "    query: where request handlers use resolve helper without overvaluing the shared logger utility hub\n"
-            "    expected_keys: [resolve_helper]\n"
+            "    expected_keys: [src/defs/helper.py]\n"
             "    top_k: 8\n"
             "    comparison_lane: topological_shield\n"
         ),
@@ -1759,11 +1759,18 @@ def _run_topological_shield_slice(
     off_latency = float(off_metrics.get("latency_p95_ms", 0.0) or 0.0)
     on_latency = float(on_metrics.get("latency_p95_ms", 0.0) or 0.0)
     on_attenuated_chunk_count = float(
-        on_lane_metrics.get("topological_shield_attenuated_chunk_count_mean", 0.0)
+        on_lane_metrics.get(
+            "topological_shield_attenuated_chunk_count_mean",
+            on_metrics.get("topological_shield_attenuated_chunk_count_mean", 0.0),
+        )
         or 0.0
     )
     on_attenuation_total = float(
-        on_lane_metrics.get("topological_shield_attenuation_total_mean", 0.0) or 0.0
+        on_lane_metrics.get(
+            "topological_shield_attenuation_total_mean",
+            on_metrics.get("topological_shield_attenuation_total_mean", 0.0),
+        )
+        or 0.0
     )
 
     deltas = {
@@ -1777,12 +1784,18 @@ def _run_topological_shield_slice(
         ),
         "attenuated_chunk_count_delta": on_attenuated_chunk_count
         - float(
-            off_lane_metrics.get("topological_shield_attenuated_chunk_count_mean", 0.0)
+            off_lane_metrics.get(
+                "topological_shield_attenuated_chunk_count_mean",
+                off_metrics.get("topological_shield_attenuated_chunk_count_mean", 0.0),
+            )
             or 0.0
         ),
         "attenuation_total_delta": on_attenuation_total
         - float(
-            off_lane_metrics.get("topological_shield_attenuation_total_mean", 0.0)
+            off_lane_metrics.get(
+                "topological_shield_attenuation_total_mean",
+                off_metrics.get("topological_shield_attenuation_total_mean", 0.0),
+            )
             or 0.0
         ),
     }

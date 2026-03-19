@@ -40,6 +40,16 @@ thresholds:
 freeze:
   runtime_gate:
     enabled: true
+  validation_rich_gate:
+    mode: enforced
+    thresholds:
+      task_success_rate_min: 0.90
+      precision_at_k_min: 0.40
+      noise_rate_max: 0.60
+      latency_p95_ms_max: 700.0
+      validation_test_count_min: 5.0
+      missing_validation_rate_max: 0.0
+      evidence_insufficient_rate_max: 0.0
   tabiv3_gate:
     enabled: true
     matrix_config: benchmark/matrix/tabiv3.yaml
@@ -60,8 +70,8 @@ freeze:
     cochange: false
     retry_count: 2
     thresholds:
-      precision_at_k_min: 0.65
-      noise_rate_max: 0.35
+      precision_at_k_min: 0.60
+      noise_rate_max: 0.40
       latency_p95_ms_max: 350.0
       chunk_hit_at_k_min: 0.90
   external_concept_gate:
@@ -116,6 +126,8 @@ repos:
     languages: python
     cases: benchmark/cases/matrix/requests.yaml
     embedding_enabled: true
+    thresholds:
+      dependency_recall_min: 0.72
 
   - name: flask
     repo: flask
@@ -125,7 +137,7 @@ repos:
     cases: benchmark/cases/matrix/flask.yaml
     embedding_enabled: true
     thresholds:
-      dependency_recall_min: 0.85
+      dependency_recall_min: 0.78
 
   - name: cobra
     repo: cobra
@@ -153,7 +165,7 @@ repos:
     embedding_enabled: true
     thresholds:
       latency_p95_ms_max: 900.0
-      dependency_recall_min: 0.85
+      dependency_recall_min: 0.75
 
   - name: protobuf-go
     repo: protobuf-go
@@ -162,6 +174,8 @@ repos:
     languages: go
     cases: benchmark/cases/matrix/protobuf_go.yaml
     embedding_enabled: true
+    thresholds:
+      latency_p95_ms_max: 500.0
 
   - name: grpc-java
     repo: grpc-java

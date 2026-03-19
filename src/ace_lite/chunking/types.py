@@ -147,6 +147,10 @@ class ChunkMetrics:
     retrieval_context_chunk_count: int = 0
     retrieval_context_coverage_ratio: float = 0.0
     retrieval_context_char_count_mean: float = 0.0
+    contextual_sidecar_parent_symbol_chunk_count: int = 0
+    contextual_sidecar_parent_symbol_coverage_ratio: float = 0.0
+    contextual_sidecar_reference_hint_chunk_count: int = 0
+    contextual_sidecar_reference_hint_coverage_ratio: float = 0.0
     robust_signature_count: int = 0
     robust_signature_coverage_ratio: float = 0.0
     graph_prior_chunk_count: int = 0
@@ -185,6 +189,18 @@ class ChunkMetrics:
             "retrieval_context_chunk_count": float(self.retrieval_context_chunk_count),
             "retrieval_context_coverage_ratio": self.retrieval_context_coverage_ratio,
             "retrieval_context_char_count_mean": self.retrieval_context_char_count_mean,
+            "contextual_sidecar_parent_symbol_chunk_count": float(
+                self.contextual_sidecar_parent_symbol_chunk_count
+            ),
+            "contextual_sidecar_parent_symbol_coverage_ratio": (
+                self.contextual_sidecar_parent_symbol_coverage_ratio
+            ),
+            "contextual_sidecar_reference_hint_chunk_count": float(
+                self.contextual_sidecar_reference_hint_chunk_count
+            ),
+            "contextual_sidecar_reference_hint_coverage_ratio": (
+                self.contextual_sidecar_reference_hint_coverage_ratio
+            ),
             "robust_signature_count": float(self.robust_signature_count),
             "robust_signature_coverage_ratio": self.robust_signature_coverage_ratio,
             "graph_prior_chunk_count": float(self.graph_prior_chunk_count),

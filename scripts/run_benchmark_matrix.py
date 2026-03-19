@@ -152,6 +152,58 @@ def _is_retryable_git_network_error(result: CommandResult) -> bool:
     )
 
 
+def _is_git_launch_unavailable(result: CommandResult) -> bool:
+    if result.returncode == 0:
+        return False
+    combined = f"{result.stdout}\n{result.stderr}".lower()
+    return "error launching git:" in combined
+
+
+def _resolve_head_without_git(*, target: Path) -> str:
+    git_dir = target / ".git"
+    head_path = git_dir / "HEAD"
+    try:
+        head_text = head_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+    if not head_text:
+        return ""
+
+    if not head_text.startswith("ref:"):
+        return head_text if len(head_text) >= 7 else ""
+
+    ref_name = head_text.partition(":")[2].strip()
+    if not ref_name:
+        return ""
+
+    ref_path = git_dir / Path(ref_name)
+    try:
+        ref_text = ref_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        ref_text = ""
+    if ref_text:
+        return ref_text
+
+    packed_refs_path = git_dir / "packed-refs"
+    try:
+        packed_refs = packed_refs_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        packed_refs = []
+    for line in packed_refs:
+        stripped = str(line).strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("^"):
+            continue
+        commit, _sep, name = stripped.partition(" ")
+        if name.strip() == ref_name and commit.strip():
+            return commit.strip()
+    return ""
+
+
+def _is_git_launch_unavailable_error(exc: Exception) -> bool:
+    return "error launching git:" in str(exc).lower()
+
+
 def _run_checkout_command_with_retry(
     *,
     cmd: list[str],
@@ -1190,6 +1242,7 @@ def _ensure_checkout(*, workspace: Path, spec: dict[str, Any]) -> dict[str, Any]
 
     ref = str(spec.get("ref") or "main").strip()
     target = workspace / name
+    git_unavailable = False
 
     if not (target / ".git").exists():
         if target.exists():
@@ -1199,23 +1252,60 @@ def _ensure_checkout(*, workspace: Path, spec: dict[str, Any]) -> dict[str, Any]
             label=f"clone {name}",
         )
     else:
-        _run_checkout_command_with_retry(
-            cmd=["git", "-C", str(target), "fetch", "--depth", "1", "origin", ref],
-            label=f"fetch {name}",
-        )
-        checkout = _run_command(cmd=["git", "-C", str(target), "checkout", "--force", "FETCH_HEAD"])
-        _require_success(checkout, label=f"checkout {name}")
+        fetch_cmd = ["git", "-C", str(target), "fetch", "--depth", "1", "origin", ref]
+        fetch = _run_command(cmd=fetch_cmd)
+        if fetch.returncode == 0:
+            checkout = _run_command(
+                cmd=["git", "-C", str(target), "checkout", "--force", "FETCH_HEAD"]
+            )
+            if _is_git_launch_unavailable(checkout):
+                git_unavailable = True
+                print(
+                    f"[matrix] git unavailable during checkout {name}; "
+                    "reusing existing checkout without refresh",
+                    file=sys.stderr,
+                )
+            else:
+                _require_success(checkout, label=f"checkout {name}")
+        elif _is_git_launch_unavailable(fetch):
+            git_unavailable = True
+            print(
+                f"[matrix] git unavailable during fetch {name}; "
+                "reusing existing checkout without refresh",
+                file=sys.stderr,
+            )
+        elif _is_retryable_git_network_error(fetch):
+            _run_checkout_command_with_retry(
+                cmd=fetch_cmd,
+                label=f"fetch {name}",
+            )
+            checkout = _run_command(
+                cmd=["git", "-C", str(target), "checkout", "--force", "FETCH_HEAD"]
+            )
+            _require_success(checkout, label=f"checkout {name}")
+        else:
+            _require_success(fetch, label=f"fetch {name}")
 
-    submodules = _sync_checkout_submodules(repo_name=name, target=target, spec=spec)
-
-    rev = _run_command(cmd=["git", "-C", str(target), "rev-parse", "HEAD"])
-    _require_success(rev, label=f"resolve head {name}")
+    if git_unavailable:
+        submodule_paths = list(_normalize_submodule_paths(spec.get("submodules")))
+        submodules = {
+            "enabled": bool(spec.get("submodules")),
+            "paths": submodule_paths,
+            "skipped": bool(spec.get("submodules")),
+            "reason": "git_unavailable",
+        }
+        resolved_commit = _resolve_head_without_git(target=target)
+    else:
+        submodules = _sync_checkout_submodules(repo_name=name, target=target, spec=spec)
+        rev = _run_command(cmd=["git", "-C", str(target), "rev-parse", "HEAD"])
+        _require_success(rev, label=f"resolve head {name}")
+        resolved_commit = str(rev.stdout or "").strip()
 
     return {
         "name": name,
         "root": str(target.resolve()),
         "ref": ref,
-        "resolved_commit": str(rev.stdout or "").strip(),
+        "resolved_commit": resolved_commit,
         "submodules": submodules,
     }
 
@@ -1515,6 +1605,11 @@ def _run_repo_benchmark(
 
 def _build_summary_markdown(*, summary: dict[str, Any]) -> str:
     repos = summary.get("repos", []) if isinstance(summary.get("repos"), list) else []
+    skipped_repos = (
+        summary.get("skipped_repos", [])
+        if isinstance(summary.get("skipped_repos"), list)
+        else []
+    )
     lines: list[str] = [
         "# ACE-Lite Benchmark Matrix",
         "",
@@ -1522,6 +1617,8 @@ def _build_summary_markdown(*, summary: dict[str, Any]) -> str:
         f"- Matrix config: {summary.get('matrix_config', '')}",
         f"- Passed: {summary.get('passed', False)}",
         f"- Repo count: {len(repos)}",
+        f"- Configured repo count: {int(summary.get('configured_repo_count', len(repos)) or 0)}",
+        f"- Skipped repo count: {len(skipped_repos)}",
         f"- Task success mean: {float(summary.get('task_success_mean', 0.0) or 0.0):.4f}",
         f"- Negative control cases: {int(summary.get('negative_control_case_count', 0) or 0)}",
         f"- Retrieval-task gap count: {int(summary.get('retrieval_task_gap_count', 0) or 0)}",
@@ -1852,6 +1949,20 @@ def _build_summary_markdown(*, summary: dict[str, Any]) -> str:
         lines.append("- None")
         lines.append("")
 
+    if skipped_repos:
+        lines.append("## Skipped Repos")
+        lines.append("")
+        for item in skipped_repos:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                "- {name}: reason={reason}".format(
+                    name=str(item.get("name") or "(unknown)"),
+                    reason=str(item.get("reason") or "unknown"),
+                )
+            )
+        lines.append("")
+
     return "\n".join(lines).strip() + "\n"
 
 
@@ -1895,6 +2006,7 @@ def main() -> int:
 
     started = perf_counter()
     repo_results: list[dict[str, Any]] = []
+    skipped_repos: list[dict[str, Any]] = []
 
     for item in repos:
         if not isinstance(item, dict):
@@ -1903,15 +2015,26 @@ def main() -> int:
         if not name:
             continue
         print(f"[matrix] running benchmark for {name}...")
-        repo_result = _run_repo_benchmark(
-            project_root=project_root,
-            cli_bin=str(args.cli_bin),
-            repo_spec=item,
-            defaults=defaults,
-            global_thresholds=global_thresholds,
-            repos_workspace=repos_workspace,
-            output_root=output_root,
-        )
+        try:
+            repo_result = _run_repo_benchmark(
+                project_root=project_root,
+                cli_bin=str(args.cli_bin),
+                repo_spec=item,
+                defaults=defaults,
+                global_thresholds=global_thresholds,
+                repos_workspace=repos_workspace,
+                output_root=output_root,
+            )
+        except RuntimeError as exc:
+            if _is_git_launch_unavailable_error(exc):
+                reason = "git_unavailable_missing_checkout"
+                skipped_repos.append({"name": name, "reason": reason})
+                print(
+                    f"[matrix] {name}: skipped reason={reason}",
+                    file=sys.stderr,
+                )
+                continue
+            raise
         repo_results.append(repo_result)
         failed_checks = (
             repo_result.get("benchmark_failed_checks", [])
@@ -1952,7 +2075,16 @@ def main() -> int:
             )
         )
 
-    passed = all(bool(item.get("passed", False)) for item in repo_results)
+    configured_repo_count = len(
+        [
+            item
+            for item in repos
+            if isinstance(item, dict) and str(item.get("name") or "").strip()
+        ]
+    )
+    passed = bool(repo_results) and all(
+        bool(item.get("passed", False)) for item in repo_results
+    )
     regression_detected = any(
         bool(item.get("benchmark_regressed", False)) for item in repo_results
     )
@@ -1974,6 +2106,9 @@ def main() -> int:
         "passed": passed,
         "benchmark_regression_detected": regression_detected,
         "repo_count": len(repo_results),
+        "configured_repo_count": configured_repo_count,
+        "skipped_repo_count": len(skipped_repos),
+        "skipped_repos": skipped_repos,
         "elapsed_seconds": round(elapsed_s, 3),
         "retrieval_policy_summary": _build_retrieval_policy_summary(repos=repo_results),
         "plugin_policy_summary": _build_plugin_policy_summary(repos=repo_results),

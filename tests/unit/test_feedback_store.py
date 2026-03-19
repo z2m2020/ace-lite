@@ -8,6 +8,7 @@ from ace_lite.feedback_store import (
     SelectionFeedbackStore,
     build_feedback_boosts,
 )
+from ace_lite.memory_long_term import LongTermMemoryCaptureService, LongTermMemoryStore
 from ace_lite.profile_store import ProfileStore
 
 
@@ -111,6 +112,38 @@ def test_feedback_store_record_relativizes_absolute_paths_against_root(tmp_path:
 
     assert payload["event"]["selected_path"] == "src/demo.py"
     assert store.load_events()[0]["selected_path"] == "src/demo.py"
+
+
+def test_feedback_store_can_mirror_selection_feedback_to_long_term_memory(
+    tmp_path: Path,
+) -> None:
+    profile_path = tmp_path / "profile.json"
+    long_term_store = LongTermMemoryStore(db_path=tmp_path / "context-map" / "long_term.db")
+    capture_service = LongTermMemoryCaptureService(store=long_term_store, enabled=True)
+    store = SelectionFeedbackStore(
+        profile_path=profile_path,
+        max_entries=8,
+        long_term_capture_service=capture_service,
+    )
+
+    payload = store.record(
+        query="openmemory 405 dimension mismatch",
+        repo="demo",
+        user_id="user-a",
+        profile_key="bugfix",
+        selected_path="src/demo.py",
+        captured_at="2026-03-19T00:00:00+00:00",
+        position=1,
+        root_path=tmp_path,
+    )
+
+    rows = long_term_store.search(query="openmemory", limit=10)
+
+    assert payload["long_term_capture"]["ok"] is True
+    assert payload["long_term_capture"]["stage"] == "selection_feedback"
+    assert len(rows) == 1
+    assert rows[0].payload["kind"] == "selection_feedback"
+    assert rows[0].payload["profile_key"] == "bugfix"
 
 
 def test_feedback_store_export_and_replay_roundtrip(tmp_path: Path) -> None:

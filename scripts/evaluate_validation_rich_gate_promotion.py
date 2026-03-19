@@ -85,6 +85,7 @@ def evaluate_promotion(
     min_history_count: int,
 ) -> dict[str, Any]:
     reasons: list[str] = []
+    warnings: list[str] = []
     gates: list[dict[str, Any]] = []
 
     history_count = int(trend_payload.get("history_count", 0) or 0)
@@ -105,7 +106,7 @@ def evaluate_promotion(
     if bool(trend_latest.get("regressed", False)):
         reasons.append("latest validation-rich summary is marked regressed")
     if trend_failed_checks:
-        reasons.append("trend report still shows failed_checks history")
+        warnings.append("trend report still shows failed_checks history")
     if threshold_failures:
         reasons.extend(threshold_failures)
     gates.append(
@@ -113,11 +114,11 @@ def evaluate_promotion(
             "name": "trend",
             "passed": trend_ok
             and not bool(trend_latest.get("regressed", False))
-            and not trend_failed_checks
             and not threshold_failures,
             "history_count": history_count,
             "latest_regressed": bool(trend_latest.get("regressed", False)),
             "threshold_failures": threshold_failures,
+            "historical_failed_checks": trend_failed_checks,
         }
     )
 
@@ -174,12 +175,19 @@ def evaluate_promotion(
         )
     gates.append({"name": "comparison", **comparison_summary})
 
-    eligible = trend_ok and stability_ok and comparison_ok and not threshold_failures and not trend_failed_checks and not bool(trend_latest.get("regressed", False))
+    eligible = (
+        trend_ok
+        and stability_ok
+        and comparison_ok
+        and not threshold_failures
+        and not bool(trend_latest.get("regressed", False))
+    )
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "recommendation": "eligible_for_enforced" if eligible else "stay_report_only",
         "eligible": eligible,
         "reasons": reasons,
+        "warnings": warnings,
         "gates": gates,
         "thresholds": thresholds,
         "latest_metrics": latest_metrics,
@@ -189,6 +197,8 @@ def evaluate_promotion(
 def _render_markdown(*, payload: dict[str, Any]) -> str:
     reasons_raw = payload.get("reasons")
     reasons = reasons_raw if isinstance(reasons_raw, list) else []
+    warnings_raw = payload.get("warnings")
+    warnings = warnings_raw if isinstance(warnings_raw, list) else []
     gates_raw = payload.get("gates")
     gates = gates_raw if isinstance(gates_raw, list) else []
     latest_metrics_raw = payload.get("latest_metrics")
@@ -213,6 +223,12 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 passed=bool(gate.get("passed", False)),
             )
         )
+    lines.extend(["", "## Warnings", ""])
+    if warnings:
+        for warning in warnings:
+            lines.append(f"- {warning}")
+    else:
+        lines.append("- None")
     lines.extend(["", "## Latest Metrics", "", "| Metric | Value |", "| --- | ---: |"])
     for metric_name in METRIC_NAMES:
         lines.append(

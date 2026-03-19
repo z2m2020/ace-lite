@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from ace_lite.memory_long_term import LongTermMemoryStore
 from ace_lite.mcp_server.service_feedback_handlers import (
     handle_feedback_record_request,
     handle_feedback_stats_request,
@@ -75,6 +76,46 @@ def test_handle_feedback_record_and_stats_round_trip(tmp_path: Path) -> None:
     assert stats["stats"]["unique_paths"] == 1
     assert stats["stats"]["user_id_filter"] == "mcp-user"
     assert stats["stats"]["profile_key_filter"] == "bugfix"
+
+
+def test_handle_feedback_record_mirrors_to_long_term_memory_when_enabled(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  memory:\n"
+            "    long_term:\n"
+            "      enabled: true\n"
+            "      write_enabled: true\n"
+            "      path: context-map/long_term_memory.db\n"
+        ),
+        encoding="utf-8",
+    )
+    src_dir = tmp_path / "src"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    selected = src_dir / "sample.py"
+    selected.write_text("print('ok')\n", encoding="utf-8")
+
+    recorded = handle_feedback_record_request(
+        query="openmemory 405 dimension mismatch",
+        selected_path=str(selected),
+        repo="demo-repo",
+        user_id="mcp-user",
+        profile_key="bugfix",
+        root_path=tmp_path,
+        default_repo="default-repo",
+        profile_path="context-map/profile.json",
+        position=1,
+        max_entries=8,
+    )
+    store = LongTermMemoryStore(db_path=tmp_path / "context-map" / "long_term_memory.db")
+    rows = store.search(query="openmemory", limit=10)
+
+    assert recorded["recorded"]["long_term_capture"]["ok"] is True
+    assert recorded["recorded"]["long_term_capture"]["stage"] == "selection_feedback"
+    assert len(rows) == 1
+    assert rows[0].payload["kind"] == "selection_feedback"
 
 
 def test_handle_feedback_record_requires_query_and_selected_path(

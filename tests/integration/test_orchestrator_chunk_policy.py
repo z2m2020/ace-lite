@@ -91,7 +91,7 @@ def test_chunk_guard_report_only_vs_enforce_changes_chunk_outputs(
         "guard": {
             "enabled": True,
             "min_pool": 1,
-            "lambda_penalty": 4.0,
+            "lambda_penalty": 8.0,
             "min_marginal_utility": 0.5,
         },
     }

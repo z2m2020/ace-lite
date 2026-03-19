@@ -265,6 +265,21 @@ def test_validation_rich_cases_cover_validation_and_agent_loop_surfaces() -> Non
     ]
 
 
+def test_external_howwhy_matrix_reuses_primary_checkout_names() -> None:
+    config_path = (
+        Path(__file__).resolve().parents[2]
+        / "benchmark"
+        / "matrix"
+        / "external_howwhy.yaml"
+    )
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    repos = payload.get("repos", []) if isinstance(payload, dict) else []
+    assert repos
+    for item in repos:
+        assert item["name"] == item["repo"]
+
+
 def test_stale_majority_cases_define_explicit_chunk_guard_lane() -> None:
     config_path = (
         Path(__file__).resolve().parents[2]
@@ -330,4 +345,167 @@ def test_grpc_java_matrix_cases_cover_java_dependency_heavy_surfaces() -> None:
         case_id = str(item["case_id"])
         assert item["top_k"] == 6
         assert tuple(item["expected_keys"]) == expected_keys[case_id]
+
+
+def test_feedback_loop_cases_cover_issue_export_and_resolution_surfaces() -> None:
+    config_path = (
+        Path(__file__).resolve().parents[2]
+        / "benchmark"
+        / "cases"
+        / "feedback_loop_cases.yaml"
+    )
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    cases = payload.get("cases", []) if isinstance(payload, dict) else []
+    assert len(cases) == 4
+
+    case_ids = {str(item.get("case_id") or "") for item in cases if isinstance(item, dict)}
+    assert case_ids == {
+        "ace-feedback-issue-export-cli-01",
+        "ace-feedback-issue-export-mcp-02",
+        "ace-feedback-resolution-cli-03",
+        "ace-feedback-resolution-mcp-04",
+    }
+
+    surfaces = {
+        str(item.get("feedback_surface") or "")
+        for item in cases
+        if isinstance(item, dict)
+    }
+    assert surfaces == {
+        "issue_report_export_cli",
+        "issue_report_export_mcp",
+        "issue_resolution_cli",
+        "issue_resolution_mcp",
+    }
+
+    expected_lanes = {
+        "ace-feedback-issue-export-cli-01": "issue_report_feedback",
+        "ace-feedback-issue-export-mcp-02": "issue_report_feedback",
+        "ace-feedback-resolution-cli-03": "dev_feedback_resolution",
+        "ace-feedback-resolution-mcp-04": "dev_feedback_resolution",
+    }
+    expected_include_paths = {
+        "ace-feedback-issue-export-cli-01": [
+            "src/ace_lite/cli_app/commands/feedback.py",
+            "src/ace_lite/issue_report_store.py",
+            "src/ace_lite/feedback_issue_linkage.py",
+            "tests/integration/test_cli_feedback.py",
+        ],
+        "ace-feedback-issue-export-mcp-02": [
+            "src/ace_lite/mcp_server/service_issue_report_handlers.py",
+            "src/ace_lite/mcp_server/service.py",
+            "src/ace_lite/mcp_server/server_tool_registration.py",
+            "src/ace_lite/issue_report_store.py",
+            "src/ace_lite/feedback_issue_linkage.py",
+            "tests/unit/test_mcp_service_issue_report_handlers.py",
+            "tests/unit/test_mcp_server.py",
+        ],
+        "ace-feedback-resolution-cli-03": [
+            "src/ace_lite/cli_app/commands/feedback.py",
+            "src/ace_lite/issue_report_store.py",
+            "src/ace_lite/dev_feedback_store.py",
+            "src/ace_lite/feedback_issue_linkage.py",
+            "tests/integration/test_cli_feedback.py",
+        ],
+        "ace-feedback-resolution-mcp-04": [
+            "src/ace_lite/mcp_server/service_issue_report_handlers.py",
+            "src/ace_lite/mcp_server/service.py",
+            "src/ace_lite/mcp_server/server_tool_registration.py",
+            "src/ace_lite/issue_report_store.py",
+            "src/ace_lite/dev_feedback_store.py",
+            "src/ace_lite/feedback_issue_linkage.py",
+            "tests/unit/test_mcp_service_issue_report_handlers.py",
+            "tests/unit/test_mcp_server.py",
+        ],
+    }
+
+    for item in cases:
+        case_id = str(item["case_id"])
+        assert item["comparison_lane"] == expected_lanes[case_id]
+        assert item["top_k"] == 8
+        assert item["task_success"] == {
+            "mode": "positive",
+            "min_validation_tests": 1,
+        }
+        assert item["filters"]["include_paths"] == expected_include_paths[case_id]
+
+
+def test_memory_feedback_cases_cover_memory_taxonomy_surfaces() -> None:
+    config_path = (
+        Path(__file__).resolve().parents[2]
+        / "benchmark"
+        / "cases"
+        / "memory_feedback_cases.yaml"
+    )
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    cases = payload.get("cases", []) if isinstance(payload, dict) else []
+    assert len(cases) == 5
+
+    case_ids = {str(item.get("case_id") or "") for item in cases if isinstance(item, dict)}
+    assert case_ids == {
+        "ace-memory-neutral-routing-01",
+        "ace-memory-helpful-ltm-02",
+        "ace-memory-harmful-negative-control-03",
+        "ace-memory-time-sensitive-asof-04",
+        "ace-memory-cross-session-recovery-05",
+    }
+
+    surfaces = {
+        str(item.get("memory_surface") or "")
+        for item in cases
+        if isinstance(item, dict)
+    }
+    assert surfaces == {
+        "namespace_routing",
+        "ltm_plan_attribution",
+        "docs_negative_control",
+        "as_of_boundary",
+        "feedback_recovery",
+    }
+
+    expected_lanes = {
+        "ace-memory-neutral-routing-01": "memory-neutral",
+        "ace-memory-helpful-ltm-02": "memory-helpful",
+        "ace-memory-harmful-negative-control-03": "memory-harmful-negative-control",
+        "ace-memory-time-sensitive-asof-04": "time-sensitive",
+        "ace-memory-cross-session-recovery-05": "cross-session-recovery",
+    }
+
+    for item in cases:
+        case_id = str(item["case_id"])
+        assert item["comparison_lane"] == expected_lanes[case_id]
+        assert item["top_k"] == 8
+        assert item["task_success"]["min_validation_tests"] == 1
+
+    negative_control = next(
+        item
+        for item in cases
+        if isinstance(item, dict)
+        and item.get("case_id") == "ace-memory-harmful-negative-control-03"
+    )
+    assert negative_control["task_success"] == {
+        "mode": "negative_control",
+        "min_validation_tests": 1,
+    }
+    assert negative_control["filters"]["include_globs"] == [
+        "docs/maintainers/*.md",
+        "docs/reference/*.md",
+    ]
+
+    helpful = next(
+        item
+        for item in cases
+        if isinstance(item, dict)
+        and item.get("case_id") == "ace-memory-helpful-ltm-02"
+    )
+    assert helpful["filters"]["include_paths"] == [
+        "src/ace_lite/pipeline/stages/memory.py",
+        "src/ace_lite/pipeline/stages/source_plan.py",
+        "src/ace_lite/benchmark/case_evaluation_metrics.py",
+        "src/ace_lite/benchmark/case_evaluation_row.py",
+        "tests/unit/test_source_plan_properties.py",
+        "tests/unit/test_benchmark_scoring.py",
+    ]
 

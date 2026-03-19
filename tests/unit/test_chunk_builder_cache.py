@@ -231,3 +231,7 @@ def test_build_candidate_chunks_attaches_internal_retrieval_context(
     assert metrics["retrieval_context_chunk_count"] == 2.0
     assert metrics["retrieval_context_coverage_ratio"] == 1.0
     assert metrics["retrieval_context_char_count_mean"] > 0.0
+    assert metrics["contextual_sidecar_parent_symbol_chunk_count"] == 2.0
+    assert metrics["contextual_sidecar_parent_symbol_coverage_ratio"] == 1.0
+    assert metrics["contextual_sidecar_reference_hint_chunk_count"] == 2.0
+    assert metrics["contextual_sidecar_reference_hint_coverage_ratio"] == 1.0

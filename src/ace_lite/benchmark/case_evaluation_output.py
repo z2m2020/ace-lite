@@ -29,6 +29,10 @@ def build_case_detail_payload(
     retrieval_context_chunk_count: int,
     retrieval_context_coverage_ratio: float,
     retrieval_context_char_count_mean: float,
+    contextual_sidecar_parent_symbol_chunk_count: int,
+    contextual_sidecar_parent_symbol_coverage_ratio: float,
+    contextual_sidecar_reference_hint_chunk_count: int,
+    contextual_sidecar_reference_hint_coverage_ratio: float,
     chunk_contract_fallback_count: int,
     chunk_contract_skeleton_chunk_count: int,
     chunk_contract_fallback_ratio: float,
@@ -134,6 +138,20 @@ def build_case_detail_payload(
             "chunk_count": int(retrieval_context_chunk_count),
             "coverage_ratio": round(retrieval_context_coverage_ratio, 6),
             "char_count_mean": round(retrieval_context_char_count_mean, 6),
+            "parent_symbol_chunk_count": int(
+                contextual_sidecar_parent_symbol_chunk_count
+            ),
+            "parent_symbol_coverage_ratio": round(
+                contextual_sidecar_parent_symbol_coverage_ratio,
+                6,
+            ),
+            "reference_hint_chunk_count": int(
+                contextual_sidecar_reference_hint_chunk_count
+            ),
+            "reference_hint_coverage_ratio": round(
+                contextual_sidecar_reference_hint_coverage_ratio,
+                6,
+            ),
         },
         "chunk_contract": {
             "fallback_count": chunk_contract_fallback_count,

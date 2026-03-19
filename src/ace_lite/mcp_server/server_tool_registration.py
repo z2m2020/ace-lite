@@ -18,6 +18,13 @@ MCP_TOOL_DESCRIPTIONS: dict[str, str] = {
     "ace_memory_wipe": "Wipe local ACE-Lite memory notes (optionally by namespace).",
     "ace_feedback_record": "Record a selection feedback event into local profile storage.",
     "ace_feedback_stats": "Summarize stored selection feedback and computed boosts.",
+    "ace_issue_report_record": "Record a structured issue report into the local issue report store.",
+    "ace_issue_report_list": "List structured issue reports from the local issue report store.",
+    "ace_issue_report_export_case": "Export an issue report into a benchmark case YAML entry.",
+    "ace_issue_report_apply_fix": "Apply a stored developer fix to an issue report resolution.",
+    "ace_dev_issue_record": "Record a developer-side issue into the local dev feedback store.",
+    "ace_dev_fix_record": "Record a developer-side fix into the local dev feedback store.",
+    "ace_dev_feedback_summary": "Summarize stored developer issues and fixes from the local dev feedback store.",
 }
 
 MCP_REGISTERED_TOOL_NAMES: tuple[str, ...] = tuple(MCP_TOOL_DESCRIPTIONS.keys())
@@ -247,6 +254,200 @@ def _register_feedback_tools(*, server: FastMCP, service: AceLiteMcpService) -> 
             decay_days=decay_days,
             top_n=top_n,
             max_entries=max_entries,
+        )
+
+    @_tool(server, "ace_issue_report_record")
+    def ace_issue_report_record(
+        title: str,
+        query: str,
+        actual_behavior: str,
+        repo: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
+        root: str | None = None,
+        store_path: str | None = None,
+        category: str | None = None,
+        severity: str | None = None,
+        status: str | None = None,
+        expected_behavior: str | None = None,
+        repro_steps: list[str] | None = None,
+        selected_path: str | None = None,
+        plan_payload_ref: str | None = None,
+        attachments: list[str] | None = None,
+        occurred_at: str | None = None,
+        resolved_at: str | None = None,
+        resolution_note: str | None = None,
+        issue_id: str | None = None,
+    ) -> dict[str, Any]:
+        return service.issue_report_record(
+            title=title,
+            query=query,
+            actual_behavior=actual_behavior,
+            repo=repo,
+            user_id=user_id,
+            profile_key=profile_key,
+            root=root,
+            store_path=store_path,
+            category=category,
+            severity=severity,
+            status=status,
+            expected_behavior=expected_behavior,
+            repro_steps=repro_steps,
+            selected_path=selected_path,
+            plan_payload_ref=plan_payload_ref,
+            attachments=attachments,
+            occurred_at=occurred_at,
+            resolved_at=resolved_at,
+            resolution_note=resolution_note,
+            issue_id=issue_id,
+        )
+
+    @_tool(server, "ace_issue_report_list")
+    def ace_issue_report_list(
+        repo: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
+        root: str | None = None,
+        store_path: str | None = None,
+        status: str | None = None,
+        category: str | None = None,
+        severity: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        return service.issue_report_list(
+            repo=repo,
+            user_id=user_id,
+            profile_key=profile_key,
+            root=root,
+            store_path=store_path,
+            status=status,
+            category=category,
+            severity=severity,
+            limit=limit,
+        )
+
+    @_tool(server, "ace_issue_report_export_case")
+    def ace_issue_report_export_case(
+        issue_id: str,
+        root: str | None = None,
+        store_path: str | None = None,
+        output_path: str = "benchmark/cases/feedback_issue_reports.yaml",
+        case_id: str | None = None,
+        comparison_lane: str = "issue_report_feedback",
+        top_k: int = 8,
+        min_validation_tests: int = 1,
+        append: bool = True,
+    ) -> dict[str, Any]:
+        return service.issue_report_export_case(
+            issue_id=issue_id,
+            root=root,
+            store_path=store_path,
+            output_path=output_path,
+            case_id=case_id,
+            comparison_lane=comparison_lane,
+            top_k=top_k,
+            min_validation_tests=min_validation_tests,
+            append=append,
+        )
+
+    @_tool(server, "ace_issue_report_apply_fix")
+    def ace_issue_report_apply_fix(
+        issue_id: str,
+        fix_id: str,
+        root: str | None = None,
+        issue_store_path: str | None = None,
+        dev_feedback_path: str | None = None,
+        status: str = "resolved",
+        resolved_at: str | None = None,
+    ) -> dict[str, Any]:
+        return service.issue_report_apply_fix(
+            issue_id=issue_id,
+            fix_id=fix_id,
+            root=root,
+            issue_store_path=issue_store_path,
+            dev_feedback_path=dev_feedback_path,
+            status=status,
+            resolved_at=resolved_at,
+        )
+
+    @_tool(server, "ace_dev_issue_record")
+    def ace_dev_issue_record(
+        title: str,
+        reason_code: str,
+        repo: str,
+        store_path: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
+        query: str | None = None,
+        selected_path: str | None = None,
+        related_invocation_id: str | None = None,
+        notes: str | None = None,
+        status: str | None = None,
+        created_at: str | None = None,
+        updated_at: str | None = None,
+        resolved_at: str | None = None,
+        issue_id: str | None = None,
+    ) -> dict[str, Any]:
+        return service.dev_issue_record(
+            title=title,
+            reason_code=reason_code,
+            repo=repo,
+            store_path=store_path,
+            user_id=user_id,
+            profile_key=profile_key,
+            query=query,
+            selected_path=selected_path,
+            related_invocation_id=related_invocation_id,
+            notes=notes,
+            status=status,
+            created_at=created_at,
+            updated_at=updated_at,
+            resolved_at=resolved_at,
+            issue_id=issue_id,
+        )
+
+    @_tool(server, "ace_dev_fix_record")
+    def ace_dev_fix_record(
+        reason_code: str,
+        repo: str,
+        resolution_note: str,
+        store_path: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
+        issue_id: str | None = None,
+        query: str | None = None,
+        selected_path: str | None = None,
+        related_invocation_id: str | None = None,
+        created_at: str | None = None,
+        fix_id: str | None = None,
+    ) -> dict[str, Any]:
+        return service.dev_fix_record(
+            reason_code=reason_code,
+            repo=repo,
+            resolution_note=resolution_note,
+            store_path=store_path,
+            user_id=user_id,
+            profile_key=profile_key,
+            issue_id=issue_id,
+            query=query,
+            selected_path=selected_path,
+            related_invocation_id=related_invocation_id,
+            created_at=created_at,
+            fix_id=fix_id,
+        )
+
+    @_tool(server, "ace_dev_feedback_summary")
+    def ace_dev_feedback_summary(
+        repo: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
+        store_path: str | None = None,
+    ) -> dict[str, Any]:
+        return service.dev_feedback_summary(
+            repo=repo,
+            user_id=user_id,
+            profile_key=profile_key,
+            store_path=store_path,
         )
 
 

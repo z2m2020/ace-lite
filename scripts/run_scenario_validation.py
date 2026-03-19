@@ -273,6 +273,11 @@ def _evaluate_plan_expectations(
     cochange_stage = (
         index_stage.get("cochange", {}) if isinstance(index_stage.get("cochange"), dict) else {}
     )
+    worktree_prior = (
+        index_stage.get("worktree_prior", {})
+        if isinstance(index_stage.get("worktree_prior"), dict)
+        else {}
+    )
     profile_stage = (
         memory_stage.get("profile", {}) if isinstance(memory_stage.get("profile"), dict) else {}
     )
@@ -345,10 +350,15 @@ def _evaluate_plan_expectations(
         )
 
     if "cochange_enabled" in expected:
+        cochange_cache_mode = str(cochange_stage.get("cache_mode") or "").strip().lower()
         _add_bool_check(
             checks,
             metric="cochange_enabled",
-            actual=bool(cochange_stage.get("enabled", False)),
+            actual=bool(cochange_stage.get("enabled", False))
+            or (
+                cochange_cache_mode != "policy_disabled"
+                and bool(worktree_prior.get("enabled", False))
+            ),
             expected=_coerce_bool(expected.get("cochange_enabled"), default=True),
         )
 

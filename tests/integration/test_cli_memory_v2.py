@@ -8,6 +8,11 @@ from click.testing import CliRunner
 
 import ace_lite.cli as cli_module
 from ace_lite.memory import LocalCacheProvider, NullMemoryProvider
+from ace_lite.memory_long_term import (
+    LongTermMemoryProvider,
+    LongTermMemoryStore,
+    build_long_term_fact_contract_v1,
+)
 
 
 def _seed_root(root: Path) -> None:
@@ -482,6 +487,49 @@ def test_create_memory_provider_none_alias_channels_return_null() -> None:
     )
 
     assert isinstance(provider, NullMemoryProvider)
+
+
+def test_create_memory_provider_long_term_enabled_uses_local_store(tmp_path: Path) -> None:
+    store_path = tmp_path / "context-map" / "long_term_memory.db"
+    LongTermMemoryStore(db_path=store_path).upsert_fact(
+        build_long_term_fact_contract_v1(
+            fact_id="fact-1",
+            fact_type="repo_policy",
+            subject="runtime.validation.git",
+            predicate="fallback_policy",
+            object_value="reuse_checkout_or_skip",
+            repo="demo",
+            namespace="repo/demo",
+            as_of="2026-03-19T09:44:00+08:00",
+            valid_from="2026-03-19T09:44:00+08:00",
+            derived_from_observation_id="obs-1",
+        )
+    )
+
+    provider = cli_module.create_memory_provider(
+        primary="none",
+        secondary="none",
+        memory_strategy="semantic",
+        memory_hybrid_limit=10,
+        memory_cache_enabled=False,
+        memory_cache_path="context-map/test-memory-cache.jsonl",
+        memory_cache_ttl_seconds=300,
+        memory_cache_max_entries=50,
+        memory_long_term_enabled=True,
+        memory_long_term_path=str(store_path),
+        memory_long_term_top_n=4,
+        mcp_base_url="http://localhost:8765",
+        rest_base_url="http://localhost:8765",
+        timeout_seconds=0.1,
+        user_id=None,
+        app="codex",
+        limit=5,
+    )
+
+    assert isinstance(provider, LongTermMemoryProvider)
+    hits = provider.search_compact("fallback policy", container_tag="repo/demo")
+    assert len(hits) == 1
+    assert hits[0].metadata["memory_kind"] == "fact"
 
 
 def test_cli_plan_passes_tokenizer_model_from_flag(tmp_path: Path, monkeypatch) -> None:

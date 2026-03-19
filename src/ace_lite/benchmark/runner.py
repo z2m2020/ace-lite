@@ -8,6 +8,7 @@ from typing import Any
 
 import yaml
 
+from ace_lite.benchmark.report_metrics import ALL_METRIC_ORDER, normalize_metrics
 from ace_lite.benchmark.scoring import (
     aggregate_metrics,
     build_adaptive_router_arm_summary,
@@ -17,6 +18,7 @@ from ace_lite.benchmark.scoring import (
     build_chunk_stage_miss_summary,
     build_decision_observability_summary,
     build_evidence_insufficiency_summary,
+    build_feedback_loop_summary,
     build_feedback_observability_summary,
     build_preference_observability_summary,
     build_retrieval_context_observability_summary,
@@ -557,6 +559,7 @@ class BenchmarkRunner:
             "evidence_insufficiency_summary": build_evidence_insufficiency_summary(
                 case_results
             ),
+            "feedback_loop_summary": build_feedback_loop_summary(case_results),
             "feedback_observability_summary": build_feedback_observability_summary(
                 case_results
             ),
@@ -620,136 +623,12 @@ def load_baseline_metrics(path: str | Path) -> dict[str, float] | None:
     if not isinstance(raw, dict):
         return None
 
-    metrics = raw.get("metrics", raw)
-    if not isinstance(metrics, dict):
+    metrics_raw = raw.get("metrics", raw)
+    if not isinstance(metrics_raw, dict):
         return None
-
+    metrics = normalize_metrics(metrics_raw)
     return {
-        "recall_at_k": float(metrics.get("recall_at_k", 0.0)),
-        "precision_at_k": float(metrics.get("precision_at_k", 0.0)),
-        "task_success_rate": float(
-            metrics.get("task_success_rate", metrics.get("utility_rate", 0.0))
-        ),
-        "utility_rate": float(
-            metrics.get("utility_rate", metrics.get("task_success_rate", 0.0))
-        ),
-        "noise_rate": float(metrics.get("noise_rate", 0.0)),
-        "docs_enabled_ratio": float(metrics.get("docs_enabled_ratio", 0.0)),
-        "docs_hit_ratio": float(metrics.get("docs_hit_ratio", 0.0)),
-        "hint_inject_ratio": float(metrics.get("hint_inject_ratio", 0.0)),
-        "dependency_recall": float(metrics.get("dependency_recall", 0.0)),
-        "memory_latency_p95_ms": float(metrics.get("memory_latency_p95_ms", 0.0)),
-        "index_latency_p95_ms": float(metrics.get("index_latency_p95_ms", 0.0)),
-        "repomap_latency_p95_ms": float(metrics.get("repomap_latency_p95_ms", 0.0)),
-        "augment_latency_p95_ms": float(metrics.get("augment_latency_p95_ms", 0.0)),
-        "skills_latency_p95_ms": float(metrics.get("skills_latency_p95_ms", 0.0)),
-        "source_plan_latency_p95_ms": float(
-            metrics.get("source_plan_latency_p95_ms", 0.0)
-        ),
-        "repomap_latency_median_ms": float(
-            metrics.get("repomap_latency_median_ms", 0.0)
-        ),
-        "latency_p95_ms": float(metrics.get("latency_p95_ms", 0.0)),
-        "latency_median_ms": float(metrics.get("latency_median_ms", 0.0)),
-        "chunk_hit_at_k": float(metrics.get("chunk_hit_at_k", 0.0)),
-        "chunks_per_file_mean": float(metrics.get("chunks_per_file_mean", 0.0)),
-        "chunk_budget_used": float(metrics.get("chunk_budget_used", 0.0)),
-        "chunk_contract_fallback_count_mean": float(
-            metrics.get("chunk_contract_fallback_count_mean", 0.0)
-        ),
-        "chunk_contract_skeleton_chunk_count_mean": float(
-            metrics.get("chunk_contract_skeleton_chunk_count_mean", 0.0)
-        ),
-        "chunk_contract_fallback_ratio": float(
-            metrics.get("chunk_contract_fallback_ratio", 0.0)
-        ),
-        "chunk_contract_skeleton_ratio": float(
-            metrics.get("chunk_contract_skeleton_ratio", 0.0)
-        ),
-        "unsupported_language_fallback_count_mean": float(
-            metrics.get("unsupported_language_fallback_count_mean", 0.0)
-        ),
-        "unsupported_language_fallback_ratio": float(
-            metrics.get("unsupported_language_fallback_ratio", 0.0)
-        ),
-        "subgraph_payload_enabled_ratio": float(
-            metrics.get("subgraph_payload_enabled_ratio", 0.0)
-        ),
-        "subgraph_seed_path_count_mean": float(
-            metrics.get("subgraph_seed_path_count_mean", 0.0)
-        ),
-        "subgraph_edge_type_count_mean": float(
-            metrics.get("subgraph_edge_type_count_mean", 0.0)
-        ),
-        "subgraph_edge_total_count_mean": float(
-            metrics.get("subgraph_edge_total_count_mean", 0.0)
-        ),
-        "validation_test_count": float(metrics.get("validation_test_count", 0.0)),
-        "evidence_insufficient_rate": float(
-            metrics.get("evidence_insufficient_rate", 0.0)
-        ),
-        "no_candidate_rate": float(metrics.get("no_candidate_rate", 0.0)),
-        "low_support_chunk_rate": float(
-            metrics.get("low_support_chunk_rate", 0.0)
-        ),
-        "missing_validation_rate": float(
-            metrics.get("missing_validation_rate", 0.0)
-        ),
-        "budget_limited_recovery_rate": float(
-            metrics.get("budget_limited_recovery_rate", 0.0)
-        ),
-        "noisy_hit_rate": float(metrics.get("noisy_hit_rate", 0.0)),
-        "notes_hit_ratio": float(metrics.get("notes_hit_ratio", 0.0)),
-        "profile_selected_mean": float(metrics.get("profile_selected_mean", 0.0)),
-        "capture_trigger_ratio": float(metrics.get("capture_trigger_ratio", 0.0)),
-        "embedding_enabled_ratio": float(metrics.get("embedding_enabled_ratio", 0.0)),
-        "embedding_similarity_mean": float(
-            metrics.get("embedding_similarity_mean", 0.0)
-        ),
-        "embedding_similarity_max": float(
-            metrics.get("embedding_similarity_max", 0.0)
-        ),
-        "embedding_rerank_ratio": float(metrics.get("embedding_rerank_ratio", 0.0)),
-        "embedding_cache_hit_ratio": float(
-            metrics.get("embedding_cache_hit_ratio", 0.0)
-        ),
-        "embedding_fallback_ratio": float(
-            metrics.get("embedding_fallback_ratio", 0.0)
-        ),
-        "parallel_time_budget_ms_mean": float(
-            metrics.get("parallel_time_budget_ms_mean", 0.0)
-        ),
-        "embedding_time_budget_ms_mean": float(
-            metrics.get("embedding_time_budget_ms_mean", 0.0)
-        ),
-        "chunk_semantic_time_budget_ms_mean": float(
-            metrics.get("chunk_semantic_time_budget_ms_mean", 0.0)
-        ),
-        "xref_time_budget_ms_mean": float(metrics.get("xref_time_budget_ms_mean", 0.0)),
-        "parallel_docs_timeout_ratio": float(
-            metrics.get("parallel_docs_timeout_ratio", 0.0)
-        ),
-        "parallel_worktree_timeout_ratio": float(
-            metrics.get("parallel_worktree_timeout_ratio", 0.0)
-        ),
-        "embedding_time_budget_exceeded_ratio": float(
-            metrics.get("embedding_time_budget_exceeded_ratio", 0.0)
-        ),
-        "embedding_adaptive_budget_ratio": float(
-            metrics.get("embedding_adaptive_budget_ratio", 0.0)
-        ),
-        "chunk_semantic_time_budget_exceeded_ratio": float(
-            metrics.get("chunk_semantic_time_budget_exceeded_ratio", 0.0)
-        ),
-        "chunk_semantic_fallback_ratio": float(
-            metrics.get("chunk_semantic_fallback_ratio", 0.0)
-        ),
-        "xref_budget_exhausted_ratio": float(
-            metrics.get("xref_budget_exhausted_ratio", 0.0)
-        ),
-        "slo_downgrade_case_rate": float(
-            metrics.get("slo_downgrade_case_rate", 0.0)
-        ),
+        metric: float(metrics.get(metric, 0.0) or 0.0) for metric in ALL_METRIC_ORDER
     }
 
 

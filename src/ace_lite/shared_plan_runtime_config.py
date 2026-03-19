@@ -19,6 +19,7 @@ from ace_lite.config_model_shared import (
 from ace_lite.config_sections import (
     DEFAULT_EMBEDDINGS_INDEX_PATH,
     DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_LONG_TERM_MEMORY_PATH,
     DEFAULT_PLAN_REPLAY_CACHE_PATH,
     DEFAULT_SCIP_INDEX_PATH,
     DEFAULT_TOKENIZER_MODEL,
@@ -199,11 +200,20 @@ def resolve_plan_replay_cache_path(
     return str(normalize_default_path(value, default=default))
 
 
+def resolve_long_term_memory_path(
+    value: Any,
+    *,
+    default: str = DEFAULT_LONG_TERM_MEMORY_PATH,
+) -> str:
+    return str(normalize_default_path(value, default=default))
+
+
 __all__ = [
     "normalize_container_tag",
     "resolve_embedding_index_path",
     "resolve_embedding_model",
     "resolve_embedding_provider",
+    "resolve_long_term_memory_path",
     "resolve_memory_auto_tag_mode",
     "resolve_memory_gate_mode",
     "resolve_memory_notes_mode",

@@ -6,6 +6,7 @@ from typing import Any
 
 DEFAULT_MEMORY_PROFILE_PATH = "~/.ace-lite/profile.json"
 DEFAULT_MEMORY_NOTES_PATH = "context-map/memory_notes.jsonl"
+DEFAULT_LONG_TERM_MEMORY_PATH = "context-map/long_term_memory.db"
 DEFAULT_SCIP_INDEX_PATH = "context-map/scip/index.json"
 DEFAULT_EMBEDDINGS_INDEX_PATH = "context-map/embeddings/index.json"
 DEFAULT_TRACE_EXPORT_PATH = "context-map/traces/stage_spans.jsonl"
@@ -69,6 +70,7 @@ def normalize_clamped_float(
 __all__ = [
     "DEFAULT_EMBEDDINGS_INDEX_PATH",
     "DEFAULT_EMBEDDING_MODEL",
+    "DEFAULT_LONG_TERM_MEMORY_PATH",
     "DEFAULT_MEMORY_NOTES_PATH",
     "DEFAULT_MEMORY_PROFILE_PATH",
     "DEFAULT_PLAN_REPLAY_CACHE_PATH",

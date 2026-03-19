@@ -23,21 +23,21 @@ thresholds:
   chunk_hit_at_k_min: 0.80
 
 repos:
-  - name: requests-howwhy
+  - name: requests
     repo: requests
     url: https://github.com/psf/requests.git
     ref: v2.32.3
     languages: python
     cases: benchmark/cases/external_howwhy/requests.yaml
 
-  - name: flask-howwhy
+  - name: flask
     repo: flask
     url: https://github.com/pallets/flask.git
     ref: 3.0.3
     languages: python
     cases: benchmark/cases/external_howwhy/flask.yaml
 
-  - name: pytest-howwhy
+  - name: pytest
     repo: pytest
     url: https://github.com/pytest-dev/pytest.git
     ref: 9.0.2

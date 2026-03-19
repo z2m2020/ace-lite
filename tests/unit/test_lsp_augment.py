@@ -3,12 +3,29 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from ace_lite.lsp.broker import LspDiagnosticsBroker
+import ace_lite.pipeline.stages.augment as augment_stage
 from ace_lite.pipeline.stages.augment import run_diagnostics_augment
 
 
-def test_run_diagnostics_augment_disabled() -> None:
+def test_run_diagnostics_augment_disabled_skips_vcs_collection(
+    monkeypatch,
+) -> None:
+    def unexpected_history(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("collect_git_commit_history should not be called")
+
+    def unexpected_worktree(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("collect_git_worktree_summary should not be called")
+
+    monkeypatch.setattr(augment_stage, "collect_git_commit_history", unexpected_history)
+    monkeypatch.setattr(
+        augment_stage,
+        "collect_git_worktree_summary",
+        unexpected_worktree,
+    )
+
     payload = run_diagnostics_augment(
         root=".",
         query="q",
@@ -24,6 +41,12 @@ def test_run_diagnostics_augment_disabled() -> None:
     assert payload["enabled"] is False
     assert payload["reason"] == "disabled"
     assert payload["count"] == 0
+    assert payload["vcs_history"]["enabled"] is False
+    assert payload["vcs_history"]["reason"] == "disabled"
+    assert payload["vcs_worktree"]["enabled"] is False
+    assert payload["vcs_worktree"]["reason"] == "disabled"
+    assert payload["tests"]["enabled"] is False
+    assert payload["tests"]["reason"] == "not_provided"
 
 
 def test_run_diagnostics_augment_broker_unavailable() -> None:

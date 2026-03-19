@@ -130,3 +130,76 @@ def test_validation_rich_gate_promotion_reports_eligible(tmp_path: Path) -> None
     assert payload["recommendation"] == "eligible_for_enforced"
     assert payload["eligible"] is True
 
+
+def test_validation_rich_gate_promotion_treats_history_failed_checks_as_warning(
+    tmp_path: Path,
+) -> None:
+    module = _load_script("evaluate_validation_rich_gate_promotion.py")
+
+    trend = tmp_path / "trend.json"
+    stability = tmp_path / "stability.json"
+    comparison = tmp_path / "comparison.json"
+    trend.write_text(
+        json.dumps(
+            {
+                "history_count": 4,
+                "latest": {
+                    "regressed": False,
+                    "task_success_rate": 1.0,
+                    "precision_at_k": 0.45,
+                    "noise_rate": 0.55,
+                    "latency_p95_ms": 590.0,
+                    "validation_test_count": 5.0,
+                    "evidence_insufficient_rate": 0.0,
+                    "missing_validation_rate": 0.0,
+                },
+                "failed_check_top3": [{"check": "latency_p95_ms", "count": 3}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    stability.write_text(
+        json.dumps({"classification": "stable_pass", "passed": True, "failure_rate": 0.0}),
+        encoding="utf-8",
+    )
+    comparison.write_text(
+        json.dumps(
+            {
+                "current": {
+                    "metrics": {
+                        "noise_rate": 0.55,
+                        "missing_validation_rate": 0.0,
+                        "evidence_insufficient_rate": 0.0,
+                    }
+                },
+                "tuned": {
+                    "metrics": {
+                        "noise_rate": 0.54,
+                        "missing_validation_rate": 0.0,
+                        "evidence_insufficient_rate": 0.0,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    module.sys.argv = [
+        "evaluate_validation_rich_gate_promotion.py",
+        "--trend-report",
+        str(trend),
+        "--stability-report",
+        str(stability),
+        "--comparison-report",
+        str(comparison),
+        "--output",
+        str(tmp_path / "decision.json"),
+    ]
+    exit_code = module.main()
+    assert exit_code == 0
+
+    payload = json.loads((tmp_path / "decision.json").read_text(encoding="utf-8"))
+    assert payload["recommendation"] == "eligible_for_enforced"
+    assert payload["eligible"] is True
+    assert "trend report still shows failed_checks history" not in payload["reasons"]
+    assert "trend report still shows failed_checks history" in payload["warnings"]

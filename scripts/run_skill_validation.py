@@ -28,6 +28,54 @@ class CommandResult:
     stderr: str
 
 
+def _is_git_launch_unavailable(result: CommandResult) -> bool:
+    if result.returncode == 0:
+        return False
+    combined = f"{result.stdout}\n{result.stderr}".lower()
+    return "error launching git:" in combined
+
+
+def _resolve_head_without_git(*, target: Path) -> str:
+    git_dir = target / ".git"
+    head_path = git_dir / "HEAD"
+    try:
+        head_text = head_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+    if not head_text:
+        return ""
+
+    if not head_text.startswith("ref:"):
+        return head_text if len(head_text) >= 7 else ""
+
+    ref_name = head_text.partition(":")[2].strip()
+    if not ref_name:
+        return ""
+
+    ref_path = git_dir / Path(ref_name)
+    try:
+        ref_text = ref_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        ref_text = ""
+    if ref_text:
+        return ref_text
+
+    packed_refs_path = git_dir / "packed-refs"
+    try:
+        packed_refs = packed_refs_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        packed_refs = []
+    for line in packed_refs:
+        stripped = str(line).strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("^"):
+            continue
+        commit, _sep, name = stripped.partition(" ")
+        if name.strip() == ref_name and commit.strip():
+            return commit.strip()
+    return ""
+
+
 def _run_command(*, cmd: list[str], cwd: Path | None = None) -> CommandResult:
     completed = subprocess.run(
         cmd,
@@ -69,14 +117,49 @@ def _resolve_path(*, project_root: Path, value: str) -> Path:
     return project_root / candidate
 
 
+def _build_checkout_result(
+    *,
+    target: Path,
+    repo_name: str,
+    repo_url: str,
+    repo_ref: str,
+    resolved_commit: str = "",
+    skipped: bool = False,
+    skip_reason: str = "",
+    checkout_reused_without_refresh: bool = False,
+) -> dict[str, Any]:
+    return {
+        "name": repo_name,
+        "root": str(target.resolve()) if target.exists() else str(target),
+        "ref": repo_ref,
+        "url": repo_url,
+        "resolved_commit": resolved_commit,
+        "skipped": skipped,
+        "skip_reason": skip_reason,
+        "checkout_reused_without_refresh": checkout_reused_without_refresh,
+    }
+
+
 def _ensure_checkout(
     *, workspace: Path, repo_name: str, repo_url: str, repo_ref: str
-) -> dict[str, str]:
+) -> dict[str, Any]:
     target = workspace / repo_name
     target.parent.mkdir(parents=True, exist_ok=True)
+    git_unavailable = False
+    git_dir = target / ".git"
 
-    if not (target / ".git").exists():
+    if not git_dir.exists():
         if target.exists():
+            git_probe = _run_command(cmd=["git", "--version"])
+            if _is_git_launch_unavailable(git_probe):
+                return _build_checkout_result(
+                    target=target,
+                    repo_name=repo_name,
+                    repo_url=repo_url,
+                    repo_ref=repo_ref,
+                    skipped=True,
+                    skip_reason="git_unavailable_missing_checkout",
+                )
             raise ValueError(f"checkout target exists without .git: {target}")
         clone = _run_command(
             cmd=[
@@ -90,27 +173,61 @@ def _ensure_checkout(
                 str(target),
             ]
         )
+        if _is_git_launch_unavailable(clone):
+            return _build_checkout_result(
+                target=target,
+                repo_name=repo_name,
+                repo_url=repo_url,
+                repo_ref=repo_ref,
+                skipped=True,
+                skip_reason="git_unavailable_missing_checkout",
+            )
         _require_success(clone, label=f"clone {repo_name}")
     else:
         fetch = _run_command(
             cmd=["git", "-C", str(target), "fetch", "--depth", "1", "origin", repo_ref]
         )
-        _require_success(fetch, label=f"fetch {repo_name}")
-        checkout = _run_command(
-            cmd=["git", "-C", str(target), "checkout", "--force", "FETCH_HEAD"]
+        if fetch.returncode == 0:
+            checkout = _run_command(
+                cmd=["git", "-C", str(target), "checkout", "--force", "FETCH_HEAD"]
+            )
+            if _is_git_launch_unavailable(checkout):
+                git_unavailable = True
+                print(
+                    f"[skills] git unavailable during checkout {repo_name}; reusing existing checkout without refresh",
+                    file=sys.stderr,
+                )
+            else:
+                _require_success(checkout, label=f"checkout {repo_name}")
+        elif _is_git_launch_unavailable(fetch):
+            git_unavailable = True
+            print(
+                f"[skills] git unavailable during fetch {repo_name}; reusing existing checkout without refresh",
+                file=sys.stderr,
+            )
+        else:
+            _require_success(fetch, label=f"fetch {repo_name}")
+
+    if git_unavailable:
+        return _build_checkout_result(
+            target=target,
+            repo_name=repo_name,
+            repo_url=repo_url,
+            repo_ref=repo_ref,
+            resolved_commit=_resolve_head_without_git(target=target),
+            checkout_reused_without_refresh=True,
         )
-        _require_success(checkout, label=f"checkout {repo_name}")
 
     rev = _run_command(cmd=["git", "-C", str(target), "rev-parse", "HEAD"])
     _require_success(rev, label=f"resolve head {repo_name}")
 
-    return {
-        "name": repo_name,
-        "root": str(target.resolve()),
-        "ref": repo_ref,
-        "url": repo_url,
-        "resolved_commit": str(rev.stdout or "").strip(),
-    }
+    return _build_checkout_result(
+        target=target,
+        repo_name=repo_name,
+        repo_url=repo_url,
+        repo_ref=repo_ref,
+        resolved_commit=str(rev.stdout or "").strip(),
+    )
 
 
 def _default_cases() -> list[dict[str, str]]:
@@ -442,6 +559,49 @@ def main() -> int:
         repo_url=str(args.repo_url),
         repo_ref=str(args.repo_ref),
     )
+
+    if bool(checkout.get("skipped", False)):
+        summary: dict[str, Any] = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "project_root": str(project_root),
+            "repo": {
+                "name": checkout["name"],
+                "root": checkout["root"],
+                "url": checkout["url"],
+                "ref": checkout["ref"],
+                "resolved_commit": checkout.get("resolved_commit", ""),
+            },
+            "settings": {
+                "skills_dir": str(skills_dir),
+                "index_cache_path": str(index_cache_path),
+                "languages": str(args.languages),
+                "apps": apps,
+                "top_k_files": int(args.top_k_files),
+                "candidate_ranker": str(args.candidate_ranker),
+                "min_pass_rate": float(args.min_pass_rate),
+                "fail_on_miss": bool(args.fail_on_miss),
+            },
+            "elapsed_seconds": 0.0,
+            "pass_count": 0,
+            "total": 0,
+            "pass_rate": 0.0,
+            "failed_apps": [],
+            "apps": [],
+            "skipped": True,
+            "skip_reason": str(checkout.get("skip_reason", "") or "checkout_unavailable"),
+        }
+        output_path.write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(f"[skills] report json: {output_path}")
+        print(
+            "[skills] skipped: reason={reason}".format(
+                reason=str(summary.get("skip_reason", "") or "checkout_unavailable")
+            ),
+            file=sys.stderr,
+        )
+        return 0
 
     cases = _load_cases(cases_json_path=cases_json_path)
 

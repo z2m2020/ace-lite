@@ -185,17 +185,23 @@ across benchmark and freeze review:
 `validation_rich_gate` mode guidance for the current repo:
 - `disabled`: benchmark evidence is collected, but freeze does not evaluate a
   validation-rich gate
-- `report_only`: recommended default; freeze records failures without flipping
-  the overall result
+- `report_only`: keep available as the rollback mode when the lane turns noisy
+  or the promotion evidence goes stale
 - `enforced`: only use after the lane has a stable dated baseline and the team
   is willing to fail release freeze on missing summaries or threshold drift
+
+Current recommendation as of 2026-03-19:
+- promotion evidence is `eligible_for_enforced`, so the maintainer-facing
+  default for the active repo can move to `enforced`
+- keep the same rollback path to `report_only` if a later checkpoint becomes
+  noisy or unstable
 
 Example gate config:
 
 ```yaml
 freeze:
   validation_rich_gate:
-    mode: report_only
+    mode: enforced
     thresholds:
       task_success_rate_min: 0.90
       precision_at_k_min: 0.40
@@ -279,6 +285,10 @@ python scripts/evaluate_validation_rich_gate_promotion.py \
 Expected promotion artifacts:
 - `promotion_decision.json`
 - `promotion_decision.md`
+
+Promotion evaluation contract:
+- `trend.latest.regressed`, latest metric thresholds, stability classification, and comparison regressions are hard gates.
+- `trend.failed_check_top3` remains maintainer-facing history context and is emitted as a warning in the promotion decision; it should not permanently block promotion after the current latest/stability/comparison evidence is healthy.
 
 If the recommendation still says `stay_report_only`, archive the current
 evidence snapshot and carry the unresolved reasons into the next cycle:

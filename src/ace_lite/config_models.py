@@ -30,6 +30,7 @@ from ace_lite.config_sections import (
     MemoryCoreSectionSpec,
     MemoryFeedbackSectionSpec,
     MemoryGateSectionSpec,
+    MemoryLongTermSectionSpec,
     MemoryNamespaceSectionSpec,
     MemoryNotesSectionSpec,
     MemoryPostprocessSectionSpec,
@@ -65,6 +66,7 @@ from ace_lite.shared_plan_runtime_config import (
     resolve_embedding_index_path,
     resolve_embedding_model,
     resolve_embedding_provider,
+    resolve_long_term_memory_path,
     resolve_memory_auto_tag_mode,
     resolve_memory_gate_mode,
     resolve_memory_notes_mode,
@@ -159,6 +161,14 @@ class MemoryFeedbackConfig(MemoryFeedbackSectionSpec):
     pass
 
 
+class MemoryLongTermConfig(MemoryLongTermSectionSpec):
+
+    @field_validator("path", mode="before")
+    @classmethod
+    def _normalize_path(cls, value: Any) -> str:
+        return resolve_long_term_memory_path(value)
+
+
 class MemoryCaptureConfig(MemoryCaptureSectionSpec):
     keywords: list[str] | None = None
 
@@ -197,6 +207,7 @@ class MemoryConfig(MemoryCoreSectionSpec):
     profile: MemoryProfileConfig | None = None
     temporal: MemoryTemporalConfig | None = None
     feedback: MemoryFeedbackConfig | None = None
+    long_term: MemoryLongTermConfig | None = None
     capture: MemoryCaptureConfig | None = None
     notes: MemoryNotesConfig | None = None
     postprocess: MemoryPostprocessConfig | None = None

@@ -9,6 +9,26 @@ import pytest
 from ace_lite.runtime_fingerprint import build_git_fast_fingerprint
 
 
+def _require_launchable_git() -> None:
+    if shutil.which("git") is None:
+        pytest.skip("git is required for runtime fingerprint integration tests")
+    try:
+        completed = subprocess.run(
+            ["git", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        pytest.skip(f"git executable is present but cannot be launched: {exc}")
+    if completed.returncode != 0:
+        message = (completed.stderr or completed.stdout or "").strip()
+        pytest.skip(
+            "git executable is present but not launchable for integration tests: "
+            f"{message}"
+        )
+
+
 def _run_git(repo_root: Path, *args: str) -> str:
     completed = subprocess.run(
         ["git", *args],
@@ -30,8 +50,7 @@ def _seed_large_dirty_repo(
     modified_files: int = 96,
     untracked_files: int = 32,
 ) -> Path:
-    if shutil.which("git") is None:
-        pytest.skip("git is required for runtime fingerprint integration tests")
+    _require_launchable_git()
 
     repo_root = tmp_path / "repo"
     repo_root.mkdir(parents=True, exist_ok=True)

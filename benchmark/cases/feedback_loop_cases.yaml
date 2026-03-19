@@ -1,0 +1,72 @@
+cases:
+  - case_id: ace-feedback-issue-export-cli-01
+    query: how does the feedback CLI export an issue report into a benchmark case yaml with include_paths and expected_keys
+    expected_keys: [feedback, issue, benchmark]
+    filters:
+      include_paths:
+        - src/ace_lite/cli_app/commands/feedback.py
+        - src/ace_lite/issue_report_store.py
+        - src/ace_lite/feedback_issue_linkage.py
+        - tests/integration/test_cli_feedback.py
+    top_k: 8
+    comparison_lane: issue_report_feedback
+    feedback_surface: issue_report_export_cli
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-feedback-issue-export-mcp-02
+    query: how does the mcp service export an issue report into a benchmark case yaml entry
+    expected_keys: [mcp, issue, benchmark]
+    filters:
+      include_paths:
+        - src/ace_lite/mcp_server/service_issue_report_handlers.py
+        - src/ace_lite/mcp_server/service.py
+        - src/ace_lite/mcp_server/server_tool_registration.py
+        - src/ace_lite/issue_report_store.py
+        - src/ace_lite/feedback_issue_linkage.py
+        - tests/unit/test_mcp_service_issue_report_handlers.py
+        - tests/unit/test_mcp_server.py
+    top_k: 8
+    comparison_lane: issue_report_feedback
+    feedback_surface: issue_report_export_mcp
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-feedback-resolution-cli-03
+    query: how does the feedback CLI resolve an issue report from a stored dev fix and persist resolution_note
+    expected_keys: [feedback, resolution, issue]
+    filters:
+      include_paths:
+        - src/ace_lite/cli_app/commands/feedback.py
+        - src/ace_lite/issue_report_store.py
+        - src/ace_lite/dev_feedback_store.py
+        - src/ace_lite/feedback_issue_linkage.py
+        - tests/integration/test_cli_feedback.py
+    top_k: 8
+    comparison_lane: dev_feedback_resolution
+    feedback_surface: issue_resolution_cli
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-feedback-resolution-mcp-04
+    query: how does the mcp service apply a stored dev fix to resolve an issue report and attach dev-fix references
+    expected_keys: [mcp, resolution, issue]
+    filters:
+      include_paths:
+        - src/ace_lite/mcp_server/service_issue_report_handlers.py
+        - src/ace_lite/mcp_server/service.py
+        - src/ace_lite/mcp_server/server_tool_registration.py
+        - src/ace_lite/issue_report_store.py
+        - src/ace_lite/dev_feedback_store.py
+        - src/ace_lite/feedback_issue_linkage.py
+        - tests/unit/test_mcp_service_issue_report_handlers.py
+        - tests/unit/test_mcp_server.py
+    top_k: 8
+    comparison_lane: dev_feedback_resolution
+    feedback_surface: issue_resolution_mcp
+    task_success:
+      mode: positive
+      min_validation_tests: 1

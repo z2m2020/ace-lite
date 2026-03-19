@@ -1636,6 +1636,165 @@ def test_run_topological_shield_slice_passes_and_renders_markdown(
     assert "| on | 1.0000 | 1.0000 | 0.0000 | 0.5000 | 0.2000 | 0.1800 | 18.00 | PASS |" in markdown
 
 
+def test_seed_topological_shield_repo_uses_path_expected_keys(tmp_path: Path) -> None:
+    module = _load_script("run_feature_slice_matrix.py")
+
+    cases_path = module._seed_topological_shield_repo(tmp_path / "repo")
+    payload = yaml.safe_load(cases_path.read_text(encoding="utf-8"))
+    cases = payload.get("cases", []) if isinstance(payload, dict) else []
+
+    assert cases == [
+        {
+            "case_id": "topological-shield-sibling-01",
+            "query": "where service handle request resolves token through a graph-near sibling helper",
+            "expected_keys": ["src/service.py"],
+            "top_k": 8,
+            "comparison_lane": "topological_shield",
+        },
+        {
+            "case_id": "topological-shield-hub-heavy-02",
+            "query": "where request handlers use resolve helper without overvaluing the shared logger utility hub",
+            "expected_keys": ["src/defs/helper.py"],
+            "top_k": 8,
+            "comparison_lane": "topological_shield",
+        },
+    ]
+
+
+def test_seed_perf_routing_repo_uses_path_expected_keys(tmp_path: Path) -> None:
+    module = _load_script("run_feature_slice_matrix.py")
+
+    cases_path = module._seed_perf_routing_repo(tmp_path / "repo")
+    payload = yaml.safe_load(cases_path.read_text(encoding="utf-8"))
+    cases = payload.get("cases", []) if isinstance(payload, dict) else []
+
+    assert cases == [
+        {
+            "case_id": "perf-routing-01",
+            "query": " optimize index latency hotspot budget and profile slowdown paths".strip(),
+            "expected_keys": [
+                "src/indexing/stage_profiler.py",
+                "src/runtime/slo_budget.py",
+            ],
+            "top_k": 2,
+        },
+        {
+            "case_id": "perf-routing-02",
+            "query": "trim context budget for hotspot ranking when latency exceeds the SLO",
+            "expected_keys": [
+                "src/indexing/context_budget.py",
+                "src/runtime/hotspot_ranker.py",
+            ],
+            "top_k": 2,
+        },
+    ]
+
+
+def test_run_topological_shield_slice_uses_aggregate_metrics_when_lane_summary_omits_shield_fields(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_feature_slice_matrix.py")
+
+    def fake_run_command(
+        *,
+        cmd: list[str],
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None,
+    ):
+        _ = (cwd, env)
+        output_dir = Path(cmd[cmd.index("--output") + 1])
+        cases_path = Path(cmd[cmd.index("--cases") + 1])
+        if output_dir.name == "topological-shield-off":
+            _write_benchmark_results(
+                output_dir=output_dir,
+                cases_path=cases_path,
+                task_success_by_case={},
+                precision_by_case={},
+                noise_by_case={},
+                metrics_overrides={
+                    "latency_p95_ms": 12.0,
+                    "topological_shield_attenuated_chunk_count_mean": 0.0,
+                    "topological_shield_attenuation_total_mean": 0.0,
+                },
+                comparison_lane_summary={
+                    "total_case_count": 2,
+                    "labeled_case_count": 2,
+                    "lane_count": 1,
+                    "lanes": [
+                        {
+                            "comparison_lane": "topological_shield",
+                            "case_count": 2,
+                            "task_success_rate": 1.0,
+                            "recall_at_k": 1.0,
+                        }
+                    ],
+                },
+            )
+        else:
+            _write_benchmark_results(
+                output_dir=output_dir,
+                cases_path=cases_path,
+                task_success_by_case={},
+                precision_by_case={},
+                noise_by_case={},
+                metrics_overrides={
+                    "latency_p95_ms": 18.0,
+                    "topological_shield_attenuated_chunk_count_mean": 0.5,
+                    "topological_shield_attenuation_total_mean": 0.2,
+                },
+                comparison_lane_summary={
+                    "total_case_count": 2,
+                    "labeled_case_count": 2,
+                    "lane_count": 1,
+                    "lanes": [
+                        {
+                            "comparison_lane": "topological_shield",
+                            "case_count": 2,
+                            "task_success_rate": 1.0,
+                            "recall_at_k": 1.0,
+                        }
+                    ],
+                },
+            )
+        return module.CommandResult(
+            cmd=cmd,
+            cwd=None,
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+
+    monkeypatch.setattr(module, "_run_command", fake_run_command)
+
+    slice_payload = module._run_topological_shield_slice(
+        cli_bin="ace-lite",
+        project_root=tmp_path,
+        output_dir=tmp_path / "out",
+        config={
+            "slices": {
+                "topological_shield": {
+                    "thresholds": {
+                        "task_success_min": 1.0,
+                        "task_success_delta_min": 0.0,
+                        "precision_delta_min": 0.0,
+                        "noise_increase_max": 0.0,
+                        "latency_growth_factor_max": 2.0,
+                        "attenuated_chunk_count_mean_min": 0.5,
+                        "attenuation_total_mean_min": 0.05,
+                        "require_repeat_fingerprints_equal": True,
+                        "require_repeat_lane_metrics_equal": True,
+                    }
+                }
+            }
+        },
+    )
+
+    assert slice_payload["passed"] is True
+    assert slice_payload["deltas"]["attenuated_chunk_count_delta"] == pytest.approx(0.5)
+    assert slice_payload["deltas"]["attenuation_total_delta"] == pytest.approx(0.2)
+
+
 def test_run_topological_shield_slice_fails_when_structural_or_repeat_signal_is_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -188,18 +188,32 @@ def build_retrieval_context_observability_summary(
             "case_count": 0,
             "available_case_count": 0,
             "available_case_rate": 0.0,
+            "parent_symbol_available_case_count": 0,
+            "parent_symbol_available_case_rate": 0.0,
+            "reference_hint_available_case_count": 0,
+            "reference_hint_available_case_rate": 0.0,
             "pool_available_case_count": 0,
             "pool_available_case_rate": 0.0,
             "chunk_count_mean": 0.0,
             "coverage_ratio_mean": 0.0,
+            "parent_symbol_chunk_count_mean": 0.0,
+            "parent_symbol_coverage_ratio_mean": 0.0,
+            "reference_hint_chunk_count_mean": 0.0,
+            "reference_hint_coverage_ratio_mean": 0.0,
             "pool_chunk_count_mean": 0.0,
             "pool_coverage_ratio_mean": 0.0,
         }
 
     available_case_count = 0
+    parent_symbol_available_case_count = 0
+    reference_hint_available_case_count = 0
     pool_available_case_count = 0
     chunk_counts: list[float] = []
     coverage_ratios: list[float] = []
+    parent_symbol_chunk_counts: list[float] = []
+    parent_symbol_coverage_ratios: list[float] = []
+    reference_hint_chunk_counts: list[float] = []
+    reference_hint_coverage_ratios: list[float] = []
     pool_chunk_counts: list[float] = []
     pool_coverage_ratios: list[float] = []
 
@@ -210,6 +224,18 @@ def build_retrieval_context_observability_summary(
         coverage_ratio = float(
             item.get("retrieval_context_coverage_ratio", 0.0) or 0.0
         )
+        parent_symbol_chunk_count = float(
+            item.get("contextual_sidecar_parent_symbol_chunk_count", 0.0) or 0.0
+        )
+        parent_symbol_coverage_ratio = float(
+            item.get("contextual_sidecar_parent_symbol_coverage_ratio", 0.0) or 0.0
+        )
+        reference_hint_chunk_count = float(
+            item.get("contextual_sidecar_reference_hint_chunk_count", 0.0) or 0.0
+        )
+        reference_hint_coverage_ratio = float(
+            item.get("contextual_sidecar_reference_hint_coverage_ratio", 0.0) or 0.0
+        )
         pool_chunk_count = float(
             item.get("retrieval_context_pool_chunk_count", 0.0) or 0.0
         )
@@ -218,10 +244,18 @@ def build_retrieval_context_observability_summary(
         )
         if chunk_count > 0.0:
             available_case_count += 1
+        if parent_symbol_chunk_count > 0.0:
+            parent_symbol_available_case_count += 1
+        if reference_hint_chunk_count > 0.0:
+            reference_hint_available_case_count += 1
         if pool_chunk_count > 0.0:
             pool_available_case_count += 1
         chunk_counts.append(chunk_count)
         coverage_ratios.append(coverage_ratio)
+        parent_symbol_chunk_counts.append(parent_symbol_chunk_count)
+        parent_symbol_coverage_ratios.append(parent_symbol_coverage_ratio)
+        reference_hint_chunk_counts.append(reference_hint_chunk_count)
+        reference_hint_coverage_ratios.append(reference_hint_coverage_ratio)
         pool_chunk_counts.append(pool_chunk_count)
         pool_coverage_ratios.append(pool_coverage_ratio)
 
@@ -231,6 +265,18 @@ def build_retrieval_context_observability_summary(
         "available_case_rate": (
             float(available_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
+        "parent_symbol_available_case_count": parent_symbol_available_case_count,
+        "parent_symbol_available_case_rate": (
+            float(parent_symbol_available_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
+        "reference_hint_available_case_count": reference_hint_available_case_count,
+        "reference_hint_available_case_rate": (
+            float(reference_hint_available_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
         "pool_available_case_count": pool_available_case_count,
         "pool_available_case_rate": (
             float(pool_available_case_count) / float(case_count)
@@ -239,6 +285,24 @@ def build_retrieval_context_observability_summary(
         ),
         "chunk_count_mean": mean(chunk_counts) if chunk_counts else 0.0,
         "coverage_ratio_mean": mean(coverage_ratios) if coverage_ratios else 0.0,
+        "parent_symbol_chunk_count_mean": (
+            mean(parent_symbol_chunk_counts) if parent_symbol_chunk_counts else 0.0
+        ),
+        "parent_symbol_coverage_ratio_mean": (
+            mean(parent_symbol_coverage_ratios)
+            if parent_symbol_coverage_ratios
+            else 0.0
+        ),
+        "reference_hint_chunk_count_mean": (
+            mean(reference_hint_chunk_counts)
+            if reference_hint_chunk_counts
+            else 0.0
+        ),
+        "reference_hint_coverage_ratio_mean": (
+            mean(reference_hint_coverage_ratios)
+            if reference_hint_coverage_ratios
+            else 0.0
+        ),
         "pool_chunk_count_mean": mean(pool_chunk_counts) if pool_chunk_counts else 0.0,
         "pool_coverage_ratio_mean": (
             mean(pool_coverage_ratios) if pool_coverage_ratios else 0.0
@@ -400,6 +464,86 @@ def build_feedback_observability_summary(
             mean(boosted_paths_counts) if boosted_paths_counts else 0.0
         ),
         "reasons": dict(sorted(reasons.items())),
+    }
+
+
+def build_feedback_loop_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {
+            "case_count": 0,
+            "issue_report_case_count": 0,
+            "issue_report_linked_case_count": 0,
+            "issue_report_linked_plan_case_count": 0,
+            "issue_to_benchmark_case_conversion_rate": 0.0,
+            "issue_report_linked_plan_rate": 0.0,
+            "dev_feedback_resolution_case_count": 0,
+            "dev_feedback_resolved_case_count": 0,
+            "dev_feedback_resolution_rate": 0.0,
+            "feedback_surfaces": {},
+        }
+
+    issue_report_case_count = 0
+    issue_report_linked_case_count = 0
+    issue_report_linked_plan_case_count = 0
+    dev_feedback_resolution_case_count = 0
+    dev_feedback_resolved_case_count = 0
+    feedback_surfaces: dict[str, int] = {}
+
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        feedback_surface = str(item.get("feedback_surface") or "").strip()
+        if feedback_surface:
+            feedback_surfaces[feedback_surface] = (
+                feedback_surfaces.get(feedback_surface, 0) + 1
+            )
+
+        lane = str(item.get("comparison_lane") or "").strip()
+        if lane == "issue_report_feedback":
+            issue_report_case_count += 1
+            issue_report_issue_id = str(item.get("issue_report_issue_id") or "").strip()
+            if issue_report_issue_id:
+                issue_report_linked_case_count += 1
+                if float(item.get("issue_report_has_plan_ref", 0.0) or 0.0) > 0.0:
+                    issue_report_linked_plan_case_count += 1
+            continue
+
+        if lane == "dev_feedback_resolution":
+            dev_feedback_resolution_case_count += 1
+            task_success_hit = float(
+                item.get("task_success_hit", item.get("utility_hit", 0.0)) or 0.0
+            )
+            if task_success_hit > 0.0:
+                dev_feedback_resolved_case_count += 1
+
+    return {
+        "case_count": case_count,
+        "issue_report_case_count": issue_report_case_count,
+        "issue_report_linked_case_count": issue_report_linked_case_count,
+        "issue_report_linked_plan_case_count": issue_report_linked_plan_case_count,
+        "issue_to_benchmark_case_conversion_rate": (
+            float(issue_report_linked_case_count) / float(issue_report_case_count)
+            if issue_report_case_count > 0
+            else 0.0
+        ),
+        "issue_report_linked_plan_rate": (
+            float(issue_report_linked_plan_case_count)
+            / float(issue_report_linked_case_count)
+            if issue_report_linked_case_count > 0
+            else 0.0
+        ),
+        "dev_feedback_resolution_case_count": dev_feedback_resolution_case_count,
+        "dev_feedback_resolved_case_count": dev_feedback_resolved_case_count,
+        "dev_feedback_resolution_rate": (
+            float(dev_feedback_resolved_case_count)
+            / float(dev_feedback_resolution_case_count)
+            if dev_feedback_resolution_case_count > 0
+            else 0.0
+        ),
+        "feedback_surfaces": dict(sorted(feedback_surfaces.items())),
     }
 
 
@@ -644,6 +788,10 @@ __all__ = [
     "build_comparison_lane_summary",
     "build_decision_observability_summary",
     "build_evidence_insufficiency_summary",
+    "build_feedback_loop_summary",
+    "build_feedback_observability_summary",
+    "build_preference_observability_summary",
+    "build_retrieval_context_observability_summary",
     "build_slo_budget_summary",
     "build_stage_latency_summary",
 ]

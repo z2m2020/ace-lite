@@ -34,6 +34,10 @@ def build_case_evaluation_row(
     retrieval_context_chunk_count: int,
     retrieval_context_coverage_ratio: float,
     retrieval_context_char_count_mean: float,
+    contextual_sidecar_parent_symbol_chunk_count: int,
+    contextual_sidecar_parent_symbol_coverage_ratio: float,
+    contextual_sidecar_reference_hint_chunk_count: int,
+    contextual_sidecar_reference_hint_coverage_ratio: float,
     retrieval_context_pool_chunk_count: int,
     retrieval_context_pool_coverage_ratio: float,
     chunk_contract_fallback_count: int,
@@ -93,6 +97,10 @@ def build_case_evaluation_row(
     notes_hit_ratio: float,
     profile_selected_count: int,
     capture_triggered: bool,
+    ltm_selected_count: int,
+    ltm_attribution_count: int,
+    ltm_graph_neighbor_count: int,
+    ltm_plan_constraint_count: int,
     feedback_enabled: bool,
     feedback_reason: str,
     feedback_event_count: int,
@@ -150,6 +158,15 @@ def build_case_evaluation_row(
     decision_trace: list[dict[str, Any]],
     evidence_insufficiency: dict[str, Any],
 ) -> dict[str, Any]:
+    issue_report_raw = case.get("issue_report")
+    issue_report = issue_report_raw if isinstance(issue_report_raw, dict) else {}
+    issue_report_issue_id = str(issue_report.get("issue_id") or "").strip()
+    issue_report_plan_payload_ref = str(
+        issue_report.get("plan_payload_ref") or ""
+    ).strip()
+    issue_report_status = str(issue_report.get("status") or "").strip()
+    feedback_surface = str(case.get("feedback_surface") or "").strip()
+
     return {
         "case_id": case.get("case_id", "unknown"),
         "query": case.get("query", ""),
@@ -183,6 +200,18 @@ def build_case_evaluation_row(
         "retrieval_context_chunk_count": float(retrieval_context_chunk_count),
         "retrieval_context_coverage_ratio": retrieval_context_coverage_ratio,
         "retrieval_context_char_count_mean": retrieval_context_char_count_mean,
+        "contextual_sidecar_parent_symbol_chunk_count": float(
+            contextual_sidecar_parent_symbol_chunk_count
+        ),
+        "contextual_sidecar_parent_symbol_coverage_ratio": float(
+            contextual_sidecar_parent_symbol_coverage_ratio
+        ),
+        "contextual_sidecar_reference_hint_chunk_count": float(
+            contextual_sidecar_reference_hint_chunk_count
+        ),
+        "contextual_sidecar_reference_hint_coverage_ratio": float(
+            contextual_sidecar_reference_hint_coverage_ratio
+        ),
         "retrieval_context_pool_chunk_count": float(
             retrieval_context_pool_chunk_count
         ),
@@ -284,10 +313,30 @@ def build_case_evaluation_row(
         "notes_hit_ratio": notes_hit_ratio,
         "profile_selected_count": float(profile_selected_count),
         "capture_triggered": 1.0 if capture_triggered else 0.0,
+        "ltm_selected_count": float(ltm_selected_count),
+        "ltm_attribution_count": float(ltm_attribution_count),
+        "ltm_graph_neighbor_count": float(ltm_graph_neighbor_count),
+        "ltm_plan_constraint_count": float(ltm_plan_constraint_count),
         "preference_capture": {
             "notes_hit_ratio": float(notes_hit_ratio),
             "profile_selected_count": int(profile_selected_count),
             "capture_triggered": bool(capture_triggered),
+        },
+        "ltm_explainability": {
+            "selected_count": int(ltm_selected_count),
+            "attribution_count": int(ltm_attribution_count),
+            "graph_neighbor_count": int(ltm_graph_neighbor_count),
+            "plan_constraint_count": int(ltm_plan_constraint_count),
+        },
+        "feedback_surface": feedback_surface,
+        "issue_report_issue_id": issue_report_issue_id,
+        "issue_report_has_plan_ref": 1.0 if issue_report_plan_payload_ref else 0.0,
+        "issue_report_status": issue_report_status,
+        "feedback_loop": {
+            "feedback_surface": feedback_surface,
+            "issue_report_issue_id": issue_report_issue_id,
+            "issue_report_has_plan_ref": bool(issue_report_plan_payload_ref),
+            "issue_report_status": issue_report_status,
         },
         "feedback_enabled": 1.0 if feedback_enabled else 0.0,
         "feedback_reason": feedback_reason,

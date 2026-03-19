@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import subprocess
 from pathlib import Path
@@ -11,15 +11,41 @@ from ace_lite.cli_app.runtime_command_support import (
     collect_runtime_status_payload,
     execute_codex_mcp_setup_plan,
     iter_runtime_command_domains,
+    load_runtime_dev_feedback_summary,
     load_runtime_preference_capture_summary,
+    load_runtime_stats_summary,
     resolve_runtime_settings_bundle,
     resolve_effective_runtime_skills_dir,
 )
+from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import SelectionFeedbackStore
+from ace_lite.runtime_stats import RuntimeInvocationStats
+from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.runtime_settings_store import (
     build_runtime_settings_record,
     persist_runtime_settings_record,
 )
+
+
+def _seed_runtime_stats_with_degraded_reason(db_path: Path) -> None:
+    store = DurableStatsStore(db_path=db_path)
+    store.record_invocation(
+        RuntimeInvocationStats(
+            invocation_id="inv-alpha",
+            session_id="session-alpha",
+            repo_key="repo-alpha",
+            profile_key="bugfix",
+            status="degraded",
+            total_latency_ms=80.0,
+            started_at="2026-03-19T00:00:00+00:00",
+            finished_at="2026-03-19T00:00:01+00:00",
+            degraded_reason_codes=("memory_fallback",),
+            stage_latencies=(
+                {"stage_name": "memory", "elapsed_ms": 20.0},
+                {"stage_name": "total", "elapsed_ms": 80.0},
+            ),
+        )
+    )
 
 
 def test_resolve_runtime_settings_bundle_uses_last_known_good_selected_profile(
@@ -226,6 +252,158 @@ def test_load_runtime_preference_capture_summary_applies_user_id_filter(
     assert payload["user_id"] == "bench-user"
 
 
+def test_load_runtime_dev_feedback_summary_applies_repo_user_and_profile_filters(
+    tmp_path: Path,
+) -> None:
+    store_path = tmp_path / ".ace-lite" / "dev_feedback.db"
+    store = DevFeedbackStore(db_path=store_path)
+    store.record_issue(
+        {
+            "title": "augment fallback",
+            "reason_code": "memory_fallback",
+            "status": "open",
+            "repo": "repo-alpha",
+            "user_id": "bench-user",
+            "profile_key": "bugfix",
+            "created_at": "2026-03-19T00:00:00+00:00",
+            "updated_at": "2026-03-19T00:01:00+00:00",
+        }
+    )
+    store.record_fix(
+        {
+            "issue_id": "devi_known",
+            "reason_code": "memory_fallback",
+            "repo": "repo-alpha",
+            "user_id": "bench-user",
+            "profile_key": "bugfix",
+            "resolution_note": "added cache warming",
+            "created_at": "2026-03-19T00:02:00+00:00",
+        }
+    )
+    store.record_issue(
+        {
+            "title": "other profile issue",
+            "reason_code": "trace_export_failed",
+            "status": "open",
+            "repo": "repo-alpha",
+            "user_id": "bench-user",
+            "profile_key": "docs",
+            "created_at": "2026-03-19T00:03:00+00:00",
+            "updated_at": "2026-03-19T00:04:00+00:00",
+        }
+    )
+
+    payload = load_runtime_dev_feedback_summary(
+        dev_feedback_path=store_path,
+        repo_key="repo-alpha",
+        user_id="bench-user",
+        profile_key="bugfix",
+    )
+
+    assert payload["issue_count"] == 1
+    assert payload["open_issue_count"] == 1
+    assert payload["fix_count"] == 1
+    assert payload["repo_key"] == "repo-alpha"
+    assert payload["user_id"] == "bench-user"
+    assert payload["profile_key"] == "bugfix"
+    assert payload["by_reason_code"][0]["reason_code"] == "memory_fallback"
+
+
+def test_load_runtime_dev_feedback_summary_applies_scope_filters(tmp_path: Path) -> None:
+    store = DevFeedbackStore(db_path=tmp_path / ".ace-lite" / "dev_feedback.db")
+    store.record_issue(
+        {
+            "issue_id": "devi_a",
+            "title": "Memory fallback",
+            "reason_code": "memory_fallback",
+            "status": "open",
+            "repo": "repo-alpha",
+            "user_id": "bench-user",
+            "profile_key": "bugfix",
+            "created_at": "2026-03-19T00:00:00+00:00",
+            "updated_at": "2026-03-19T00:00:00+00:00",
+        }
+    )
+    store.record_issue(
+        {
+            "issue_id": "devi_b",
+            "title": "Docs drift",
+            "reason_code": "docs_drift",
+            "status": "open",
+            "repo": "repo-alpha",
+            "user_id": "other-user",
+            "profile_key": "docs",
+            "created_at": "2026-03-19T00:01:00+00:00",
+            "updated_at": "2026-03-19T00:01:00+00:00",
+        }
+    )
+
+    payload = load_runtime_dev_feedback_summary(
+        dev_feedback_path=store.db_path,
+        repo_key="repo-alpha",
+        user_id="bench-user",
+        profile_key="bugfix",
+    )
+
+    assert payload["repo_key"] == "repo-alpha"
+    assert payload["user_id"] == "bench-user"
+    assert payload["profile_key"] == "bugfix"
+    assert payload["issue_count"] == 1
+    assert payload["open_issue_count"] == 1
+    assert payload["fix_count"] == 0
+    assert payload["by_reason_code"][0]["reason_code"] == "memory_fallback"
+
+
+def test_load_runtime_stats_summary_includes_dev_feedback_and_top_pain_summary(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / ".ace-lite" / "runtime_state.db"
+    _seed_runtime_stats_with_degraded_reason(db_path)
+    dev_feedback_store = DevFeedbackStore(db_path=tmp_path / ".ace-lite" / "dev_feedback.db")
+    dev_feedback_store.record_issue(
+        {
+            "issue_id": "devi_memory_fallback",
+            "title": "Memory fallback",
+            "reason_code": "memory_fallback",
+            "status": "open",
+            "repo": "repo-alpha",
+            "user_id": "bench-user",
+            "profile_key": "bugfix",
+            "created_at": "2026-03-19T00:00:00+00:00",
+            "updated_at": "2026-03-19T00:00:00+00:00",
+        }
+    )
+    dev_feedback_store.record_fix(
+        {
+            "fix_id": "devf_memory_fallback",
+            "issue_id": "devi_memory_fallback",
+            "reason_code": "memory_fallback",
+            "repo": "repo-alpha",
+            "user_id": "bench-user",
+            "profile_key": "bugfix",
+            "resolution_note": "added fallback diagnostics",
+            "created_at": "2026-03-19T00:05:00+00:00",
+        }
+    )
+
+    payload = load_runtime_stats_summary(
+        db_path=db_path,
+        repo_key="repo-alpha",
+        user_id="bench-user",
+        profile_key="bugfix",
+        home_path=tmp_path,
+    )
+
+    assert payload["dev_feedback_summary"]["issue_count"] == 1
+    assert payload["dev_feedback_summary"]["fix_count"] == 1
+    assert payload["top_pain_summary"]["count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["reason_code"] == "memory_fallback"
+    assert payload["top_pain_summary"]["items"][0]["runtime_event_count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["manual_issue_count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["open_issue_count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["fix_count"] == 1
+
+
 def test_execute_codex_mcp_setup_plan_dry_run_does_not_run_commands() -> None:
     setup_plan = build_codex_mcp_setup_plan(
         name="ace-lite",
@@ -359,6 +537,8 @@ def test_runtime_command_domain_registry_covers_phase1_domains() -> None:
             "collect_runtime_mcp_self_test_payload",
             "build_runtime_cache_doctor_payload",
             "build_runtime_cache_vacuum_payload",
+            "build_runtime_git_doctor_payload",
+            "build_runtime_version_sync_payload",
             "build_runtime_doctor_payload",
         ),
         "status": (
@@ -374,3 +554,4 @@ def test_runtime_command_domain_registry_covers_phase1_domains() -> None:
         ),
     }
     assert set(RUNTIME_COMMAND_DOMAIN_REGISTRY) == set(domains)
+

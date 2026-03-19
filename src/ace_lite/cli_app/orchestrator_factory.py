@@ -45,6 +45,7 @@ from ace_lite.memory import (
     OpenMemoryClient,
     OpenMemoryMemoryProvider,
 )
+from ace_lite.memory_long_term import LongTermMemoryProvider, LongTermMemoryStore
 from ace_lite.memory_clients.mcp_client import OpenMemoryMcpClient
 from ace_lite.memory_clients.rest_client import OpenMemoryRestClient
 from ace_lite.orchestrator import AceOrchestrator
@@ -125,6 +126,12 @@ def create_memory_provider(
     memory_notes_expiry_enabled: bool = True,
     memory_notes_ttl_days: int = 90,
     memory_notes_max_age_days: int = 365,
+    memory_long_term_enabled: bool = False,
+    memory_long_term_path: str = "context-map/long_term_memory.db",
+    memory_long_term_top_n: int = 4,
+    memory_long_term_token_budget: int = 192,
+    memory_long_term_write_enabled: bool = False,
+    memory_long_term_as_of_enabled: bool = True,
     mcp_base_url: str,
     rest_base_url: str,
     timeout_seconds: float,
@@ -200,16 +207,38 @@ def create_memory_provider(
         )
 
     if _is_null_provider(provider_with_cache) or not bool(memory_notes_enabled):
-        return provider_with_cache
+        provider_with_notes = provider_with_cache
+    else:
+        provider_with_notes = LocalNotesProvider(
+            provider_with_cache,
+            notes_path=str(memory_notes_path),
+            default_limit=max(1, int(memory_notes_limit)),
+            mode=str(memory_notes_mode or "supplement").strip().lower() or "supplement",
+            expiry_enabled=bool(memory_notes_expiry_enabled),
+            ttl_days=max(1, int(memory_notes_ttl_days)),
+            max_age_days=max(1, int(memory_notes_max_age_days)),
+        )
 
-    return LocalNotesProvider(
-        provider_with_cache,
-        notes_path=str(memory_notes_path),
-        default_limit=max(1, int(memory_notes_limit)),
-        mode=str(memory_notes_mode or "supplement").strip().lower() or "supplement",
-        expiry_enabled=bool(memory_notes_expiry_enabled),
-        ttl_days=max(1, int(memory_notes_ttl_days)),
-        max_age_days=max(1, int(memory_notes_max_age_days)),
+    if not bool(memory_long_term_enabled):
+        return provider_with_notes
+
+    long_term_provider = LongTermMemoryProvider(
+        LongTermMemoryStore(db_path=memory_long_term_path),
+        limit=max(1, int(memory_long_term_top_n)),
+        container_tag=None,
+        channel_name="long_term",
+    )
+    setattr(long_term_provider, "token_budget", max(1, int(memory_long_term_token_budget)))
+    setattr(long_term_provider, "write_enabled", bool(memory_long_term_write_enabled))
+    setattr(long_term_provider, "as_of_enabled", bool(memory_long_term_as_of_enabled))
+
+    if _is_null_provider(provider_with_notes):
+        return long_term_provider
+
+    return HybridMemoryProvider(
+        semantic=provider_with_notes,
+        keyword=long_term_provider,
+        limit=max(max(1, int(limit)), max(1, int(memory_long_term_top_n))),
     )
 
 
@@ -255,6 +284,12 @@ def create_orchestrator(
     memory_feedback_boost_per_select: float = 0.15,
     memory_feedback_max_boost: float = 0.6,
     memory_feedback_decay_days: float = 60.0,
+    memory_long_term_enabled: bool = False,
+    memory_long_term_path: str | Path = "context-map/long_term_memory.db",
+    memory_long_term_top_n: int = 4,
+    memory_long_term_token_budget: int = 192,
+    memory_long_term_write_enabled: bool = False,
+    memory_long_term_as_of_enabled: bool = True,
     memory_capture_enabled: bool = False,
     memory_capture_notes_path: str | Path = "context-map/memory_notes.jsonl",
     memory_capture_min_query_length: int = 24,
@@ -422,6 +457,12 @@ def create_orchestrator(
         memory_feedback_boost_per_select=memory_feedback_boost_per_select,
         memory_feedback_max_boost=memory_feedback_max_boost,
         memory_feedback_decay_days=memory_feedback_decay_days,
+        memory_long_term_enabled=memory_long_term_enabled,
+        memory_long_term_path=str(memory_long_term_path),
+        memory_long_term_top_n=memory_long_term_top_n,
+        memory_long_term_token_budget=memory_long_term_token_budget,
+        memory_long_term_write_enabled=memory_long_term_write_enabled,
+        memory_long_term_as_of_enabled=memory_long_term_as_of_enabled,
         memory_capture_enabled=memory_capture_enabled,
         memory_capture_notes_path=str(memory_capture_notes_path),
         memory_capture_min_query_length=memory_capture_min_query_length,

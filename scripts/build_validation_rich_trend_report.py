@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -18,6 +19,8 @@ METRIC_NAMES = (
     "evidence_insufficient_rate",
     "missing_validation_rate",
 )
+
+_DATED_CHECKPOINT_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:$|[-_].+)")
 
 
 def _resolve_path(*, root: Path, value: str) -> Path:
@@ -57,11 +60,34 @@ def _parse_generated_at(value: Any) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def _is_direct_dated_summary(*, history_root: Path, path: Path) -> bool:
+    try:
+        relative = path.resolve().relative_to(history_root.resolve())
+    except Exception:
+        return False
+    parts = relative.parts
+    if len(parts) != 2:
+        return False
+    parent, filename = parts
+    if str(filename) != "summary.json":
+        return False
+    parent_name = str(parent)
+    if not _DATED_CHECKPOINT_PREFIX_RE.match(parent_name):
+        return False
+    try:
+        datetime.strptime(parent_name[:10], "%Y-%m-%d")
+    except ValueError:
+        return False
+    return True
+
+
 def _iter_summary_paths(*, history_root: Path, latest_report: Path | None, limit: int) -> list[Path]:
     paths: list[Path] = []
     if history_root.exists() and history_root.is_dir():
         for path in history_root.rglob("summary.json"):
-            paths.append(path.resolve())
+            resolved = path.resolve()
+            if _is_direct_dated_summary(history_root=history_root, path=resolved):
+                paths.append(resolved)
     if isinstance(latest_report, Path) and latest_report.exists() and latest_report.is_file():
         latest_resolved = latest_report.resolve()
         if latest_resolved not in paths:

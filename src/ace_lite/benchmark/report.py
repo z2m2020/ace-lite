@@ -581,6 +581,20 @@ def _append_retrieval_context_observability_summary(
             rate=float(summary.get("pool_available_case_rate", 0.0) or 0.0),
         )
     )
+    lines.append(
+        "- Parent-symbol cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("parent_symbol_available_case_count", 0) or 0),
+            total=int(summary.get("case_count", 0) or 0),
+            rate=float(summary.get("parent_symbol_available_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Reference-hint cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("reference_hint_available_case_count", 0) or 0),
+            total=int(summary.get("case_count", 0) or 0),
+            rate=float(summary.get("reference_hint_available_case_rate", 0.0) or 0.0),
+        )
+    )
     lines.append("")
     lines.append("| Metric | Value |")
     lines.append("| --- | ---: |")
@@ -592,6 +606,30 @@ def _append_retrieval_context_observability_summary(
     lines.append(
         "| coverage_ratio_mean | {value:.4f} |".format(
             value=float(summary.get("coverage_ratio_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| parent_symbol_chunk_count_mean | {value:.4f} |".format(
+            value=float(summary.get("parent_symbol_chunk_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| parent_symbol_coverage_ratio_mean | {value:.4f} |".format(
+            value=float(
+                summary.get("parent_symbol_coverage_ratio_mean", 0.0) or 0.0
+            )
+        )
+    )
+    lines.append(
+        "| reference_hint_chunk_count_mean | {value:.4f} |".format(
+            value=float(summary.get("reference_hint_chunk_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| reference_hint_coverage_ratio_mean | {value:.4f} |".format(
+            value=float(
+                summary.get("reference_hint_coverage_ratio_mean", 0.0) or 0.0
+            )
         )
     )
     lines.append(
@@ -729,6 +767,82 @@ def _append_feedback_observability_summary(
     lines.append("| --- | ---: |")
     for name, count in sorted(
         reasons.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))
+    ):
+        lines.append(f"| {name} | {int(count or 0)} |")
+    lines.append("")
+
+
+def _append_feedback_loop_summary(lines: list[str], results: dict[str, Any]) -> None:
+    summary_raw = results.get("feedback_loop_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    feedback_surfaces_raw = summary.get("feedback_surfaces")
+    feedback_surfaces: dict[str, Any] = (
+        feedback_surfaces_raw if isinstance(feedback_surfaces_raw, dict) else {}
+    )
+
+    lines.append("## Feedback Loop Summary")
+    lines.append("")
+    lines.append(
+        "- Issue-report cases: {count}".format(
+            count=int(summary.get("issue_report_case_count", 0) or 0)
+        )
+    )
+    lines.append(
+        "- Converted issue-report benchmark cases: {count} rate={rate:.4f}".format(
+            count=int(summary.get("issue_report_linked_case_count", 0) or 0),
+            rate=float(
+                summary.get("issue_to_benchmark_case_conversion_rate", 0.0) or 0.0
+            ),
+        )
+    )
+    lines.append(
+        "- Linked-plan issue reports: {count} rate={rate:.4f}".format(
+            count=int(summary.get("issue_report_linked_plan_case_count", 0) or 0),
+            rate=float(summary.get("issue_report_linked_plan_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Dev-feedback resolution cases: {count} resolved={resolved} rate={rate:.4f}".format(
+            count=int(summary.get("dev_feedback_resolution_case_count", 0) or 0),
+            resolved=int(summary.get("dev_feedback_resolved_case_count", 0) or 0),
+            rate=float(summary.get("dev_feedback_resolution_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("| --- | ---: |")
+    lines.append(
+        "| issue_to_benchmark_case_conversion_rate | {value:.4f} |".format(
+            value=float(
+                summary.get("issue_to_benchmark_case_conversion_rate", 0.0) or 0.0
+            )
+        )
+    )
+    lines.append(
+        "| issue_report_linked_plan_rate | {value:.4f} |".format(
+            value=float(summary.get("issue_report_linked_plan_rate", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| dev_feedback_resolution_rate | {value:.4f} |".format(
+            value=float(summary.get("dev_feedback_resolution_rate", 0.0) or 0.0)
+        )
+    )
+    lines.append("")
+    lines.append("### Feedback Surfaces")
+    lines.append("")
+    if not feedback_surfaces:
+        lines.append("- None")
+        lines.append("")
+        return
+
+    lines.append("| Surface | Count |")
+    lines.append("| --- | ---: |")
+    for name, count in sorted(
+        feedback_surfaces.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))
     ):
         lines.append(f"| {name} | {int(count or 0)} |")
     lines.append("")
@@ -1286,6 +1400,7 @@ def build_report_markdown(results: dict[str, Any]) -> str:
 
     _append_comparison_lane_summary(lines, results)
     _append_evidence_insufficiency_summary(lines, results)
+    _append_feedback_loop_summary(lines, results)
     _append_feedback_observability_summary(lines, results)
     _append_preference_observability_summary(lines, results)
     _append_retrieval_context_observability_summary(lines, results)

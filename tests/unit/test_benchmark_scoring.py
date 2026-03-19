@@ -5,6 +5,7 @@ from ace_lite.benchmark.report_metrics import ALL_METRIC_ORDER, COMPARABLE_METRI
 from ace_lite.benchmark.scoring import (
     aggregate_metrics,
     build_comparison_lane_summary,
+    build_feedback_loop_summary,
     compare_metrics,
     detect_regression,
     evaluate_case_result,
@@ -35,6 +36,10 @@ def test_evaluate_case_result_and_aggregate() -> None:
                 "retrieval_context_chunk_count": 2.0,
                 "retrieval_context_coverage_ratio": 1.0,
                 "retrieval_context_char_count_mean": 84.0,
+                "contextual_sidecar_parent_symbol_chunk_count": 2.0,
+                "contextual_sidecar_parent_symbol_coverage_ratio": 1.0,
+                "contextual_sidecar_reference_hint_chunk_count": 1.0,
+                "contextual_sidecar_reference_hint_coverage_ratio": 0.5,
                 "robust_signature_count": 1.0,
                 "robust_signature_coverage_ratio": 0.5,
                 "graph_prior_chunk_count": 1.0,
@@ -87,6 +92,12 @@ def test_evaluate_case_result_and_aggregate() -> None:
         },
         "source_plan": {
             "validation_tests": ["tests.test_auth::test_token"],
+            "ltm_constraint_summary": {
+                "selected_count": 1,
+                "constraint_count": 0,
+                "graph_neighbor_count": 0,
+                "handles": [],
+            },
             "evidence_summary": {
                 "direct_count": 1.0,
                 "neighbor_context_count": 0.0,
@@ -154,6 +165,10 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert row["retrieval_context_chunk_count"] == 2.0
     assert row["retrieval_context_coverage_ratio"] == 1.0
     assert row["retrieval_context_char_count_mean"] == 84.0
+    assert row["contextual_sidecar_parent_symbol_chunk_count"] == 2.0
+    assert row["contextual_sidecar_parent_symbol_coverage_ratio"] == 1.0
+    assert row["contextual_sidecar_reference_hint_chunk_count"] == 1.0
+    assert row["contextual_sidecar_reference_hint_coverage_ratio"] == 0.5
     assert row["retrieval_context_pool_chunk_count"] == 1.0
     assert row["retrieval_context_pool_coverage_ratio"] == 0.5
     assert row["skills_selected_count"] == 1.0
@@ -290,6 +305,10 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "chunk_count": 2,
         "coverage_ratio": 1.0,
         "char_count_mean": 84.0,
+        "parent_symbol_chunk_count": 2,
+        "parent_symbol_coverage_ratio": 1.0,
+        "reference_hint_chunk_count": 1,
+        "reference_hint_coverage_ratio": 0.5,
     }
     assert row["year2_normalized_kpis"] == {
         "skills_token_budget_utilization_ratio": round(250.0 / 600.0, 6),
@@ -309,6 +328,7 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "task_success_rate",
         "utility_rate",
         "noise_rate",
+        "memory_helpful_task_success_rate",
         "docs_enabled_ratio",
         "docs_hit_ratio",
         "hint_inject_ratio",
@@ -330,6 +350,10 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "retrieval_context_chunk_count_mean",
         "retrieval_context_coverage_ratio",
         "retrieval_context_char_count_mean",
+        "contextual_sidecar_parent_symbol_chunk_count_mean",
+        "contextual_sidecar_parent_symbol_coverage_ratio",
+        "contextual_sidecar_reference_hint_chunk_count_mean",
+        "contextual_sidecar_reference_hint_coverage_ratio",
         "chunk_contract_fallback_count_mean",
         "chunk_contract_skeleton_chunk_count_mean",
         "chunk_contract_fallback_ratio",
@@ -394,6 +418,12 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "notes_hit_ratio",
         "profile_selected_mean",
         "capture_trigger_ratio",
+        "ltm_hit_ratio",
+        "ltm_false_help_rate",
+        "ltm_stale_hit_rate",
+        "issue_report_linked_plan_rate",
+        "issue_to_benchmark_case_conversion_rate",
+        "dev_feedback_resolution_rate",
         "embedding_enabled_ratio",
         "embedding_similarity_mean",
         "embedding_similarity_max",
@@ -430,6 +460,10 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["retrieval_context_chunk_count_mean"] == 2.0
     assert metrics["retrieval_context_coverage_ratio"] == 1.0
     assert metrics["retrieval_context_char_count_mean"] == 84.0
+    assert metrics["contextual_sidecar_parent_symbol_chunk_count_mean"] == 2.0
+    assert metrics["contextual_sidecar_parent_symbol_coverage_ratio"] == 1.0
+    assert metrics["contextual_sidecar_reference_hint_chunk_count_mean"] == 1.0
+    assert metrics["contextual_sidecar_reference_hint_coverage_ratio"] == 0.5
     assert metrics["subgraph_payload_enabled_ratio"] == 0.0
     assert metrics["subgraph_seed_path_count_mean"] == 0.0
     assert metrics["subgraph_edge_type_count_mean"] == 0.0
@@ -458,6 +492,7 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["chunk_guard_report_only_ratio"] == 0.0
     assert metrics["chunk_guard_filtered_count_mean"] == 0.0
     assert metrics["chunk_guard_filter_ratio"] == 0.0
+
     assert metrics["chunk_guard_pairwise_conflict_count_mean"] == 0.0
     assert metrics["chunk_guard_fallback_ratio"] == 0.0
     assert metrics["skills_route_latency_p95_ms"] == 0.3
@@ -483,6 +518,109 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["docs_hit_ratio"] == 1.0
     assert metrics["task_success_rate"] == 1.0
     assert metrics["evidence_insufficient_rate"] == 0.0
+    assert metrics["memory_helpful_task_success_rate"] == 0.0
+    assert metrics["ltm_hit_ratio"] == 0.0
+    assert metrics["ltm_false_help_rate"] == 0.0
+    assert metrics["ltm_stale_hit_rate"] == 0.0
+
+
+def test_feedback_loop_summary_and_metrics() -> None:
+    case_results = [
+        {
+            "case_id": "issue-exported",
+            "comparison_lane": "issue_report_feedback",
+            "issue_report_issue_id": "iss_123",
+            "issue_report_has_plan_ref": 1.0,
+            "feedback_surface": "issue_report_export_cli",
+            "task_success_hit": 1.0,
+        },
+        {
+            "case_id": "issue-manual",
+            "comparison_lane": "issue_report_feedback",
+            "issue_report_issue_id": "",
+            "issue_report_has_plan_ref": 0.0,
+            "feedback_surface": "issue_report_export_mcp",
+            "task_success_hit": 1.0,
+        },
+        {
+            "case_id": "resolved",
+            "comparison_lane": "dev_feedback_resolution",
+            "feedback_surface": "issue_resolution_cli",
+            "task_success_hit": 1.0,
+        },
+        {
+            "case_id": "unresolved",
+            "comparison_lane": "dev_feedback_resolution",
+            "feedback_surface": "issue_resolution_mcp",
+            "task_success_hit": 0.0,
+        },
+    ]
+
+    metrics = aggregate_metrics(case_results)
+    summary = build_feedback_loop_summary(case_results)
+
+    assert metrics["issue_to_benchmark_case_conversion_rate"] == 0.5
+    assert metrics["issue_report_linked_plan_rate"] == 1.0
+    assert metrics["dev_feedback_resolution_rate"] == 0.5
+    assert summary["issue_report_case_count"] == 2
+    assert summary["issue_report_linked_case_count"] == 1
+    assert summary["issue_report_linked_plan_case_count"] == 1
+    assert summary["dev_feedback_resolution_case_count"] == 2
+    assert summary["dev_feedback_resolved_case_count"] == 1
+    assert summary["feedback_surfaces"] == {
+        "issue_report_export_cli": 1,
+        "issue_report_export_mcp": 1,
+        "issue_resolution_cli": 1,
+        "issue_resolution_mcp": 1,
+    }
+
+
+def test_ltm_summary_metrics_use_lane_specific_plan_attribution_signals() -> None:
+    case_results = [
+        {
+            "case_id": "helpful-hit",
+            "comparison_lane": "memory-helpful",
+            "ltm_plan_constraint_count": 1.0,
+            "task_success_hit": 1.0,
+        },
+        {
+            "case_id": "helpful-miss",
+            "comparison_lane": "memory-helpful",
+            "ltm_plan_constraint_count": 0.0,
+            "task_success_hit": 1.0,
+        },
+        {
+            "case_id": "harmful-polluted",
+            "comparison_lane": "memory-harmful-negative-control",
+            "ltm_plan_constraint_count": 1.0,
+            "task_success_hit": 0.0,
+        },
+        {
+            "case_id": "harmful-clean",
+            "comparison_lane": "memory-harmful-negative-control",
+            "ltm_plan_constraint_count": 0.0,
+            "task_success_hit": 1.0,
+        },
+        {
+            "case_id": "time-sensitive-stale",
+            "comparison_lane": "time-sensitive",
+            "ltm_plan_constraint_count": 1.0,
+            "task_success_hit": 0.0,
+        },
+        {
+            "case_id": "time-sensitive-safe",
+            "comparison_lane": "time-sensitive",
+            "ltm_plan_constraint_count": 1.0,
+            "task_success_hit": 1.0,
+        },
+    ]
+
+    metrics = aggregate_metrics(case_results)
+
+    assert metrics["memory_helpful_task_success_rate"] == 1.0
+    assert metrics["ltm_hit_ratio"] == 0.5
+    assert metrics["ltm_false_help_rate"] == 0.5
+    assert metrics["ltm_stale_hit_rate"] == 0.5
 
 
 def test_evaluate_case_result_applies_candidate_path_exclusions() -> None:
@@ -1011,6 +1149,13 @@ def test_resolve_regression_thresholds_with_profile_and_overrides() -> None:
     assert thresholds["precision_tolerance"] == 0.02
     assert thresholds["latency_growth_factor"] == 1.1
     assert thresholds["dependency_recall_floor"] == 0.8
+    assert thresholds["memory_helpful_task_success_tolerance"] == 0.02
+    assert thresholds["ltm_false_help_tolerance"] == 0.02
+    assert thresholds["ltm_stale_hit_tolerance"] == 0.02
+    assert thresholds["plan_replay_cache_stale_hit_safe_tolerance"] == 0.05
+    assert thresholds["issue_report_linked_plan_tolerance"] == 0.05
+    assert thresholds["issue_to_benchmark_case_conversion_tolerance"] == 0.05
+    assert thresholds["dev_feedback_resolution_tolerance"] == 0.05
     assert thresholds["embedding_similarity_tolerance"] == 0.02
 
 
@@ -1435,6 +1580,24 @@ def test_evaluate_case_result_extracts_memory_metrics() -> None:
             "notes": {"selected_count": 2},
             "profile": {"selected_count": 3},
             "capture": {"triggered": True},
+            "ltm": {
+                "selected_count": 2,
+                "attribution_count": 1,
+                "attribution": [
+                    {
+                        "handle": "fact-1",
+                        "graph_neighborhood": {"triple_count": 1},
+                    }
+                ],
+            },
+        },
+        "source_plan": {
+            "ltm_constraint_summary": {
+                "selected_count": 2,
+                "constraint_count": 1,
+                "graph_neighbor_count": 1,
+                "handles": ["fact-1"],
+            },
         },
         "index": {
             "candidate_files": [{"path": "src/auth.py", "module": "src.auth"}],
@@ -1454,6 +1617,10 @@ def test_evaluate_case_result_extracts_memory_metrics() -> None:
     assert row["notes_hit_ratio"] == 0.5
     assert row["profile_selected_count"] == 3.0
     assert row["capture_triggered"] == 1.0
+    assert row["ltm_selected_count"] == 2.0
+    assert row["ltm_attribution_count"] == 1.0
+    assert row["ltm_graph_neighbor_count"] == 1.0
+    assert row["ltm_plan_constraint_count"] == 1.0
     assert row["feedback_enabled"] == 1.0
     assert row["feedback_reason"] == "ok"
     assert row["feedback_event_count"] == 4.0
@@ -1499,6 +1666,84 @@ def test_detect_regression_for_memory_metric_drop() -> None:
     assert "notes_hit_ratio" in regression["failed_checks"]
     assert "profile_selected_mean" in regression["failed_checks"]
     assert "capture_trigger_ratio" in regression["failed_checks"]
+
+
+def test_detect_regression_for_feedback_loop_metric_drop() -> None:
+    baseline = {
+        "precision_at_k": 0.8,
+        "task_success_rate": 0.8,
+        "noise_rate": 0.2,
+        "latency_p95_ms": 100.0,
+        "dependency_recall": 0.8,
+        "chunk_hit_at_k": 0.8,
+        "chunk_budget_used": 20.0,
+        "validation_test_count": 2.0,
+        "issue_report_linked_plan_rate": 1.0,
+        "issue_to_benchmark_case_conversion_rate": 0.8,
+        "dev_feedback_resolution_rate": 0.9,
+    }
+    current = dict(baseline)
+    current.update(
+        {
+            "issue_report_linked_plan_rate": 0.6,
+            "issue_to_benchmark_case_conversion_rate": 0.5,
+            "dev_feedback_resolution_rate": 0.6,
+        }
+    )
+
+    regression = detect_regression(
+        current=current,
+        baseline=baseline,
+        issue_report_linked_plan_tolerance=0.1,
+        issue_to_benchmark_case_conversion_tolerance=0.1,
+        dev_feedback_resolution_tolerance=0.1,
+    )
+
+    assert regression["regressed"] is True
+    assert "issue_report_linked_plan_rate" in regression["failed_checks"]
+    assert "issue_to_benchmark_case_conversion_rate" in regression["failed_checks"]
+    assert "dev_feedback_resolution_rate" in regression["failed_checks"]
+
+
+def test_detect_regression_for_memory_lane_and_replay_drift_metrics() -> None:
+    baseline = {
+        "precision_at_k": 0.8,
+        "task_success_rate": 0.8,
+        "noise_rate": 0.2,
+        "latency_p95_ms": 100.0,
+        "dependency_recall": 0.8,
+        "memory_helpful_task_success_rate": 0.9,
+        "chunk_hit_at_k": 0.8,
+        "chunk_budget_used": 20.0,
+        "validation_test_count": 2.0,
+        "ltm_false_help_rate": 0.0,
+        "ltm_stale_hit_rate": 0.0,
+        "plan_replay_cache_stale_hit_safe_ratio": 1.0,
+    }
+    current = dict(baseline)
+    current.update(
+        {
+            "memory_helpful_task_success_rate": 0.6,
+            "ltm_false_help_rate": 0.2,
+            "ltm_stale_hit_rate": 0.2,
+            "plan_replay_cache_stale_hit_safe_ratio": 0.7,
+        }
+    )
+
+    regression = detect_regression(
+        current=current,
+        baseline=baseline,
+        memory_helpful_task_success_tolerance=0.1,
+        ltm_false_help_tolerance=0.05,
+        ltm_stale_hit_tolerance=0.05,
+        plan_replay_cache_stale_hit_safe_tolerance=0.1,
+    )
+
+    assert regression["regressed"] is True
+    assert "memory_helpful_task_success_rate" in regression["failed_checks"]
+    assert "ltm_false_help_rate" in regression["failed_checks"]
+    assert "ltm_stale_hit_rate" in regression["failed_checks"]
+    assert "plan_replay_cache_stale_hit_safe_ratio" in regression["failed_checks"]
 
 
 def test_detect_regression_for_embedding_metric_drop() -> None:

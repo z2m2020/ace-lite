@@ -41,6 +41,41 @@ def test_benchmark_matrix_summary_helpers(tmp_path: Path) -> None:
     assert failed == ["precision_at_k", "noise_rate"]
 
 
+def test_benchmark_matrix_summary_markdown_lists_skipped_repos() -> None:
+    module = _load_script("run_benchmark_matrix.py")
+
+    markdown = module._build_summary_markdown(
+        summary={
+            "generated_at": "2026-03-19T00:00:00Z",
+            "matrix_config": "benchmark/matrix/repos.yaml",
+            "passed": True,
+            "repo_count": 1,
+            "configured_repo_count": 2,
+            "skipped_repos": [{"name": "grpc-java", "reason": "git_unavailable_missing_checkout"}],
+            "task_success_mean": 1.0,
+            "negative_control_case_count": 0,
+            "retrieval_task_gap_count": 0,
+            "repos": [
+                {
+                    "name": "requests",
+                    "retrieval_policy": "auto",
+                    "passed": True,
+                    "benchmark_regressed": False,
+                    "benchmark_failed_checks": [],
+                    "metrics": {},
+                    "task_success_summary": {},
+                    "failed_checks": [],
+                }
+            ],
+        }
+    )
+
+    assert "- Configured repo count: 2" in markdown
+    assert "- Skipped repo count: 1" in markdown
+    assert "## Skipped Repos" in markdown
+    assert "- grpc-java: reason=git_unavailable_missing_checkout" in markdown
+
+
 def test_benchmark_matrix_policy_summary_helpers() -> None:
     module = _load_script("run_benchmark_matrix.py")
 
@@ -822,6 +857,116 @@ def test_benchmark_matrix_checkout_updates_configured_submodules(
         "lib/solmate",
         "lib/openzeppelin-contracts",
     ] in calls
+
+
+def test_benchmark_matrix_checkout_reuses_existing_checkout_when_git_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_benchmark_matrix.py")
+    workspace = tmp_path / "workspace"
+    target = workspace / "repo-a"
+    git_dir = target / ".git"
+    refs_dir = git_dir / "refs" / "heads"
+    refs_dir.mkdir(parents=True, exist_ok=True)
+    (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    (refs_dir / "main").write_text("abc123\n", encoding="utf-8")
+
+    def fake_run_command(*, cmd: list[str], cwd: Path | None = None):
+        _ = cwd
+        if "fetch" in cmd:
+            return module.CommandResult(
+                cmd=cmd,
+                cwd=None,
+                returncode=1,
+                stdout="",
+                stderr="error launching git:",
+            )
+        raise AssertionError(f"unexpected git command: {cmd}")
+
+    monkeypatch.setattr(module, "_run_command", fake_run_command)
+
+    checkout = module._ensure_checkout(
+        workspace=workspace,
+        spec={
+            "name": "repo-a",
+            "url": "https://example.invalid/repo-a.git",
+            "ref": "main",
+            "submodules": True,
+        },
+    )
+
+    assert checkout["resolved_commit"] == "abc123"
+    assert checkout["submodules"] == {
+        "enabled": True,
+        "paths": [],
+        "skipped": True,
+        "reason": "git_unavailable",
+    }
+
+
+def test_benchmark_matrix_main_skips_repo_when_git_unavailable_and_checkout_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_benchmark_matrix.py")
+    matrix_config = tmp_path / "matrix.yaml"
+    matrix_config.write_text(
+        """
+repos:
+  - name: requests
+    url: https://example.invalid/requests.git
+    ref: main
+    cases: benchmark/cases/scenarios/real_world.yaml
+  - name: grpc-java
+    url: https://example.invalid/grpc-java.git
+    ref: main
+    cases: benchmark/cases/scenarios/real_world.yaml
+""".lstrip(),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "out"
+
+    def fake_run_repo_benchmark(**kwargs):
+        repo_spec = kwargs["repo_spec"]
+        name = str(repo_spec.get("name") or "")
+        if name == "grpc-java":
+            raise RuntimeError("clone grpc-java failed\nstderr:\nerror launching git:")
+        return {
+            "name": "requests",
+            "retrieval_policy": "auto",
+            "passed": True,
+            "benchmark_regressed": False,
+            "benchmark_failed_checks": [],
+            "metrics": {},
+            "task_success_summary": {},
+            "failed_checks": [],
+        }
+
+    monkeypatch.setattr(module, "_run_repo_benchmark", fake_run_repo_benchmark)
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "run_benchmark_matrix.py",
+            "--matrix-config",
+            str(matrix_config),
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 0
+
+    summary = json.loads((output_dir / "matrix_summary.json").read_text(encoding="utf-8"))
+    assert summary["passed"] is True
+    assert summary["repo_count"] == 1
+    assert summary["configured_repo_count"] == 2
+    assert summary["skipped_repo_count"] == 1
+    assert summary["skipped_repos"] == [
+        {"name": "grpc-java", "reason": "git_unavailable_missing_checkout"}
+    ]
 
 
 def test_benchmark_matrix_checkout_retries_transient_submodule_errors(

@@ -9,6 +9,7 @@ from ace_lite.shared_plan_runtime_config import (
     resolve_embedding_index_path,
     resolve_embedding_model,
     resolve_embedding_provider,
+    resolve_long_term_memory_path,
     resolve_memory_auto_tag_mode,
     resolve_memory_gate_mode,
     resolve_memory_notes_mode,
@@ -84,6 +85,11 @@ def test_shared_plan_runtime_config_helpers_support_validate_and_runtime_modes()
     assert resolve_optional_path(" ") is None
     assert resolve_optional_path(None) is None
     assert (
+        resolve_long_term_memory_path(" context-map/custom-long-term.db ")
+        == "context-map/custom-long-term.db"
+    )
+    assert resolve_long_term_memory_path(" ") == "context-map/long_term_memory.db"
+    assert (
         resolve_plan_replay_cache_path(" custom/plan-replay/cache.json ")
         == "custom/plan-replay/cache.json"
     )
@@ -108,6 +114,14 @@ def test_shared_plan_runtime_config_aligns_cli_and_runtime_memory_sections() -> 
         "notes": {
             "enabled": True,
             "mode": "PREFER_LOCAL",
+        },
+        "long_term": {
+            "enabled": True,
+            "path": " context-map/custom-long-term.db ",
+            "top_n": 6,
+            "token_budget": 240,
+            "write_enabled": True,
+            "as_of_enabled": False,
         },
     }
     repomap_payload = {"ranking_profile": "GRAPH"}
@@ -165,6 +179,11 @@ def test_shared_plan_runtime_config_aligns_cli_and_runtime_memory_sections() -> 
     assert cli_validated["plan"]["memory"]["namespace"]["auto_tag_mode"] == "user"
     assert cli_validated["plan"]["memory"]["gate"]["mode"] == "never"
     assert cli_validated["plan"]["memory"]["notes"]["mode"] == "prefer_local"
+    assert cli_validated["plan"]["memory"]["long_term"]["path"] == "context-map/custom-long-term.db"
+    assert cli_validated["plan"]["memory"]["long_term"]["top_n"] == 6
+    assert cli_validated["plan"]["memory"]["long_term"]["token_budget"] == 240
+    assert cli_validated["plan"]["memory"]["long_term"]["write_enabled"] is True
+    assert cli_validated["plan"]["memory"]["long_term"]["as_of_enabled"] is False
     assert cli_validated["plan"]["repomap"]["ranking_profile"] == "graph"
     assert cli_validated["plan"]["scip"]["provider"] == "auto"
     assert cli_validated["plan"]["scip"]["index_path"] == "context-map/scip/custom-index.json"
@@ -189,6 +208,11 @@ def test_shared_plan_runtime_config_aligns_cli_and_runtime_memory_sections() -> 
     assert runtime.memory.namespace.auto_tag_mode == "user"
     assert runtime.memory.gate.mode == "never"
     assert runtime.memory.notes.mode == "prefer_local"
+    assert str(runtime.memory.long_term.path) == "context-map/custom-long-term.db"
+    assert runtime.memory.long_term.top_n == 6
+    assert runtime.memory.long_term.token_budget == 240
+    assert runtime.memory.long_term.write_enabled is True
+    assert runtime.memory.long_term.as_of_enabled is False
     assert runtime.repomap.ranking_profile == "graph"
     assert runtime.scip.provider == "auto"
     assert str(runtime.scip.index_path) == "context-map/scip/custom-index.json"

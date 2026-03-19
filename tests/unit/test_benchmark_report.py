@@ -34,6 +34,10 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "latency_median_ms": 9.0,
                 "skills_route_latency_p95_ms": 0.2,
                 "skills_hydration_latency_p95_ms": 0.4,
+                "contextual_sidecar_parent_symbol_chunk_count_mean": 2.0,
+                "contextual_sidecar_parent_symbol_coverage_ratio": 1.0,
+                "contextual_sidecar_reference_hint_chunk_count_mean": 1.0,
+                "contextual_sidecar_reference_hint_coverage_ratio": 0.5,
                 "robust_signature_count_mean": 1.0,
                 "robust_signature_coverage_ratio": 0.5,
                 "graph_closure_enabled_ratio": 1.0,
@@ -66,6 +70,9 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "missing_validation_rate": 0.5,
                 "budget_limited_recovery_rate": 0.0,
                 "noisy_hit_rate": 0.5,
+                "ltm_hit_ratio": 1.0,
+                "ltm_false_help_rate": 0.25,
+                "ltm_stale_hit_rate": 0.0,
             },
             "baseline_metrics": {
                 "recall_at_k": 0.6,
@@ -80,6 +87,10 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "latency_median_ms": 7.0,
                 "skills_route_latency_p95_ms": 0.3,
                 "skills_hydration_latency_p95_ms": 0.5,
+                "contextual_sidecar_parent_symbol_chunk_count_mean": 1.0,
+                "contextual_sidecar_parent_symbol_coverage_ratio": 0.5,
+                "contextual_sidecar_reference_hint_chunk_count_mean": 0.5,
+                "contextual_sidecar_reference_hint_coverage_ratio": 0.25,
                 "robust_signature_count_mean": 0.5,
                 "robust_signature_coverage_ratio": 0.25,
                 "graph_closure_enabled_ratio": 0.0,
@@ -112,6 +123,9 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "missing_validation_rate": 0.25,
                 "budget_limited_recovery_rate": 0.0,
                 "noisy_hit_rate": 0.25,
+                "ltm_hit_ratio": 0.5,
+                "ltm_false_help_rate": 0.0,
+                "ltm_stale_hit_rate": 0.25,
             },
             "delta": {
                 "recall_at_k": -0.1,
@@ -131,6 +145,10 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "repomap_latency_median_ms": 2.0,
                 "latency_p95_ms": 2.0,
                 "latency_median_ms": 2.0,
+                "contextual_sidecar_parent_symbol_chunk_count_mean": 1.0,
+                "contextual_sidecar_parent_symbol_coverage_ratio": 0.5,
+                "contextual_sidecar_reference_hint_chunk_count_mean": 0.5,
+                "contextual_sidecar_reference_hint_coverage_ratio": 0.25,
                 "robust_signature_count_mean": 0.5,
                 "robust_signature_coverage_ratio": 0.25,
                 "graph_closure_enabled_ratio": 1.0,
@@ -163,6 +181,9 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "missing_validation_rate": 0.25,
                 "budget_limited_recovery_rate": 0.0,
                 "noisy_hit_rate": 0.25,
+                "ltm_hit_ratio": 0.5,
+                "ltm_false_help_rate": 0.25,
+                "ltm_stale_hit_rate": -0.25,
                 "parallel_time_budget_ms_mean": 5.0,
                 "embedding_time_budget_ms_mean": 4.0,
                 "chunk_semantic_time_budget_ms_mean": 3.0,
@@ -373,6 +394,10 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                     "notes_hit_ratio": 0.5,
                     "profile_selected_count": 2.0,
                     "capture_triggered": 1.0,
+                    "ltm_selected_count": 2.0,
+                    "ltm_attribution_count": 1.0,
+                    "ltm_graph_neighbor_count": 1.0,
+                    "ltm_plan_constraint_count": 1.0,
                     "feedback_enabled": 1.0,
                     "feedback_matched_event_count": 2.0,
                     "feedback_boosted_count": 1.0,
@@ -441,6 +466,12 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                         "profile_selected_count": 2,
                         "capture_triggered": True,
                     },
+                    "ltm_explainability": {
+                        "selected_count": 2,
+                        "attribution_count": 1,
+                        "graph_neighbor_count": 1,
+                        "plan_constraint_count": 1,
+                    },
                     "feedback_boost": {
                         "enabled": True,
                         "reason": "ok",
@@ -507,6 +538,10 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "notes_hit_ratio: 0.5000" in report
     assert "profile_selected_count: 2.0000" in report
     assert "capture_triggered: 1.0000" in report
+    assert "ltm_selected_count: 2.0000" in report
+    assert "ltm_attribution_count: 1.0000" in report
+    assert "ltm_graph_neighbor_count: 1.0000" in report
+    assert "ltm_plan_constraint_count: 1.0000" in report
     assert "feedback_enabled: 1.0000" in report
     assert "feedback_boosted_count: 1.0000" in report
     assert "chunk_stage_miss: source_plan_pack_miss" in report
@@ -517,6 +552,11 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "skills_token_budget_used_mean" in report
     assert "skills_budget_exhausted_ratio" in report
     assert "skills_route_latency_p95_ms" in report
+    assert "ltm_hit_ratio" in report
+    assert "ltm_false_help_rate" in report
+    assert "ltm_stale_hit_rate" in report
+    assert "contextual_sidecar_parent_symbol_chunk_count_mean" in report
+    assert "contextual_sidecar_reference_hint_coverage_ratio" in report
     assert "robust_signature_count_mean" in report
     assert "robust_signature_coverage_ratio" in report
     assert "graph_prior_chunk_count_mean" in report
@@ -548,6 +588,7 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "graph_closure: enabled=True, boosted_chunk_count=2, coverage_ratio=0.5000, anchor_count=1, support_edge_count=3, total=0.1400" in report
     assert "source_plan_packing: graph_closure_preference_enabled=True, graph_closure_bonus_candidate_count=2, graph_closure_preferred_count=1, focused_file_promoted_count=1, packed_path_count=2, reason=graph_closure_preferred" in report
     assert "preference_capture: notes_hit_ratio=0.5000, profile_selected_count=2, capture_triggered=True" in report
+    assert "ltm_explainability: selected_count=2, attribution_count=1, graph_neighbor_count=1, plan_constraint_count=1" in report
     assert "feedback_boost: enabled=True, reason=ok, event_count=4, matched_event_count=2, boosted_candidate_count=1, boosted_unique_paths=1" in report
     assert "chunk_stage_miss_details: oracle_file_path=src/ace_lite/benchmark/case_evaluation.py, file_present=True, raw_chunk_present=True, source_plan_chunk_present=False" in report
     assert "embedding_similarity_mean" in report
@@ -809,10 +850,18 @@ def test_build_results_summary_preserves_retrieval_context_observability_summary
                 "case_count": 2,
                 "available_case_count": 2,
                 "available_case_rate": 1.0,
+                "parent_symbol_available_case_count": 2,
+                "parent_symbol_available_case_rate": 1.0,
+                "reference_hint_available_case_count": 1,
+                "reference_hint_available_case_rate": 0.5,
                 "pool_available_case_count": 1,
                 "pool_available_case_rate": 0.5,
                 "chunk_count_mean": 2.0,
                 "coverage_ratio_mean": 1.0,
+                "parent_symbol_chunk_count_mean": 2.0,
+                "parent_symbol_coverage_ratio_mean": 1.0,
+                "reference_hint_chunk_count_mean": 1.0,
+                "reference_hint_coverage_ratio_mean": 0.5,
                 "pool_chunk_count_mean": 1.0,
                 "pool_coverage_ratio_mean": 0.5,
             },
@@ -823,10 +872,18 @@ def test_build_results_summary_preserves_retrieval_context_observability_summary
         "case_count": 2,
         "available_case_count": 2,
         "available_case_rate": 1.0,
+        "parent_symbol_available_case_count": 2,
+        "parent_symbol_available_case_rate": 1.0,
+        "reference_hint_available_case_count": 1,
+        "reference_hint_available_case_rate": 0.5,
         "pool_available_case_count": 1,
         "pool_available_case_rate": 0.5,
         "chunk_count_mean": 2.0,
         "coverage_ratio_mean": 1.0,
+        "parent_symbol_chunk_count_mean": 2.0,
+        "parent_symbol_coverage_ratio_mean": 1.0,
+        "reference_hint_chunk_count_mean": 1.0,
+        "reference_hint_coverage_ratio_mean": 0.5,
         "pool_chunk_count_mean": 1.0,
         "pool_coverage_ratio_mean": 0.5,
     }
@@ -950,10 +1007,18 @@ def test_build_report_markdown_includes_retrieval_context_observability_summary(
                 "case_count": 2,
                 "available_case_count": 2,
                 "available_case_rate": 1.0,
+                "parent_symbol_available_case_count": 2,
+                "parent_symbol_available_case_rate": 1.0,
+                "reference_hint_available_case_count": 1,
+                "reference_hint_available_case_rate": 0.5,
                 "pool_available_case_count": 1,
                 "pool_available_case_rate": 0.5,
                 "chunk_count_mean": 2.0,
                 "coverage_ratio_mean": 1.0,
+                "parent_symbol_chunk_count_mean": 2.0,
+                "parent_symbol_coverage_ratio_mean": 1.0,
+                "reference_hint_chunk_count_mean": 1.0,
+                "reference_hint_coverage_ratio_mean": 0.5,
                 "pool_chunk_count_mean": 1.0,
                 "pool_coverage_ratio_mean": 0.5,
             },
@@ -962,7 +1027,11 @@ def test_build_report_markdown_includes_retrieval_context_observability_summary(
 
     assert "## Retrieval Context Observability Summary" in report
     assert "- Available cases: 2/2 (1.0000)" in report
+    assert "- Parent-symbol cases: 2/2 (1.0000)" in report
+    assert "- Reference-hint cases: 1/2 (0.5000)" in report
     assert "- Pool-available cases: 1/2 (0.5000)" in report
+    assert "| parent_symbol_chunk_count_mean | 2.0000 |" in report
+    assert "| reference_hint_coverage_ratio_mean | 0.5000 |" in report
     assert "| pool_coverage_ratio_mean | 0.5000 |" in report
 
 
@@ -1025,6 +1094,62 @@ def test_build_report_markdown_includes_feedback_observability_summary() -> None
     assert "- Matched cases: 1/2 (0.5000)" in report
     assert "| boosted_candidate_count_mean | 0.5000 |" in report
     assert "| no_events | 1 |" in report
+
+
+def test_build_report_markdown_includes_feedback_loop_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-19T00:00:00Z",
+            "repo": "demo",
+            "case_count": 4,
+            "metrics": {},
+            "feedback_loop_summary": {
+                "case_count": 4,
+                "issue_report_case_count": 2,
+                "issue_report_linked_case_count": 1,
+                "issue_report_linked_plan_case_count": 1,
+                "issue_to_benchmark_case_conversion_rate": 0.5,
+                "issue_report_linked_plan_rate": 1.0,
+                "dev_feedback_resolution_case_count": 2,
+                "dev_feedback_resolved_case_count": 1,
+                "dev_feedback_resolution_rate": 0.5,
+                "feedback_surfaces": {
+                    "issue_report_export_cli": 1,
+                    "issue_resolution_cli": 1,
+                },
+            },
+        }
+    )
+
+    assert "## Feedback Loop Summary" in report
+    assert "- Converted issue-report benchmark cases: 1 rate=0.5000" in report
+    assert "- Linked-plan issue reports: 1 rate=1.0000" in report
+    assert "| issue_to_benchmark_case_conversion_rate | 0.5000 |" in report
+    assert "| dev_feedback_resolution_rate | 0.5000 |" in report
+    assert "| issue_report_export_cli | 1 |" in report
+
+
+def test_build_results_summary_preserves_feedback_loop_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "feedback_loop_summary": {
+                "case_count": 4,
+                "issue_report_case_count": 2,
+                "issue_report_linked_case_count": 1,
+                "issue_report_linked_plan_case_count": 1,
+                "issue_to_benchmark_case_conversion_rate": 0.5,
+                "issue_report_linked_plan_rate": 1.0,
+                "dev_feedback_resolution_case_count": 2,
+                "dev_feedback_resolved_case_count": 1,
+                "dev_feedback_resolution_rate": 0.5,
+                "feedback_surfaces": {"issue_report_export_cli": 1},
+            },
+        }
+    )
+
+    assert summary["feedback_loop_summary"]["issue_report_case_count"] == 2
+    assert summary["feedback_loop_summary"]["dev_feedback_resolution_rate"] == 0.5
 
 
 def test_build_report_markdown_includes_reward_log_summary() -> None:

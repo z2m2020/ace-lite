@@ -42,6 +42,32 @@ _TOKEN_ESTIMATE_CACHE: OrderedDict[tuple[str, str, str, str, str], int] = Ordere
 _TOKEN_ESTIMATE_CACHE_CAP = 4096
 
 
+def _resolve_candidate_per_file_limit(
+    *,
+    candidate: dict[str, Any],
+    default_limit: int,
+    policy: dict[str, Any],
+) -> int:
+    limit = max(1, int(default_limit))
+    if not isinstance(candidate, dict):
+        return limit
+
+    kind = str(candidate.get("kind") or "").strip().lower()
+    language = str(candidate.get("language") or "").strip().lower()
+    if not language:
+        path = str(candidate.get("path") or "").strip().lower()
+        if path.endswith(".md") or path.endswith(".markdown"):
+            language = "markdown"
+    if kind != "section" or language != "markdown":
+        return limit
+
+    markdown_limit = max(
+        1,
+        int(policy.get("markdown_section_per_file_limit", 2) or 2),
+    )
+    return min(limit, markdown_limit)
+
+
 def _build_reference_hits(files_map: dict[str, dict[str, Any]]) -> dict[str, int]:
     reference_hits: dict[str, int] = {}
     for entry in files_map.values():
@@ -707,7 +733,12 @@ def build_candidate_chunks(
                 continue
 
             current_count = int(per_file_counter.get(path, 0))
-            if current_count >= limit_per_file:
+            effective_per_file_limit = _resolve_candidate_per_file_limit(
+                candidate=item,
+                default_limit=limit_per_file,
+                policy=policy,
+            )
+            if current_count >= effective_per_file_limit:
                 continue
 
             estimated_tokens = int(
@@ -832,6 +863,26 @@ def build_candidate_chunks(
         if isinstance(item, dict) and str(item.get("_retrieval_context") or "").strip()
     ]
     retrieval_context_chunk_count = len(retrieval_context_lengths)
+    contextual_sidecars = [
+        item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
+        for item in selected
+        if isinstance(item, dict)
+        and isinstance(item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY), dict)
+    ]
+    contextual_sidecar_parent_symbol_chunk_count = sum(
+        1
+        for sidecar in contextual_sidecars
+        if str(sidecar.get("parent_symbol") or "").strip()
+    )
+    contextual_sidecar_reference_hint_chunk_count = sum(
+        1
+        for sidecar in contextual_sidecars
+        if isinstance(sidecar.get("references"), list)
+        and any(
+            str(reference).strip()
+            for reference in sidecar.get("references", [])
+        )
+    )
     robust_signature_count = sum(
         1
         for item in selected
@@ -920,6 +971,22 @@ def build_candidate_chunks(
                 6,
             )
             if retrieval_context_chunk_count > 0
+            else 0.0
+        ),
+        contextual_sidecar_parent_symbol_chunk_count=int(
+            contextual_sidecar_parent_symbol_chunk_count
+        ),
+        contextual_sidecar_parent_symbol_coverage_ratio=(
+            float(contextual_sidecar_parent_symbol_chunk_count) / float(selected_count)
+            if selected_count > 0
+            else 0.0
+        ),
+        contextual_sidecar_reference_hint_chunk_count=int(
+            contextual_sidecar_reference_hint_chunk_count
+        ),
+        contextual_sidecar_reference_hint_coverage_ratio=(
+            float(contextual_sidecar_reference_hint_chunk_count) / float(selected_count)
+            if selected_count > 0
             else 0.0
         ),
         robust_signature_count=int(robust_signature_count),

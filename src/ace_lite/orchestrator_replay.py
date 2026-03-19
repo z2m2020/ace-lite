@@ -101,15 +101,17 @@ def build_repo_inputs_replay_fingerprint(
 
 
 def build_augment_replay_fingerprint(*, augment_payload: dict[str, Any]) -> str:
+    augment_enabled = bool(augment_payload.get("enabled", False))
     stable_payload = {
-        "enabled": bool(augment_payload.get("enabled", False)),
+        "enabled": augment_enabled,
         "reason": str(augment_payload.get("reason", "")),
         "diagnostics": augment_payload.get("diagnostics", []),
         "xref": augment_payload.get("xref", {}),
         "tests": augment_payload.get("tests", {}),
-        "vcs_history": augment_payload.get("vcs_history", {}),
-        "vcs_worktree": augment_payload.get("vcs_worktree", {}),
     }
+    if augment_enabled:
+        stable_payload["vcs_history"] = augment_payload.get("vcs_history", {})
+        stable_payload["vcs_worktree"] = augment_payload.get("vcs_worktree", {})
     return build_plan_component_fingerprint(
         stable_payload,
         exclude_keys={"elapsed_ms"},

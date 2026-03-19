@@ -602,6 +602,41 @@ def run_diagnostics_augment(
     vcs_enabled: bool = True,
     vcs_worktree_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    chunk_candidates = candidate_chunks if isinstance(candidate_chunks, list) else []
+    tests_payload = _collect_test_signals(
+        candidate_chunks=chunk_candidates,
+        junit_xml_path=junit_xml_path,
+        coverage_json_path=coverage_json_path,
+        sbfl_json_path=sbfl_json_path,
+        sbfl_metric=sbfl_metric,
+    )
+
+    if not enabled:
+        vcs_worktree = (
+            dict(vcs_worktree_override)
+            if isinstance(vcs_worktree_override, dict) and vcs_worktree_override
+            else _empty_vcs_worktree_payload(reason="disabled")
+        )
+        return {
+            "enabled": False,
+            "count": 0,
+            "diagnostics": [],
+            "errors": [],
+            "reason": "disabled",
+            "vcs_history": _empty_vcs_history_payload(reason="disabled"),
+            "vcs_worktree": vcs_worktree,
+            "xref_enabled": bool(xref_enabled),
+            "xref": {
+                "count": 0,
+                "results": [],
+                "errors": [],
+                "budget_exhausted": False,
+                "elapsed_ms": 0.0,
+                "time_budget_ms": max(1, int(xref_time_budget_ms)),
+            },
+            "tests": tests_payload,
+        }
+
     candidates = index_stage.get("candidate_files", [])
     if not isinstance(candidates, list):
         candidates = []
@@ -629,36 +664,6 @@ def run_diagnostics_augment(
     else:
         vcs_history = _empty_vcs_history_payload(reason="disabled")
         vcs_worktree = _empty_vcs_worktree_payload(reason="disabled")
-
-    chunk_candidates = candidate_chunks if isinstance(candidate_chunks, list) else []
-    tests_payload = _collect_test_signals(
-        candidate_chunks=chunk_candidates,
-        junit_xml_path=junit_xml_path,
-        coverage_json_path=coverage_json_path,
-        sbfl_json_path=sbfl_json_path,
-        sbfl_metric=sbfl_metric,
-    )
-
-    if not enabled:
-        return {
-            "enabled": False,
-            "count": 0,
-            "diagnostics": [],
-            "errors": [],
-            "reason": "disabled",
-            "vcs_history": vcs_history,
-            "vcs_worktree": vcs_worktree,
-            "xref_enabled": bool(xref_enabled),
-            "xref": {
-                "count": 0,
-                "results": [],
-                "errors": [],
-                "budget_exhausted": False,
-                "elapsed_ms": 0.0,
-                "time_budget_ms": max(1, int(xref_time_budget_ms)),
-            },
-            "tests": tests_payload,
-        }
 
     if broker is None:
         return {

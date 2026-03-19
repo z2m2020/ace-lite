@@ -148,6 +148,85 @@ def test_run_source_plan_is_deterministic_for_same_context() -> None:
     assert len(first["chunk_steps"]) == len(first["candidate_chunks"])
 
 
+def test_run_source_plan_emits_selected_ltm_constraints() -> None:
+    ctx = StageContext(query="reuse checkout fallback policy", repo="demo", root=".")
+    ctx.state = {
+        "memory": {
+            "hits_preview": [
+                {
+                    "handle": "fact-1",
+                    "preview": "[fact:repo_policy] runtime.validation.git fallback_policy reuse_checkout_or_skip",
+                },
+                {
+                    "handle": "note-1",
+                    "preview": "Prefer deterministic ordering in chunk ranking.",
+                },
+            ],
+            "ltm": {
+                "selected_count": 1,
+                "selected": [
+                    {
+                        "handle": "fact-1",
+                        "memory_kind": "fact",
+                        "fact_type": "repo_policy",
+                        "as_of": "2026-03-19T09:44:00+08:00",
+                        "derived_from_observation_id": "obs-1",
+                    }
+                ],
+                "attribution": [
+                    {
+                        "handle": "fact-1",
+                        "memory_kind": "fact",
+                        "graph_neighborhood": {"triple_count": 1},
+                    }
+                ],
+            },
+        },
+        "index": {
+            "candidate_files": [{"path": "src/ace_lite/validation/sandbox.py"}],
+            "candidate_chunks": [],
+            "chunk_metrics": {"chunk_budget_used": 0.0},
+        },
+        "repomap": {"focused_files": ["src/ace_lite/validation/sandbox.py"]},
+        "augment": {
+            "diagnostics": [],
+            "xref": {"count": 0, "results": []},
+            "tests": {"suspicious_chunks": [], "suggested_tests": []},
+        },
+        "skills": {"selected": []},
+        "__policy": {"name": "general", "version": "v1", "test_signal_weight": 1.0},
+    }
+
+    result = run_source_plan(
+        ctx=ctx,
+        pipeline_order=["memory", "index", "repomap", "augment", "skills", "source_plan"],
+        chunk_top_k=4,
+        chunk_per_file_limit=2,
+        chunk_token_budget=256,
+        chunk_disclosure="refs",
+        policy_version="v1",
+    )
+
+    assert result["constraints"][0].startswith("[fact:repo_policy]")
+    assert result["ltm_constraint_summary"] == {
+        "selected_count": 1,
+        "constraint_count": 1,
+        "graph_neighbor_count": 1,
+        "handles": ["fact-1"],
+    }
+    assert result["ltm_constraints"] == [
+        {
+            "handle": "fact-1",
+            "constraint": "[fact:repo_policy] runtime.validation.git fallback_policy reuse_checkout_or_skip",
+            "memory_kind": "fact",
+            "fact_type": "repo_policy",
+            "as_of": "2026-03-19T09:44:00+08:00",
+            "derived_from_observation_id": "obs-1",
+            "graph_neighbor_count": 1,
+        }
+    ]
+
+
 def test_run_source_plan_preserves_mixed_chunk_disclosure_contracts() -> None:
     ctx = StageContext(query="trace mixed disclosure flow", repo="demo", root=".")
     ctx.state = {

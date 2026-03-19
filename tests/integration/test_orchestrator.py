@@ -11,6 +11,11 @@ from click.testing import CliRunner
 from ace_lite.cli import cli
 from ace_lite.index_stage import extract_terms
 from ace_lite.memory import OpenMemoryMemoryProvider
+from ace_lite.memory_long_term import (
+    LongTermMemoryProvider,
+    LongTermMemoryStore,
+    build_long_term_fact_contract_v1,
+)
 from ace_lite.orchestrator import AceOrchestrator
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.rankers.bm25 import rank_candidates_bm25_two_stage
@@ -255,6 +260,103 @@ def test_orchestrator_plan_records_durable_runtime_stats(
     assert all_time.to_payload()["counters"]["invocation_count"] == 1
     assert session.to_payload()["counters"]["invocation_count"] == 1
     assert "total" in [item["stage_name"] for item in session.to_payload()["stage_latencies"]]
+
+
+def test_orchestrator_plan_captures_long_term_stage_observations(
+    tmp_path: Path,
+    fake_skill_manifest: list[dict[str, Any]],
+) -> None:
+    _seed_repo(tmp_path)
+    db_path = tmp_path / "context-map" / "long_term_memory.db"
+    config = OrchestratorConfig(
+        skills={"manifest": fake_skill_manifest},
+        index={
+            "languages": ["python"],
+            "cache_path": tmp_path / "context-map" / "index.json",
+        },
+        repomap={"enabled": False},
+        memory={
+            "long_term": {
+                "enabled": True,
+                "path": db_path,
+                "write_enabled": True,
+            }
+        },
+        validation={"enabled": False},
+    )
+    orchestrator = AceOrchestrator(config=config)
+
+    payload = orchestrator.plan(
+        query="capture source plan and validation observations",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+    )
+
+    store = LongTermMemoryStore(db_path=db_path)
+    rows = store.search(query="capture", limit=10)
+
+    assert "long_term_capture" in payload["observability"]
+    assert len(payload["observability"]["long_term_capture"]) == 2
+    assert {row.payload["kind"] for row in rows} == {"source_plan", "validation"}
+
+
+def test_orchestrator_plan_emits_ltm_constraints_for_source_plan(
+    tmp_path: Path,
+    fake_skill_manifest: list[dict[str, Any]],
+) -> None:
+    _seed_repo(tmp_path)
+    store = LongTermMemoryStore(db_path=tmp_path / "context-map" / "long_term_memory.db")
+    store.upsert_fact(
+        build_long_term_fact_contract_v1(
+            fact_id="fact-1",
+            fact_type="repo_policy",
+            subject="runtime.validation.git",
+            predicate="fallback_policy",
+            object_value="reuse_checkout_or_skip",
+            repo="ace-lite-engine",
+            namespace="repo:ace-lite-engine",
+            as_of="2026-03-19T09:44:00+08:00",
+            valid_from="2026-03-19T09:44:00+08:00",
+            derived_from_observation_id="obs-1",
+        )
+    )
+    provider = LongTermMemoryProvider(
+        store,
+        limit=4,
+        container_tag="repo:ace-lite-engine",
+        neighborhood_hops=1,
+        neighborhood_limit=4,
+    )
+    config = OrchestratorConfig(
+        skills={"manifest": fake_skill_manifest},
+        index={
+            "languages": ["python"],
+            "cache_path": tmp_path / "context-map" / "index.json",
+        },
+        repomap={"enabled": False},
+        memory={
+            "namespace": {"container_tag": "repo:ace-lite-engine"},
+            "disclosure_mode": "full",
+        },
+        validation={"enabled": False},
+    )
+    orchestrator = AceOrchestrator(memory_provider=provider, config=config)
+
+    payload = orchestrator.plan(
+        query="fallback",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+    )
+
+    assert payload["memory"]["ltm"]["selected_count"] == 1
+    assert payload["source_plan"]["ltm_constraint_summary"] == {
+        "selected_count": 1,
+        "constraint_count": 1,
+        "graph_neighbor_count": 0,
+        "handles": ["fact-1"],
+    }
+    assert payload["source_plan"]["ltm_constraints"][0]["handle"] == "fact-1"
+    assert payload["source_plan"]["ltm_constraints"][0]["memory_kind"] == "fact"
 
 
 def test_orchestrator_can_reuse_runtime_manager_shared_services(
@@ -615,6 +717,97 @@ def test_orchestrator_augment_replay_fingerprint_ignores_runtime_elapsed_fields(
     changed["xref"]["elapsed_ms"] = 98.4
     changed["vcs_history"]["elapsed_ms"] = 7.2
     changed["vcs_worktree"]["elapsed_ms"] = 0.9
+
+    first = AceOrchestrator._build_augment_replay_fingerprint(augment_payload=payload)
+    second = AceOrchestrator._build_augment_replay_fingerprint(augment_payload=changed)
+
+    assert first == second
+
+
+def test_orchestrator_augment_replay_fingerprint_ignores_disabled_vcs_payload_shape_drift() -> None:
+    payload = {
+        "enabled": False,
+        "reason": "disabled",
+        "diagnostics": [],
+        "xref": {
+            "count": 0,
+            "results": [],
+            "errors": [],
+            "budget_exhausted": False,
+            "elapsed_ms": 0.0,
+            "time_budget_ms": 1500,
+        },
+        "tests": {
+            "enabled": False,
+            "reason": "not_provided",
+            "failures": [],
+            "stack_frames": [],
+            "suspicious_chunks": [],
+            "suggested_tests": [],
+            "inputs": {
+                "junit_xml": None,
+                "failed_test_report": None,
+                "coverage_json": None,
+                "sbfl_json": None,
+                "sbfl_metric": "ochiai",
+                "report_format": "none",
+            },
+        },
+        "vcs_history": {
+            "enabled": False,
+            "reason": "disabled",
+            "commit_count": 0,
+            "commits": [],
+            "error": "",
+        },
+        "vcs_worktree": {
+            "enabled": False,
+            "reason": "not_git_repo",
+            "changed_count": 0,
+            "staged_count": 0,
+            "unstaged_count": 0,
+            "untracked_count": 0,
+            "entries": [],
+            "diffstat": {
+                "staged": {
+                    "file_count": 0,
+                    "binary_count": 0,
+                    "additions": 0,
+                    "deletions": 0,
+                    "files": [],
+                    "error": None,
+                    "timed_out": False,
+                    "truncated": False,
+                },
+                "unstaged": {
+                    "file_count": 0,
+                    "binary_count": 0,
+                    "additions": 0,
+                    "deletions": 0,
+                    "files": [],
+                    "error": None,
+                    "timed_out": False,
+                    "truncated": False,
+                },
+            },
+        },
+    }
+    changed = json.loads(json.dumps(payload))
+    changed["vcs_history"] = {
+        "enabled": False,
+        "reason": "disabled",
+        "commit_count": 0,
+        "commits": [],
+        "error": "",
+    }
+    changed["vcs_worktree"] = {
+        "enabled": False,
+        "reason": "disabled",
+        "changed_count": 0,
+        "entries": [],
+        "truncated": False,
+        "error": "",
+    }
 
     first = AceOrchestrator._build_augment_replay_fingerprint(augment_payload=payload)
     second = AceOrchestrator._build_augment_replay_fingerprint(augment_payload=changed)

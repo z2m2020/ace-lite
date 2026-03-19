@@ -25,7 +25,7 @@ def test_run_diagnostics_augment_includes_vcs_worktree_payload(tmp_path: Path) -
     assert payload["enabled"] is False
     assert "vcs_worktree" in payload
     assert payload["vcs_worktree"]["enabled"] is False
-    assert payload["vcs_worktree"]["reason"] == "not_git_repo"
+    assert payload["vcs_worktree"]["reason"] == "disabled"
 
 
 def test_run_diagnostics_augment_uses_vcs_worktree_override(
@@ -47,7 +47,7 @@ def test_run_diagnostics_augment_uses_vcs_worktree_override(
         root=str(tmp_path),
         query="q",
         index_stage={"candidate_files": [{"path": "src/app.py", "language": "python"}]},
-        enabled=False,
+        enabled=True,
         top_n=3,
         broker=None,
         xref_enabled=False,

@@ -299,3 +299,150 @@ def test_validation_rich_trend_report_handles_single_report(
     )
     assert "## Latest" in markdown
     assert "## Delta" not in markdown
+
+
+def test_validation_rich_trend_report_ignores_nested_summary_json(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("build_validation_rich_trend_report.py")
+
+    history_root = tmp_path / "history"
+    direct_report = history_root / "2026-03-19-wave5-latency-trim" / "summary.json"
+    nested_report = (
+        history_root
+        / "stability"
+        / "2026-03-19-wave5-latency-trim"
+        / "run-01"
+        / "summary.json"
+    )
+
+    _write_validation_rich_summary(
+        direct_report,
+        generated_at="2026-03-19T00:00:00+00:00",
+        repo="ace-lite-engine",
+        case_count=7,
+        regressed=False,
+        failed_checks=[],
+        task_success_rate=1.0,
+        precision_at_k=0.5935,
+        noise_rate=0.4065,
+        validation_test_count=5.0,
+        latency_p95_ms=124.03,
+        evidence_insufficient_rate=0.0,
+        missing_validation_rate=0.0,
+    )
+    _write_validation_rich_summary(
+        nested_report,
+        generated_at="2026-03-20T00:00:00+00:00",
+        repo="ace-lite-engine",
+        case_count=7,
+        regressed=False,
+        failed_checks=[],
+        task_success_rate=1.0,
+        precision_at_k=0.5935,
+        noise_rate=0.4065,
+        validation_test_count=5.0,
+        latency_p95_ms=80.0,
+        evidence_insufficient_rate=0.0,
+        missing_validation_rate=0.0,
+    )
+
+    def fake_git_diff(cmd, cwd, check, capture_output, text):
+        _ = (cmd, cwd, check, capture_output, text)
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_git_diff)
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "build_validation_rich_trend_report.py",
+            "--history-root",
+            str(history_root),
+            "--output-dir",
+            str(tmp_path / "trend"),
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 0
+
+    output = json.loads(
+        (tmp_path / "trend" / "validation_rich_trend_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert output["history_count"] == 1
+    assert output["latest"]["path"] == str(direct_report)
+
+
+def test_validation_rich_trend_report_ignores_non_dated_directories(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("build_validation_rich_trend_report.py")
+
+    history_root = tmp_path / "history"
+    direct_report = history_root / "2026-03-19-wave5-latency-trim" / "summary.json"
+    pseudo_dated_report = history_root / "ps-warm-vcs-cache" / "summary.json"
+
+    _write_validation_rich_summary(
+        direct_report,
+        generated_at="2026-03-19T00:00:00+00:00",
+        repo="ace-lite-engine",
+        case_count=7,
+        regressed=False,
+        failed_checks=[],
+        task_success_rate=1.0,
+        precision_at_k=0.5935,
+        noise_rate=0.4065,
+        validation_test_count=5.0,
+        latency_p95_ms=124.03,
+        evidence_insufficient_rate=0.0,
+        missing_validation_rate=0.0,
+    )
+    _write_validation_rich_summary(
+        pseudo_dated_report,
+        generated_at="2026-03-20T00:00:00+00:00",
+        repo="ace-lite-engine",
+        case_count=7,
+        regressed=True,
+        failed_checks=["latency_p95_ms"],
+        task_success_rate=1.0,
+        precision_at_k=0.5935,
+        noise_rate=0.4065,
+        validation_test_count=5.0,
+        latency_p95_ms=600.0,
+        evidence_insufficient_rate=0.0,
+        missing_validation_rate=0.0,
+    )
+
+    def fake_git_diff(cmd, cwd, check, capture_output, text):
+        _ = (cmd, cwd, check, capture_output, text)
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_git_diff)
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "build_validation_rich_trend_report.py",
+            "--history-root",
+            str(history_root),
+            "--output-dir",
+            str(tmp_path / "trend"),
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 0
+
+    output = json.loads(
+        (tmp_path / "trend" / "validation_rich_trend_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert output["history_count"] == 1
+    assert output["latest"]["path"] == str(direct_report)
+    assert output["failed_check_top3"] == []

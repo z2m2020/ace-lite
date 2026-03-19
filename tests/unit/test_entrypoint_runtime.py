@@ -35,6 +35,12 @@ def _make_resolved() -> dict[str, Any]:
         "memory_feedback_boost_per_select": 0.2,
         "memory_feedback_max_boost": 0.5,
         "memory_feedback_decay_days": 15.0,
+        "memory_long_term_enabled": True,
+        "memory_long_term_path": "context-map/long_term_memory.db",
+        "memory_long_term_top_n": 7,
+        "memory_long_term_token_budget": 320,
+        "memory_long_term_write_enabled": True,
+        "memory_long_term_as_of_enabled": False,
         "memory_capture_enabled": True,
         "memory_capture_notes_path": "capture.jsonl",
         "memory_capture_min_query_length": 32,
@@ -112,6 +118,12 @@ def test_build_memory_provider_kwargs_normalizes_values() -> None:
         memory_notes_expiry_enabled=True,
         memory_notes_ttl_days=0,
         memory_notes_max_age_days=0,
+        memory_long_term_enabled=True,
+        memory_long_term_path=" ",
+        memory_long_term_top_n=0,
+        memory_long_term_token_budget=0,
+        memory_long_term_write_enabled=True,
+        memory_long_term_as_of_enabled=False,
         mcp_base_url="http://localhost:8765",
         rest_base_url="http://localhost:8765",
         timeout_seconds=3,
@@ -131,6 +143,12 @@ def test_build_memory_provider_kwargs_normalizes_values() -> None:
     assert payload["memory_notes_mode"] == "prefer_local"
     assert payload["memory_notes_ttl_days"] == 1
     assert payload["memory_notes_max_age_days"] == 1
+    assert payload["memory_long_term_enabled"] is True
+    assert payload["memory_long_term_path"] == "context-map/long_term_memory.db"
+    assert payload["memory_long_term_top_n"] == 1
+    assert payload["memory_long_term_token_budget"] == 1
+    assert payload["memory_long_term_write_enabled"] is True
+    assert payload["memory_long_term_as_of_enabled"] is False
     assert payload["limit"] == 1
 
 
@@ -147,6 +165,9 @@ def test_build_memory_provider_kwargs_from_resolved_normalizes_payload() -> None
     resolved["memory_notes_mode"] = " PREFER_LOCAL "
     resolved["memory_notes_ttl_days"] = 0
     resolved["memory_notes_max_age_days"] = 0
+    resolved["memory_long_term_path"] = " "
+    resolved["memory_long_term_top_n"] = 0
+    resolved["memory_long_term_token_budget"] = 0
 
     payload = build_memory_provider_kwargs_from_resolved(
         resolved=resolved,
@@ -171,6 +192,12 @@ def test_build_memory_provider_kwargs_from_resolved_normalizes_payload() -> None
     assert payload["memory_notes_mode"] == "prefer_local"
     assert payload["memory_notes_ttl_days"] == 1
     assert payload["memory_notes_max_age_days"] == 1
+    assert payload["memory_long_term_enabled"] is True
+    assert payload["memory_long_term_path"] == "context-map/long_term_memory.db"
+    assert payload["memory_long_term_top_n"] == 1
+    assert payload["memory_long_term_token_budget"] == 1
+    assert payload["memory_long_term_write_enabled"] is True
+    assert payload["memory_long_term_as_of_enabled"] is False
     assert payload["limit"] == 1
 
 
@@ -186,6 +213,8 @@ def test_build_run_plan_kwargs_from_resolved_includes_explicit_and_grouped_field
     assert payload["memory_config"] == {"strategy": "hybrid"}
     assert payload["memory_disclosure_mode"] == "compact"
     assert payload["memory_gate_mode"] == "auto"
+    assert payload["memory_long_term_enabled"] is True
+    assert payload["memory_long_term_top_n"] == 7
     assert payload["memory_capture_keywords"] == ["alpha", "beta"]
     assert payload["skills_config"] == {"dir": "skills", "top_n": 4}
     assert payload["index_config"] == {"cache_path": "context-map/index.json"}

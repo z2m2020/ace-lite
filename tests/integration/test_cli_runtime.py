@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import subprocess
@@ -9,6 +9,7 @@ from click.testing import CliRunner
 
 import ace_lite.cli as cli_module
 from ace_lite.cli_app.commands import runtime as runtime_module
+from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.runtime_stats import RuntimeInvocationStats
 from ace_lite.runtime_stats_store import DurableStatsStore
@@ -76,6 +77,50 @@ def _seed_runtime_stats_db(db_path: Path) -> None:
             ),
         )
     )
+
+
+def _seed_dev_feedback_store(
+    root: Path,
+    *,
+    repo: str,
+    user_id: str = "bench-user",
+    profile_key: str = "bugfix",
+    reason_code: str = "memory_fallback",
+) -> Path:
+    store = DevFeedbackStore(db_path=root / ".ace-lite" / "dev_feedback.db")
+    store.record_issue(
+        {
+            "issue_id": f"devi_{reason_code}",
+            "title": "Memory fallback while planning",
+            "reason_code": reason_code,
+            "status": "open",
+            "repo": repo,
+            "user_id": user_id,
+            "profile_key": profile_key,
+            "query": "why did memory fallback",
+            "selected_path": "src/auth.py",
+            "related_invocation_id": "inv-dev-1",
+            "notes": "first report",
+            "created_at": "2026-03-19T00:00:00+00:00",
+            "updated_at": "2026-03-19T00:00:00+00:00",
+        }
+    )
+    store.record_fix(
+        {
+            "fix_id": f"devf_{reason_code}",
+            "issue_id": f"devi_{reason_code}",
+            "reason_code": reason_code,
+            "repo": repo,
+            "user_id": user_id,
+            "profile_key": profile_key,
+            "query": "why did memory fallback",
+            "selected_path": "src/auth.py",
+            "related_invocation_id": "inv-dev-1",
+            "resolution_note": "added fallback diagnostics",
+            "created_at": "2026-03-19T00:05:00+00:00",
+        }
+    )
+    return store.db_path
 
 
 def test_cli_runtime_watch_config_finishes(tmp_path: Path) -> None:
@@ -300,12 +345,16 @@ def test_cli_runtime_doctor_groups_settings_stats_cache_and_integration(
     assert "settings" in payload
     assert "stats" in payload
     assert "cache" in payload
+    assert "git" in payload
+    assert "version_sync" in payload
     assert "integration" in payload
     assert "settings" in payload["settings"]
     assert "fingerprint" in payload["settings"]
     assert "latest_match" in payload["stats"]
     assert "summary" in payload["stats"]
     assert payload["cache"]["ok"] is True
+    assert payload["git"]["reason"] == "not_git_repo"
+    assert payload["version_sync"]["ok"] is True
     assert payload["cache"]["entry_count"] == 1
     assert payload["integration"]["event"] == "mcp_doctor"
 
@@ -1269,6 +1318,42 @@ def test_cli_runtime_stats_user_id_filter_applies_to_preference_capture_summary(
     assert payload["preference_capture_summary"]["user_id"] == "bench-user"
 
 
+def test_cli_runtime_stats_exposes_dev_feedback_and_top_pain_summary(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / ".ace-lite" / "runtime_state.db"
+    _seed_runtime_stats_db(db_path)
+    _seed_dev_feedback_store(tmp_path, repo="repo-alpha")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "stats",
+            "--repo",
+            "repo-alpha",
+            "--profile",
+            "bugfix",
+            "--user-id",
+            "bench-user",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["dev_feedback_summary"]["issue_count"] == 1
+    assert payload["dev_feedback_summary"]["fix_count"] == 1
+    assert payload["top_pain_summary"]["count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["reason_code"] == "memory_fallback"
+    assert payload["top_pain_summary"]["items"][0]["runtime_event_count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["manual_issue_count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["open_issue_count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["fix_count"] == 1
+
+
 def test_cli_runtime_status_reports_service_health_and_cache_paths(tmp_path: Path) -> None:
     (tmp_path / ".ace-lite.yml").write_text(
         (
@@ -1469,6 +1554,48 @@ def test_cli_runtime_status_applies_user_id_filter_to_preference_capture_summary
     )
 
 
+def test_cli_runtime_status_exposes_dev_feedback_and_top_pain_summary(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        "plan:\n  runtime_profile: bugfix\n",
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "runtime-stats.db"
+    _seed_runtime_stats_db(db_path)
+    _seed_dev_feedback_store(tmp_path, repo="repo-alpha")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "status",
+            "--root",
+            str(tmp_path),
+            "--db-path",
+            str(db_path),
+            "--runtime-profile",
+            "bugfix",
+            "--user-id",
+            "bench-user",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["latest_runtime"]["dev_feedback_summary"]["issue_count"] == 1
+    assert payload["latest_runtime"]["dev_feedback_summary"]["fix_count"] == 1
+    assert payload["latest_runtime"]["top_pain_summary"]["count"] == 1
+    assert payload["latest_runtime"]["top_pain_summary"]["items"][0]["reason_code"] == (
+        "memory_fallback"
+    )
+    assert payload["latest_runtime"]["top_pain_summary"]["items"][0]["runtime_event_count"] == 1
+    assert payload["latest_runtime"]["top_pain_summary"]["items"][0]["manual_issue_count"] == 1
+
+
 def test_cli_runtime_help_lists_runtime_profile_flags() -> None:
     runner = CliRunner()
 
@@ -1483,6 +1610,51 @@ def test_cli_runtime_help_lists_runtime_profile_flags() -> None:
     assert status_help.exit_code == 0
     assert "--runtime-profile" in status_help.output
     assert "--user-id" in status_help.output
+
+
+def test_cli_runtime_doctor_exposes_dev_feedback_and_top_pain_summary(
+    tmp_path: Path,
+) -> None:
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".ace-lite.yml").write_text(
+        "plan:\n  runtime_profile: bugfix\n",
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "runtime-stats.db"
+    _seed_runtime_stats_db(db_path)
+    _seed_dev_feedback_store(tmp_path, repo="repo-alpha")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "doctor",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(skills_dir),
+            "--stats-db-path",
+            str(db_path),
+            "--runtime-profile",
+            "bugfix",
+            "--user-id",
+            "bench-user",
+            "--no-probe-endpoints",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["stats"]["dev_feedback_summary"]["issue_count"] == 1
+    assert payload["stats"]["dev_feedback_summary"]["fix_count"] == 1
+    assert payload["stats"]["top_pain_summary"]["count"] == 1
+    assert payload["stats"]["top_pain_summary"]["items"][0]["reason_code"] == "memory_fallback"
+    assert payload["stats"]["top_pain_summary"]["items"][0]["runtime_event_count"] == 0
+    assert payload["stats"]["top_pain_summary"]["items"][0]["manual_issue_count"] == 1
 
 
 def test_cli_runtime_status_reports_degraded_services_for_bad_lsp_config(
@@ -1518,3 +1690,4 @@ def test_cli_runtime_status_reports_degraded_services_for_bad_lsp_config(
         item["name"] == "lsp" and item["reason"] == "enabled_without_commands"
         for item in payload["degraded_services"]
     )
+

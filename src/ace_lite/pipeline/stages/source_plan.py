@@ -75,24 +75,117 @@ def _extract_profile_constraints(profile_payload: dict[str, Any]) -> list[str]:
     return constraints
 
 
-def _build_constraints(*, memory_hits: list[dict[str, Any]], profile: dict[str, Any]) -> list[str]:
-    raw: list[str] = []
-    raw.extend(_extract_profile_constraints(profile))
-    raw.extend(_extract_constraints(memory_hits))
+def _extract_ltm_maps(
+    memory_stage: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    ltm_payload = (
+        memory_stage.get("ltm", {}) if isinstance(memory_stage.get("ltm"), dict) else {}
+    )
+    selected_map: dict[str, dict[str, Any]] = {}
+    attribution_map: dict[str, dict[str, Any]] = {}
+
+    for item in _coerce_list(ltm_payload.get("selected")):
+        if not isinstance(item, dict):
+            continue
+        handle = str(item.get("handle") or "").strip()
+        if handle:
+            selected_map[handle] = item
+    for item in _coerce_list(ltm_payload.get("attribution")):
+        if not isinstance(item, dict):
+            continue
+        handle = str(item.get("handle") or "").strip()
+        if handle:
+            attribution_map[handle] = item
+    return selected_map, attribution_map
+
+
+def _build_constraints(
+    *,
+    memory_hits: list[dict[str, Any]],
+    profile: dict[str, Any],
+    ltm_selected_map: dict[str, dict[str, Any]],
+    ltm_attribution_map: dict[str, dict[str, Any]],
+) -> tuple[list[str], list[dict[str, Any]], dict[str, Any]]:
+    raw: list[dict[str, Any]] = []
+    for text in _extract_profile_constraints(profile):
+        raw.append({"text": text, "source": "profile"})
+    for hit in memory_hits:
+        text = hit.get("text") or hit.get("preview")
+        if not isinstance(text, str):
+            continue
+        handle = str(hit.get("handle") or "").strip()
+        entry: dict[str, Any] = {
+            "text": text,
+            "source": "memory",
+            "handle": handle,
+        }
+        if handle and handle in ltm_selected_map:
+            entry["source"] = "ltm"
+            entry["ltm_selected"] = ltm_selected_map.get(handle, {})
+            entry["ltm_attribution"] = ltm_attribution_map.get(handle, {})
+        raw.append(entry)
 
     sanitized: list[str] = []
+    selected_ltm_constraints: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in raw:
-        candidate = _sanitize_constraint(item)
+        candidate = _sanitize_constraint(str(item.get("text") or ""))
         if not candidate:
             continue
         if candidate in seen:
             continue
         seen.add(candidate)
         sanitized.append(candidate)
+
+        if item.get("source") == "ltm":
+            selected_payload = (
+                item.get("ltm_selected")
+                if isinstance(item.get("ltm_selected"), dict)
+                else {}
+            )
+            attribution_payload = (
+                item.get("ltm_attribution")
+                if isinstance(item.get("ltm_attribution"), dict)
+                else {}
+            )
+            graph_neighborhood = (
+                attribution_payload.get("graph_neighborhood")
+                if isinstance(attribution_payload.get("graph_neighborhood"), dict)
+                else {}
+            )
+            selected_ltm_constraints.append(
+                {
+                    "handle": str(item.get("handle") or "").strip(),
+                    "constraint": candidate,
+                    "memory_kind": str(selected_payload.get("memory_kind") or "").strip(),
+                    "fact_type": str(selected_payload.get("fact_type") or "").strip(),
+                    "as_of": str(selected_payload.get("as_of") or "").strip(),
+                    "derived_from_observation_id": str(
+                        selected_payload.get("derived_from_observation_id") or ""
+                    ).strip(),
+                    "graph_neighbor_count": int(
+                        graph_neighborhood.get("triple_count", 0) or 0
+                    ),
+                }
+            )
         if len(sanitized) >= 5:
             break
-    return sanitized
+
+    summary = {
+        "selected_count": len(ltm_selected_map),
+        "constraint_count": len(selected_ltm_constraints),
+        "graph_neighbor_count": sum(
+            1
+            for item in selected_ltm_constraints
+            if int(item.get("graph_neighbor_count", 0) or 0) > 0
+        ),
+        "handles": [
+            str(item.get("handle") or "").strip()
+            for item in selected_ltm_constraints
+            if str(item.get("handle") or "").strip()
+        ],
+    }
+    return sanitized, selected_ltm_constraints, summary
 
 
 def _resolve_focused_files(
@@ -146,7 +239,13 @@ def run_source_plan(
 
     memory_hits = _extract_memory_hits(memory_stage)
     profile_payload = memory_stage.get("profile", {}) if isinstance(memory_stage.get("profile"), dict) else {}
-    constraints = _build_constraints(memory_hits=memory_hits, profile=profile_payload)
+    ltm_selected_map, ltm_attribution_map = _extract_ltm_maps(memory_stage)
+    constraints, ltm_constraints, ltm_constraint_summary = _build_constraints(
+        memory_hits=memory_hits,
+        profile=profile_payload,
+        ltm_selected_map=ltm_selected_map,
+        ltm_attribution_map=ltm_attribution_map,
+    )
 
     diagnostics = _coerce_list(augment_stage.get("diagnostics", []))
     xref = augment_stage.get("xref", {}) if isinstance(augment_stage.get("xref"), dict) else {}
@@ -248,6 +347,8 @@ def run_source_plan(
         "query": ctx.query,
         "stages": list(pipeline_order),
         "constraints": constraints,
+        "ltm_constraints": ltm_constraints,
+        "ltm_constraint_summary": ltm_constraint_summary,
         "diagnostics": diagnostics,
         "xref": xref,
         "tests": tests,

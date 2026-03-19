@@ -48,6 +48,10 @@ class CaseEvaluationMetrics:
     notes_hit_ratio: float
     profile_selected_count: int
     capture_triggered: bool
+    ltm_selected_count: int
+    ltm_attribution_count: int
+    ltm_graph_neighbor_count: int
+    ltm_plan_constraint_count: int
     feedback_enabled: bool
     feedback_reason: str
     feedback_event_count: int
@@ -94,6 +98,10 @@ class CaseEvaluationMetrics:
     retrieval_context_chunk_count: int
     retrieval_context_coverage_ratio: float
     retrieval_context_char_count_mean: float
+    contextual_sidecar_parent_symbol_chunk_count: int
+    contextual_sidecar_parent_symbol_coverage_ratio: float
+    contextual_sidecar_reference_hint_chunk_count: int
+    contextual_sidecar_reference_hint_coverage_ratio: float
     retrieval_context_pool_chunk_count: int
     retrieval_context_pool_coverage_ratio: float
     chunk_contract_fallback_count: int
@@ -258,6 +266,7 @@ def build_case_evaluation_metrics(
     profile_payload = _as_dict(memory_payload.get("profile"))
     capture_payload = _as_dict(memory_payload.get("capture"))
     notes_payload = _as_dict(memory_payload.get("notes"))
+    ltm_payload = _as_dict(memory_payload.get("ltm"))
     validation_tests = _as_list(source_plan_payload.get("validation_tests"))
     memory_count = max(0, int(memory_payload.get("count", 0) or 0))
     notes_selected_count = max(0, int(notes_payload.get("selected_count", 0) or 0))
@@ -271,6 +280,31 @@ def build_case_evaluation_metrics(
         int(profile_payload.get("selected_count", 0) or 0),
     )
     capture_triggered = bool(capture_payload.get("triggered", False))
+    ltm_selected = _as_list(ltm_payload.get("selected"))
+    ltm_attribution = _as_list(ltm_payload.get("attribution"))
+    ltm_selected_count = max(
+        0,
+        int(ltm_payload.get("selected_count", len(ltm_selected)) or 0),
+    )
+    ltm_attribution_count = max(
+        0,
+        int(ltm_payload.get("attribution_count", len(ltm_attribution)) or 0),
+    )
+    ltm_graph_neighbor_count = sum(
+        1
+        for item in ltm_attribution
+        if isinstance(item, dict)
+        and isinstance(item.get("graph_neighborhood"), dict)
+        and int(
+            _as_dict(item.get("graph_neighborhood")).get("triple_count", 0) or 0
+        )
+        > 0
+    )
+    ltm_constraint_summary = _as_dict(source_plan_payload.get("ltm_constraint_summary"))
+    ltm_plan_constraint_count = max(
+        0,
+        int(ltm_constraint_summary.get("constraint_count", 0) or 0),
+    )
     feedback_enabled = bool(candidate_ranking_payload.get("feedback_enabled", False))
     feedback_reason = str(candidate_ranking_payload.get("feedback_reason", "") or "").strip()
     feedback_event_count = max(
@@ -517,6 +551,46 @@ def build_case_evaluation_metrics(
     )
     retrieval_context_char_count_mean = float(
         chunk_metrics.get("retrieval_context_char_count_mean", 0.0) or 0.0
+    )
+    contextual_sidecar_parent_symbol_chunk_count = max(
+        0,
+        int(
+            chunk_metrics.get(
+                "contextual_sidecar_parent_symbol_chunk_count",
+                index_tags.get("contextual_sidecar_parent_symbol_chunk_count", 0),
+            )
+            or 0
+        ),
+    )
+    contextual_sidecar_parent_symbol_coverage_ratio = float(
+        chunk_metrics.get(
+            "contextual_sidecar_parent_symbol_coverage_ratio",
+            index_tags.get(
+                "contextual_sidecar_parent_symbol_coverage_ratio",
+                0.0,
+            ),
+        )
+        or 0.0
+    )
+    contextual_sidecar_reference_hint_chunk_count = max(
+        0,
+        int(
+            chunk_metrics.get(
+                "contextual_sidecar_reference_hint_chunk_count",
+                index_tags.get("contextual_sidecar_reference_hint_chunk_count", 0),
+            )
+            or 0
+        ),
+    )
+    contextual_sidecar_reference_hint_coverage_ratio = float(
+        chunk_metrics.get(
+            "contextual_sidecar_reference_hint_coverage_ratio",
+            index_tags.get(
+                "contextual_sidecar_reference_hint_coverage_ratio",
+                0.0,
+            ),
+        )
+        or 0.0
     )
     retrieval_context_pool_chunk_count = max(
         0,
@@ -985,6 +1059,10 @@ def build_case_evaluation_metrics(
         notes_hit_ratio=notes_hit_ratio,
         profile_selected_count=profile_selected_count,
         capture_triggered=capture_triggered,
+        ltm_selected_count=ltm_selected_count,
+        ltm_attribution_count=ltm_attribution_count,
+        ltm_graph_neighbor_count=ltm_graph_neighbor_count,
+        ltm_plan_constraint_count=ltm_plan_constraint_count,
         feedback_enabled=feedback_enabled,
         feedback_reason=feedback_reason,
         feedback_event_count=feedback_event_count,
@@ -1031,6 +1109,18 @@ def build_case_evaluation_metrics(
         retrieval_context_chunk_count=retrieval_context_chunk_count,
         retrieval_context_coverage_ratio=retrieval_context_coverage_ratio,
         retrieval_context_char_count_mean=retrieval_context_char_count_mean,
+        contextual_sidecar_parent_symbol_chunk_count=(
+            contextual_sidecar_parent_symbol_chunk_count
+        ),
+        contextual_sidecar_parent_symbol_coverage_ratio=(
+            contextual_sidecar_parent_symbol_coverage_ratio
+        ),
+        contextual_sidecar_reference_hint_chunk_count=(
+            contextual_sidecar_reference_hint_chunk_count
+        ),
+        contextual_sidecar_reference_hint_coverage_ratio=(
+            contextual_sidecar_reference_hint_coverage_ratio
+        ),
         retrieval_context_pool_chunk_count=retrieval_context_pool_chunk_count,
         retrieval_context_pool_coverage_ratio=retrieval_context_pool_coverage_ratio,
         chunk_contract_fallback_count=chunk_contract_fallback_count,

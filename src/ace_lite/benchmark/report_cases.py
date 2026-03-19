@@ -51,6 +51,18 @@ def _append_case_section(
         f"- capture_triggered: {float(case.get('capture_triggered', 0.0)):.4f}"
     )
     lines.append(
+        f"- ltm_selected_count: {float(case.get('ltm_selected_count', 0.0)):.4f}"
+    )
+    lines.append(
+        f"- ltm_attribution_count: {float(case.get('ltm_attribution_count', 0.0)):.4f}"
+    )
+    lines.append(
+        f"- ltm_graph_neighbor_count: {float(case.get('ltm_graph_neighbor_count', 0.0)):.4f}"
+    )
+    lines.append(
+        f"- ltm_plan_constraint_count: {float(case.get('ltm_plan_constraint_count', 0.0)):.4f}"
+    )
+    lines.append(
         f"- feedback_enabled: {float(case.get('feedback_enabled', 0.0)):.4f}"
     )
     lines.append(
@@ -205,6 +217,7 @@ def _append_case_section(
     _append_graph_closure_details(lines, case=case)
     _append_source_plan_packing_details(lines, case=case)
     _append_preference_capture_details(lines, case=case)
+    _append_ltm_explainability_details(lines, case=case)
     _append_feedback_boost_details(lines, case=case)
     _append_chunk_stage_miss_details(lines, case=case)
     lines.append(f"- latency_ms: {float(case.get('latency_ms', 0.0)):.2f}")
@@ -470,6 +483,31 @@ def _append_feedback_boost_details(lines: list[str], *, case: dict[str, Any]) ->
                 ),
                 "boosted_unique_paths={value}".format(
                     value=int(feedback_boost.get("boosted_unique_paths", 0) or 0)
+                ),
+            ]
+        )
+    )
+
+
+def _append_ltm_explainability_details(lines: list[str], *, case: dict[str, Any]) -> None:
+    ltm_explainability = case.get("ltm_explainability")
+    if not isinstance(ltm_explainability, dict) or not ltm_explainability:
+        return
+    lines.append(
+        "- ltm_explainability: "
+        + ", ".join(
+            [
+                "selected_count={value}".format(
+                    value=int(ltm_explainability.get("selected_count", 0) or 0)
+                ),
+                "attribution_count={value}".format(
+                    value=int(ltm_explainability.get("attribution_count", 0) or 0)
+                ),
+                "graph_neighbor_count={value}".format(
+                    value=int(ltm_explainability.get("graph_neighbor_count", 0) or 0)
+                ),
+                "plan_constraint_count={value}".format(
+                    value=int(ltm_explainability.get("plan_constraint_count", 0) or 0)
                 ),
             ]
         )

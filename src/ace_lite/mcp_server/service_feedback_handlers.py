@@ -5,6 +5,7 @@ from typing import Any, TypedDict
 
 from ace_lite.feedback_store import FeedbackBoostConfig, SelectionFeedbackStore
 from ace_lite.index_stage.terms import extract_terms
+from ace_lite.memory_long_term import build_long_term_capture_service_from_runtime
 
 
 class FeedbackRecordResponse(TypedDict):
@@ -67,9 +68,17 @@ def handle_feedback_record_request(
         root_path=root_path,
         profile_path=profile_path,
     )
+    long_term_capture_service = None
+    try:
+        long_term_capture_service = build_long_term_capture_service_from_runtime(
+            root=root_path,
+        )
+    except Exception:
+        long_term_capture_service = None
     store = SelectionFeedbackStore(
         profile_path=profile,
         max_entries=max(0, int(max_entries)),
+        long_term_capture_service=long_term_capture_service,
     )
     recorded = store.record(
         query=normalized_query,

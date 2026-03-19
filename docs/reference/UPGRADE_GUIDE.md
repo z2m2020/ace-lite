@@ -9,6 +9,7 @@ remain stale). ACE-Lite now detects this and reports it via `ace_health` warning
 
 To resync:
 
+- Cross-platform: `python scripts/update.py`
 - Windows (PowerShell): `./scripts/update.ps1`
 - Make: `make update`
 - Manual: `python -m pip install -e ".[dev]"`
@@ -16,6 +17,10 @@ To resync:
 `./scripts/update.ps1` now fails if the installed distribution metadata still
 does not match `pyproject.toml`, so release/update maintenance no longer only
 prints the drift and keeps going.
+
+`python scripts/update.py` provides the same editable-install sync flow without
+depending on PowerShell. If your repo is already up to date but local `git`
+launch fails, rerun it with `--skip-git-pull`.
 
 ## 0.3.16
 

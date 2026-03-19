@@ -16,6 +16,7 @@ from ace_lite.benchmark.summary_quality import (
     build_comparison_lane_summary as _build_comparison_lane_summary_impl,
     build_decision_observability_summary as _build_decision_observability_summary_impl,
     build_evidence_insufficiency_summary as _build_evidence_insufficiency_summary_impl,
+    build_feedback_loop_summary as _build_feedback_loop_summary_impl,
     build_feedback_observability_summary as _build_feedback_observability_summary_impl,
     build_preference_observability_summary as _build_preference_observability_summary_impl,
     build_retrieval_context_observability_summary as _build_retrieval_context_observability_summary_impl,
@@ -75,6 +76,22 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     ]
     retrieval_context_char_counts = [
         float(item.get("retrieval_context_char_count_mean", 0.0))
+        for item in case_results
+    ]
+    contextual_sidecar_parent_symbol_chunk_counts = [
+        float(item.get("contextual_sidecar_parent_symbol_chunk_count", 0.0))
+        for item in case_results
+    ]
+    contextual_sidecar_parent_symbol_coverage = [
+        float(item.get("contextual_sidecar_parent_symbol_coverage_ratio", 0.0))
+        for item in case_results
+    ]
+    contextual_sidecar_reference_hint_chunk_counts = [
+        float(item.get("contextual_sidecar_reference_hint_chunk_count", 0.0))
+        for item in case_results
+    ]
+    contextual_sidecar_reference_hint_coverage = [
+        float(item.get("contextual_sidecar_reference_hint_coverage_ratio", 0.0))
         for item in case_results
     ]
     chunk_contract_fallback_counts = [
@@ -288,6 +305,67 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     notes_hit_ratios = [float(item.get("notes_hit_ratio", 0.0)) for item in case_results]
     profile_selected_counts = [float(item.get("profile_selected_count", 0.0)) for item in case_results]
     capture_triggered = [float(item.get("capture_triggered", 0.0)) for item in case_results]
+    memory_helpful_cases = [
+        item
+        for item in case_results
+        if str(item.get("comparison_lane") or "").strip() == "memory-helpful"
+    ]
+    memory_helpful_task_success_hits = [
+        float(item.get("task_success_hit", item.get("utility_hit", 0.0)) or 0.0)
+        for item in memory_helpful_cases
+    ]
+    ltm_hit_cases = [
+        item
+        for item in memory_helpful_cases
+        if float(item.get("ltm_plan_constraint_count", 0.0) or 0.0) > 0.0
+    ]
+    memory_harmful_negative_control_cases = [
+        item
+        for item in case_results
+        if str(item.get("comparison_lane") or "").strip()
+        == "memory-harmful-negative-control"
+    ]
+    ltm_false_help_cases = [
+        item
+        for item in memory_harmful_negative_control_cases
+        if float(item.get("ltm_plan_constraint_count", 0.0) or 0.0) > 0.0
+    ]
+    time_sensitive_cases = [
+        item
+        for item in case_results
+        if str(item.get("comparison_lane") or "").strip() == "time-sensitive"
+    ]
+    ltm_stale_hit_cases = [
+        item
+        for item in time_sensitive_cases
+        if float(item.get("ltm_plan_constraint_count", 0.0) or 0.0) > 0.0
+        and float(item.get("task_success_hit", item.get("utility_hit", 0.0)) or 0.0)
+        <= 0.0
+    ]
+    issue_report_feedback_cases = [
+        item
+        for item in case_results
+        if str(item.get("comparison_lane") or "").strip() == "issue_report_feedback"
+    ]
+    issue_report_linked_cases = [
+        item
+        for item in issue_report_feedback_cases
+        if str(item.get("issue_report_issue_id") or "").strip()
+    ]
+    issue_report_linked_plan_cases = [
+        item
+        for item in issue_report_linked_cases
+        if float(item.get("issue_report_has_plan_ref", 0.0) or 0.0) > 0.0
+    ]
+    dev_feedback_resolution_cases = [
+        item
+        for item in case_results
+        if str(item.get("comparison_lane") or "").strip() == "dev_feedback_resolution"
+    ]
+    dev_feedback_resolution_hits = [
+        float(item.get("task_success_hit", item.get("utility_hit", 0.0)) or 0.0)
+        for item in dev_feedback_resolution_cases
+    ]
     embedding_enabled = [float(item.get("embedding_enabled", 0.0)) for item in case_results]
     embedding_similarity_means = [
         float(item.get("embedding_similarity_mean", 0.0)) for item in case_results
@@ -358,6 +436,11 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "task_success_rate": mean(task_successes),
         "utility_rate": mean(utilities),
         "noise_rate": mean(noises),
+        "memory_helpful_task_success_rate": (
+            mean(memory_helpful_task_success_hits)
+            if memory_helpful_task_success_hits
+            else 0.0
+        ),
         "docs_enabled_ratio": mean(docs_enabled),
         "docs_hit_ratio": mean(docs_hits),
         "hint_inject_ratio": mean(hint_injects),
@@ -379,6 +462,18 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "retrieval_context_chunk_count_mean": mean(retrieval_context_chunk_counts),
         "retrieval_context_coverage_ratio": mean(retrieval_context_coverage),
         "retrieval_context_char_count_mean": mean(retrieval_context_char_counts),
+        "contextual_sidecar_parent_symbol_chunk_count_mean": mean(
+            contextual_sidecar_parent_symbol_chunk_counts
+        ),
+        "contextual_sidecar_parent_symbol_coverage_ratio": mean(
+            contextual_sidecar_parent_symbol_coverage
+        ),
+        "contextual_sidecar_reference_hint_chunk_count_mean": mean(
+            contextual_sidecar_reference_hint_chunk_counts
+        ),
+        "contextual_sidecar_reference_hint_coverage_ratio": mean(
+            contextual_sidecar_reference_hint_coverage
+        ),
         "chunk_contract_fallback_count_mean": mean(
             chunk_contract_fallback_counts
         ),
@@ -477,6 +572,39 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "notes_hit_ratio": mean(notes_hit_ratios),
         "profile_selected_mean": mean(profile_selected_counts),
         "capture_trigger_ratio": mean(capture_triggered),
+        "ltm_hit_ratio": (
+            float(len(ltm_hit_cases)) / float(len(memory_helpful_cases))
+            if memory_helpful_cases
+            else 0.0
+        ),
+        "ltm_false_help_rate": (
+            float(len(ltm_false_help_cases))
+            / float(len(memory_harmful_negative_control_cases))
+            if memory_harmful_negative_control_cases
+            else 0.0
+        ),
+        "ltm_stale_hit_rate": (
+            float(len(ltm_stale_hit_cases)) / float(len(time_sensitive_cases))
+            if time_sensitive_cases
+            else 0.0
+        ),
+        "issue_report_linked_plan_rate": (
+            float(len(issue_report_linked_plan_cases))
+            / float(len(issue_report_linked_cases))
+            if issue_report_linked_cases
+            else 0.0
+        ),
+        "issue_to_benchmark_case_conversion_rate": (
+            float(len(issue_report_linked_cases))
+            / float(len(issue_report_feedback_cases))
+            if issue_report_feedback_cases
+            else 0.0
+        ),
+        "dev_feedback_resolution_rate": (
+            mean(dev_feedback_resolution_hits)
+            if dev_feedback_resolution_hits
+            else 0.0
+        ),
         "embedding_enabled_ratio": mean(embedding_enabled),
         "embedding_similarity_mean": mean(embedding_similarity_means),
         "embedding_similarity_max": mean(embedding_similarity_maxes),
@@ -550,6 +678,12 @@ def build_feedback_observability_summary(
     return _build_feedback_observability_summary_impl(case_results)
 
 
+def build_feedback_loop_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return _build_feedback_loop_summary_impl(case_results)
+
+
 def build_adaptive_router_arm_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -588,6 +722,7 @@ __all__ = [
     "build_chunk_stage_miss_summary",
     "build_decision_observability_summary",
     "build_evidence_insufficiency_summary",
+    "build_feedback_loop_summary",
     "build_feedback_observability_summary",
     "build_preference_observability_summary",
     "build_retrieval_context_observability_summary",
