@@ -23,6 +23,8 @@ MCP_TOOL_DESCRIPTIONS: dict[str, str] = {
     "ace_issue_report_export_case": "Export an issue report into a benchmark case YAML entry.",
     "ace_issue_report_apply_fix": "Apply a stored developer fix to an issue report resolution.",
     "ace_dev_issue_record": "Record a developer-side issue into the local dev feedback store.",
+    "ace_dev_issue_from_runtime": "Promote an auto-captured runtime event into a developer-side issue.",
+    "ace_dev_issue_apply_fix": "Apply a stored developer fix to a developer-side issue resolution.",
     "ace_dev_fix_record": "Record a developer-side fix into the local dev feedback store.",
     "ace_dev_feedback_summary": "Summarize stored developer issues and fixes from the local dev feedback store.",
 }
@@ -434,6 +436,48 @@ def _register_feedback_tools(*, server: FastMCP, service: AceLiteMcpService) -> 
             related_invocation_id=related_invocation_id,
             created_at=created_at,
             fix_id=fix_id,
+        )
+
+    @_tool(server, "ace_dev_issue_from_runtime")
+    def ace_dev_issue_from_runtime(
+        invocation_id: str,
+        stats_db_path: str | None = None,
+        store_path: str | None = None,
+        reason_code: str | None = None,
+        title: str | None = None,
+        notes: str | None = None,
+        status: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
+        issue_id: str | None = None,
+    ) -> dict[str, Any]:
+        return service.dev_issue_from_runtime(
+            invocation_id=invocation_id,
+            stats_db_path=stats_db_path,
+            store_path=store_path,
+            reason_code=reason_code,
+            title=title,
+            notes=notes,
+            status=status,
+            user_id=user_id,
+            profile_key=profile_key,
+            issue_id=issue_id,
+        )
+
+    @_tool(server, "ace_dev_issue_apply_fix")
+    def ace_dev_issue_apply_fix(
+        issue_id: str,
+        fix_id: str,
+        store_path: str | None = None,
+        status: str | None = None,
+        resolved_at: str | None = None,
+    ) -> dict[str, Any]:
+        return service.dev_issue_apply_fix(
+            issue_id=issue_id,
+            fix_id=fix_id,
+            store_path=store_path,
+            status=status,
+            resolved_at=resolved_at,
         )
 
     @_tool(server, "ace_dev_feedback_summary")

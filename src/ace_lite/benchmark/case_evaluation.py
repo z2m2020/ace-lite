@@ -160,6 +160,7 @@ def evaluate_case_result(
     ltm_attribution_count = metrics.ltm_attribution_count
     ltm_graph_neighbor_count = metrics.ltm_graph_neighbor_count
     ltm_plan_constraint_count = metrics.ltm_plan_constraint_count
+    ltm_attribution_preview = metrics.ltm_attribution_preview
     feedback_enabled = metrics.feedback_enabled
     feedback_reason = metrics.feedback_reason
     feedback_event_count = metrics.feedback_event_count
@@ -466,6 +467,7 @@ def evaluate_case_result(
         ltm_attribution_count=ltm_attribution_count,
         ltm_graph_neighbor_count=ltm_graph_neighbor_count,
         ltm_plan_constraint_count=ltm_plan_constraint_count,
+        ltm_attribution_preview=ltm_attribution_preview,
         feedback_enabled=feedback_enabled,
         feedback_reason=feedback_reason,
         feedback_event_count=feedback_event_count,

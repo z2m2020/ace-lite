@@ -512,6 +512,11 @@ def _append_ltm_explainability_details(lines: list[str], *, case: dict[str, Any]
             ]
         )
     )
+    attribution_preview = ltm_explainability.get("attribution_preview")
+    if isinstance(attribution_preview, list):
+        preview_values = [str(item).strip() for item in attribution_preview if str(item).strip()]
+        if preview_values:
+            lines.append("- ltm_attribution_preview: " + " || ".join(preview_values))
 
 
 def _append_chunk_stage_miss_details(lines: list[str], *, case: dict[str, Any]) -> None:

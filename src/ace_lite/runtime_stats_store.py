@@ -167,6 +167,16 @@ class DurableStatsStore:
         finally:
             conn.close()
 
+    def read_invocation(self, *, invocation_id: str) -> RuntimeInvocationStats | None:
+        normalized_invocation_id = str(invocation_id or "").strip()
+        if not normalized_invocation_id:
+            return None
+        conn = self._connect()
+        try:
+            return self._load_invocation(conn, normalized_invocation_id)
+        finally:
+            conn.close()
+
     def _load_invocation(self, conn: Any, invocation_id: str) -> RuntimeInvocationStats | None:
         row = conn.execute(
             f"SELECT * FROM {RUNTIME_STATS_INVOCATIONS_TABLE} WHERE invocation_id = ?",

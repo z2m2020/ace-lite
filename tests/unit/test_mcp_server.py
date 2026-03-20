@@ -511,6 +511,117 @@ def test_mcp_service_dev_feedback_record_fix_and_summary(tmp_path: Path) -> None
     assert health_after["request_stats"]["last_request_tool"] == "ace_dev_feedback_summary"
 
 
+def test_mcp_service_dev_issue_from_runtime_round_trip(tmp_path: Path) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  memory:\n"
+            "    long_term:\n"
+            "      enabled: true\n"
+            "      write_enabled: true\n"
+            "      path: context-map/long_term_memory.db\n"
+        ),
+        encoding="utf-8",
+    )
+    service = _make_service(tmp_path)
+    stats_db_path = tmp_path / "context-map" / "runtime-stats.db"
+    store_path = tmp_path / "context-map" / "dev-feedback.db"
+
+    from ace_lite.runtime_stats import RuntimeInvocationStats
+    from ace_lite.runtime_stats_store import DurableStatsStore
+
+    DurableStatsStore(db_path=stats_db_path).record_invocation(
+        RuntimeInvocationStats(
+            invocation_id="inv-runtime-1",
+            session_id="sess-1",
+            repo_key="demo-repo",
+            profile_key="bugfix",
+            status="degraded",
+            total_latency_ms=21.0,
+            started_at="2026-03-19T00:00:00+00:00",
+            finished_at="2026-03-19T00:00:01+00:00",
+            degraded_reason_codes=("memory_fallback",),
+        )
+    )
+
+    recorded_issue = service.dev_issue_from_runtime(
+        invocation_id="inv-runtime-1",
+        stats_db_path=str(stats_db_path),
+        store_path=str(store_path),
+        notes="confirmed from MCP",
+        user_id="svc-user",
+        issue_id="devi_runtime_1",
+    )
+
+    assert recorded_issue["ok"] is True
+    assert recorded_issue["issue"]["issue_id"] == "devi_runtime_1"
+    assert recorded_issue["issue"]["repo"] == "demo-repo"
+    assert recorded_issue["issue"]["reason_code"] == "memory_fallback"
+    assert recorded_issue["invocation"]["invocation_id"] == "inv-runtime-1"
+    assert recorded_issue["long_term_capture"]["ok"] is True
+    assert recorded_issue["long_term_capture"]["stage"] == "dev_issue"
+
+
+def test_mcp_service_dev_issue_apply_fix_updates_summary(tmp_path: Path) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  memory:\n"
+            "    long_term:\n"
+            "      enabled: true\n"
+            "      write_enabled: true\n"
+            "      path: context-map/long_term_memory.db\n"
+        ),
+        encoding="utf-8",
+    )
+    service = _make_service(tmp_path)
+    store_path = tmp_path / "context-map" / "dev-feedback.db"
+
+    service.dev_issue_record(
+        title="Memory fallback while planning",
+        reason_code="memory_fallback",
+        repo="demo-repo",
+        store_path=str(store_path),
+        user_id="svc-user",
+        profile_key="bugfix",
+        status="open",
+        created_at="2026-03-19T00:00:00+00:00",
+        updated_at="2026-03-19T00:00:00+00:00",
+        issue_id="devi_memory_fallback",
+    )
+    service.dev_fix_record(
+        reason_code="memory_fallback",
+        repo="demo-repo",
+        resolution_note="added cache warming",
+        store_path=str(store_path),
+        user_id="svc-user",
+        profile_key="bugfix",
+        issue_id="devi_memory_fallback",
+        created_at="2026-03-19T00:05:00+00:00",
+        fix_id="devf_memory_fallback",
+    )
+
+    resolved = service.dev_issue_apply_fix(
+        issue_id="devi_memory_fallback",
+        fix_id="devf_memory_fallback",
+        store_path=str(store_path),
+        status="fixed",
+    )
+    summary = service.dev_feedback_summary(
+        repo="demo-repo",
+        user_id="svc-user",
+        profile_key="bugfix",
+        store_path=str(store_path),
+    )
+
+    assert resolved["ok"] is True
+    assert resolved["issue"]["status"] == "fixed"
+    assert resolved["long_term_capture"]["ok"] is True
+    assert resolved["long_term_capture"]["stage"] == "dev_issue_resolution"
+    assert summary["summary"]["issue_count"] == 1
+    assert summary["summary"]["open_issue_count"] == 0
+
+
 def test_mcp_service_plan_smoke_returns_summary(tmp_path: Path) -> None:
     _write_sample_repo(tmp_path)
     service = _make_service(tmp_path)

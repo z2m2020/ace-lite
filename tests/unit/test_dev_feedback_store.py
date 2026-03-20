@@ -73,6 +73,53 @@ def test_dev_feedback_store_records_issue_fix_and_summarizes_by_reason(tmp_path:
     ]
 
 
+def test_dev_feedback_store_apply_fix_resolves_issue_and_updates_summary(
+    tmp_path: Path,
+) -> None:
+    store = DevFeedbackStore(db_path=tmp_path / "context-map" / "dev_feedback.db")
+    store.record_issue(
+        {
+            "issue_id": "devi_memory_fallback",
+            "title": "Memory fallback while planning",
+            "reason_code": "memory_fallback",
+            "status": "open",
+            "repo": "demo",
+            "user_id": "bench-user",
+            "profile_key": "bugfix",
+            "notes": "first report",
+            "created_at": "2026-03-19T00:00:00+00:00",
+            "updated_at": "2026-03-19T00:00:00+00:00",
+        }
+    )
+    store.record_fix(
+        {
+            "fix_id": "devf_memory_fallback",
+            "issue_id": "devi_memory_fallback",
+            "reason_code": "memory_fallback",
+            "repo": "demo",
+            "user_id": "bench-user",
+            "profile_key": "bugfix",
+            "resolution_note": "added fallback diagnostics",
+            "created_at": "2026-03-19T00:05:00+00:00",
+        }
+    )
+
+    resolved = store.apply_fix(
+        issue_id="devi_memory_fallback",
+        fix_id="devf_memory_fallback",
+        status="fixed",
+    )
+    summary = store.summarize(repo="demo", user_id="bench-user", profile_key="bugfix")
+
+    assert resolved.status == "fixed"
+    assert resolved.resolved_at == "2026-03-19T00:05:00+00:00"
+    assert "resolved_by_fix=devf_memory_fallback" in resolved.notes
+    assert summary["issue_count"] == 1
+    assert summary["open_issue_count"] == 0
+    assert summary["fix_count"] == 1
+    assert summary["by_reason_code"][0]["open_issue_count"] == 0
+
+
 def test_dev_feedback_store_summary_filters_scope(tmp_path: Path) -> None:
     store = DevFeedbackStore(db_path=tmp_path / "context-map" / "dev_feedback.db")
     store.record_issue(

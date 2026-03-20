@@ -285,6 +285,137 @@ def test_cli_feedback_record_mirrors_to_long_term_memory_when_enabled(
     assert long_term_path.exists() is True
 
 
+def test_cli_feedback_dev_issue_fix_resolution_mirror_to_long_term_memory_when_enabled(
+    tmp_path: Path,
+) -> None:
+    from ace_lite.memory_long_term import LongTermMemoryStore
+
+    runner = CliRunner()
+    store_path = tmp_path / "dev-feedback.db"
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  memory:\n"
+            "    long_term:\n"
+            "      enabled: true\n"
+            "      write_enabled: true\n"
+            "      path: context-map/long_term_memory.db\n"
+        ),
+        encoding="utf-8",
+    )
+
+    recorded_issue = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "report-dev-issue",
+            "--title",
+            "Memory fallback while planning",
+            "--reason-code",
+            "memory_fallback",
+            "--repo",
+            "demo",
+            "--status",
+            "open",
+            "--user-id",
+            "cli-user",
+            "--profile-key",
+            "bugfix",
+            "--query",
+            "why did memory fallback",
+            "--selected-path",
+            "src/planner.py",
+            "--related-invocation-id",
+            "inv-123",
+            "--created-at",
+            "2026-03-19T00:00:00+00:00",
+            "--updated-at",
+            "2026-03-19T00:00:00+00:00",
+            "--issue-id",
+            "devi_memory_fallback",
+            "--root",
+            str(tmp_path),
+            "--store-path",
+            str(store_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+    recorded_fix = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "report-dev-fix",
+            "--reason-code",
+            "memory_fallback",
+            "--repo",
+            "demo",
+            "--resolution-note",
+            "added fallback diagnostics",
+            "--user-id",
+            "cli-user",
+            "--profile-key",
+            "bugfix",
+            "--issue-id",
+            "devi_memory_fallback",
+            "--query",
+            "why did memory fallback",
+            "--selected-path",
+            "src/planner.py",
+            "--related-invocation-id",
+            "inv-123",
+            "--created-at",
+            "2026-03-19T00:05:00+00:00",
+            "--fix-id",
+            "devf_memory_fallback",
+            "--root",
+            str(tmp_path),
+            "--store-path",
+            str(store_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+    resolved = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "apply-dev-fix",
+            "--issue-id",
+            "devi_memory_fallback",
+            "--fix-id",
+            "devf_memory_fallback",
+            "--status",
+            "fixed",
+            "--root",
+            str(tmp_path),
+            "--store-path",
+            str(store_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert recorded_issue.exit_code == 0
+    assert recorded_fix.exit_code == 0
+    assert resolved.exit_code == 0
+
+    issue_payload = json.loads(recorded_issue.output)
+    fix_payload = json.loads(recorded_fix.output)
+    resolved_payload = json.loads(resolved.output)
+    long_term_store = LongTermMemoryStore(db_path=tmp_path / "context-map" / "long_term_memory.db")
+    resolution_fact = long_term_store.fetch(
+        handles=[resolved_payload["long_term_capture"]["fact_handle"]]
+    )
+
+    assert issue_payload["long_term_capture"]["ok"] is True
+    assert issue_payload["long_term_capture"]["stage"] == "dev_issue"
+    assert fix_payload["long_term_capture"]["ok"] is True
+    assert fix_payload["long_term_capture"]["stage"] == "dev_fix"
+    assert resolved_payload["long_term_capture"]["ok"] is True
+    assert resolved_payload["long_term_capture"]["stage"] == "dev_issue_resolution"
+    assert len(resolution_fact) == 1
+    assert resolution_fact[0].payload["predicate"] == "resolved_by"
+    assert resolution_fact[0].payload["object"] == "dev_fix:devf_memory_fallback"
+
+
 def test_cli_feedback_issue_report_round_trip(tmp_path: Path) -> None:
     runner = CliRunner()
     selected = tmp_path / "src" / "demo.py"
@@ -476,6 +607,216 @@ def test_cli_feedback_dev_issue_fix_and_summary_round_trip(tmp_path: Path) -> No
     assert summary_payload["summary"]["open_issue_count"] == 1
     assert summary_payload["summary"]["fix_count"] == 1
     assert summary_payload["summary"]["by_reason_code"][0]["reason_code"] == "memory_fallback"
+
+
+def test_cli_feedback_report_dev_issue_from_runtime_round_trip(tmp_path: Path) -> None:
+    from ace_lite.runtime_stats import RuntimeInvocationStats
+    from ace_lite.runtime_stats_store import DurableStatsStore
+
+    runner = CliRunner()
+    store_path = tmp_path / "dev-feedback.db"
+    stats_db_path = tmp_path / "runtime-stats.db"
+    DurableStatsStore(db_path=stats_db_path).record_invocation(
+        RuntimeInvocationStats(
+            invocation_id="inv-runtime-1",
+            session_id="sess-1",
+            repo_key="demo",
+            profile_key="bugfix",
+            status="degraded",
+            total_latency_ms=15.0,
+            started_at="2026-03-19T00:00:00+00:00",
+            finished_at="2026-03-19T00:00:01+00:00",
+            degraded_reason_codes=("memory_fallback",),
+        )
+    )
+
+    recorded_issue = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "report-dev-issue-from-runtime",
+            "--invocation-id",
+            "inv-runtime-1",
+            "--stats-db-path",
+            str(stats_db_path),
+            "--store-path",
+            str(store_path),
+            "--user-id",
+            "cli-user",
+            "--issue-id",
+            "devi_runtime_1",
+            "--notes",
+            "confirmed in cli",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert recorded_issue.exit_code == 0
+    payload = json.loads(recorded_issue.output)
+    assert payload["ok"] is True
+    assert payload["issue"]["issue_id"] == "devi_runtime_1"
+    assert payload["issue"]["repo"] == "demo"
+    assert payload["issue"]["reason_code"] == "memory_fallback"
+    assert payload["invocation"]["invocation_id"] == "inv-runtime-1"
+
+
+def test_cli_feedback_report_dev_issue_from_runtime_mirrors_to_long_term_memory_when_enabled(
+    tmp_path: Path,
+) -> None:
+    from ace_lite.runtime_stats import RuntimeInvocationStats
+    from ace_lite.runtime_stats_store import DurableStatsStore
+
+    runner = CliRunner()
+    store_path = tmp_path / "dev-feedback.db"
+    stats_db_path = tmp_path / "runtime-stats.db"
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  memory:\n"
+            "    long_term:\n"
+            "      enabled: true\n"
+            "      write_enabled: true\n"
+            "      path: context-map/long_term_memory.db\n"
+        ),
+        encoding="utf-8",
+    )
+    DurableStatsStore(db_path=stats_db_path).record_invocation(
+        RuntimeInvocationStats(
+            invocation_id="inv-runtime-1",
+            session_id="sess-1",
+            repo_key="demo",
+            profile_key="bugfix",
+            status="degraded",
+            total_latency_ms=15.0,
+            started_at="2026-03-19T00:00:00+00:00",
+            finished_at="2026-03-19T00:00:01+00:00",
+            degraded_reason_codes=("memory_fallback",),
+        )
+    )
+
+    recorded_issue = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "report-dev-issue-from-runtime",
+            "--invocation-id",
+            "inv-runtime-1",
+            "--root",
+            str(tmp_path),
+            "--stats-db-path",
+            str(stats_db_path),
+            "--store-path",
+            str(store_path),
+            "--user-id",
+            "cli-user",
+            "--issue-id",
+            "devi_runtime_1",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert recorded_issue.exit_code == 0
+    payload = json.loads(recorded_issue.output)
+    assert payload["long_term_capture"]["ok"] is True
+    assert payload["long_term_capture"]["stage"] == "dev_issue"
+
+
+def test_cli_feedback_apply_dev_fix_updates_summary(tmp_path: Path) -> None:
+    runner = CliRunner()
+    store_path = tmp_path / "dev-feedback.db"
+
+    runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "report-dev-issue",
+            "--title",
+            "Memory fallback while planning",
+            "--reason-code",
+            "memory_fallback",
+            "--repo",
+            "demo",
+            "--status",
+            "open",
+            "--user-id",
+            "cli-user",
+            "--profile-key",
+            "bugfix",
+            "--issue-id",
+            "devi_memory_fallback",
+            "--created-at",
+            "2026-03-19T00:00:00+00:00",
+            "--updated-at",
+            "2026-03-19T00:00:00+00:00",
+            "--store-path",
+            str(store_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+    runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "report-dev-fix",
+            "--reason-code",
+            "memory_fallback",
+            "--repo",
+            "demo",
+            "--resolution-note",
+            "added fallback diagnostics",
+            "--user-id",
+            "cli-user",
+            "--profile-key",
+            "bugfix",
+            "--issue-id",
+            "devi_memory_fallback",
+            "--fix-id",
+            "devf_memory_fallback",
+            "--created-at",
+            "2026-03-19T00:05:00+00:00",
+            "--store-path",
+            str(store_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    resolved = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "apply-dev-fix",
+            "--issue-id",
+            "devi_memory_fallback",
+            "--fix-id",
+            "devf_memory_fallback",
+            "--store-path",
+            str(store_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+    summary = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "dev-feedback-summary",
+            "--repo",
+            "demo",
+            "--user-id",
+            "cli-user",
+            "--profile-key",
+            "bugfix",
+            "--store-path",
+            str(store_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert resolved.exit_code == 0
+    resolved_payload = json.loads(resolved.output)
+    summary_payload = json.loads(summary.output)
+    assert resolved_payload["issue"]["status"] == "fixed"
+    assert summary_payload["summary"]["issue_count"] == 1
+    assert summary_payload["summary"]["open_issue_count"] == 0
 
 
 def test_cli_feedback_issue_export_case_and_apply_fix_round_trip(tmp_path: Path) -> None:

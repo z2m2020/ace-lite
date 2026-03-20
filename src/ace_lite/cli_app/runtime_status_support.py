@@ -21,6 +21,12 @@ from ace_lite.runtime_stats_store import DurableStatsStore
 
 
 DEFAULT_RUNTIME_STATS_DB_PATH = DEFAULT_USER_RUNTIME_DB_PATH
+RUNTIME_MEMORY_REASON_CODES = frozenset(
+    {
+        "memory_fallback",
+        "memory_namespace_fallback",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -286,6 +292,75 @@ def _build_runtime_top_pain_summary(
     return {"count": len(rows), "items": rows[:10]}
 
 
+def _build_runtime_memory_health_summary(
+    *,
+    runtime_scope_map: dict[str, dict[str, Any] | None],
+    top_pain_summary: dict[str, Any],
+) -> dict[str, Any]:
+    preferred_scope_name = "all_time"
+    preferred_scope: dict[str, Any] | None = None
+    for scope_name in ("repo_profile", "repo", "profile", "session", "all_time"):
+        candidate = runtime_scope_map.get(scope_name)
+        if isinstance(candidate, dict):
+            preferred_scope_name = scope_name
+            preferred_scope = candidate
+            break
+
+    latency_mean = 0.0
+    if isinstance(preferred_scope, dict):
+        for item in preferred_scope.get("stage_latencies", []):
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("stage_name") or "").strip() != "memory":
+                continue
+            latency_mean = float(item.get("latency_ms_avg", 0.0) or 0.0)
+            break
+
+    reason_items_raw = top_pain_summary.get("items")
+    reason_items = reason_items_raw if isinstance(reason_items_raw, list) else []
+    memory_items: list[dict[str, Any]] = []
+    for item in reason_items:
+        if not isinstance(item, dict):
+            continue
+        reason_code = str(item.get("reason_code") or "").strip()
+        if reason_code not in RUNTIME_MEMORY_REASON_CODES:
+            continue
+        memory_items.append(
+            {
+                "reason_code": reason_code,
+                "runtime_event_count": int(item.get("runtime_event_count", 0) or 0),
+                "manual_issue_count": int(item.get("manual_issue_count", 0) or 0),
+                "open_issue_count": int(item.get("open_issue_count", 0) or 0),
+                "fix_count": int(item.get("fix_count", 0) or 0),
+                "last_seen_at": str(item.get("last_seen_at") or ""),
+            }
+        )
+
+    runtime_event_count = sum(
+        int(item.get("runtime_event_count", 0) or 0) for item in memory_items
+    )
+    issue_count = sum(int(item.get("manual_issue_count", 0) or 0) for item in memory_items)
+    open_issue_count = sum(int(item.get("open_issue_count", 0) or 0) for item in memory_items)
+    fix_count = sum(int(item.get("fix_count", 0) or 0) for item in memory_items)
+
+    return {
+        "scope_kind": preferred_scope_name,
+        "reason_count": len(memory_items),
+        "runtime_event_count": runtime_event_count,
+        "issue_count": issue_count,
+        "open_issue_count": open_issue_count,
+        "fix_count": fix_count,
+        "resolution_rate": (
+            float(fix_count) / float(issue_count) if issue_count > 0 else 0.0
+        ),
+        "open_issue_rate": (
+            float(open_issue_count) / float(issue_count) if issue_count > 0 else 0.0
+        ),
+        "memory_stage_latency_ms_avg": latency_mean,
+        "reasons": memory_items,
+    }
+
+
 def load_runtime_stats_summary(
     *,
     db_path: str | Path | None = None,
@@ -354,6 +429,10 @@ def load_runtime_stats_summary(
         runtime_scope_map=scope_map,
         dev_feedback_summary=dev_feedback_summary,
     )
+    memory_health_summary = _build_runtime_memory_health_summary(
+        runtime_scope_map=scope_map,
+        top_pain_summary=top_pain_summary,
+    )
     filters = {
         "repo": normalized_repo,
         "profile": normalized_profile,
@@ -369,6 +448,7 @@ def load_runtime_stats_summary(
         "preference_capture_summary": preference_capture_summary,
         "dev_feedback_summary": dev_feedback_summary,
         "top_pain_summary": top_pain_summary,
+        "memory_health_summary": memory_health_summary,
     }
 
 

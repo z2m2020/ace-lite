@@ -66,9 +66,9 @@ def test_build_runtime_version_sync_payload_detects_install_drift() -> None:
     payload = runtime_doctor_support.build_runtime_version_sync_payload(
         get_version_info_fn=lambda **kwargs: {
             "dist_name": "ace-lite-engine",
-            "version": "0.3.46",
+            "version": "0.3.47",
             "source": "pyproject",
-            "pyproject_version": "0.3.46",
+            "pyproject_version": "0.3.47",
             "installed_version": "0.3.44",
             "drifted": True,
         }

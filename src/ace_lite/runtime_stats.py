@@ -65,6 +65,27 @@ class RuntimeInvocationStats:
     trace_exported: bool = False
     trace_export_failed: bool = False
 
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "invocation_id": self.invocation_id,
+            "session_id": self.session_id,
+            "repo_key": self.repo_key,
+            "profile_key": self.profile_key,
+            "settings_fingerprint": self.settings_fingerprint,
+            "status": self.status,
+            "total_latency_ms": self.total_latency_ms,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "contract_error_code": self.contract_error_code,
+            "degraded_reason_codes": list(self.degraded_reason_codes),
+            "stage_latencies": [item.to_payload() for item in self.stage_latencies],
+            "plan_replay_hit": self.plan_replay_hit,
+            "plan_replay_safe_hit": self.plan_replay_safe_hit,
+            "plan_replay_store_written": self.plan_replay_store_written,
+            "trace_exported": self.trace_exported,
+            "trace_export_failed": self.trace_export_failed,
+        }
+
     def to_storage_payload(self) -> dict[str, Any]:
         return {
             "invocation_id": self.invocation_id,

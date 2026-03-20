@@ -276,6 +276,21 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 },
                 "outcomes": {"applied": 1},
             },
+            "ltm_explainability_summary": {
+                "case_count": 1,
+                "selected_case_count": 1,
+                "selected_case_rate": 1.0,
+                "selected_count_mean": 2.0,
+                "attribution_case_count": 1,
+                "attribution_case_rate": 1.0,
+                "attribution_count_mean": 1.0,
+                "graph_neighbor_case_count": 1,
+                "graph_neighbor_case_rate": 1.0,
+                "graph_neighbor_count_mean": 1.0,
+                "plan_constraint_case_count": 1,
+                "plan_constraint_case_rate": 1.0,
+                "plan_constraint_count_mean": 1.0,
+            },
             "stage_latency_summary": {
                 "memory": {"mean_ms": 3.0, "p95_ms": 3.0},
                 "index": {"mean_ms": 4.0, "p95_ms": 4.0},
@@ -471,6 +486,9 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                         "attribution_count": 1,
                         "graph_neighbor_count": 1,
                         "plan_constraint_count": 1,
+                        "attribution_preview": [
+                            "runtime.validation.git fallback_policy reuse_checkout_or_skip | graph: reuse_checkout_or_skip recommended_for runtime.validation.git"
+                        ],
                     },
                     "feedback_boost": {
                         "enabled": True,
@@ -513,6 +531,7 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "## Evidence Insufficiency Summary" in report
     assert "## Chunk Stage Miss Summary" in report
     assert "## Decision Observability Summary" in report
+    assert "## Long-Term Explainability Summary" in report
     assert "## Stage Latency Summary" in report
     assert "## SLO Budget Summary" in report
     assert "## Retrieval-to-Task Gaps" in report
@@ -544,6 +563,14 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "ltm_plan_constraint_count: 1.0000" in report
     assert "feedback_enabled: 1.0000" in report
     assert "feedback_boosted_count: 1.0000" in report
+    assert "Selected cases: 1/1 (1.0000)" in report
+    assert "Attribution cases: 1/1 (1.0000)" in report
+    assert "Graph-neighbor cases: 1/1 (1.0000)" in report
+    assert "Plan-constraint cases: 1/1 (1.0000)" in report
+    assert "| selected_count_mean | 2.0000 |" in report
+    assert "| attribution_count_mean | 1.0000 |" in report
+    assert "| graph_neighbor_count_mean | 1.0000 |" in report
+    assert "| plan_constraint_count_mean | 1.0000 |" in report
     assert "chunk_stage_miss: source_plan_pack_miss" in report
     assert "decision_event: index | retry | candidate_postprocess | reason=low_candidate_count | outcome=applied" in report
     assert "decision_event: skills | skip | skills_hydration | reason=token_budget_exhausted" in report
@@ -553,8 +580,10 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "skills_budget_exhausted_ratio" in report
     assert "skills_route_latency_p95_ms" in report
     assert "ltm_hit_ratio" in report
+    assert "ltm_effective_hit_rate" in report
     assert "ltm_false_help_rate" in report
     assert "ltm_stale_hit_rate" in report
+    assert "ltm_replay_drift_rate" in report
     assert "contextual_sidecar_parent_symbol_chunk_count_mean" in report
     assert "contextual_sidecar_reference_hint_coverage_ratio" in report
     assert "robust_signature_count_mean" in report
@@ -589,6 +618,10 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "source_plan_packing: graph_closure_preference_enabled=True, graph_closure_bonus_candidate_count=2, graph_closure_preferred_count=1, focused_file_promoted_count=1, packed_path_count=2, reason=graph_closure_preferred" in report
     assert "preference_capture: notes_hit_ratio=0.5000, profile_selected_count=2, capture_triggered=True" in report
     assert "ltm_explainability: selected_count=2, attribution_count=1, graph_neighbor_count=1, plan_constraint_count=1" in report
+    assert (
+        "ltm_attribution_preview: runtime.validation.git fallback_policy reuse_checkout_or_skip | graph: reuse_checkout_or_skip recommended_for runtime.validation.git"
+        in report
+    )
     assert "feedback_boost: enabled=True, reason=ok, event_count=4, matched_event_count=2, boosted_candidate_count=1, boosted_unique_paths=1" in report
     assert "chunk_stage_miss_details: oracle_file_path=src/ace_lite/benchmark/case_evaluation.py, file_present=True, raw_chunk_present=True, source_plan_chunk_present=False" in report
     assert "embedding_similarity_mean" in report
@@ -689,6 +722,21 @@ def test_write_results_emits_summary_sidecar(tmp_path: Path) -> None:
             "reasons": {"low_candidate_count": 1},
             "outcomes": {"applied": 1},
         },
+        "ltm_explainability_summary": {
+            "case_count": 1,
+            "selected_case_count": 1,
+            "selected_case_rate": 1.0,
+            "selected_count_mean": 2.0,
+            "attribution_case_count": 1,
+            "attribution_case_rate": 1.0,
+            "attribution_count_mean": 1.0,
+            "graph_neighbor_case_count": 1,
+            "graph_neighbor_case_rate": 1.0,
+            "graph_neighbor_count_mean": 1.0,
+            "plan_constraint_case_count": 1,
+            "plan_constraint_case_rate": 1.0,
+            "plan_constraint_count_mean": 1.0,
+        },
         "cases": [],
     }
 
@@ -717,6 +765,8 @@ def test_write_results_emits_summary_sidecar(tmp_path: Path) -> None:
         "candidate_chunks_miss": 1
     }
     assert summary["decision_observability_summary"]["decision_event_count"] == 1
+    assert summary["ltm_explainability_summary"]["selected_count_mean"] == 2.0
+    assert summary["ltm_explainability_summary"]["plan_constraint_case_count"] == 1
 
 
 def test_build_results_summary_defaults_missing_fields() -> None:
@@ -1208,6 +1258,27 @@ def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> N
                         "latency": {"latency_ms_avg": 12.0},
                     }
                 },
+                "memory_health_summary": {
+                    "scope_kind": "session",
+                    "reason_count": 1,
+                    "runtime_event_count": 1,
+                    "issue_count": 1,
+                    "open_issue_count": 1,
+                    "fix_count": 1,
+                    "resolution_rate": 1.0,
+                    "open_issue_rate": 1.0,
+                    "memory_stage_latency_ms_avg": 5.0,
+                    "reasons": [
+                        {
+                            "reason_code": "memory_fallback",
+                            "runtime_event_count": 1,
+                            "manual_issue_count": 1,
+                            "open_issue_count": 1,
+                            "fix_count": 1,
+                            "last_seen_at": "2026-03-17T00:00:00Z",
+                        }
+                    ],
+                },
                 "preference_snapshot": {
                     "preference_observability_summary": {
                         "case_count": 2,
@@ -1304,6 +1375,12 @@ def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> N
     )
 
     assert "## Runtime Stats Summary" in report
+    assert "### Memory Health" in report
+    assert "Scope: session" in report
+    assert "Runtime memory events: 1" in report
+    assert "Developer issues: 1 open=1 fixes=1 resolution_rate=1.0000" in report
+    assert "Memory stage latency avg: 5.00 ms" in report
+    assert "| memory_fallback | 1 | 1 | 1 | 1 | 2026-03-17T00:00:00Z |" in report
     assert "### Preference Snapshot" in report
     assert "- Preference observed cases: 2/2 (1.0000)" in report
     assert "- Preference profile-selected mean: 1.5000" in report

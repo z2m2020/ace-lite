@@ -319,6 +319,12 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         for item in memory_helpful_cases
         if float(item.get("ltm_plan_constraint_count", 0.0) or 0.0) > 0.0
     ]
+    ltm_effective_hit_cases = [
+        item
+        for item in ltm_hit_cases
+        if float(item.get("task_success_hit", item.get("utility_hit", 0.0)) or 0.0)
+        > 0.0
+    ]
     memory_harmful_negative_control_cases = [
         item
         for item in case_results
@@ -341,6 +347,16 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         if float(item.get("ltm_plan_constraint_count", 0.0) or 0.0) > 0.0
         and float(item.get("task_success_hit", item.get("utility_hit", 0.0)) or 0.0)
         <= 0.0
+    ]
+    ltm_time_sensitive_hit_cases = [
+        item
+        for item in time_sensitive_cases
+        if float(item.get("ltm_plan_constraint_count", 0.0) or 0.0) > 0.0
+    ]
+    ltm_replay_drift_cases = [
+        item
+        for item in ltm_time_sensitive_hit_cases
+        if float(item.get("plan_replay_cache_stale_hit_safe", 1.0) or 0.0) <= 0.0
     ]
     issue_report_feedback_cases = [
         item
@@ -577,6 +593,11 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
             if memory_helpful_cases
             else 0.0
         ),
+        "ltm_effective_hit_rate": (
+            float(len(ltm_effective_hit_cases)) / float(len(ltm_hit_cases))
+            if ltm_hit_cases
+            else 0.0
+        ),
         "ltm_false_help_rate": (
             float(len(ltm_false_help_cases))
             / float(len(memory_harmful_negative_control_cases))
@@ -586,6 +607,12 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "ltm_stale_hit_rate": (
             float(len(ltm_stale_hit_cases)) / float(len(time_sensitive_cases))
             if time_sensitive_cases
+            else 0.0
+        ),
+        "ltm_replay_drift_rate": (
+            float(len(ltm_replay_drift_cases))
+            / float(len(ltm_time_sensitive_hit_cases))
+            if ltm_time_sensitive_hit_cases
             else 0.0
         ),
         "issue_report_linked_plan_rate": (
@@ -684,6 +711,68 @@ def build_feedback_loop_summary(
     return _build_feedback_loop_summary_impl(case_results)
 
 
+def build_ltm_explainability_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {
+            "case_count": 0,
+            "selected_case_count": 0,
+            "selected_case_rate": 0.0,
+            "selected_count_mean": 0.0,
+            "attribution_case_count": 0,
+            "attribution_case_rate": 0.0,
+            "attribution_count_mean": 0.0,
+            "graph_neighbor_case_count": 0,
+            "graph_neighbor_case_rate": 0.0,
+            "graph_neighbor_count_mean": 0.0,
+            "plan_constraint_case_count": 0,
+            "plan_constraint_case_rate": 0.0,
+            "plan_constraint_count_mean": 0.0,
+        }
+
+    selected_counts = [
+        float(item.get("ltm_selected_count", 0.0) or 0.0) for item in case_results
+    ]
+    attribution_counts = [
+        float(item.get("ltm_attribution_count", 0.0) or 0.0) for item in case_results
+    ]
+    graph_neighbor_counts = [
+        float(item.get("ltm_graph_neighbor_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    plan_constraint_counts = [
+        float(item.get("ltm_plan_constraint_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+
+    def _positive_case_count(values: list[float]) -> int:
+        return sum(1 for value in values if value > 0.0)
+
+    selected_case_count = _positive_case_count(selected_counts)
+    attribution_case_count = _positive_case_count(attribution_counts)
+    graph_neighbor_case_count = _positive_case_count(graph_neighbor_counts)
+    plan_constraint_case_count = _positive_case_count(plan_constraint_counts)
+
+    total = float(case_count)
+    return {
+        "case_count": case_count,
+        "selected_case_count": selected_case_count,
+        "selected_case_rate": float(selected_case_count) / total,
+        "selected_count_mean": mean(selected_counts),
+        "attribution_case_count": attribution_case_count,
+        "attribution_case_rate": float(attribution_case_count) / total,
+        "attribution_count_mean": mean(attribution_counts),
+        "graph_neighbor_case_count": graph_neighbor_case_count,
+        "graph_neighbor_case_rate": float(graph_neighbor_case_count) / total,
+        "graph_neighbor_count_mean": mean(graph_neighbor_counts),
+        "plan_constraint_case_count": plan_constraint_case_count,
+        "plan_constraint_case_rate": float(plan_constraint_case_count) / total,
+        "plan_constraint_count_mean": mean(plan_constraint_counts),
+    }
+
+
 def build_adaptive_router_arm_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -724,6 +813,7 @@ __all__ = [
     "build_evidence_insufficiency_summary",
     "build_feedback_loop_summary",
     "build_feedback_observability_summary",
+    "build_ltm_explainability_summary",
     "build_preference_observability_summary",
     "build_retrieval_context_observability_summary",
     "build_slo_budget_summary",

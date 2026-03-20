@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
+from ace_lite.cli_app.orchestrator_factory import create_orchestrator, run_plan
 from ace_lite.entrypoint_runtime import (
     SHARED_RUNTIME_PAYLOAD_KEYS,
     build_memory_provider_kwargs,
@@ -262,6 +264,28 @@ def test_runtime_payload_builders_share_canonical_config_slice() -> None:
     assert {key: run_plan_payload[key] for key in SHARED_RUNTIME_PAYLOAD_KEYS} == {
         key: orchestrator_payload[key] for key in SHARED_RUNTIME_PAYLOAD_KEYS
     }
+
+
+def test_run_plan_runtime_payload_keys_are_accepted_by_run_plan_signature() -> None:
+    payload = build_run_plan_kwargs_from_resolved(
+        resolved=_make_resolved(),
+        skills_dir="skills",
+        retrieval_policy="feature",
+    )
+
+    signature_keys = set(inspect.signature(run_plan).parameters)
+    assert set(payload).issubset(signature_keys)
+
+
+def test_orchestrator_runtime_payload_keys_are_accepted_by_factory_signature() -> None:
+    payload = build_orchestrator_kwargs_from_resolved(
+        resolved=_make_resolved(),
+        skills_dir="skills",
+        retrieval_policy="feature",
+    )
+
+    signature_keys = set(inspect.signature(create_orchestrator).parameters)
+    assert set(payload).issubset(signature_keys)
 
 
 def test_shared_runtime_payload_keys_exclude_run_plan_and_orchestrator_only_fields() -> None:

@@ -8,6 +8,7 @@ OPTIONAL_SUMMARY_MAPPING_KEYS = (
     "evidence_insufficiency_summary",
     "feedback_loop_summary",
     "feedback_observability_summary",
+    "ltm_explainability_summary",
     "preference_observability_summary",
     "retrieval_context_observability_summary",
     "chunk_stage_miss_summary",

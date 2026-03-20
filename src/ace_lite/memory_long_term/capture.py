@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ace_lite.memory_long_term.contracts import build_long_term_observation_contract_v1
+from ace_lite.memory_long_term.contracts import (
+    build_long_term_fact_contract_v1,
+    build_long_term_observation_contract_v1,
+)
 from ace_lite.memory_long_term.store import LongTermMemoryStore
 from ace_lite.runtime_settings import RuntimeSettingsManager
 
@@ -23,6 +26,15 @@ def _resolve_repo_relative_path(*, root: str | Path, configured_path: str) -> Pa
     if path.is_absolute():
         return path.resolve()
     return (Path(root).resolve() / path).resolve()
+
+
+def _resolve_root(root: str | Path | None) -> str:
+    if root is None:
+        return ""
+    normalized = str(root).strip()
+    if not normalized:
+        return ""
+    return str(Path(normalized).expanduser().resolve())
 
 
 class LongTermMemoryCaptureService:
@@ -147,6 +159,260 @@ class LongTermMemoryCaptureService:
             "handle": entry.handle,
             "as_of": entry.as_of,
             "status": "selected",
+        }
+
+    def capture_dev_issue(
+        self,
+        *,
+        issue: dict[str, Any],
+        root: str | Path | None,
+    ) -> dict[str, Any]:
+        if not self._enabled:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "disabled",
+                "stage": "dev_issue",
+            }
+
+        normalized_issue = dict(issue) if isinstance(issue, dict) else {}
+        repo = _normalize_text(normalized_issue.get("repo"))
+        issue_id = _normalize_text(normalized_issue.get("issue_id"))
+        observed_at = (
+            _normalize_text(normalized_issue.get("updated_at"))
+            or _normalize_text(normalized_issue.get("created_at"))
+            or _utc_now_iso()
+        )
+        status = _normalize_text(normalized_issue.get("status")) or "open"
+        title = _normalize_text(normalized_issue.get("title"))
+        payload = {
+            "status": status,
+            "issue_id": issue_id,
+            "title": title,
+            "reason_code": _normalize_text(normalized_issue.get("reason_code")),
+            "selected_path": _normalize_text(normalized_issue.get("selected_path")),
+            "related_invocation_id": _normalize_text(
+                normalized_issue.get("related_invocation_id")
+            ),
+            "notes": _normalize_text(normalized_issue.get("notes")),
+        }
+        observation_id = hashlib.sha256(
+            f"dev_issue|{repo}|{issue_id}|{observed_at}|{status}".encode("utf-8")
+        ).hexdigest()[:24]
+        contract = build_long_term_observation_contract_v1(
+            observation_id=observation_id,
+            kind="dev_issue",
+            repo=repo,
+            root=_resolve_root(root),
+            namespace=f"repo/{repo}",
+            user_id=_normalize_text(normalized_issue.get("user_id")),
+            profile_key=_normalize_text(normalized_issue.get("profile_key")),
+            query=_normalize_text(normalized_issue.get("query")) or title,
+            payload=payload,
+            observed_at=observed_at,
+            as_of=observed_at,
+            source_run_id=_normalize_text(normalized_issue.get("related_invocation_id")),
+            severity="warning" if status not in {"fixed", "resolved", "rejected"} else "info",
+            status=status,
+            metadata={
+                "stage": "dev_issue",
+                "reason_code": payload["reason_code"],
+                "issue_id": issue_id,
+            },
+        )
+        entry = self._store.upsert_observation(contract)
+        return {
+            "ok": True,
+            "skipped": False,
+            "stage": "dev_issue",
+            "handle": entry.handle,
+            "as_of": entry.as_of,
+            "status": status,
+        }
+
+    def capture_dev_fix(
+        self,
+        *,
+        fix: dict[str, Any],
+        root: str | Path | None,
+    ) -> dict[str, Any]:
+        if not self._enabled:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "disabled",
+                "stage": "dev_fix",
+            }
+
+        normalized_fix = dict(fix) if isinstance(fix, dict) else {}
+        repo = _normalize_text(normalized_fix.get("repo"))
+        fix_id = _normalize_text(normalized_fix.get("fix_id"))
+        observed_at = _normalize_text(normalized_fix.get("created_at")) or _utc_now_iso()
+        payload = {
+            "status": "recorded",
+            "fix_id": fix_id,
+            "issue_id": _normalize_text(normalized_fix.get("issue_id")),
+            "reason_code": _normalize_text(normalized_fix.get("reason_code")),
+            "selected_path": _normalize_text(normalized_fix.get("selected_path")),
+            "related_invocation_id": _normalize_text(
+                normalized_fix.get("related_invocation_id")
+            ),
+            "resolution_note": _normalize_text(normalized_fix.get("resolution_note")),
+        }
+        observation_id = hashlib.sha256(
+            f"dev_fix|{repo}|{fix_id}|{observed_at}".encode("utf-8")
+        ).hexdigest()[:24]
+        contract = build_long_term_observation_contract_v1(
+            observation_id=observation_id,
+            kind="dev_fix",
+            repo=repo,
+            root=_resolve_root(root),
+            namespace=f"repo/{repo}",
+            user_id=_normalize_text(normalized_fix.get("user_id")),
+            profile_key=_normalize_text(normalized_fix.get("profile_key")),
+            query=_normalize_text(normalized_fix.get("query")) or payload["resolution_note"],
+            payload=payload,
+            observed_at=observed_at,
+            as_of=observed_at,
+            source_run_id=_normalize_text(normalized_fix.get("related_invocation_id")),
+            severity="info",
+            status="recorded",
+            metadata={
+                "stage": "dev_fix",
+                "reason_code": payload["reason_code"],
+                "fix_id": fix_id,
+                "issue_id": payload["issue_id"],
+            },
+        )
+        entry = self._store.upsert_observation(contract)
+        return {
+            "ok": True,
+            "skipped": False,
+            "stage": "dev_fix",
+            "handle": entry.handle,
+            "as_of": entry.as_of,
+            "status": "recorded",
+        }
+
+    def capture_dev_issue_resolution(
+        self,
+        *,
+        issue: dict[str, Any],
+        fix: dict[str, Any],
+        root: str | Path | None,
+    ) -> dict[str, Any]:
+        if not self._enabled:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "disabled",
+                "stage": "dev_issue_resolution",
+            }
+
+        normalized_issue = dict(issue) if isinstance(issue, dict) else {}
+        normalized_fix = dict(fix) if isinstance(fix, dict) else {}
+        repo = _normalize_text(normalized_issue.get("repo") or normalized_fix.get("repo"))
+        issue_id = _normalize_text(normalized_issue.get("issue_id"))
+        fix_id = _normalize_text(normalized_fix.get("fix_id"))
+        observed_at = (
+            _normalize_text(normalized_issue.get("resolved_at"))
+            or _normalize_text(normalized_issue.get("updated_at"))
+            or _normalize_text(normalized_fix.get("created_at"))
+            or _utc_now_iso()
+        )
+        status = _normalize_text(normalized_issue.get("status")) or "fixed"
+        resolution_note = _normalize_text(normalized_fix.get("resolution_note"))
+        observation_payload = {
+            "status": status,
+            "issue_id": issue_id,
+            "fix_id": fix_id,
+            "reason_code": _normalize_text(
+                normalized_issue.get("reason_code") or normalized_fix.get("reason_code")
+            ),
+            "selected_path": _normalize_text(
+                normalized_issue.get("selected_path") or normalized_fix.get("selected_path")
+            ),
+            "related_invocation_id": _normalize_text(
+                normalized_issue.get("related_invocation_id")
+                or normalized_fix.get("related_invocation_id")
+            ),
+            "resolution_note": resolution_note,
+        }
+        observation_id = hashlib.sha256(
+            f"dev_issue_resolution|{repo}|{issue_id}|{fix_id}|{observed_at}".encode("utf-8")
+        ).hexdigest()[:24]
+        observation_contract = build_long_term_observation_contract_v1(
+            observation_id=observation_id,
+            kind="dev_issue_resolution",
+            repo=repo,
+            root=_resolve_root(root),
+            namespace=f"repo/{repo}",
+            user_id=_normalize_text(
+                normalized_issue.get("user_id") or normalized_fix.get("user_id")
+            ),
+            profile_key=_normalize_text(
+                normalized_issue.get("profile_key") or normalized_fix.get("profile_key")
+            ),
+            query=(
+                _normalize_text(normalized_issue.get("query"))
+                or _normalize_text(normalized_fix.get("query"))
+                or _normalize_text(normalized_issue.get("title"))
+                or resolution_note
+            ),
+            payload=observation_payload,
+            observed_at=observed_at,
+            as_of=observed_at,
+            source_run_id=observation_payload["related_invocation_id"],
+            severity="info",
+            status=status,
+            metadata={
+                "stage": "dev_issue_resolution",
+                "reason_code": observation_payload["reason_code"],
+                "issue_id": issue_id,
+                "fix_id": fix_id,
+            },
+        )
+        observation_entry = self._store.upsert_observation(observation_contract)
+        fact_contract = build_long_term_fact_contract_v1(
+            fact_id=hashlib.sha256(
+                f"dev_issue_resolution_fact|{repo}|{issue_id}|{fix_id}|{observed_at}".encode(
+                    "utf-8"
+                )
+            ).hexdigest()[:24],
+            fact_type="dev_issue_resolution",
+            subject=f"dev_issue:{issue_id}",
+            predicate="resolved_by",
+            object_value=f"dev_fix:{fix_id}",
+            repo=repo,
+            root=_resolve_root(root),
+            namespace=f"repo/{repo}",
+            user_id=_normalize_text(
+                normalized_issue.get("user_id") or normalized_fix.get("user_id")
+            ),
+            profile_key=_normalize_text(
+                normalized_issue.get("profile_key") or normalized_fix.get("profile_key")
+            ),
+            as_of=observed_at,
+            confidence=1.0,
+            valid_from=observed_at,
+            derived_from_observation_id=observation_id,
+            metadata={
+                "status": status,
+                "reason_code": observation_payload["reason_code"],
+                "issue_id": issue_id,
+                "fix_id": fix_id,
+                "resolution_note": resolution_note,
+            },
+        )
+        fact_entry = self._store.upsert_fact(fact_contract)
+        return {
+            "ok": True,
+            "skipped": False,
+            "stage": "dev_issue_resolution",
+            "handle": observation_entry.handle,
+            "fact_handle": fact_entry.handle,
+            "as_of": observation_entry.as_of,
+            "status": status,
         }
 
     def _build_stage_payload(

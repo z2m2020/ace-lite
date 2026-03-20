@@ -9,7 +9,11 @@ from typing import Any
 import click
 
 from ace_lite.cli_app.output import echo_json
+from ace_lite.cli_app.runtime_command_support import DEFAULT_RUNTIME_STATS_DB_PATH
 from ace_lite.dev_feedback_store import DevFeedbackStore
+from ace_lite.dev_feedback_runtime_linkage import (
+    record_dev_issue_from_runtime_invocation,
+)
 from ace_lite.feedback_store import FeedbackBoostConfig, SelectionFeedbackStore
 from ace_lite.index_stage.terms import extract_terms
 from ace_lite.issue_report_store import IssueReportStore
@@ -19,6 +23,37 @@ from ace_lite.memory_long_term import build_long_term_capture_service_from_runti
 @click.group("feedback", help="Record and inspect selection feedback for reranking.")
 def feedback_group() -> None:
     return None
+
+
+def _resolve_root_path(root: str | None) -> str:
+    return str(Path(root or Path.cwd()).expanduser().resolve())
+
+
+def _build_long_term_capture_service(*, root: str | None) -> Any:
+    try:
+        return build_long_term_capture_service_from_runtime(root=_resolve_root_path(root))
+    except Exception:
+        return None
+
+
+def _capture_long_term_event(
+    *,
+    service: Any,
+    stage_name: str,
+    operation: Any,
+) -> dict[str, Any] | None:
+    if service is None:
+        return None
+    try:
+        payload = operation()
+    except Exception as exc:
+        return {
+            "ok": False,
+            "skipped": False,
+            "stage": stage_name,
+            "reason": f"capture_failed:{exc.__class__.__name__}",
+        }
+    return dict(payload) if isinstance(payload, dict) else None
 
 
 def _load_feedback_events(path: Path) -> tuple[list[dict[str, Any]], str]:
@@ -132,13 +167,7 @@ def feedback_record_command(
     user_id: str | None,
     profile_key: str | None,
 ) -> None:
-    long_term_capture_service = None
-    try:
-        long_term_capture_service = build_long_term_capture_service_from_runtime(
-            root=root or str(Path.cwd()),
-        )
-    except Exception:
-        long_term_capture_service = None
+    long_term_capture_service = _build_long_term_capture_service(root=root)
     store = SelectionFeedbackStore(
         profile_path=profile_path,
         max_entries=max(0, int(max_entries)),
@@ -676,6 +705,11 @@ def feedback_resolve_issue_from_dev_fix_command(
 @click.option("--resolved-at", default=None, help="Optional ISO-8601 resolution timestamp.")
 @click.option("--issue-id", default=None, help="Optional stable issue id.")
 @click.option(
+    "--root",
+    default=None,
+    help="Optional repo root used to resolve runtime config for long-term capture.",
+)
+@click.option(
     "--store-path",
     default="~/.ace-lite/dev_feedback.db",
     show_default=True,
@@ -696,6 +730,7 @@ def feedback_report_dev_issue_command(
     updated_at: str | None,
     resolved_at: str | None,
     issue_id: str | None,
+    root: str | None,
     store_path: str,
 ) -> None:
     store = DevFeedbackStore(db_path=store_path)
@@ -717,7 +752,23 @@ def feedback_report_dev_issue_command(
             "resolved_at": resolved_at,
         }
     )
-    echo_json({"ok": True, "store_path": str(store.db_path), "issue": issue.to_payload()})
+    long_term_capture_service = _build_long_term_capture_service(root=root)
+    long_term_capture = _capture_long_term_event(
+        service=long_term_capture_service,
+        stage_name="dev_issue",
+        operation=lambda: long_term_capture_service.capture_dev_issue(
+            issue=issue.to_payload(),
+            root=_resolve_root_path(root),
+        ),
+    )
+    echo_json(
+        {
+            "ok": True,
+            "store_path": str(store.db_path),
+            "issue": issue.to_payload(),
+            "long_term_capture": long_term_capture,
+        }
+    )
 
 
 @feedback_group.command("report-dev-fix", help="Record a developer-side fix or mitigation.")
@@ -732,6 +783,11 @@ def feedback_report_dev_issue_command(
 @click.option("--related-invocation-id", default=None, help="Optional linked invocation id.")
 @click.option("--created-at", default=None, help="Optional ISO-8601 creation timestamp.")
 @click.option("--fix-id", default=None, help="Optional stable fix id.")
+@click.option(
+    "--root",
+    default=None,
+    help="Optional repo root used to resolve runtime config for long-term capture.",
+)
 @click.option(
     "--store-path",
     default="~/.ace-lite/dev_feedback.db",
@@ -750,6 +806,7 @@ def feedback_report_dev_fix_command(
     related_invocation_id: str | None,
     created_at: str | None,
     fix_id: str | None,
+    root: str | None,
     store_path: str,
 ) -> None:
     store = DevFeedbackStore(db_path=store_path)
@@ -768,7 +825,81 @@ def feedback_report_dev_fix_command(
             "created_at": created_at,
         }
     )
-    echo_json({"ok": True, "store_path": str(store.db_path), "fix": fix.to_payload()})
+    long_term_capture_service = _build_long_term_capture_service(root=root)
+    long_term_capture = _capture_long_term_event(
+        service=long_term_capture_service,
+        stage_name="dev_fix",
+        operation=lambda: long_term_capture_service.capture_dev_fix(
+            fix=fix.to_payload(),
+            root=_resolve_root_path(root),
+        ),
+    )
+    echo_json(
+        {
+            "ok": True,
+            "store_path": str(store.db_path),
+            "fix": fix.to_payload(),
+            "long_term_capture": long_term_capture,
+        }
+    )
+
+
+@feedback_group.command(
+    "apply-dev-fix",
+    help="Apply a stored developer fix to a developer-side issue resolution.",
+)
+@click.option("--issue-id", required=True, help="Developer issue identifier.")
+@click.option("--fix-id", required=True, help="Developer fix identifier.")
+@click.option(
+    "--store-path",
+    default="~/.ace-lite/dev_feedback.db",
+    show_default=True,
+    help="Developer feedback SQLite path.",
+)
+@click.option("--status", default="fixed", show_default=True, help="Resolved issue status.")
+@click.option("--resolved-at", default=None, help="Optional ISO-8601 resolution timestamp.")
+@click.option(
+    "--root",
+    default=None,
+    help="Optional repo root used to resolve runtime config for long-term capture.",
+)
+def feedback_apply_dev_fix_command(
+    issue_id: str,
+    fix_id: str,
+    store_path: str,
+    status: str,
+    resolved_at: str | None,
+    root: str | None,
+) -> None:
+    store = DevFeedbackStore(db_path=store_path)
+    issue = store.apply_fix(
+        issue_id=issue_id,
+        fix_id=fix_id,
+        status=status,
+        resolved_at=resolved_at,
+    )
+    fix = store.get_fix(fix_id)
+    if fix is None:
+        raise click.ClickException(f"Developer fix not found: {fix_id}")
+    long_term_capture_service = _build_long_term_capture_service(root=root)
+    long_term_capture = _capture_long_term_event(
+        service=long_term_capture_service,
+        stage_name="dev_issue_resolution",
+        operation=lambda: long_term_capture_service.capture_dev_issue_resolution(
+            issue=issue.to_payload(),
+            fix=fix.to_payload(),
+            root=_resolve_root_path(root),
+        ),
+    )
+    echo_json(
+        {
+            "ok": True,
+            "store_path": str(store.db_path),
+            "issue": issue.to_payload(),
+            "fix": fix.to_payload(),
+            "long_term_capture": long_term_capture,
+        }
+    )
 
 
 @feedback_group.command("dev-feedback-summary", help="Summarize stored developer issues and fixes.")
@@ -793,6 +924,83 @@ def feedback_dev_feedback_summary_command(
         user_id=user_id,
         profile_key=profile_key,
     )})
+
+
+@feedback_group.command(
+    "report-dev-issue-from-runtime",
+    help="Promote an auto-captured runtime event into a developer-side issue.",
+)
+@click.option("--invocation-id", required=True, help="Runtime invocation id to promote.")
+@click.option("--reason-code", default=None, help="Optional degraded reason override.")
+@click.option("--title", default=None, help="Optional developer issue title override.")
+@click.option("--notes", default=None, help="Optional extra notes appended to auto notes.")
+@click.option("--status", default="open", show_default=True, help="Issue status.")
+@click.option("--user-id", default=None, help="Optional user scope.")
+@click.option("--profile-key", default=None, help="Optional profile scope override.")
+@click.option("--issue-id", default=None, help="Optional stable issue id.")
+@click.option(
+    "--root",
+    default=None,
+    help="Optional repo root used to resolve runtime config for long-term capture.",
+)
+@click.option(
+    "--stats-db-path",
+    default=DEFAULT_RUNTIME_STATS_DB_PATH,
+    show_default=True,
+    help="Runtime stats SQLite path used for auto-captured invocation lookup.",
+)
+@click.option(
+    "--store-path",
+    default="~/.ace-lite/dev_feedback.db",
+    show_default=True,
+    help="Developer feedback SQLite path.",
+)
+def feedback_report_dev_issue_from_runtime_command(
+    invocation_id: str,
+    reason_code: str | None,
+    title: str | None,
+    notes: str | None,
+    status: str,
+    user_id: str | None,
+    profile_key: str | None,
+    issue_id: str | None,
+    root: str | None,
+    stats_db_path: str,
+    store_path: str,
+) -> None:
+    issue, invocation, resolved_store_path, resolved_stats_db_path = (
+        record_dev_issue_from_runtime_invocation(
+            invocation_id=invocation_id,
+            stats_db_path=stats_db_path,
+            store_path=store_path,
+            reason_code=reason_code,
+            title=title,
+            notes=notes,
+            status=status,
+            user_id=user_id,
+            profile_key=profile_key,
+            issue_id=issue_id,
+        )
+    )
+    long_term_capture_service = _build_long_term_capture_service(root=root)
+    long_term_capture = _capture_long_term_event(
+        service=long_term_capture_service,
+        stage_name="dev_issue",
+        operation=lambda: long_term_capture_service.capture_dev_issue(
+            issue=issue.to_payload(),
+            root=_resolve_root_path(root),
+        ),
+    )
+    echo_json(
+        {
+            "ok": True,
+            "store_path": resolved_store_path,
+            "stats_db_path": resolved_stats_db_path,
+            "issue": issue.to_payload(),
+            "invocation": invocation.to_payload(),
+            "long_term_capture": long_term_capture,
+        }
+    )
 
 
 __all__ = ["feedback_group"]

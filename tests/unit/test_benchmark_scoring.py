@@ -6,6 +6,7 @@ from ace_lite.benchmark.scoring import (
     aggregate_metrics,
     build_comparison_lane_summary,
     build_feedback_loop_summary,
+    build_ltm_explainability_summary,
     compare_metrics,
     detect_regression,
     evaluate_case_result,
@@ -419,8 +420,10 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "profile_selected_mean",
         "capture_trigger_ratio",
         "ltm_hit_ratio",
+        "ltm_effective_hit_rate",
         "ltm_false_help_rate",
         "ltm_stale_hit_rate",
+        "ltm_replay_drift_rate",
         "issue_report_linked_plan_rate",
         "issue_to_benchmark_case_conversion_rate",
         "dev_feedback_resolution_rate",
@@ -520,8 +523,10 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["evidence_insufficient_rate"] == 0.0
     assert metrics["memory_helpful_task_success_rate"] == 0.0
     assert metrics["ltm_hit_ratio"] == 0.0
+    assert metrics["ltm_effective_hit_rate"] == 0.0
     assert metrics["ltm_false_help_rate"] == 0.0
     assert metrics["ltm_stale_hit_rate"] == 0.0
+    assert metrics["ltm_replay_drift_rate"] == 0.0
 
 
 def test_feedback_loop_summary_and_metrics() -> None:
@@ -606,12 +611,14 @@ def test_ltm_summary_metrics_use_lane_specific_plan_attribution_signals() -> Non
             "comparison_lane": "time-sensitive",
             "ltm_plan_constraint_count": 1.0,
             "task_success_hit": 0.0,
+            "plan_replay_cache_stale_hit_safe": 0.0,
         },
         {
             "case_id": "time-sensitive-safe",
             "comparison_lane": "time-sensitive",
             "ltm_plan_constraint_count": 1.0,
             "task_success_hit": 1.0,
+            "plan_replay_cache_stale_hit_safe": 1.0,
         },
     ]
 
@@ -619,8 +626,54 @@ def test_ltm_summary_metrics_use_lane_specific_plan_attribution_signals() -> Non
 
     assert metrics["memory_helpful_task_success_rate"] == 1.0
     assert metrics["ltm_hit_ratio"] == 0.5
+    assert metrics["ltm_effective_hit_rate"] == 1.0
     assert metrics["ltm_false_help_rate"] == 0.5
     assert metrics["ltm_stale_hit_rate"] == 0.5
+    assert metrics["ltm_replay_drift_rate"] == 0.5
+
+
+def test_build_ltm_explainability_summary_aggregates_case_level_signals() -> None:
+    summary = build_ltm_explainability_summary(
+        [
+            {
+                "case_id": "case-a",
+                "ltm_selected_count": 2.0,
+                "ltm_attribution_count": 1.0,
+                "ltm_graph_neighbor_count": 1.0,
+                "ltm_plan_constraint_count": 1.0,
+            },
+            {
+                "case_id": "case-b",
+                "ltm_selected_count": 0.0,
+                "ltm_attribution_count": 0.0,
+                "ltm_graph_neighbor_count": 0.0,
+                "ltm_plan_constraint_count": 0.0,
+            },
+            {
+                "case_id": "case-c",
+                "ltm_selected_count": 1.0,
+                "ltm_attribution_count": 1.0,
+                "ltm_graph_neighbor_count": 0.0,
+                "ltm_plan_constraint_count": 1.0,
+            },
+        ]
+    )
+
+    assert summary == {
+        "case_count": 3,
+        "selected_case_count": 2,
+        "selected_case_rate": 2.0 / 3.0,
+        "selected_count_mean": 1.0,
+        "attribution_case_count": 2,
+        "attribution_case_rate": 2.0 / 3.0,
+        "attribution_count_mean": 2.0 / 3.0,
+        "graph_neighbor_case_count": 1,
+        "graph_neighbor_case_rate": 1.0 / 3.0,
+        "graph_neighbor_count_mean": 1.0 / 3.0,
+        "plan_constraint_case_count": 2,
+        "plan_constraint_case_rate": 2.0 / 3.0,
+        "plan_constraint_count_mean": 2.0 / 3.0,
+    }
 
 
 def test_evaluate_case_result_applies_candidate_path_exclusions() -> None:
@@ -1586,7 +1639,17 @@ def test_evaluate_case_result_extracts_memory_metrics() -> None:
                 "attribution": [
                     {
                         "handle": "fact-1",
-                        "graph_neighborhood": {"triple_count": 1},
+                        "summary": "runtime.validation.git fallback_policy reuse_checkout_or_skip",
+                        "graph_neighborhood": {
+                            "triple_count": 1,
+                            "triples": [
+                                {
+                                    "subject": "reuse_checkout_or_skip",
+                                    "predicate": "recommended_for",
+                                    "object": "runtime.validation.git",
+                                }
+                            ],
+                        },
                     }
                 ],
             },
@@ -1621,6 +1684,9 @@ def test_evaluate_case_result_extracts_memory_metrics() -> None:
     assert row["ltm_attribution_count"] == 1.0
     assert row["ltm_graph_neighbor_count"] == 1.0
     assert row["ltm_plan_constraint_count"] == 1.0
+    assert row["ltm_explainability"]["attribution_preview"] == [
+        "runtime.validation.git fallback_policy reuse_checkout_or_skip | graph: reuse_checkout_or_skip recommended_for runtime.validation.git"
+    ]
     assert row["feedback_enabled"] == 1.0
     assert row["feedback_reason"] == "ok"
     assert row["feedback_event_count"] == 4.0

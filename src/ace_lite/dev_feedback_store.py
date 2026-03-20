@@ -363,6 +363,20 @@ class DevFeedbackStore:
         finally:
             conn.close()
 
+    def get_issue(self, issue_id: str) -> DevIssue | None:
+        normalized_issue_id = _normalize_text(issue_id, max_len=128)
+        if not normalized_issue_id:
+            return None
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                f"SELECT * FROM {DEV_ISSUES_TABLE} WHERE issue_id = ?",
+                (normalized_issue_id,),
+            ).fetchone()
+            return self._row_to_issue(row) if row is not None else None
+        finally:
+            conn.close()
+
     def get_fix(self, fix_id: str) -> DevFix | None:
         normalized_fix_id = _normalize_text(fix_id, max_len=128)
         if not normalized_fix_id:
@@ -376,6 +390,65 @@ class DevFeedbackStore:
             return self._row_to_fix(row) if row is not None else None
         finally:
             conn.close()
+
+    def resolve_with_fix(
+        self,
+        *,
+        issue_id: str,
+        fix: DevFix,
+        resolved_at: str | None = None,
+        status: str = "fixed",
+    ) -> DevIssue:
+        current = self.get_issue(issue_id)
+        if current is None:
+            raise KeyError(f"developer issue not found: {issue_id}")
+        if fix.issue_id and fix.issue_id != current.issue_id:
+            raise ValueError("developer fix issue_id does not match target issue")
+        if fix.repo != current.repo:
+            raise ValueError("developer fix repo does not match target issue")
+        if fix.reason_code and current.reason_code and fix.reason_code != current.reason_code:
+            raise ValueError("developer fix reason_code does not match target issue")
+
+        resolved_timestamp = _normalize_timestamp(
+            resolved_at or fix.created_at,
+            required=True,
+        )
+        note_lines = (
+            [str(current.notes or "").strip()]
+            if str(current.notes or "").strip()
+            else []
+        )
+        note_lines.append(f"resolved_by_fix={fix.fix_id}")
+        note_lines.append(f"resolution_note={fix.resolution_note}")
+        return self.record_issue(
+            {
+                **current.to_payload(),
+                "status": status,
+                "related_invocation_id": current.related_invocation_id
+                or fix.related_invocation_id,
+                "notes": "\n".join(note_lines),
+                "updated_at": resolved_timestamp,
+                "resolved_at": resolved_timestamp,
+            }
+        )
+
+    def apply_fix(
+        self,
+        *,
+        issue_id: str,
+        fix_id: str,
+        resolved_at: str | None = None,
+        status: str = "fixed",
+    ) -> DevIssue:
+        fix = self.get_fix(fix_id)
+        if fix is None:
+            raise KeyError(f"developer fix not found: {fix_id}")
+        return self.resolve_with_fix(
+            issue_id=issue_id,
+            fix=fix,
+            resolved_at=resolved_at,
+            status=status,
+        )
 
     def summarize(
         self,
@@ -510,6 +583,25 @@ class DevFeedbackStore:
             related_invocation_id=str(row["related_invocation_id"] or ""),
             resolution_note=str(row["resolution_note"] or ""),
             created_at=str(row["created_at"] or ""),
+        )
+
+    @staticmethod
+    def _row_to_issue(row: Any) -> DevIssue:
+        return DevIssue(
+            issue_id=str(row["issue_id"] or ""),
+            title=str(row["title"] or ""),
+            reason_code=str(row["reason_code"] or ""),
+            status=str(row["status"] or ""),
+            repo=str(row["repo"] or ""),
+            user_id=str(row["user_id"] or ""),
+            profile_key=str(row["profile_key"] or ""),
+            query=str(row["query"] or ""),
+            selected_path=str(row["selected_path"] or ""),
+            related_invocation_id=str(row["related_invocation_id"] or ""),
+            notes=str(row["notes"] or ""),
+            created_at=str(row["created_at"] or ""),
+            updated_at=str(row["updated_at"] or ""),
+            resolved_at=str(row["resolved_at"] or ""),
         )
 
 

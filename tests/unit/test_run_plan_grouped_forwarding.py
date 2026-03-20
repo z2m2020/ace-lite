@@ -163,6 +163,14 @@ def test_run_plan_prefers_grouped_internal_forwarding(monkeypatch) -> None:
         "strategy": "semantic",
         "timeline": {"enabled": False},
         "gate": {"enabled": True, "mode": "never"},
+        "long_term": {
+            "enabled": True,
+            "path": "context-map/custom-long-term.db",
+            "top_n": 7,
+            "token_budget": 320,
+            "write_enabled": True,
+            "as_of_enabled": False,
+        },
         "profile": {
             "enabled": True,
             "path": "profile.json",
@@ -476,6 +484,12 @@ def test_run_plan_preserves_flat_forwarding_without_grouped_payloads(monkeypatch
         memory_timeline_enabled=False,
         memory_profile_enabled=True,
         memory_profile_top_n=6,
+        memory_long_term_enabled=True,
+        memory_long_term_path="context-map/custom-long-term.db",
+        memory_long_term_top_n=7,
+        memory_long_term_token_budget=320,
+        memory_long_term_write_enabled=True,
+        memory_long_term_as_of_enabled=False,
         memory_capture_enabled=True,
         memory_capture_keywords=["alpha", "beta"],
         memory_notes_enabled=True,
@@ -580,6 +594,12 @@ def test_run_plan_preserves_flat_forwarding_without_grouped_payloads(monkeypatch
     assert captured["memory_timeline_enabled"] is False
     assert captured["memory_profile_enabled"] is True
     assert captured["memory_profile_top_n"] == 6
+    assert captured["memory_long_term_enabled"] is True
+    assert captured["memory_long_term_path"] == "context-map/custom-long-term.db"
+    assert captured["memory_long_term_top_n"] == 7
+    assert captured["memory_long_term_token_budget"] == 320
+    assert captured["memory_long_term_write_enabled"] is True
+    assert captured["memory_long_term_as_of_enabled"] is False
     assert captured["memory_capture_enabled"] is True
     assert captured["memory_capture_keywords"] == ["alpha", "beta"]
     assert captured["memory_notes_enabled"] is True

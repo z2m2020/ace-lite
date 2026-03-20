@@ -7,6 +7,7 @@ from typing import Any
 import click
 from click.testing import CliRunner
 
+from ace_lite.benchmark.regression_checks import resolve_regression_thresholds
 from ace_lite.cli import cli
 from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.router_reward_store import append_reward_event
@@ -677,22 +678,9 @@ def test_cli_benchmark_reports_complete_threshold_keys(tmp_path: Path) -> None:
     assert result.exit_code == 0
     payload = json.loads((output_dir / "results.json").read_text(encoding="utf-8"))
     thresholds = payload["regression_thresholds"]
-    assert set(thresholds.keys()) == {
-        "precision_tolerance",
-        "noise_tolerance",
-        "latency_growth_factor",
-        "dependency_recall_floor",
-        "chunk_hit_tolerance",
-        "chunk_budget_growth_factor",
-        "validation_test_growth_factor",
-        "notes_hit_tolerance",
-        "profile_selected_tolerance",
-        "capture_trigger_tolerance",
-        "embedding_similarity_tolerance",
-        "embedding_rerank_ratio_tolerance",
-        "embedding_cache_hit_tolerance",
-        "embedding_fallback_tolerance",
-    }
+    assert set(thresholds.keys()) == set(
+        resolve_regression_thresholds(profile="strict").keys()
+    )
 
 
 def test_cli_benchmark_passes_grouped_config_objects_to_factory(

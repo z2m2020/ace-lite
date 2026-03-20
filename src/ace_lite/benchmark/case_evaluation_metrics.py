@@ -23,6 +23,43 @@ def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def _build_ltm_attribution_preview(attribution: list[Any], *, limit: int = 2) -> list[str]:
+    preview: list[str] = []
+    resolved_limit = max(1, int(limit or 2))
+    for item in attribution:
+        if not isinstance(item, dict):
+            continue
+        summary = str(item.get("summary") or "").strip()
+        graph_neighborhood = _as_dict(item.get("graph_neighborhood"))
+        graph_triples = _as_list(graph_neighborhood.get("triples"))
+        graph_preview = ""
+        for triple in graph_triples:
+            if not isinstance(triple, dict):
+                continue
+            edge = " ".join(
+                value
+                for value in (
+                    str(triple.get("subject") or "").strip(),
+                    str(triple.get("predicate") or "").strip(),
+                    str(triple.get("object") or "").strip(),
+                )
+                if value
+            )
+            if edge:
+                graph_preview = edge
+                break
+        text = summary
+        if graph_preview:
+            text = f"{summary} | graph: {graph_preview}" if summary else graph_preview
+        text = text.strip()
+        if not text or text in preview:
+            continue
+        preview.append(text)
+        if len(preview) >= resolved_limit:
+            break
+    return preview
+
+
 @dataclass(frozen=True, slots=True)
 class CaseEvaluationMetrics:
     source_plan_evidence_summary: dict[str, float]
@@ -52,6 +89,7 @@ class CaseEvaluationMetrics:
     ltm_attribution_count: int
     ltm_graph_neighbor_count: int
     ltm_plan_constraint_count: int
+    ltm_attribution_preview: list[str]
     feedback_enabled: bool
     feedback_reason: str
     feedback_event_count: int
@@ -305,6 +343,7 @@ def build_case_evaluation_metrics(
         0,
         int(ltm_constraint_summary.get("constraint_count", 0) or 0),
     )
+    ltm_attribution_preview = _build_ltm_attribution_preview(ltm_attribution)
     feedback_enabled = bool(candidate_ranking_payload.get("feedback_enabled", False))
     feedback_reason = str(candidate_ranking_payload.get("feedback_reason", "") or "").strip()
     feedback_event_count = max(
@@ -1063,6 +1102,7 @@ def build_case_evaluation_metrics(
         ltm_attribution_count=ltm_attribution_count,
         ltm_graph_neighbor_count=ltm_graph_neighbor_count,
         ltm_plan_constraint_count=ltm_plan_constraint_count,
+        ltm_attribution_preview=ltm_attribution_preview,
         feedback_enabled=feedback_enabled,
         feedback_reason=feedback_reason,
         feedback_event_count=feedback_event_count,

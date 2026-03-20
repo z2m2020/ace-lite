@@ -424,6 +424,78 @@ plan:
     assert captured["memory_capture_keywords"] == ["fix", "bug"]
 
 
+def test_cli_plan_reads_memory_long_term_from_config(tmp_path: Path, monkeypatch) -> None:
+    _seed_root(tmp_path)
+
+    (tmp_path / ".ace-lite.yml").write_text(
+        """
+plan:
+  memory:
+    long_term:
+      enabled: true
+      path: context-map/long-term.db
+      top_n: 6
+      token_budget: 320
+      write_enabled: true
+      as_of_enabled: false
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    provider_captured: dict[str, Any] = {}
+    run_captured: dict[str, Any] = {}
+
+    def fake_create_memory_provider(**kwargs: Any) -> NullMemoryProvider:
+        provider_captured.update(kwargs)
+        return NullMemoryProvider()
+
+    def fake_run_plan(**kwargs: Any) -> dict[str, Any]:
+        run_captured.update(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(cli_module, "create_memory_provider", fake_create_memory_provider)
+    monkeypatch.setattr(cli_module, "run_plan", fake_run_plan)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "plan",
+            "--query",
+            "q",
+            "--repo",
+            "demo",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(tmp_path / "skills"),
+            "--memory-primary",
+            "none",
+            "--memory-secondary",
+            "none",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    assert provider_captured["memory_long_term_enabled"] is True
+    assert str(provider_captured["memory_long_term_path"]).endswith(
+        "context-map/long-term.db"
+    )
+    assert provider_captured["memory_long_term_top_n"] == 6
+    assert provider_captured["memory_long_term_token_budget"] == 320
+    assert provider_captured["memory_long_term_write_enabled"] is True
+    assert provider_captured["memory_long_term_as_of_enabled"] is False
+    assert run_captured["memory_long_term_enabled"] is True
+    assert str(run_captured["memory_long_term_path"]).endswith(
+        "context-map/long-term.db"
+    )
+    assert run_captured["memory_long_term_top_n"] == 6
+    assert run_captured["memory_long_term_token_budget"] == 320
+    assert run_captured["memory_long_term_write_enabled"] is True
+    assert run_captured["memory_long_term_as_of_enabled"] is False
+
 
 def test_create_memory_provider_builds_hybrid_cache_wrapper() -> None:
     provider = cli_module.create_memory_provider(

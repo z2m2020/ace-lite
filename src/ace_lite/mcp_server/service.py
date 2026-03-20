@@ -34,6 +34,8 @@ from ace_lite.mcp_server.service_feedback_handlers import (
 )
 from ace_lite.mcp_server.service_dev_feedback_handlers import (
     handle_dev_feedback_summary_request,
+    handle_dev_issue_apply_fix_request,
+    handle_dev_issue_from_runtime_request,
     handle_dev_fix_record_request,
     handle_dev_issue_record_request,
 )
@@ -629,6 +631,7 @@ class AceLiteMcpService:
                 updated_at=updated_at,
                 resolved_at=resolved_at,
                 issue_id=issue_id,
+                root_path=self._config.default_root,
             ),
         )
 
@@ -664,6 +667,60 @@ class AceLiteMcpService:
                 related_invocation_id=related_invocation_id,
                 created_at=created_at,
                 fix_id=fix_id,
+                root_path=self._config.default_root,
+            ),
+        )
+
+    def dev_issue_from_runtime(
+        self,
+        *,
+        invocation_id: str,
+        stats_db_path: str | None = None,
+        store_path: str | None = None,
+        reason_code: str | None = None,
+        title: str | None = None,
+        notes: str | None = None,
+        status: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
+        issue_id: str | None = None,
+    ) -> dict[str, Any]:
+        resolved_user_id = user_id if user_id is not None else self._config.user_id
+        return self._run_tracked(
+            "ace_dev_issue_from_runtime",
+            lambda: handle_dev_issue_from_runtime_request(
+                invocation_id=invocation_id,
+                stats_db_path=stats_db_path,
+                store_path=store_path,
+                reason_code=reason_code,
+                title=title,
+                notes=notes,
+                status=status,
+                user_id=resolved_user_id,
+                profile_key=profile_key,
+                issue_id=issue_id,
+                root_path=self._config.default_root,
+            ),
+        )
+
+    def dev_issue_apply_fix(
+        self,
+        *,
+        issue_id: str,
+        fix_id: str,
+        store_path: str | None = None,
+        status: str | None = None,
+        resolved_at: str | None = None,
+    ) -> dict[str, Any]:
+        return self._run_tracked(
+            "ace_dev_issue_apply_fix",
+            lambda: handle_dev_issue_apply_fix_request(
+                issue_id=issue_id,
+                fix_id=fix_id,
+                store_path=store_path,
+                status=status,
+                resolved_at=resolved_at,
+                root_path=self._config.default_root,
             ),
         )
 

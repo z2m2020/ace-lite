@@ -101,6 +101,7 @@ def build_case_evaluation_row(
     ltm_attribution_count: int,
     ltm_graph_neighbor_count: int,
     ltm_plan_constraint_count: int,
+    ltm_attribution_preview: list[str],
     feedback_enabled: bool,
     feedback_reason: str,
     feedback_event_count: int,
@@ -327,6 +328,11 @@ def build_case_evaluation_row(
             "attribution_count": int(ltm_attribution_count),
             "graph_neighbor_count": int(ltm_graph_neighbor_count),
             "plan_constraint_count": int(ltm_plan_constraint_count),
+            "attribution_preview": [
+                str(item).strip()
+                for item in ltm_attribution_preview
+                if str(item).strip()
+            ],
         },
         "feedback_surface": feedback_surface,
         "issue_report_issue_id": issue_report_issue_id,

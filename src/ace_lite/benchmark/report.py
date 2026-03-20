@@ -193,6 +193,12 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
         if isinstance(preference_snapshot_raw, dict)
         else {}
     )
+    memory_health_summary_raw = summary.get("memory_health_summary")
+    memory_health_summary: dict[str, Any] = (
+        memory_health_summary_raw
+        if isinstance(memory_health_summary_raw, dict)
+        else {}
+    )
 
     lines.append("## Runtime Stats Summary")
     lines.append("")
@@ -224,6 +230,55 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
             f" | {float(latency.get('latency_ms_avg', 0.0) or 0.0):.2f} |"
         )
     lines.append("")
+    if memory_health_summary:
+        lines.append("### Memory Health")
+        lines.append("")
+        lines.append(
+            "- Scope: {scope}".format(
+                scope=str(memory_health_summary.get("scope_kind") or "all_time")
+            )
+        )
+        lines.append(
+            "- Runtime memory events: {count}".format(
+                count=int(memory_health_summary.get("runtime_event_count", 0) or 0)
+            )
+        )
+        lines.append(
+            "- Developer issues: {count} open={open_count} fixes={fix_count} resolution_rate={rate:.4f}".format(
+                count=int(memory_health_summary.get("issue_count", 0) or 0),
+                open_count=int(memory_health_summary.get("open_issue_count", 0) or 0),
+                fix_count=int(memory_health_summary.get("fix_count", 0) or 0),
+                rate=float(memory_health_summary.get("resolution_rate", 0.0) or 0.0),
+            )
+        )
+        lines.append(
+            "- Memory stage latency avg: {value:.2f} ms".format(
+                value=float(
+                    memory_health_summary.get("memory_stage_latency_ms_avg", 0.0) or 0.0
+                )
+            )
+        )
+        lines.append("")
+        reason_rows_raw = memory_health_summary.get("reasons")
+        reason_rows = reason_rows_raw if isinstance(reason_rows_raw, list) else []
+        if reason_rows:
+            lines.append(
+                "| Reason | Runtime Events | Issues | Open Issues | Fixes | Last Seen |"
+            )
+            lines.append("| --- | ---: | ---: | ---: | ---: | --- |")
+            for item in reason_rows:
+                if not isinstance(item, dict):
+                    continue
+                lines.append(
+                    "| "
+                    f"{str(item.get('reason_code') or '').strip() or '(unknown)'}"
+                    f" | {int(item.get('runtime_event_count', 0) or 0)}"
+                    f" | {int(item.get('manual_issue_count', 0) or 0)}"
+                    f" | {int(item.get('open_issue_count', 0) or 0)}"
+                    f" | {int(item.get('fix_count', 0) or 0)}"
+                    f" | {str(item.get('last_seen_at') or '').strip() or '-'} |"
+                )
+            lines.append("")
     if preference_snapshot:
         lines.append("### Preference Snapshot")
         lines.append("")
@@ -769,6 +824,71 @@ def _append_feedback_observability_summary(
         reasons.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))
     ):
         lines.append(f"| {name} | {int(count or 0)} |")
+    lines.append("")
+
+
+def _append_ltm_explainability_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("ltm_explainability_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    case_count = int(summary.get("case_count", 0) or 0)
+    lines.append("## Long-Term Explainability Summary")
+    lines.append("")
+    lines.append(
+        "- Selected cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("selected_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("selected_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Attribution cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("attribution_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("attribution_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Graph-neighbor cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("graph_neighbor_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("graph_neighbor_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Plan-constraint cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("plan_constraint_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("plan_constraint_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("| --- | ---: |")
+    lines.append(
+        "| selected_count_mean | {value:.4f} |".format(
+            value=float(summary.get("selected_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| attribution_count_mean | {value:.4f} |".format(
+            value=float(summary.get("attribution_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| graph_neighbor_count_mean | {value:.4f} |".format(
+            value=float(summary.get("graph_neighbor_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| plan_constraint_count_mean | {value:.4f} |".format(
+            value=float(summary.get("plan_constraint_count_mean", 0.0) or 0.0)
+        )
+    )
     lines.append("")
 
 
@@ -1402,6 +1522,7 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     _append_evidence_insufficiency_summary(lines, results)
     _append_feedback_loop_summary(lines, results)
     _append_feedback_observability_summary(lines, results)
+    _append_ltm_explainability_summary(lines, results)
     _append_preference_observability_summary(lines, results)
     _append_retrieval_context_observability_summary(lines, results)
     _append_chunk_stage_miss_summary(lines, results)

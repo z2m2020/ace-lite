@@ -107,6 +107,9 @@ def _base_row_kwargs() -> dict[str, object]:
         "ltm_attribution_count": 1,
         "ltm_graph_neighbor_count": 1,
         "ltm_plan_constraint_count": 1,
+        "ltm_attribution_preview": [
+            "runtime.validation.git fallback_policy reuse_checkout_or_skip | graph: reuse_checkout_or_skip recommended_for runtime.validation.git"
+        ],
         "feedback_enabled": True,
         "feedback_reason": "ok",
         "feedback_event_count": 4,
@@ -202,6 +205,9 @@ def test_build_case_evaluation_row_contract() -> None:
         "attribution_count": 1,
         "graph_neighbor_count": 1,
         "plan_constraint_count": 1,
+        "attribution_preview": [
+            "runtime.validation.git fallback_policy reuse_checkout_or_skip | graph: reuse_checkout_or_skip recommended_for runtime.validation.git"
+        ],
     }
     assert row["feedback_boost"] == {
         "enabled": True,

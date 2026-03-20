@@ -95,3 +95,27 @@ def test_durable_stats_store_update_rebuilds_existing_invocation_without_double_
     assert payload["counters"]["plan_replay_store_count"] == 1
     assert payload["latency"]["latency_ms_sum"] == 25.0
     assert payload["degraded_states"] == []
+
+
+def test_durable_stats_store_can_read_individual_invocation(tmp_path: Path) -> None:
+    store = DurableStatsStore(db_path=tmp_path / "context-map" / "runtime-stats.db")
+    store.record_invocation(
+        RuntimeInvocationStats(
+            invocation_id="inv-lookup",
+            session_id="sess-1",
+            repo_key="repo-alpha",
+            profile_key="bugfix",
+            status="degraded",
+            total_latency_ms=18.5,
+            started_at="2026-03-19T00:00:00+00:00",
+            finished_at="2026-03-19T00:00:01+00:00",
+            degraded_reason_codes=("memory_fallback",),
+        )
+    )
+
+    loaded = store.read_invocation(invocation_id="inv-lookup")
+
+    assert loaded is not None
+    assert loaded.invocation_id == "inv-lookup"
+    assert loaded.repo_key == "repo-alpha"
+    assert loaded.degraded_reason_codes == ("memory_fallback",)

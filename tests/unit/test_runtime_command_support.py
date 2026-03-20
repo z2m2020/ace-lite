@@ -402,6 +402,16 @@ def test_load_runtime_stats_summary_includes_dev_feedback_and_top_pain_summary(
     assert payload["top_pain_summary"]["items"][0]["manual_issue_count"] == 1
     assert payload["top_pain_summary"]["items"][0]["open_issue_count"] == 1
     assert payload["top_pain_summary"]["items"][0]["fix_count"] == 1
+    assert payload["memory_health_summary"]["scope_kind"] == "repo_profile"
+    assert payload["memory_health_summary"]["reason_count"] == 1
+    assert payload["memory_health_summary"]["runtime_event_count"] == 1
+    assert payload["memory_health_summary"]["issue_count"] == 1
+    assert payload["memory_health_summary"]["open_issue_count"] == 1
+    assert payload["memory_health_summary"]["fix_count"] == 1
+    assert payload["memory_health_summary"]["resolution_rate"] == 1.0
+    assert payload["memory_health_summary"]["open_issue_rate"] == 1.0
+    assert payload["memory_health_summary"]["memory_stage_latency_ms_avg"] == 20.0
+    assert payload["memory_health_summary"]["reasons"][0]["reason_code"] == "memory_fallback"
 
 
 def test_execute_codex_mcp_setup_plan_dry_run_does_not_run_commands() -> None:

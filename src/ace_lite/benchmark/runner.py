@@ -20,6 +20,7 @@ from ace_lite.benchmark.scoring import (
     build_evidence_insufficiency_summary,
     build_feedback_loop_summary,
     build_feedback_observability_summary,
+    build_ltm_explainability_summary,
     build_preference_observability_summary,
     build_retrieval_context_observability_summary,
     build_slo_budget_summary,
@@ -561,6 +562,9 @@ class BenchmarkRunner:
             ),
             "feedback_loop_summary": build_feedback_loop_summary(case_results),
             "feedback_observability_summary": build_feedback_observability_summary(
+                case_results
+            ),
+            "ltm_explainability_summary": build_ltm_explainability_summary(
                 case_results
             ),
             "preference_observability_summary": (
