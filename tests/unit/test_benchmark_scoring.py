@@ -424,9 +424,12 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "ltm_false_help_rate",
         "ltm_stale_hit_rate",
         "ltm_replay_drift_rate",
+        "ltm_latency_overhead_ms",
         "issue_report_linked_plan_rate",
         "issue_to_benchmark_case_conversion_rate",
+        "issue_report_time_to_fix_hours_mean",
         "dev_feedback_resolution_rate",
+        "dev_issue_to_fix_rate",
         "embedding_enabled_ratio",
         "embedding_similarity_mean",
         "embedding_similarity_max",
@@ -527,6 +530,7 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["ltm_false_help_rate"] == 0.0
     assert metrics["ltm_stale_hit_rate"] == 0.0
     assert metrics["ltm_replay_drift_rate"] == 0.0
+    assert metrics["ltm_latency_overhead_ms"] == 0.0
 
 
 def test_feedback_loop_summary_and_metrics() -> None:
@@ -536,6 +540,8 @@ def test_feedback_loop_summary_and_metrics() -> None:
             "comparison_lane": "issue_report_feedback",
             "issue_report_issue_id": "iss_123",
             "issue_report_has_plan_ref": 1.0,
+            "issue_report_resolved_at": "2026-03-19T12:00:00+00:00",
+            "issue_report_time_to_fix_hours": 12.0,
             "feedback_surface": "issue_report_export_cli",
             "task_success_hit": 1.0,
         },
@@ -544,6 +550,8 @@ def test_feedback_loop_summary_and_metrics() -> None:
             "comparison_lane": "issue_report_feedback",
             "issue_report_issue_id": "",
             "issue_report_has_plan_ref": 0.0,
+            "issue_report_resolved_at": "",
+            "issue_report_time_to_fix_hours": 0.0,
             "feedback_surface": "issue_report_export_mcp",
             "task_success_hit": 1.0,
         },
@@ -551,12 +559,19 @@ def test_feedback_loop_summary_and_metrics() -> None:
             "case_id": "resolved",
             "comparison_lane": "dev_feedback_resolution",
             "feedback_surface": "issue_resolution_cli",
+            "dev_feedback_issue_count": 1.0,
+            "dev_feedback_linked_fix_issue_count": 1.0,
+            "dev_feedback_resolved_issue_count": 1.0,
+            "dev_feedback_issue_time_to_fix_hours": 6.0,
             "task_success_hit": 1.0,
         },
         {
             "case_id": "unresolved",
             "comparison_lane": "dev_feedback_resolution",
             "feedback_surface": "issue_resolution_mcp",
+            "dev_feedback_issue_count": 1.0,
+            "dev_feedback_linked_fix_issue_count": 0.0,
+            "dev_feedback_resolved_issue_count": 0.0,
             "task_success_hit": 0.0,
         },
     ]
@@ -566,12 +581,24 @@ def test_feedback_loop_summary_and_metrics() -> None:
 
     assert metrics["issue_to_benchmark_case_conversion_rate"] == 0.5
     assert metrics["issue_report_linked_plan_rate"] == 1.0
+    assert metrics["issue_report_time_to_fix_hours_mean"] == 12.0
     assert metrics["dev_feedback_resolution_rate"] == 0.5
+    assert metrics["dev_issue_to_fix_rate"] == 0.5
     assert summary["issue_report_case_count"] == 2
     assert summary["issue_report_linked_case_count"] == 1
     assert summary["issue_report_linked_plan_case_count"] == 1
+    assert summary["issue_report_resolved_case_count"] == 1
+    assert summary["issue_report_resolution_rate"] == 0.5
+    assert summary["issue_report_time_to_fix_case_count"] == 1
+    assert summary["issue_report_time_to_fix_hours_mean"] == 12.0
     assert summary["dev_feedback_resolution_case_count"] == 2
     assert summary["dev_feedback_resolved_case_count"] == 1
+    assert summary["dev_feedback_issue_count"] == 2
+    assert summary["dev_feedback_linked_fix_issue_count"] == 1
+    assert summary["dev_feedback_resolved_issue_count"] == 1
+    assert summary["dev_issue_to_fix_rate"] == 0.5
+    assert summary["dev_feedback_issue_time_to_fix_case_count"] == 1
+    assert summary["dev_feedback_issue_time_to_fix_hours_mean"] == 6.0
     assert summary["feedback_surfaces"] == {
         "issue_report_export_cli": 1,
         "issue_report_export_mcp": 1,
@@ -587,24 +614,28 @@ def test_ltm_summary_metrics_use_lane_specific_plan_attribution_signals() -> Non
             "comparison_lane": "memory-helpful",
             "ltm_plan_constraint_count": 1.0,
             "task_success_hit": 1.0,
+            "memory_latency_ms": 8.0,
         },
         {
             "case_id": "helpful-miss",
             "comparison_lane": "memory-helpful",
             "ltm_plan_constraint_count": 0.0,
             "task_success_hit": 1.0,
+            "memory_latency_ms": 4.0,
         },
         {
             "case_id": "harmful-polluted",
             "comparison_lane": "memory-harmful-negative-control",
             "ltm_plan_constraint_count": 1.0,
             "task_success_hit": 0.0,
+            "memory_latency_ms": 8.0,
         },
         {
             "case_id": "harmful-clean",
             "comparison_lane": "memory-harmful-negative-control",
             "ltm_plan_constraint_count": 0.0,
             "task_success_hit": 1.0,
+            "memory_latency_ms": 4.0,
         },
         {
             "case_id": "time-sensitive-stale",
@@ -612,6 +643,7 @@ def test_ltm_summary_metrics_use_lane_specific_plan_attribution_signals() -> Non
             "ltm_plan_constraint_count": 1.0,
             "task_success_hit": 0.0,
             "plan_replay_cache_stale_hit_safe": 0.0,
+            "memory_latency_ms": 8.0,
         },
         {
             "case_id": "time-sensitive-safe",
@@ -619,6 +651,7 @@ def test_ltm_summary_metrics_use_lane_specific_plan_attribution_signals() -> Non
             "ltm_plan_constraint_count": 1.0,
             "task_success_hit": 1.0,
             "plan_replay_cache_stale_hit_safe": 1.0,
+            "memory_latency_ms": 8.0,
         },
     ]
 
@@ -630,6 +663,7 @@ def test_ltm_summary_metrics_use_lane_specific_plan_attribution_signals() -> Non
     assert metrics["ltm_false_help_rate"] == 0.5
     assert metrics["ltm_stale_hit_rate"] == 0.5
     assert metrics["ltm_replay_drift_rate"] == 0.5
+    assert metrics["ltm_latency_overhead_ms"] == 4.0
 
 
 def test_build_ltm_explainability_summary_aggregates_case_level_signals() -> None:
@@ -1209,6 +1243,7 @@ def test_resolve_regression_thresholds_with_profile_and_overrides() -> None:
     assert thresholds["issue_report_linked_plan_tolerance"] == 0.05
     assert thresholds["issue_to_benchmark_case_conversion_tolerance"] == 0.05
     assert thresholds["dev_feedback_resolution_tolerance"] == 0.05
+    assert thresholds["dev_issue_to_fix_tolerance"] == 0.05
     assert thresholds["embedding_similarity_tolerance"] == 0.02
 
 
@@ -1747,6 +1782,7 @@ def test_detect_regression_for_feedback_loop_metric_drop() -> None:
         "issue_report_linked_plan_rate": 1.0,
         "issue_to_benchmark_case_conversion_rate": 0.8,
         "dev_feedback_resolution_rate": 0.9,
+        "dev_issue_to_fix_rate": 0.8,
     }
     current = dict(baseline)
     current.update(
@@ -1754,6 +1790,7 @@ def test_detect_regression_for_feedback_loop_metric_drop() -> None:
             "issue_report_linked_plan_rate": 0.6,
             "issue_to_benchmark_case_conversion_rate": 0.5,
             "dev_feedback_resolution_rate": 0.6,
+            "dev_issue_to_fix_rate": 0.5,
         }
     )
 
@@ -1763,12 +1800,14 @@ def test_detect_regression_for_feedback_loop_metric_drop() -> None:
         issue_report_linked_plan_tolerance=0.1,
         issue_to_benchmark_case_conversion_tolerance=0.1,
         dev_feedback_resolution_tolerance=0.1,
+        dev_issue_to_fix_tolerance=0.1,
     )
 
     assert regression["regressed"] is True
     assert "issue_report_linked_plan_rate" in regression["failed_checks"]
     assert "issue_to_benchmark_case_conversion_rate" in regression["failed_checks"]
     assert "dev_feedback_resolution_rate" in regression["failed_checks"]
+    assert "dev_issue_to_fix_rate" in regression["failed_checks"]
 
 
 def test_detect_regression_for_memory_lane_and_replay_drift_metrics() -> None:

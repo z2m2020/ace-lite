@@ -23,6 +23,7 @@ REGRESSION_THRESHOLD_PROFILES: dict[str, dict[str, float]] = {
         "issue_report_linked_plan_tolerance": 0.10,
         "issue_to_benchmark_case_conversion_tolerance": 0.10,
         "dev_feedback_resolution_tolerance": 0.10,
+        "dev_issue_to_fix_tolerance": 0.10,
         "embedding_similarity_tolerance": 0.05,
         "embedding_rerank_ratio_tolerance": 0.10,
         "embedding_cache_hit_tolerance": 0.20,
@@ -46,6 +47,7 @@ REGRESSION_THRESHOLD_PROFILES: dict[str, dict[str, float]] = {
         "issue_report_linked_plan_tolerance": 0.05,
         "issue_to_benchmark_case_conversion_tolerance": 0.05,
         "dev_feedback_resolution_tolerance": 0.05,
+        "dev_issue_to_fix_tolerance": 0.05,
         "embedding_similarity_tolerance": 0.02,
         "embedding_rerank_ratio_tolerance": 0.05,
         "embedding_cache_hit_tolerance": 0.10,
@@ -69,6 +71,7 @@ REGRESSION_THRESHOLD_PROFILES: dict[str, dict[str, float]] = {
         "issue_report_linked_plan_tolerance": 0.20,
         "issue_to_benchmark_case_conversion_tolerance": 0.20,
         "dev_feedback_resolution_tolerance": 0.20,
+        "dev_issue_to_fix_tolerance": 0.20,
         "embedding_similarity_tolerance": 0.10,
         "embedding_rerank_ratio_tolerance": 0.20,
         "embedding_cache_hit_tolerance": 0.35,
@@ -116,6 +119,7 @@ def detect_regression(
     issue_report_linked_plan_tolerance: float = 0.10,
     issue_to_benchmark_case_conversion_tolerance: float = 0.10,
     dev_feedback_resolution_tolerance: float = 0.10,
+    dev_issue_to_fix_tolerance: float = 0.10,
     embedding_similarity_tolerance: float = 0.05,
     embedding_rerank_ratio_tolerance: float = 0.10,
     embedding_cache_hit_tolerance: float = 0.20,
@@ -173,6 +177,10 @@ def detect_regression(
     )
     baseline_dev_feedback_resolution_rate = float(
         baseline.get("dev_feedback_resolution_rate", 0.0)
+    )
+    current_dev_issue_to_fix_rate = float(current.get("dev_issue_to_fix_rate", 0.0))
+    baseline_dev_issue_to_fix_rate = float(
+        baseline.get("dev_issue_to_fix_rate", 0.0)
     )
     current_embedding_similarity = float(current.get("embedding_similarity_mean", 0.0))
     baseline_embedding_similarity = float(
@@ -232,6 +240,9 @@ def detect_regression(
     dev_feedback_resolution_threshold = (
         baseline_dev_feedback_resolution_rate - dev_feedback_resolution_tolerance
     )
+    dev_issue_to_fix_threshold = (
+        baseline_dev_issue_to_fix_rate - dev_issue_to_fix_tolerance
+    )
     embedding_similarity_threshold = (
         baseline_embedding_similarity - embedding_similarity_tolerance
     )
@@ -282,6 +293,7 @@ def detect_regression(
     dev_feedback_resolution_regressed = (
         current_dev_feedback_resolution_rate < dev_feedback_resolution_threshold
     )
+    dev_issue_to_fix_regressed = current_dev_issue_to_fix_rate < dev_issue_to_fix_threshold
     embedding_similarity_regressed = (
         baseline_embedding_similarity > 0.0
         and current_embedding_similarity < embedding_similarity_threshold
@@ -469,6 +481,16 @@ def detect_regression(
                 "operator": "<",
                 "current": current_dev_feedback_resolution_rate,
                 "threshold": dev_feedback_resolution_threshold,
+            }
+        )
+    if dev_issue_to_fix_regressed:
+        failed_checks.append("dev_issue_to_fix_rate")
+        failed_thresholds.append(
+            {
+                "metric": "dev_issue_to_fix_rate",
+                "operator": "<",
+                "current": current_dev_issue_to_fix_rate,
+                "threshold": dev_issue_to_fix_threshold,
             }
         )
     if embedding_similarity_regressed:

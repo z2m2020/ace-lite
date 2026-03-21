@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ace_lite.dev_feedback_taxonomy import describe_dev_feedback_reason
+from ace_lite.dev_feedback_taxonomy import get_dev_feedback_reason_family
+from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
 from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.preference_capture_store import DurablePreferenceCaptureStore
@@ -58,6 +61,13 @@ def resolve_user_runtime_stats_path(
 def _normalize_filter_value(value: str | None) -> str | None:
     text = str(value or "").strip()
     return text or None
+
+
+def _resolve_reason_details(reason_code: Any) -> dict[str, str]:
+    canonical = normalize_dev_feedback_reason_code(reason_code, default="")
+    if not canonical:
+        return {"reason_code": "", "reason_family": "", "capture_class": ""}
+    return describe_dev_feedback_reason(canonical)
 
 
 def _summarize_scope(scope: RuntimeScopeRollup | None) -> dict[str, Any] | None:
@@ -228,17 +238,24 @@ def _build_runtime_top_pain_summary(
         else []
     )
     for item in degraded_states if isinstance(degraded_states, list) else []:
-        reason_code = str(item.get("reason_code") or "").strip()
+        reason_details = _resolve_reason_details(item.get("reason_code"))
+        reason_code = str(reason_details.get("reason_code") or "").strip()
         if not reason_code:
             continue
         bucket = merged.setdefault(
             reason_code,
             {
                 "reason_code": reason_code,
+                "reason_family": str(reason_details.get("reason_family") or ""),
+                "capture_class": str(reason_details.get("capture_class") or ""),
                 "runtime_event_count": 0,
                 "manual_issue_count": 0,
                 "open_issue_count": 0,
+                "resolved_issue_count": 0,
                 "fix_count": 0,
+                "linked_fix_issue_count": 0,
+                "issue_time_to_fix_case_count": 0,
+                "issue_time_to_fix_hours_total": 0.0,
                 "last_seen_at": "",
             },
         )
@@ -252,23 +269,41 @@ def _build_runtime_top_pain_summary(
     for item in by_reason_code if isinstance(by_reason_code, list) else []:
         if not isinstance(item, dict):
             continue
-        reason_code = str(item.get("reason_code") or "").strip()
+        reason_details = _resolve_reason_details(item.get("reason_code"))
+        reason_code = str(reason_details.get("reason_code") or "").strip()
         if not reason_code:
             continue
         bucket = merged.setdefault(
             reason_code,
             {
                 "reason_code": reason_code,
+                "reason_family": str(reason_details.get("reason_family") or ""),
+                "capture_class": str(reason_details.get("capture_class") or ""),
                 "runtime_event_count": 0,
                 "manual_issue_count": 0,
                 "open_issue_count": 0,
+                "resolved_issue_count": 0,
                 "fix_count": 0,
+                "linked_fix_issue_count": 0,
+                "issue_time_to_fix_case_count": 0,
+                "issue_time_to_fix_hours_total": 0.0,
                 "last_seen_at": "",
             },
         )
         bucket["manual_issue_count"] += int(item.get("issue_count", 0) or 0)
         bucket["open_issue_count"] += int(item.get("open_issue_count", 0) or 0)
+        bucket["resolved_issue_count"] += int(item.get("resolved_issue_count", 0) or 0)
         bucket["fix_count"] += int(item.get("fix_count", 0) or 0)
+        bucket["linked_fix_issue_count"] += int(
+            item.get("linked_fix_issue_count", 0) or 0
+        )
+        issue_time_to_fix_case_count = int(
+            item.get("issue_time_to_fix_case_count", 0) or 0
+        )
+        bucket["issue_time_to_fix_case_count"] += issue_time_to_fix_case_count
+        bucket["issue_time_to_fix_hours_total"] += float(
+            item.get("issue_time_to_fix_hours_mean", 0.0) or 0.0
+        ) * float(issue_time_to_fix_case_count)
         bucket["last_seen_at"] = max(
             str(bucket["last_seen_at"]),
             str(item.get("last_seen_at") or ""),
@@ -276,12 +311,30 @@ def _build_runtime_top_pain_summary(
 
     rows: list[dict[str, Any]] = []
     for bucket in merged.values():
+        issue_count = int(bucket["manual_issue_count"])
+        issue_time_to_fix_case_count = int(bucket["issue_time_to_fix_case_count"])
         total_count = (
             int(bucket["runtime_event_count"])
-            + int(bucket["manual_issue_count"])
+            + issue_count
             + int(bucket["open_issue_count"])
         )
-        rows.append({**bucket, "total_count": total_count})
+        rows.append(
+            {
+                **bucket,
+                "dev_issue_to_fix_rate": (
+                    float(bucket["linked_fix_issue_count"]) / float(issue_count)
+                    if issue_count > 0
+                    else 0.0
+                ),
+                "issue_time_to_fix_hours_mean": (
+                    float(bucket["issue_time_to_fix_hours_total"])
+                    / float(issue_time_to_fix_case_count)
+                    if issue_time_to_fix_case_count > 0
+                    else 0.0
+                ),
+                "total_count": total_count,
+            }
+        )
     rows.sort(
         key=lambda item: (
             -int(item.get("total_count", 0) or 0),
@@ -289,6 +342,8 @@ def _build_runtime_top_pain_summary(
             str(item.get("reason_code") or ""),
         )
     )
+    for item in rows:
+        item.pop("issue_time_to_fix_hours_total", None)
     return {"count": len(rows), "items": rows[:10]}
 
 
@@ -322,16 +377,30 @@ def _build_runtime_memory_health_summary(
     for item in reason_items:
         if not isinstance(item, dict):
             continue
-        reason_code = str(item.get("reason_code") or "").strip()
+        reason_details = _resolve_reason_details(item.get("reason_code"))
+        reason_code = str(reason_details.get("reason_code") or "").strip()
         if reason_code not in RUNTIME_MEMORY_REASON_CODES:
             continue
         memory_items.append(
             {
                 "reason_code": reason_code,
+                "reason_family": str(reason_details.get("reason_family") or ""),
+                "capture_class": str(reason_details.get("capture_class") or ""),
                 "runtime_event_count": int(item.get("runtime_event_count", 0) or 0),
                 "manual_issue_count": int(item.get("manual_issue_count", 0) or 0),
                 "open_issue_count": int(item.get("open_issue_count", 0) or 0),
+                "resolved_issue_count": int(item.get("resolved_issue_count", 0) or 0),
                 "fix_count": int(item.get("fix_count", 0) or 0),
+                "linked_fix_issue_count": int(item.get("linked_fix_issue_count", 0) or 0),
+                "dev_issue_to_fix_rate": float(
+                    item.get("dev_issue_to_fix_rate", 0.0) or 0.0
+                ),
+                "issue_time_to_fix_case_count": int(
+                    item.get("issue_time_to_fix_case_count", 0) or 0
+                ),
+                "issue_time_to_fix_hours_mean": float(
+                    item.get("issue_time_to_fix_hours_mean", 0.0) or 0.0
+                ),
                 "last_seen_at": str(item.get("last_seen_at") or ""),
             }
         )
@@ -341,7 +410,21 @@ def _build_runtime_memory_health_summary(
     )
     issue_count = sum(int(item.get("manual_issue_count", 0) or 0) for item in memory_items)
     open_issue_count = sum(int(item.get("open_issue_count", 0) or 0) for item in memory_items)
+    resolved_issue_count = sum(
+        int(item.get("resolved_issue_count", 0) or 0) for item in memory_items
+    )
     fix_count = sum(int(item.get("fix_count", 0) or 0) for item in memory_items)
+    linked_fix_issue_count = sum(
+        int(item.get("linked_fix_issue_count", 0) or 0) for item in memory_items
+    )
+    issue_time_to_fix_case_count = sum(
+        int(item.get("issue_time_to_fix_case_count", 0) or 0) for item in memory_items
+    )
+    issue_time_to_fix_hours_total = sum(
+        float(item.get("issue_time_to_fix_hours_mean", 0.0) or 0.0)
+        * float(item.get("issue_time_to_fix_case_count", 0) or 0)
+        for item in memory_items
+    )
 
     return {
         "scope_kind": preferred_scope_name,
@@ -349,12 +432,25 @@ def _build_runtime_memory_health_summary(
         "runtime_event_count": runtime_event_count,
         "issue_count": issue_count,
         "open_issue_count": open_issue_count,
+        "resolved_issue_count": resolved_issue_count,
         "fix_count": fix_count,
+        "linked_fix_issue_count": linked_fix_issue_count,
         "resolution_rate": (
             float(fix_count) / float(issue_count) if issue_count > 0 else 0.0
         ),
+        "dev_issue_to_fix_rate": (
+            float(linked_fix_issue_count) / float(issue_count)
+            if issue_count > 0
+            else 0.0
+        ),
         "open_issue_rate": (
             float(open_issue_count) / float(issue_count) if issue_count > 0 else 0.0
+        ),
+        "issue_time_to_fix_case_count": issue_time_to_fix_case_count,
+        "issue_time_to_fix_hours_mean": (
+            float(issue_time_to_fix_hours_total) / float(issue_time_to_fix_case_count)
+            if issue_time_to_fix_case_count > 0
+            else 0.0
         ),
         "memory_stage_latency_ms_avg": latency_mean,
         "reasons": memory_items,
@@ -705,24 +801,16 @@ def _build_runtime_degraded_services(
     if not isinstance(latest_session, dict):
         return degraded_services
     degraded_states = latest_session.get("degraded_states", [])
-    reason_map = {
-        "memory_fallback": "memory",
-        "memory_namespace_fallback": "memory",
-        "trace_export_failed": "trace_export",
-        "plan_replay_invalid_cached_payload": "plan_replay_cache",
-        "plan_replay_store_failed": "plan_replay_cache",
-        "candidate_ranker_fallback": "retrieval",
-        "embedding_time_budget_exceeded": "embeddings",
-        "embedding_fallback": "embeddings",
-    }
     for item in degraded_states if isinstance(degraded_states, list) else []:
         reason_code = str(item.get("reason_code", "")).strip()
         if not reason_code:
             continue
+        reason_details = describe_dev_feedback_reason(reason_code)
         degraded_services.append(
             {
-                "name": reason_map.get(reason_code, "runtime"),
-                "reason": reason_code,
+                "name": reason_details["reason_family"],
+                "reason": reason_details["reason_code"],
+                "capture_class": reason_details["capture_class"],
                 "source": "latest_runtime_stats",
             }
         )
@@ -778,6 +866,7 @@ def build_runtime_status_payload(
             ),
             "dev_feedback_summary": runtime_stats.get("dev_feedback_summary"),
             "top_pain_summary": runtime_stats.get("top_pain_summary"),
+            "memory_health_summary": runtime_stats.get("memory_health_summary"),
         },
     }
 

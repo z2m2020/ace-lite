@@ -73,7 +73,10 @@ def test_handle_dev_feedback_round_trip(tmp_path: Path) -> None:
     assert summary["ok"] is True
     assert summary["summary"]["issue_count"] == 1
     assert summary["summary"]["open_issue_count"] == 1
+    assert summary["summary"]["resolved_issue_count"] == 0
     assert summary["summary"]["fix_count"] == 1
+    assert summary["summary"]["linked_fix_issue_count"] == 1
+    assert summary["summary"]["dev_issue_to_fix_rate"] == 1.0
     assert summary["summary"]["by_reason_code"][0]["reason_code"] == "memory_fallback"
 
 
@@ -238,6 +241,8 @@ def test_handle_dev_issue_from_runtime_promotes_auto_captured_event(
     assert recorded_issue["issue"]["repo"] == "demo"
     assert recorded_issue["issue"]["related_invocation_id"] == "inv-runtime-1"
     assert "auto_captured_from=runtime_stats" in recorded_issue["issue"]["notes"]
+    assert "reason_family=memory" in recorded_issue["issue"]["notes"]
+    assert "capture_class=fallback" in recorded_issue["issue"]["notes"]
     assert recorded_issue["invocation"]["invocation_id"] == "inv-runtime-1"
     assert recorded_issue["long_term_capture"]["ok"] is True
     assert recorded_issue["long_term_capture"]["stage"] == "dev_issue"
@@ -296,3 +301,7 @@ def test_handle_dev_issue_apply_fix_updates_open_issue_count(tmp_path: Path) -> 
     assert resolved_issue["issue"]["status"] == "fixed"
     assert summary["summary"]["issue_count"] == 1
     assert summary["summary"]["open_issue_count"] == 0
+    assert summary["summary"]["resolved_issue_count"] == 1
+    assert summary["summary"]["linked_fix_issue_count"] == 1
+    assert summary["summary"]["dev_issue_to_fix_rate"] == 1.0
+    assert summary["summary"]["issue_time_to_fix_case_count"] == 1

@@ -817,6 +817,11 @@ def test_cli_feedback_apply_dev_fix_updates_summary(tmp_path: Path) -> None:
     assert resolved_payload["issue"]["status"] == "fixed"
     assert summary_payload["summary"]["issue_count"] == 1
     assert summary_payload["summary"]["open_issue_count"] == 0
+    assert summary_payload["summary"]["resolved_issue_count"] == 1
+    assert summary_payload["summary"]["linked_fix_issue_count"] == 1
+    assert summary_payload["summary"]["dev_issue_to_fix_rate"] == 1.0
+    assert summary_payload["summary"]["issue_time_to_fix_case_count"] == 1
+    assert summary_payload["summary"]["issue_time_to_fix_hours_mean"] > 0.0
 
 
 def test_cli_feedback_issue_export_case_and_apply_fix_round_trip(tmp_path: Path) -> None:
@@ -947,3 +952,40 @@ def test_cli_feedback_issue_export_case_and_apply_fix_round_trip(tmp_path: Path)
     assert resolved_payload["report"]["status"] == "resolved"
     assert resolved_payload["report"]["resolution_note"] == "patched validation payload"
     assert "dev-fix://devf_demo1234" in resolved_payload["report"]["attachments"]
+
+    exported_resolved_case = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "issue-to-benchmark-case",
+            "--issue-id",
+            "iss_demo1234",
+            "--root",
+            str(tmp_path),
+            "--store-path",
+            str(issue_store_path),
+            "--output",
+            str(output_path),
+            "--comparison-lane",
+            "dev_feedback_resolution",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert exported_resolved_case.exit_code == 0
+    exported_resolved_payload = json.loads(exported_resolved_case.output)
+    assert exported_resolved_payload["case"]["dev_feedback"]["issue_count"] == 1
+    assert (
+        exported_resolved_payload["case"]["dev_feedback"]["linked_fix_issue_count"] == 1
+    )
+    assert (
+        exported_resolved_payload["case"]["dev_feedback"]["resolved_issue_count"] == 1
+    )
+    assert (
+        exported_resolved_payload["case"]["dev_feedback"]["created_at"]
+        == resolved_payload["report"]["occurred_at"]
+    )
+    assert (
+        exported_resolved_payload["case"]["dev_feedback"]["resolved_at"]
+        == "2026-03-19T00:05:00+00:00"
+    )

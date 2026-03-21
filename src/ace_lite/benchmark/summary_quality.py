@@ -477,19 +477,35 @@ def build_feedback_loop_summary(
             "issue_report_case_count": 0,
             "issue_report_linked_case_count": 0,
             "issue_report_linked_plan_case_count": 0,
+            "issue_report_resolved_case_count": 0,
             "issue_to_benchmark_case_conversion_rate": 0.0,
             "issue_report_linked_plan_rate": 0.0,
+            "issue_report_resolution_rate": 0.0,
+            "issue_report_time_to_fix_case_count": 0,
+            "issue_report_time_to_fix_hours_mean": 0.0,
             "dev_feedback_resolution_case_count": 0,
             "dev_feedback_resolved_case_count": 0,
             "dev_feedback_resolution_rate": 0.0,
+            "dev_feedback_issue_count": 0,
+            "dev_feedback_linked_fix_issue_count": 0,
+            "dev_feedback_resolved_issue_count": 0,
+            "dev_issue_to_fix_rate": 0.0,
+            "dev_feedback_issue_time_to_fix_case_count": 0,
+            "dev_feedback_issue_time_to_fix_hours_mean": 0.0,
             "feedback_surfaces": {},
         }
 
     issue_report_case_count = 0
     issue_report_linked_case_count = 0
     issue_report_linked_plan_case_count = 0
+    issue_report_resolved_case_count = 0
+    issue_report_time_to_fix_hours: list[float] = []
     dev_feedback_resolution_case_count = 0
     dev_feedback_resolved_case_count = 0
+    dev_feedback_issue_count = 0
+    dev_feedback_linked_fix_issue_count = 0
+    dev_feedback_resolved_issue_count = 0
+    dev_feedback_issue_time_to_fix_hours: list[float] = []
     feedback_surfaces: dict[str, int] = {}
 
     for item in case_results:
@@ -509,6 +525,11 @@ def build_feedback_loop_summary(
                 issue_report_linked_case_count += 1
                 if float(item.get("issue_report_has_plan_ref", 0.0) or 0.0) > 0.0:
                     issue_report_linked_plan_case_count += 1
+            if str(item.get("issue_report_resolved_at") or "").strip():
+                issue_report_resolved_case_count += 1
+            time_to_fix_hours = float(item.get("issue_report_time_to_fix_hours", 0.0) or 0.0)
+            if time_to_fix_hours > 0.0:
+                issue_report_time_to_fix_hours.append(time_to_fix_hours)
             continue
 
         if lane == "dev_feedback_resolution":
@@ -518,12 +539,25 @@ def build_feedback_loop_summary(
             )
             if task_success_hit > 0.0:
                 dev_feedback_resolved_case_count += 1
+            dev_feedback_issue_count += int(item.get("dev_feedback_issue_count", 0) or 0)
+            dev_feedback_linked_fix_issue_count += int(
+                item.get("dev_feedback_linked_fix_issue_count", 0) or 0
+            )
+            dev_feedback_resolved_issue_count += int(
+                item.get("dev_feedback_resolved_issue_count", 0) or 0
+            )
+            time_to_fix_hours = float(
+                item.get("dev_feedback_issue_time_to_fix_hours", 0.0) or 0.0
+            )
+            if time_to_fix_hours > 0.0:
+                dev_feedback_issue_time_to_fix_hours.append(time_to_fix_hours)
 
     return {
         "case_count": case_count,
         "issue_report_case_count": issue_report_case_count,
         "issue_report_linked_case_count": issue_report_linked_case_count,
         "issue_report_linked_plan_case_count": issue_report_linked_plan_case_count,
+        "issue_report_resolved_case_count": issue_report_resolved_case_count,
         "issue_to_benchmark_case_conversion_rate": (
             float(issue_report_linked_case_count) / float(issue_report_case_count)
             if issue_report_case_count > 0
@@ -535,12 +569,39 @@ def build_feedback_loop_summary(
             if issue_report_linked_case_count > 0
             else 0.0
         ),
+        "issue_report_resolution_rate": (
+            float(issue_report_resolved_case_count) / float(issue_report_case_count)
+            if issue_report_case_count > 0
+            else 0.0
+        ),
+        "issue_report_time_to_fix_case_count": len(issue_report_time_to_fix_hours),
+        "issue_report_time_to_fix_hours_mean": (
+            mean(issue_report_time_to_fix_hours)
+            if issue_report_time_to_fix_hours
+            else 0.0
+        ),
         "dev_feedback_resolution_case_count": dev_feedback_resolution_case_count,
         "dev_feedback_resolved_case_count": dev_feedback_resolved_case_count,
         "dev_feedback_resolution_rate": (
             float(dev_feedback_resolved_case_count)
             / float(dev_feedback_resolution_case_count)
             if dev_feedback_resolution_case_count > 0
+            else 0.0
+        ),
+        "dev_feedback_issue_count": dev_feedback_issue_count,
+        "dev_feedback_linked_fix_issue_count": dev_feedback_linked_fix_issue_count,
+        "dev_feedback_resolved_issue_count": dev_feedback_resolved_issue_count,
+        "dev_issue_to_fix_rate": (
+            float(dev_feedback_linked_fix_issue_count) / float(dev_feedback_issue_count)
+            if dev_feedback_issue_count > 0
+            else 0.0
+        ),
+        "dev_feedback_issue_time_to_fix_case_count": len(
+            dev_feedback_issue_time_to_fix_hours
+        ),
+        "dev_feedback_issue_time_to_fix_hours_mean": (
+            mean(dev_feedback_issue_time_to_fix_hours)
+            if dev_feedback_issue_time_to_fix_hours
             else 0.0
         ),
         "feedback_surfaces": dict(sorted(feedback_surfaces.items())),

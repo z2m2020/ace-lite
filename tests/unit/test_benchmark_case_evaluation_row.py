@@ -5,7 +5,28 @@ from ace_lite.benchmark.case_evaluation_row import build_case_evaluation_row
 
 def _base_row_kwargs() -> dict[str, object]:
     return {
-        "case": {"case_id": "c1", "query": "where validate token"},
+        "case": {
+            "case_id": "c1",
+            "query": "where validate token",
+            "issue_report": {
+                "issue_id": "iss_demo1234",
+                "status": "resolved",
+                "plan_payload_ref": "run-123",
+                "occurred_at": "2026-03-19T00:00:00+00:00",
+                "resolved_at": "2026-03-19T12:00:00+00:00",
+                "created_at": "2026-03-19T00:00:00+00:00",
+                "updated_at": "2026-03-19T12:00:00+00:00",
+                "resolution_note": "patched validation payload",
+            },
+            "dev_feedback": {
+                "issue_count": 1,
+                "linked_fix_issue_count": 1,
+                "resolved_issue_count": 1,
+                "created_at": "2026-03-19T00:00:00+00:00",
+                "resolved_at": "2026-03-19T06:00:00+00:00",
+            },
+            "feedback_surface": "issue_report_export_cli",
+        },
         "expected": ["validate_token"],
         "top_k": 4,
         "recall_hit": 1.0,
@@ -195,6 +216,14 @@ def test_build_case_evaluation_row_contract() -> None:
     assert row["docs_enabled"] == 1.0
     assert row["chunk_guard_mode"] == "strict"
     assert row["decision_trace_count"] == 1
+    assert row["issue_report_issue_id"] == "iss_demo1234"
+    assert row["issue_report_status"] == "resolved"
+    assert row["issue_report_time_to_fix_hours"] == 12.0
+    assert row["dev_feedback_issue_count"] == 1.0
+    assert row["dev_feedback_linked_fix_issue_count"] == 1.0
+    assert row["dev_feedback_resolved_issue_count"] == 1.0
+    assert row["dev_feedback_issue_time_to_fix_hours"] == 6.0
+    assert row["dev_issue_to_fix_rate"] == 1.0
     assert row["preference_capture"] == {
         "notes_hit_ratio": 0.25,
         "profile_selected_count": 2,
@@ -216,4 +245,20 @@ def test_build_case_evaluation_row_contract() -> None:
         "matched_event_count": 2,
         "boosted_candidate_count": 1,
         "boosted_unique_paths": 1,
+    }
+    assert row["feedback_loop"] == {
+        "feedback_surface": "issue_report_export_cli",
+        "issue_report_issue_id": "iss_demo1234",
+        "issue_report_has_plan_ref": True,
+        "issue_report_status": "resolved",
+        "issue_report_occurred_at": "2026-03-19T00:00:00+00:00",
+        "issue_report_resolved_at": "2026-03-19T12:00:00+00:00",
+        "issue_report_time_to_fix_hours": 12.0,
+        "dev_feedback_issue_count": 1,
+        "dev_feedback_linked_fix_issue_count": 1,
+        "dev_feedback_resolved_issue_count": 1,
+        "dev_feedback_created_at": "2026-03-19T00:00:00+00:00",
+        "dev_feedback_resolved_at": "2026-03-19T06:00:00+00:00",
+        "dev_feedback_issue_time_to_fix_hours": 6.0,
+        "dev_issue_to_fix_rate": 1.0,
     }

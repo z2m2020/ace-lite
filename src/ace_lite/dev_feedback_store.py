@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from ace_lite.dev_feedback_taxonomy import describe_dev_feedback_reason
+from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
 from ace_lite.runtime_db import connect_runtime_db
 
 DEV_ISSUES_TABLE = "dev_issues"
@@ -26,7 +28,10 @@ def _normalize_text(value: Any, *, max_len: int = 4096) -> str:
 
 
 def _normalize_token(value: Any, *, default: str = "", max_len: int = 64) -> str:
-    normalized = _normalize_text(value, max_len=max_len).lower().replace(" ", "_")
+    normalized = normalize_dev_feedback_reason_code(
+        _normalize_text(value, max_len=max_len),
+        default=default,
+    )
     return normalized or default
 
 
@@ -43,6 +48,22 @@ def _normalize_timestamp(value: Any, *, required: bool = False) -> str:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc).isoformat()
+
+
+def _time_delta_hours(*, start: Any, end: Any) -> float:
+    start_normalized = _normalize_timestamp(start, required=False)
+    end_normalized = _normalize_timestamp(end, required=False)
+    if not start_normalized or not end_normalized:
+        return 0.0
+    try:
+        start_dt = datetime.fromisoformat(start_normalized)
+        end_dt = datetime.fromisoformat(end_normalized)
+    except ValueError:
+        return 0.0
+    delta_seconds = (end_dt - start_dt).total_seconds()
+    if delta_seconds <= 0.0:
+        return 0.0
+    return float(delta_seconds) / 3600.0
 
 
 def _normalize_path(value: Any) -> str:
@@ -496,12 +517,29 @@ class DevFeedbackStore:
                 """,
                 tuple(fix_params),
             ).fetchall()
+            issue_detail_rows = conn.execute(
+                f"""
+                SELECT issue_id, reason_code, status, created_at, updated_at, resolved_at
+                FROM {DEV_ISSUES_TABLE}
+                {issue_where_sql}
+                """,
+                tuple(issue_params),
+            ).fetchall()
+            fix_detail_rows = conn.execute(
+                f"""
+                SELECT issue_id, reason_code, created_at
+                FROM {DEV_FIXES_TABLE}
+                {fix_where_sql}
+                """,
+                tuple(fix_params),
+            ).fetchall()
         finally:
             conn.close()
 
         by_reason_code: dict[str, dict[str, Any]] = {}
         open_issue_count = 0
         issue_count = 0
+        resolved_issue_count = 0
         latest_issue_at = ""
         for row in issue_rows:
             reason_code = str(row["reason_code"] or "")
@@ -516,9 +554,15 @@ class DevFeedbackStore:
                 reason_code,
                 {
                     "reason_code": reason_code,
+                    **describe_dev_feedback_reason(reason_code),
                     "issue_count": 0,
                     "open_issue_count": 0,
                     "fix_count": 0,
+                    "resolved_issue_count": 0,
+                    "linked_fix_issue_count": 0,
+                    "dev_issue_to_fix_rate": 0.0,
+                    "issue_time_to_fix_case_count": 0,
+                    "issue_time_to_fix_hours_mean": 0.0,
                     "last_seen_at": "",
                 },
             )
@@ -539,14 +583,108 @@ class DevFeedbackStore:
                 reason_code,
                 {
                     "reason_code": reason_code,
+                    **describe_dev_feedback_reason(reason_code),
                     "issue_count": 0,
                     "open_issue_count": 0,
                     "fix_count": 0,
+                    "resolved_issue_count": 0,
+                    "linked_fix_issue_count": 0,
+                    "dev_issue_to_fix_rate": 0.0,
+                    "issue_time_to_fix_case_count": 0,
+                    "issue_time_to_fix_hours_mean": 0.0,
                     "last_seen_at": "",
                 },
             )
             bucket["fix_count"] += event_count
             bucket["last_seen_at"] = max(str(bucket["last_seen_at"]), last_seen_at)
+
+        linked_fix_issue_ids: set[str] = set()
+        linked_fix_issue_ids_by_reason: dict[str, set[str]] = {}
+        for row in fix_detail_rows:
+            issue_id = str(row["issue_id"] or "").strip()
+            reason_code = str(row["reason_code"] or "")
+            if not issue_id:
+                continue
+            linked_fix_issue_ids.add(issue_id)
+            linked_fix_issue_ids_by_reason.setdefault(reason_code, set()).add(issue_id)
+
+        issue_time_to_fix_hours_values: list[float] = []
+        issue_time_to_fix_hours_by_reason: dict[str, list[float]] = {}
+        for row in issue_detail_rows:
+            issue_id = str(row["issue_id"] or "").strip()
+            reason_code = str(row["reason_code"] or "")
+            status = str(row["status"] or "").strip().lower()
+            resolved_at = str(row["resolved_at"] or "").strip()
+            if status in {"fixed", "rejected"} or resolved_at:
+                resolved_issue_count += 1
+                bucket = by_reason_code.setdefault(
+                    reason_code,
+                    {
+                        "reason_code": reason_code,
+                        **describe_dev_feedback_reason(reason_code),
+                        "issue_count": 0,
+                        "open_issue_count": 0,
+                        "fix_count": 0,
+                        "resolved_issue_count": 0,
+                        "linked_fix_issue_count": 0,
+                        "dev_issue_to_fix_rate": 0.0,
+                        "issue_time_to_fix_case_count": 0,
+                        "issue_time_to_fix_hours_mean": 0.0,
+                        "last_seen_at": "",
+                    },
+                )
+                bucket["resolved_issue_count"] += 1
+            if issue_id and issue_id in linked_fix_issue_ids:
+                bucket = by_reason_code.setdefault(
+                    reason_code,
+                    {
+                        "reason_code": reason_code,
+                        **describe_dev_feedback_reason(reason_code),
+                        "issue_count": 0,
+                        "open_issue_count": 0,
+                        "fix_count": 0,
+                        "resolved_issue_count": 0,
+                        "linked_fix_issue_count": 0,
+                        "dev_issue_to_fix_rate": 0.0,
+                        "issue_time_to_fix_case_count": 0,
+                        "issue_time_to_fix_hours_mean": 0.0,
+                        "last_seen_at": "",
+                    },
+                )
+                bucket["linked_fix_issue_count"] += 1
+            time_to_fix_hours = _time_delta_hours(
+                start=row["created_at"],
+                end=row["resolved_at"],
+            )
+            if time_to_fix_hours > 0.0:
+                issue_time_to_fix_hours_values.append(time_to_fix_hours)
+                issue_time_to_fix_hours_by_reason.setdefault(reason_code, []).append(
+                    time_to_fix_hours
+                )
+
+        total_linked_fix_issue_count = 0
+        for reason_code, bucket in by_reason_code.items():
+            reason_issue_count = int(bucket["issue_count"] or 0)
+            linked_count = int(bucket["linked_fix_issue_count"] or 0)
+            if linked_count <= 0:
+                linked_count = min(
+                    reason_issue_count,
+                    int(bucket["fix_count"] or 0),
+                )
+                bucket["linked_fix_issue_count"] = linked_count
+            bucket["dev_issue_to_fix_rate"] = (
+                float(linked_count) / float(reason_issue_count)
+                if reason_issue_count > 0
+                else 0.0
+            )
+            reason_time_to_fix_hours = issue_time_to_fix_hours_by_reason.get(reason_code, [])
+            bucket["issue_time_to_fix_case_count"] = len(reason_time_to_fix_hours)
+            bucket["issue_time_to_fix_hours_mean"] = (
+                float(sum(reason_time_to_fix_hours)) / float(len(reason_time_to_fix_hours))
+                if reason_time_to_fix_hours
+                else 0.0
+            )
+            total_linked_fix_issue_count += linked_count
 
         top_reasons = sorted(
             by_reason_code.values(),
@@ -563,7 +701,21 @@ class DevFeedbackStore:
             "profile_key": normalized_profile or None,
             "issue_count": issue_count,
             "open_issue_count": open_issue_count,
+            "resolved_issue_count": resolved_issue_count,
             "fix_count": fix_count,
+            "linked_fix_issue_count": total_linked_fix_issue_count,
+            "dev_issue_to_fix_rate": (
+                float(total_linked_fix_issue_count) / float(issue_count)
+                if issue_count > 0
+                else 0.0
+            ),
+            "issue_time_to_fix_case_count": len(issue_time_to_fix_hours_values),
+            "issue_time_to_fix_hours_mean": (
+                float(sum(issue_time_to_fix_hours_values))
+                / float(len(issue_time_to_fix_hours_values))
+                if issue_time_to_fix_hours_values
+                else 0.0
+            ),
             "latest_issue_at": latest_issue_at,
             "latest_fix_at": latest_fix_at,
             "by_reason_code": top_reasons,

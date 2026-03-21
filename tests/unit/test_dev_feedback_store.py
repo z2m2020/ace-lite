@@ -61,13 +61,25 @@ def test_dev_feedback_store_records_issue_fix_and_summarizes_by_reason(tmp_path:
     assert fix.reason_code == "memory_fallback"
     assert summary["issue_count"] == 1
     assert summary["open_issue_count"] == 1
+    assert summary["resolved_issue_count"] == 0
     assert summary["fix_count"] == 1
+    assert summary["linked_fix_issue_count"] == 1
+    assert summary["dev_issue_to_fix_rate"] == 1.0
+    assert summary["issue_time_to_fix_case_count"] == 0
+    assert summary["issue_time_to_fix_hours_mean"] == 0.0
     assert summary["by_reason_code"] == [
         {
             "reason_code": "memory_fallback",
+            "reason_family": "memory",
+            "capture_class": "fallback",
             "issue_count": 1,
             "open_issue_count": 1,
             "fix_count": 1,
+            "resolved_issue_count": 0,
+            "linked_fix_issue_count": 1,
+            "dev_issue_to_fix_rate": 1.0,
+            "issue_time_to_fix_case_count": 0,
+            "issue_time_to_fix_hours_mean": 0.0,
             "last_seen_at": "2026-03-19T00:05:00+00:00",
         }
     ]
@@ -116,8 +128,20 @@ def test_dev_feedback_store_apply_fix_resolves_issue_and_updates_summary(
     assert "resolved_by_fix=devf_memory_fallback" in resolved.notes
     assert summary["issue_count"] == 1
     assert summary["open_issue_count"] == 0
+    assert summary["resolved_issue_count"] == 1
     assert summary["fix_count"] == 1
+    assert summary["linked_fix_issue_count"] == 1
+    assert summary["dev_issue_to_fix_rate"] == 1.0
+    assert summary["issue_time_to_fix_case_count"] == 1
+    assert summary["issue_time_to_fix_hours_mean"] == pytest.approx(5.0 / 60.0)
     assert summary["by_reason_code"][0]["open_issue_count"] == 0
+    assert summary["by_reason_code"][0]["resolved_issue_count"] == 1
+    assert summary["by_reason_code"][0]["linked_fix_issue_count"] == 1
+    assert summary["by_reason_code"][0]["dev_issue_to_fix_rate"] == 1.0
+    assert summary["by_reason_code"][0]["issue_time_to_fix_case_count"] == 1
+    assert summary["by_reason_code"][0]["issue_time_to_fix_hours_mean"] == pytest.approx(
+        5.0 / 60.0
+    )
 
 
 def test_dev_feedback_store_summary_filters_scope(tmp_path: Path) -> None:
@@ -156,7 +180,10 @@ def test_dev_feedback_store_summary_filters_scope(tmp_path: Path) -> None:
     assert summary["profile_key"] == "bugfix"
     assert summary["issue_count"] == 1
     assert summary["open_issue_count"] == 1
+    assert summary["resolved_issue_count"] == 0
     assert summary["fix_count"] == 0
+    assert summary["linked_fix_issue_count"] == 0
+    assert summary["dev_issue_to_fix_rate"] == 0.0
     assert summary["by_reason_code"][0]["reason_code"] == "memory_fallback"
 
 

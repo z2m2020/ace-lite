@@ -94,6 +94,11 @@ def test_issue_report_store_exports_case_and_applies_fix(tmp_path: Path) -> None
             created_at="2026-03-19T00:05:00+00:00",
         ),
     )
+    exported_after_resolution = store.export_case(
+        issue_id=report.issue_id,
+        output_path=tmp_path / "benchmark" / "cases" / "feedback_issue_reports.yaml",
+        comparison_lane="dev_feedback_resolution",
+    )
     exported_yaml = yaml.safe_load(
         Path(exported["output_path"]).read_text(encoding="utf-8")
     )
@@ -103,3 +108,10 @@ def test_issue_report_store_exports_case_and_applies_fix(tmp_path: Path) -> None
     assert resolved.status == "resolved"
     assert resolved.resolution_note == "patched validation payload"
     assert "dev-fix://devf_demo1234" in resolved.attachments
+    assert exported_after_resolution["case"]["dev_feedback"] == {
+        "issue_count": 1,
+        "linked_fix_issue_count": 1,
+        "resolved_issue_count": 1,
+        "created_at": "2026-03-19T00:00:00+00:00",
+        "resolved_at": "2026-03-19T00:05:00+00:00",
+    }

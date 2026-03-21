@@ -319,6 +319,16 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         for item in memory_helpful_cases
         if float(item.get("ltm_plan_constraint_count", 0.0) or 0.0) > 0.0
     ]
+    ltm_latency_cases = [
+        float(item.get("memory_latency_ms", 0.0) or 0.0)
+        for item in case_results
+        if float(item.get("ltm_plan_constraint_count", 0.0) or 0.0) > 0.0
+    ]
+    non_ltm_latency_cases = [
+        float(item.get("memory_latency_ms", 0.0) or 0.0)
+        for item in case_results
+        if float(item.get("ltm_plan_constraint_count", 0.0) or 0.0) <= 0.0
+    ]
     ltm_effective_hit_cases = [
         item
         for item in ltm_hit_cases
@@ -373,6 +383,11 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         for item in issue_report_linked_cases
         if float(item.get("issue_report_has_plan_ref", 0.0) or 0.0) > 0.0
     ]
+    issue_report_time_to_fix_hours = [
+        float(item.get("issue_report_time_to_fix_hours", 0.0) or 0.0)
+        for item in issue_report_feedback_cases
+        if float(item.get("issue_report_time_to_fix_hours", 0.0) or 0.0) > 0.0
+    ]
     dev_feedback_resolution_cases = [
         item
         for item in case_results
@@ -382,6 +397,14 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         float(item.get("task_success_hit", item.get("utility_hit", 0.0)) or 0.0)
         for item in dev_feedback_resolution_cases
     ]
+    dev_feedback_issue_count = sum(
+        float(item.get("dev_feedback_issue_count", 0.0) or 0.0)
+        for item in dev_feedback_resolution_cases
+    )
+    dev_feedback_linked_fix_issue_count = sum(
+        float(item.get("dev_feedback_linked_fix_issue_count", 0.0) or 0.0)
+        for item in dev_feedback_resolution_cases
+    )
     embedding_enabled = [float(item.get("embedding_enabled", 0.0)) for item in case_results]
     embedding_similarity_means = [
         float(item.get("embedding_similarity_mean", 0.0)) for item in case_results
@@ -615,6 +638,11 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
             if ltm_time_sensitive_hit_cases
             else 0.0
         ),
+        "ltm_latency_overhead_ms": (
+            max(0.0, mean(ltm_latency_cases) - mean(non_ltm_latency_cases))
+            if ltm_latency_cases and non_ltm_latency_cases
+            else 0.0
+        ),
         "issue_report_linked_plan_rate": (
             float(len(issue_report_linked_plan_cases))
             / float(len(issue_report_linked_cases))
@@ -627,9 +655,19 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
             if issue_report_feedback_cases
             else 0.0
         ),
+        "issue_report_time_to_fix_hours_mean": (
+            mean(issue_report_time_to_fix_hours)
+            if issue_report_time_to_fix_hours
+            else 0.0
+        ),
         "dev_feedback_resolution_rate": (
             mean(dev_feedback_resolution_hits)
             if dev_feedback_resolution_hits
+            else 0.0
+        ),
+        "dev_issue_to_fix_rate": (
+            float(dev_feedback_linked_fix_issue_count) / float(dev_feedback_issue_count)
+            if dev_feedback_issue_count > 0.0
             else 0.0
         ),
         "embedding_enabled_ratio": mean(embedding_enabled),

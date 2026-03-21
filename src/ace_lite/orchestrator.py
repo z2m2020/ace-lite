@@ -876,6 +876,12 @@ class AceOrchestrator:
         replay_cache_info: dict[str, Any] | None,
         trace_export: dict[str, Any],
     ) -> list[str]:
+        def _safe_float(value: Any) -> float:
+            try:
+                return float(value or 0.0)
+            except Exception:
+                return 0.0
+
         reasons: set[str] = set()
         if contract_error is not None:
             reasons.add("contract_error")
@@ -898,20 +904,58 @@ class AceOrchestrator:
                     reasons.add("candidate_ranker_fallback")
                 if bool(tags.get("embedding_time_budget_exceeded", False)):
                     reasons.add("embedding_time_budget_exceeded")
+                    reasons.add("latency_budget_exceeded")
                 if bool(tags.get("embedding_fallback", False)):
                     reasons.add("embedding_fallback")
                 if bool(tags.get("chunk_semantic_time_budget_exceeded", False)):
                     reasons.add("chunk_semantic_time_budget_exceeded")
+                    reasons.add("latency_budget_exceeded")
                 if bool(tags.get("chunk_semantic_fallback", False)):
                     reasons.add("chunk_semantic_fallback")
                 if bool(tags.get("parallel_docs_timed_out", False)):
                     reasons.add("parallel_docs_timeout")
+                    reasons.add("latency_budget_exceeded")
                 if bool(tags.get("parallel_worktree_timed_out", False)):
                     reasons.add("parallel_worktree_timeout")
+                    reasons.add("latency_budget_exceeded")
                 if bool(tags.get("router_fallback_applied", False)):
                     reasons.add("router_fallback_applied")
             if metric.stage == "augment" and bool(tags.get("xref_budget_exhausted", False)):
                 reasons.add("xref_budget_exhausted")
+                reasons.add("latency_budget_exceeded")
+            if metric.stage == "skills":
+                if bool(tags.get("budget_exhausted", False)) or int(
+                    tags.get("skipped_for_budget_count", 0) or 0
+                ) > 0:
+                    reasons.add("skills_budget_exhausted")
+            if metric.stage == "source_plan":
+                direct_count = int(tags.get("evidence_direct_count", 0) or 0)
+                neighbor_count = int(
+                    tags.get("evidence_neighbor_context_count", 0) or 0
+                )
+                hint_only_count = int(tags.get("evidence_hint_only_count", 0) or 0)
+                candidate_chunk_count = int(tags.get("candidate_chunk_count", 0) or 0)
+                validation_test_count = int(tags.get("validation_test_count", 0) or 0)
+                hint_only_ratio = _safe_float(tags.get("evidence_hint_only_ratio", 0.0))
+                if validation_test_count <= 0:
+                    reasons.add("evidence_insufficient")
+                if direct_count <= 0 and (
+                    candidate_chunk_count <= 0
+                    or hint_only_count > 0
+                    or neighbor_count > 0
+                ):
+                    reasons.add("evidence_insufficient")
+                if (
+                    direct_count > 0
+                    and hint_only_count > 0
+                    and hint_only_ratio >= 0.5
+                ):
+                    reasons.add("noisy_hit")
+            if metric.stage == "agent_loop":
+                stop_reason = str(tags.get("stop_reason") or "").strip().lower()
+                iteration_count = int(tags.get("iteration_count", 0) or 0)
+                if stop_reason == "max_iterations" and iteration_count > 0:
+                    reasons.add("repeated_retry")
             if int(tags.get("slot_policy_blocked", 0) or 0) > 0:
                 reasons.add("plugin_policy_blocked")
             if int(tags.get("slot_policy_warn", 0) or 0) > 0:

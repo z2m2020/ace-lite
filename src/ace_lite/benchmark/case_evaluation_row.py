@@ -2,7 +2,39 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
+
+
+def _normalize_timestamp(value: Any) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return ""
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return ""
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
+def _time_delta_hours(*, start: Any, end: Any) -> float:
+    start_normalized = _normalize_timestamp(start)
+    end_normalized = _normalize_timestamp(end)
+    if not start_normalized or not end_normalized:
+        return 0.0
+    try:
+        start_dt = datetime.fromisoformat(start_normalized)
+        end_dt = datetime.fromisoformat(end_normalized)
+    except ValueError:
+        return 0.0
+    delta_seconds = (end_dt - start_dt).total_seconds()
+    if delta_seconds <= 0.0:
+        return 0.0
+    return float(delta_seconds) / 3600.0
 
 
 def build_case_evaluation_row(
@@ -166,6 +198,34 @@ def build_case_evaluation_row(
         issue_report.get("plan_payload_ref") or ""
     ).strip()
     issue_report_status = str(issue_report.get("status") or "").strip()
+    issue_report_occurred_at = _normalize_timestamp(issue_report.get("occurred_at"))
+    issue_report_resolved_at = _normalize_timestamp(issue_report.get("resolved_at"))
+    issue_report_created_at = _normalize_timestamp(issue_report.get("created_at"))
+    issue_report_updated_at = _normalize_timestamp(issue_report.get("updated_at"))
+    issue_report_resolution_note = str(issue_report.get("resolution_note") or "").strip()
+    issue_report_time_to_fix_hours = _time_delta_hours(
+        start=issue_report.get("occurred_at") or issue_report.get("created_at"),
+        end=issue_report.get("resolved_at"),
+    )
+    dev_feedback_raw = case.get("dev_feedback")
+    dev_feedback = dev_feedback_raw if isinstance(dev_feedback_raw, dict) else {}
+    dev_feedback_issue_count = max(0, int(dev_feedback.get("issue_count", 0) or 0))
+    dev_feedback_linked_fix_issue_count = max(
+        0, int(dev_feedback.get("linked_fix_issue_count", 0) or 0)
+    )
+    dev_feedback_resolved_issue_count = max(
+        0, int(dev_feedback.get("resolved_issue_count", 0) or 0)
+    )
+    dev_feedback_created_at = _normalize_timestamp(dev_feedback.get("created_at"))
+    dev_feedback_resolved_at = _normalize_timestamp(dev_feedback.get("resolved_at"))
+    dev_feedback_issue_time_to_fix_hours = float(
+        dev_feedback.get("issue_time_to_fix_hours", 0.0) or 0.0
+    )
+    if dev_feedback_issue_time_to_fix_hours <= 0.0:
+        dev_feedback_issue_time_to_fix_hours = _time_delta_hours(
+            start=dev_feedback.get("created_at"),
+            end=dev_feedback.get("resolved_at"),
+        )
     feedback_surface = str(case.get("feedback_surface") or "").strip()
 
     return {
@@ -338,11 +398,55 @@ def build_case_evaluation_row(
         "issue_report_issue_id": issue_report_issue_id,
         "issue_report_has_plan_ref": 1.0 if issue_report_plan_payload_ref else 0.0,
         "issue_report_status": issue_report_status,
+        "issue_report_occurred_at": issue_report_occurred_at,
+        "issue_report_resolved_at": issue_report_resolved_at,
+        "issue_report_created_at": issue_report_created_at,
+        "issue_report_updated_at": issue_report_updated_at,
+        "issue_report_resolution_note": issue_report_resolution_note,
+        "issue_report_time_to_fix_hours": float(issue_report_time_to_fix_hours),
+        "dev_feedback_issue_count": float(dev_feedback_issue_count),
+        "dev_feedback_linked_fix_issue_count": float(
+            dev_feedback_linked_fix_issue_count
+        ),
+        "dev_feedback_resolved_issue_count": float(
+            dev_feedback_resolved_issue_count
+        ),
+        "dev_feedback_created_at": dev_feedback_created_at,
+        "dev_feedback_resolved_at": dev_feedback_resolved_at,
+        "dev_feedback_issue_time_to_fix_hours": float(
+            dev_feedback_issue_time_to_fix_hours
+        ),
+        "dev_issue_to_fix_rate": (
+            float(dev_feedback_linked_fix_issue_count) / float(dev_feedback_issue_count)
+            if dev_feedback_issue_count > 0
+            else 0.0
+        ),
         "feedback_loop": {
             "feedback_surface": feedback_surface,
             "issue_report_issue_id": issue_report_issue_id,
             "issue_report_has_plan_ref": bool(issue_report_plan_payload_ref),
             "issue_report_status": issue_report_status,
+            "issue_report_occurred_at": issue_report_occurred_at,
+            "issue_report_resolved_at": issue_report_resolved_at,
+            "issue_report_time_to_fix_hours": float(issue_report_time_to_fix_hours),
+            "dev_feedback_issue_count": int(dev_feedback_issue_count),
+            "dev_feedback_linked_fix_issue_count": int(
+                dev_feedback_linked_fix_issue_count
+            ),
+            "dev_feedback_resolved_issue_count": int(
+                dev_feedback_resolved_issue_count
+            ),
+            "dev_feedback_created_at": dev_feedback_created_at,
+            "dev_feedback_resolved_at": dev_feedback_resolved_at,
+            "dev_feedback_issue_time_to_fix_hours": float(
+                dev_feedback_issue_time_to_fix_hours
+            ),
+            "dev_issue_to_fix_rate": (
+                float(dev_feedback_linked_fix_issue_count)
+                / float(dev_feedback_issue_count)
+                if dev_feedback_issue_count > 0
+                else 0.0
+            ),
         },
         "feedback_enabled": 1.0 if feedback_enabled else 0.0,
         "feedback_reason": feedback_reason,

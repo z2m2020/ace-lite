@@ -37,6 +37,10 @@ cases:
   - case_id: ace-feedback-resolution-cli-03
     query: how does the feedback CLI resolve an issue report from a stored dev fix and persist resolution_note
     expected_keys: [feedback, resolution, issue]
+    dev_feedback:
+      issue_count: 1
+      linked_fix_issue_count: 1
+      resolved_issue_count: 1
     filters:
       include_paths:
         - src/ace_lite/cli_app/commands/feedback.py
@@ -54,6 +58,10 @@ cases:
   - case_id: ace-feedback-resolution-mcp-04
     query: how does the mcp service apply a stored dev fix to resolve an issue report and attach dev-fix references
     expected_keys: [mcp, resolution, issue]
+    dev_feedback:
+      issue_count: 1
+      linked_fix_issue_count: 1
+      resolved_issue_count: 1
     filters:
       include_paths:
         - src/ace_lite/mcp_server/service_issue_report_handlers.py

@@ -6,6 +6,7 @@ from pathlib import Path
 from ace_lite.cli_app.runtime_command_support import (
     RUNTIME_COMMAND_DOMAIN_REGISTRY,
     build_codex_mcp_setup_plan,
+    build_runtime_status_payload,
     build_runtime_status_snapshot,
     collect_runtime_settings_show_payload,
     collect_runtime_status_payload,
@@ -43,6 +44,27 @@ def _seed_runtime_stats_with_degraded_reason(db_path: Path) -> None:
             stage_latencies=(
                 {"stage_name": "memory", "elapsed_ms": 20.0},
                 {"stage_name": "total", "elapsed_ms": 80.0},
+            ),
+        )
+    )
+
+
+def _seed_runtime_stats_with_alias_reason(db_path: Path) -> None:
+    store = DurableStatsStore(db_path=db_path)
+    store.record_invocation(
+        RuntimeInvocationStats(
+            invocation_id="inv-alias",
+            session_id="session-alpha",
+            repo_key="repo-alpha",
+            profile_key="bugfix",
+            status="degraded",
+            total_latency_ms=40.0,
+            started_at="2026-03-19T00:10:00+00:00",
+            finished_at="2026-03-19T00:10:01+00:00",
+            degraded_reason_codes=("budget_exceeded",),
+            stage_latencies=(
+                {"stage_name": "memory", "elapsed_ms": 10.0},
+                {"stage_name": "total", "elapsed_ms": 40.0},
             ),
         )
     )
@@ -302,11 +324,19 @@ def test_load_runtime_dev_feedback_summary_applies_repo_user_and_profile_filters
 
     assert payload["issue_count"] == 1
     assert payload["open_issue_count"] == 1
+    assert payload["resolved_issue_count"] == 0
     assert payload["fix_count"] == 1
+    assert payload["linked_fix_issue_count"] == 1
+    assert payload["dev_issue_to_fix_rate"] == 1.0
+    assert payload["issue_time_to_fix_case_count"] == 0
+    assert payload["issue_time_to_fix_hours_mean"] == 0.0
     assert payload["repo_key"] == "repo-alpha"
     assert payload["user_id"] == "bench-user"
     assert payload["profile_key"] == "bugfix"
     assert payload["by_reason_code"][0]["reason_code"] == "memory_fallback"
+    assert payload["by_reason_code"][0]["reason_family"] == "memory"
+    assert payload["by_reason_code"][0]["capture_class"] == "fallback"
+    assert payload["by_reason_code"][0]["dev_issue_to_fix_rate"] == 1.0
 
 
 def test_load_runtime_dev_feedback_summary_applies_scope_filters(tmp_path: Path) -> None:
@@ -350,8 +380,12 @@ def test_load_runtime_dev_feedback_summary_applies_scope_filters(tmp_path: Path)
     assert payload["profile_key"] == "bugfix"
     assert payload["issue_count"] == 1
     assert payload["open_issue_count"] == 1
+    assert payload["resolved_issue_count"] == 0
     assert payload["fix_count"] == 0
+    assert payload["linked_fix_issue_count"] == 0
+    assert payload["dev_issue_to_fix_rate"] == 0.0
     assert payload["by_reason_code"][0]["reason_code"] == "memory_fallback"
+    assert payload["by_reason_code"][0]["reason_family"] == "memory"
 
 
 def test_load_runtime_stats_summary_includes_dev_feedback_and_top_pain_summary(
@@ -398,20 +432,95 @@ def test_load_runtime_stats_summary_includes_dev_feedback_and_top_pain_summary(
     assert payload["dev_feedback_summary"]["fix_count"] == 1
     assert payload["top_pain_summary"]["count"] == 1
     assert payload["top_pain_summary"]["items"][0]["reason_code"] == "memory_fallback"
+    assert payload["top_pain_summary"]["items"][0]["reason_family"] == "memory"
+    assert payload["top_pain_summary"]["items"][0]["capture_class"] == "fallback"
     assert payload["top_pain_summary"]["items"][0]["runtime_event_count"] == 1
     assert payload["top_pain_summary"]["items"][0]["manual_issue_count"] == 1
     assert payload["top_pain_summary"]["items"][0]["open_issue_count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["resolved_issue_count"] == 0
     assert payload["top_pain_summary"]["items"][0]["fix_count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["linked_fix_issue_count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["dev_issue_to_fix_rate"] == 1.0
+    assert payload["top_pain_summary"]["items"][0]["issue_time_to_fix_case_count"] == 0
+    assert payload["top_pain_summary"]["items"][0]["issue_time_to_fix_hours_mean"] == 0.0
     assert payload["memory_health_summary"]["scope_kind"] == "repo_profile"
     assert payload["memory_health_summary"]["reason_count"] == 1
     assert payload["memory_health_summary"]["runtime_event_count"] == 1
     assert payload["memory_health_summary"]["issue_count"] == 1
     assert payload["memory_health_summary"]["open_issue_count"] == 1
+    assert payload["memory_health_summary"]["resolved_issue_count"] == 0
     assert payload["memory_health_summary"]["fix_count"] == 1
+    assert payload["memory_health_summary"]["linked_fix_issue_count"] == 1
     assert payload["memory_health_summary"]["resolution_rate"] == 1.0
+    assert payload["memory_health_summary"]["dev_issue_to_fix_rate"] == 1.0
     assert payload["memory_health_summary"]["open_issue_rate"] == 1.0
+    assert payload["memory_health_summary"]["issue_time_to_fix_case_count"] == 0
+    assert payload["memory_health_summary"]["issue_time_to_fix_hours_mean"] == 0.0
     assert payload["memory_health_summary"]["memory_stage_latency_ms_avg"] == 20.0
     assert payload["memory_health_summary"]["reasons"][0]["reason_code"] == "memory_fallback"
+    assert payload["memory_health_summary"]["reasons"][0]["reason_family"] == "memory"
+    assert payload["memory_health_summary"]["reasons"][0]["linked_fix_issue_count"] == 1
+
+
+def test_load_runtime_stats_summary_canonicalizes_runtime_reason_aliases_in_top_pain_summary(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / ".ace-lite" / "runtime_state.db"
+    _seed_runtime_stats_with_alias_reason(db_path)
+
+    payload = load_runtime_stats_summary(
+        db_path=db_path,
+        repo_key="repo-alpha",
+        profile_key="bugfix",
+        home_path=tmp_path,
+    )
+
+    assert payload["top_pain_summary"]["count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["reason_code"] == (
+        "latency_budget_exceeded"
+    )
+    assert payload["top_pain_summary"]["items"][0]["reason_family"] == "runtime"
+    assert payload["top_pain_summary"]["items"][0]["capture_class"] == "budget"
+    assert payload["top_pain_summary"]["items"][0]["runtime_event_count"] == 1
+
+
+def test_build_runtime_status_payload_canonicalizes_runtime_reason_aliases_in_degraded_services(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / ".ace-lite" / "runtime_state.db"
+    _seed_runtime_stats_with_alias_reason(db_path)
+    runtime_stats = load_runtime_stats_summary(
+        db_path=db_path,
+        repo_key="repo-alpha",
+        profile_key="bugfix",
+        home_path=tmp_path,
+    )
+
+    payload = build_runtime_status_payload(
+        root=str(tmp_path),
+        settings={},
+        fingerprint="fingerprint",
+        selected_profile="bugfix",
+        stats_tags={},
+        snapshot_loaded=False,
+        snapshot_path="",
+        memory_state={
+            "memory_disabled": True,
+            "primary": "none",
+            "secondary": "none",
+            "warnings": [],
+            "recommendations": [],
+        },
+        runtime_stats=runtime_stats,
+    )
+
+    assert any(
+        item["name"] == "runtime"
+        and item["reason"] == "latency_budget_exceeded"
+        and item.get("capture_class") == "budget"
+        and item["source"] == "latest_runtime_stats"
+        for item in payload["degraded_services"]
+    )
 
 
 def test_execute_codex_mcp_setup_plan_dry_run_does_not_run_commands() -> None:

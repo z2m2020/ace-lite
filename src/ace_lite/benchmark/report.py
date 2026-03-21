@@ -925,10 +925,28 @@ def _append_feedback_loop_summary(lines: list[str], results: dict[str, Any]) -> 
         )
     )
     lines.append(
+        "- Resolved issue reports: {count} rate={rate:.4f} time_to_fix_mean={hours:.2f}h".format(
+            count=int(summary.get("issue_report_resolved_case_count", 0) or 0),
+            rate=float(summary.get("issue_report_resolution_rate", 0.0) or 0.0),
+            hours=float(summary.get("issue_report_time_to_fix_hours_mean", 0.0) or 0.0),
+        )
+    )
+    lines.append(
         "- Dev-feedback resolution cases: {count} resolved={resolved} rate={rate:.4f}".format(
             count=int(summary.get("dev_feedback_resolution_case_count", 0) or 0),
             resolved=int(summary.get("dev_feedback_resolved_case_count", 0) or 0),
             rate=float(summary.get("dev_feedback_resolution_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Dev-feedback issue linkage: issues={issue_count} linked_fixes={linked} resolved_issues={resolved} issue_to_fix_rate={rate:.4f} time_to_fix_mean={hours:.2f}h".format(
+            issue_count=int(summary.get("dev_feedback_issue_count", 0) or 0),
+            linked=int(summary.get("dev_feedback_linked_fix_issue_count", 0) or 0),
+            resolved=int(summary.get("dev_feedback_resolved_issue_count", 0) or 0),
+            rate=float(summary.get("dev_issue_to_fix_rate", 0.0) or 0.0),
+            hours=float(
+                summary.get("dev_feedback_issue_time_to_fix_hours_mean", 0.0) or 0.0
+            ),
         )
     )
     lines.append("")
@@ -947,8 +965,18 @@ def _append_feedback_loop_summary(lines: list[str], results: dict[str, Any]) -> 
         )
     )
     lines.append(
+        "| issue_report_time_to_fix_hours_mean | {value:.2f} |".format(
+            value=float(summary.get("issue_report_time_to_fix_hours_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
         "| dev_feedback_resolution_rate | {value:.4f} |".format(
             value=float(summary.get("dev_feedback_resolution_rate", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| dev_issue_to_fix_rate | {value:.4f} |".format(
+            value=float(summary.get("dev_issue_to_fix_rate", 0.0) or 0.0)
         )
     )
     lines.append("")

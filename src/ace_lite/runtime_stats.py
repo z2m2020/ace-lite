@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
 from ace_lite.runtime_stats_schema import (
     RUNTIME_STATS_DEGRADED_REASON_CODES,
     RUNTIME_STATS_STAGE_NAMES,
@@ -183,7 +184,10 @@ def normalize_runtime_degraded_reason_codes(value: Any) -> tuple[str, ...]:
     normalized: set[str] = set()
     allowed = set(RUNTIME_STATS_DEGRADED_REASON_CODES)
     for item in rows:
-        reason = _normalize_text(item, max_len=128).lower()
+        reason = normalize_dev_feedback_reason_code(
+            _normalize_text(item, max_len=128).lower(),
+            default="",
+        )
         if not reason:
             continue
         normalized.add(reason if reason in allowed else reason)

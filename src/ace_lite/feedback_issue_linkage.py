@@ -33,6 +33,33 @@ def _unique_non_empty(items: list[str], *, limit: int | None = None) -> list[str
     return out
 
 
+def _derive_dev_feedback_case_payload(*, report: IssueReport) -> dict[str, Any] | None:
+    attachments = [
+        str(item).strip()
+        for item in getattr(report, "attachments", ())
+        if str(item).strip()
+    ]
+    fix_refs = [item for item in attachments if item.startswith("dev-fix://")]
+    if not fix_refs:
+        return None
+    resolved_statuses = {"resolved", "fixed", "closed"}
+    resolved = bool(str(report.resolved_at or "").strip()) or (
+        str(report.status or "").strip().lower() in resolved_statuses
+    )
+    payload: dict[str, Any] = {
+        "issue_count": 1,
+        "linked_fix_issue_count": 1,
+        "resolved_issue_count": 1 if resolved else 0,
+    }
+    occurred_at = str(report.occurred_at or report.created_at or "").strip()
+    resolved_at = str(report.resolved_at or "").strip()
+    if occurred_at:
+        payload["created_at"] = occurred_at
+    if resolved_at:
+        payload["resolved_at"] = resolved_at
+    return payload
+
+
 def build_issue_report_case_id(*, report: IssueReport) -> str:
     suffix = str(report.issue_id or "issue").strip().lower().replace("_", "-")
     suffix = re.sub(r"[^a-z0-9-]+", "-", suffix).strip("-")
@@ -72,7 +99,7 @@ def build_issue_report_benchmark_case(
     filters: dict[str, Any] = {}
     if report.selected_path:
         filters["include_paths"] = [str(report.selected_path)]
-    return {
+    payload = {
         "case_id": str(case_id or build_issue_report_case_id(report=report)),
         "query": str(report.query),
         "expected_keys": expected_keys,
@@ -91,8 +118,17 @@ def build_issue_report_benchmark_case(
             "status": str(report.status),
             "selected_path": str(report.selected_path),
             "plan_payload_ref": str(report.plan_payload_ref),
+            "occurred_at": str(report.occurred_at),
+            "resolved_at": str(report.resolved_at),
+            "created_at": str(report.created_at),
+            "updated_at": str(report.updated_at),
+            "resolution_note": str(report.resolution_note),
         },
     }
+    dev_feedback = _derive_dev_feedback_case_payload(report=report)
+    if dev_feedback is not None:
+        payload["dev_feedback"] = dev_feedback
+    return payload
 
 
 def export_issue_report_benchmark_case(

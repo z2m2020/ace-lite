@@ -419,6 +419,18 @@ def test_feedback_loop_cases_cover_issue_export_and_resolution_surfaces() -> Non
             "tests/unit/test_mcp_server.py",
         ],
     }
+    expected_dev_feedback = {
+        "ace-feedback-resolution-cli-03": {
+            "issue_count": 1,
+            "linked_fix_issue_count": 1,
+            "resolved_issue_count": 1,
+        },
+        "ace-feedback-resolution-mcp-04": {
+            "issue_count": 1,
+            "linked_fix_issue_count": 1,
+            "resolved_issue_count": 1,
+        },
+    }
 
     for item in cases:
         case_id = str(item["case_id"])
@@ -429,6 +441,8 @@ def test_feedback_loop_cases_cover_issue_export_and_resolution_surfaces() -> Non
             "min_validation_tests": 1,
         }
         assert item["filters"]["include_paths"] == expected_include_paths[case_id]
+        if case_id in expected_dev_feedback:
+            assert item["dev_feedback"] == expected_dev_feedback[case_id]
 
 
 def test_memory_feedback_cases_cover_memory_taxonomy_surfaces() -> None:

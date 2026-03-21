@@ -67,6 +67,11 @@ RUNTIME_STATS_DEGRADED_REASON_CODES = (
     "plugin_policy_warn",
     "contract_error",
     "trace_export_failed",
+    "evidence_insufficient",
+    "noisy_hit",
+    "manual_override",
+    "repeated_retry",
+    "latency_budget_exceeded",
 )
 
 RUNTIME_STATS_INVOCATIONS_TABLE = "runtime_stats_invocations"

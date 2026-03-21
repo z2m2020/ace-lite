@@ -152,12 +152,25 @@ def execute_post_source_plan_agent_loop(
                 final_query=current_query,
             )
 
+    summary = controller.finalize(
+        stop_reason="max_iterations",
+        last_action=last_action,
+        final_query=current_query,
+    )
+    stage_metrics.append(
+        StageMetric(
+            stage="agent_loop",
+            elapsed_ms=0.0,
+            plugins=[],
+            tags={
+                "stop_reason": str(summary.get("stop_reason") or ""),
+                "iteration_count": int(summary.get("iteration_count", 0) or 0),
+                "actions_executed": int(summary.get("actions_executed", 0) or 0),
+            },
+        )
+    )
     return OrchestratorAgentLoopResult(
         contract_error=None,
-        summary=controller.finalize(
-            stop_reason="max_iterations",
-            last_action=last_action,
-            final_query=current_query,
-        ),
+        summary=summary,
         final_query=current_query,
     )

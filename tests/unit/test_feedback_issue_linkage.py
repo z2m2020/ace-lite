@@ -52,6 +52,11 @@ def test_build_issue_report_benchmark_case_uses_selected_path_filters() -> None:
     assert payload["filters"] == {"include_paths": ["src/ace_lite/validation/result.py"]}
     assert "validation" in payload["expected_keys"]
     assert payload["issue_report"]["issue_id"] == "iss_demo1234"
+    assert payload["issue_report"]["occurred_at"] == "2026-03-19T00:00:00+00:00"
+    assert payload["issue_report"]["resolved_at"] == ""
+    assert payload["issue_report"]["created_at"] == "2026-03-19T00:00:00+00:00"
+    assert payload["issue_report"]["updated_at"] == "2026-03-19T00:00:00+00:00"
+    assert "dev_feedback" not in payload
 
 
 def test_export_issue_report_benchmark_case_replaces_same_case_id(tmp_path: Path) -> None:
@@ -90,3 +95,40 @@ def test_build_issue_report_resolution_from_fix_attaches_dev_fix_reference() -> 
     assert payload["resolved_at"] == "2026-03-19T00:05:00+00:00"
     assert payload["resolution_note"] == "patched validation payload"
     assert "dev-fix://devf_demo1234" in payload["attachments"]
+
+
+def test_build_issue_report_benchmark_case_derives_dev_feedback_metadata_from_fix_attachment(
+) -> None:
+    report = _sample_report()
+    resolved_report = IssueReport(
+        **build_issue_report_resolution_from_fix(
+            report=report,
+            fix=DevFix(
+                fix_id="devf_demo1234",
+                issue_id="iss_demo1234",
+                reason_code="memory_fallback",
+                repo="demo",
+                user_id="bench-user",
+                profile_key="bugfix",
+                query="validation missing selected path",
+                selected_path="src/ace_lite/validation/result.py",
+                related_invocation_id="inv-123",
+                resolution_note="patched validation payload",
+                created_at="2026-03-19T00:05:00+00:00",
+            ),
+        )
+    )
+
+    payload = build_issue_report_benchmark_case(
+        report=resolved_report,
+        comparison_lane="dev_feedback_resolution",
+    )
+
+    assert payload["comparison_lane"] == "dev_feedback_resolution"
+    assert payload["dev_feedback"] == {
+        "issue_count": 1,
+        "linked_fix_issue_count": 1,
+        "resolved_issue_count": 1,
+        "created_at": "2026-03-19T00:00:00+00:00",
+        "resolved_at": "2026-03-19T00:05:00+00:00",
+    }

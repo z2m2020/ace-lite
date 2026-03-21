@@ -130,17 +130,56 @@ def test_source_plan_stage_tags_include_packing_observability() -> None:
                 "packed_path_count": 3,
                 "reason": "ok",
             },
+            "evidence_summary": {
+                "direct_count": 1.0,
+                "neighbor_context_count": 1.0,
+                "hint_only_count": 1.0,
+                "direct_ratio": 1.0 / 3.0,
+                "neighbor_context_ratio": 1.0 / 3.0,
+                "hint_only_ratio": 1.0 / 3.0,
+            },
             "policy_name": "general",
             "policy_version": "v1",
         },
     )
 
+    assert tags["evidence_direct_count"] == 1
+    assert tags["evidence_neighbor_context_count"] == 1
+    assert tags["evidence_hint_only_count"] == 1
+    assert tags["evidence_direct_ratio"] == 1.0 / 3.0
+    assert tags["evidence_neighbor_context_ratio"] == 1.0 / 3.0
+    assert tags["evidence_hint_only_ratio"] == 1.0 / 3.0
     assert tags["packing_graph_closure_preference_enabled"] is True
     assert tags["packing_graph_closure_bonus_candidate_count"] == 2
     assert tags["packing_graph_closure_preferred_count"] == 1
     assert tags["packing_focused_file_promoted_count"] == 3
     assert tags["packing_packed_path_count"] == 3
     assert tags["packing_reason"] == "ok"
+
+
+def test_skills_stage_tags_include_budget_observability() -> None:
+    tags = build_stage_tags(
+        stage_name="skills",
+        output={
+            "selected": [{"name": "ace-dev"}],
+            "available_count": 4,
+            "token_budget": 1200,
+            "token_budget_used": 900,
+            "budget_exhausted": True,
+            "skipped_for_budget": [
+                {"name": "cross-agent-release-readiness", "estimated_tokens": 600}
+            ],
+            "policy_name": "general",
+            "policy_version": "v1",
+        },
+    )
+
+    assert tags["selected_count"] == 1
+    assert tags["available_count"] == 4
+    assert tags["token_budget"] == 1200
+    assert tags["token_budget_used"] == 900
+    assert tags["budget_exhausted"] is True
+    assert tags["skipped_for_budget_count"] == 1
 
 
 def test_validation_stage_tags_include_sandbox_and_result_summary() -> None:

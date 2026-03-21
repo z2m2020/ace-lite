@@ -448,6 +448,12 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
         return {
             "selected_count": len(selected) if isinstance(selected, list) else 0,
             "available_count": int(output.get("available_count", 0) or 0),
+            "token_budget": int(output.get("token_budget", 0) or 0),
+            "token_budget_used": int(output.get("token_budget_used", 0) or 0),
+            "budget_exhausted": bool(output.get("budget_exhausted", False)),
+            "skipped_for_budget_count": len(output.get("skipped_for_budget", []))
+            if isinstance(output.get("skipped_for_budget"), list)
+            else 0,
             "policy_name": policy_name,
             "policy_version": policy_version,
         }
@@ -458,6 +464,11 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
         chunks = output.get("candidate_chunks", [])
         chunk_steps = output.get("chunk_steps", [])
         packing = output.get("packing", {}) if isinstance(output.get("packing"), dict) else {}
+        evidence_summary = (
+            output.get("evidence_summary", {})
+            if isinstance(output.get("evidence_summary"), dict)
+            else {}
+        )
         return {
             "diagnostic_count": len(diagnostics) if isinstance(diagnostics, list) else 0,
             "constraint_count": len(constraints) if isinstance(constraints, list) else 0,
@@ -469,6 +480,24 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "validation_test_count": len(output.get("validation_tests", []))
             if isinstance(output.get("validation_tests"), list)
             else 0,
+            "evidence_direct_count": int(
+                evidence_summary.get("direct_count", 0.0) or 0.0
+            ),
+            "evidence_neighbor_context_count": int(
+                evidence_summary.get("neighbor_context_count", 0.0) or 0.0
+            ),
+            "evidence_hint_only_count": int(
+                evidence_summary.get("hint_only_count", 0.0) or 0.0
+            ),
+            "evidence_direct_ratio": float(
+                evidence_summary.get("direct_ratio", 0.0) or 0.0
+            ),
+            "evidence_neighbor_context_ratio": float(
+                evidence_summary.get("neighbor_context_ratio", 0.0) or 0.0
+            ),
+            "evidence_hint_only_ratio": float(
+                evidence_summary.get("hint_only_ratio", 0.0) or 0.0
+            ),
             "chunk_budget_used": float(output.get("chunk_budget_used", 0.0) or 0.0),
             "packing_graph_closure_preference_enabled": bool(
                 packing.get("graph_closure_preference_enabled", False)

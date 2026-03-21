@@ -1,246 +1,291 @@
 # Long-Term Memory and Feedback Loop Requirements
 
-## 1. Background
+## 1. Document Role
 
-Date: `2026-03-19`
+Date: `2026-03-20`
 
-The current ACE-Lite primary pipeline is:
+This document is no longer a pure greenfield design note.
+It is a reality-aligned requirements and phase-tracking document for the ACE-Lite long-term memory and feedback loop.
+
+It serves three purposes:
+
+1. describe the target product and engineering loop
+2. record what is already implemented in the current codebase
+3. isolate the remaining Phase 2 backlog so future work does not mix completed foundations with deferred metrics
+
+Status labels used below:
+
+- `implemented`: shipped in the current codebase and covered by runtime, CLI, MCP, benchmark, or tests
+- `partial`: the main path exists, but the capability is not yet complete or not yet fully measured
+- `deferred`: still a design requirement or backlog item, not a current system capability
+
+## 2. Background
+
+The current ACE-Lite primary pipeline remains:
 
 `memory -> index -> repomap -> augment -> skills -> source_plan -> validation`
 
 The existing system already provides these baseline capabilities:
 
-- `MemoryProvider` V2 contract: `search_compact()` + `fetch()`
+- `MemoryProvider` V2 contract with `search_compact()` and `fetch()`
 - memory-stage temporal filtering, timeline handling, recency boost, namespace routing, and postprocessing
 - `local_notes`, `profile_store`, `selection_feedback`, and durable preference capture
 - benchmark summaries, regression gates, runtime stats, and MCP/CLI entry points
 
-The main gap is no longer "whether a memory interface exists", but rather:
+As of `2026-03-20`, the main gap is no longer "whether a memory or feedback interface exists".
+The main remaining gaps are:
 
-- there is no durable, writable, replayable, and measurable long-term memory layer
-- there is no structured issue-reporting surface for real user problems
-- there is no tight developer dogfooding feedback loop that feeds directly into optimization decisions
-- there is no dedicated evaluation loop for the benefits and risks of long-term memory
+- long-term memory evaluation is only partially complete
+- the developer auto-capture taxonomy is narrower than originally planned
+- several advanced metrics and issue lifecycle metrics are still missing
+- the original benchmark lane design in this document no longer matches the actual benchmark case taxonomy
 
-## 2. Goals
+## 3. Goals
 
-This requirement set aims to unify four capability areas into one evolvable product and engineering loop:
+This capability area still aims to unify four loops into one evolvable product and engineering system:
 
-1. Long-term memory: allow ACE-Lite to persist high-value observations, facts, and lightweight graph edges across sessions, and use them as first-class retrieval signals during `ace_plan`.
+1. Long-term memory: persist high-value observations, facts, and lightweight relation edges across sessions, and use them as first-class retrieval signals during `ace_plan`.
 2. User issue reporting: allow real users to submit structured problem reports that developers can track, triage, attribute, and convert into benchmark and optimization work.
 3. Developer inner-loop feedback: allow local dogfooding failures, degradations, and manual corrections to flow back into development decisions automatically or semi-automatically.
-4. Evaluation and validation: make the gains, noise, latency overhead, and replay stability of long-term memory and feedback systems measurable, comparable, and regression-gated.
+4. Evaluation and validation: make gains, noise, replay stability, and operational cost measurable and regression-gated.
 
-## 3. Design Principles
+## 4. Design Principles
 
-### 3.1 First-Class Capability, Not a Sidecar Primary Path
+### 4.1 First-Class Capability, Not a Sidecar Primary Path
 
-- Long-term memory must be integrated into the existing `memory` stage as a first-class capability.
-- It should not first be implemented as an external MCP plugin or a separate side-route primary retrieval path.
+- Long-term memory must stay integrated into the existing `memory` stage as a first-class capability.
+- It should not be reintroduced as a separate primary retrieval path.
 
-### 3.2 Preserve Existing Public Contracts
+### 4.2 Preserve Existing Public Contracts
 
 - Do not break the base `MemoryProvider` contract.
-- Keep public CLI, MCP, benchmark, schema, and replay contracts backward-compatible whenever possible.
+- Keep public CLI, MCP, benchmark, schema, and replay contracts backward-compatible whenever practical.
 
-### 3.3 Local-First and Deterministic by Default
+### 4.3 Local-First and Deterministic by Default
 
-- The first implementation should prioritize local `SQLite + FTS5`.
-- All retrieval and write paths should support `as_of` or an equivalent temporal boundary to prevent replay drift and future-information leakage.
+- The first implementation remains local `SQLite + FTS5`.
+- Retrieval and write paths should support `as_of` or an equivalent temporal boundary to reduce replay drift and future-information leakage.
 
-### 3.4 Observation Before Fact
+### 4.4 Observation Before Fact
 
 - Raw events should first be captured as `observation` records.
-- Facts should be a traceable, supersedable, and expirable derived layer.
+- Facts should remain a traceable, supersedable, and expirable derived layer.
 
-### 3.5 Closed Loops Over Isolated Features
+### 4.5 Closed Loops Over Passive Storage
 
-- Every feedback capability must flow back into:
-  - benchmark cases
-  - long-term memory observations and facts
-  - developer prioritization and optimization decisions
-- The system must not become a passive warehouse that only collects data.
+- Feedback must flow back into benchmark cases, long-term memory observations and facts, and developer prioritization.
+- The system should not become a passive warehouse with no optimization feedback path.
 
-### 3.6 2026-03-19 Phase 1 Contract Freeze
+### 4.6 Phase 1 Contract Freeze
 
-- The first pass of `memory.long_term.*` should freeze only the minimal contract, without prematurely binding to store or provider internals:
-  - `enabled`
-  - `path`
-  - `top_n`
-  - `token_budget`
-  - `write_enabled`
-  - `as_of_enabled`
-- The default path is fixed to `context-map/long_term_memory.db`.
-- Observation and fact schemas should be frozen through dedicated helpers, without directly mutating the existing public `memory -> augment` payload.
-- The first pass must preserve these scoping fields:
-  - `repo`
-  - `root`
-  - `namespace`
-  - `user_id`
-  - `profile_key`
-  - `as_of`
-- The first schema versions are:
-  - `long_term_observation_v1`
-  - `long_term_fact_v1`
+The first pass of `memory.long_term.*` is intentionally narrow and should remain stable:
 
-## 4. Scope
+- `enabled`
+- `path`
+- `top_n`
+- `token_budget`
+- `write_enabled`
+- `as_of_enabled`
 
-### 4.1 In Scope
+The default path is:
 
-- long-term memory storage, provider, and capture/ingestion pipeline
-- user issue-report templates, persistence, aggregation, and developer consumption paths
-- developer inner-loop automatic capture and manual confirmation paths
-- benchmark, summary, and regression metric expansion for long-term memory and feedback
-- CLI, MCP, runtime status, and runtime doctor surfaces for feedback and observability
+- `context-map/long_term_memory.db`
 
-### 4.2 Out of Scope
+The first schema versions are:
 
-- no external graph store such as Neo4j or JanusGraph in the first version
-- no full Graphiti-style property graph evolution in the first version
-- no full web UI in the first version
-- no mutation of public `index` or `source_plan` contracts driven directly by long-term memory in the first version
+- `long_term_observation_v1`
+- `long_term_fact_v1`
 
-## 5. Requirement Overview
+The preserved scope fields are:
 
-### 5.1 Long-Term Memory Capability
+- `repo`
+- `root`
+- `namespace`
+- `user_id`
+- `profile_key`
+- `as_of`
 
-Add a long-term memory chain compatible with the current memory contract:
+## 5. Current Implementation Snapshot
 
-`capture/ingestion -> LongTermMemoryStore -> LongTermMemoryProvider -> memory stage`
+### 5.1 Long-Term Memory Core
 
-Requirements:
+Status: `implemented`
 
-- the store is based on local `SQLite + FTS5`
-- the provider implements `search_compact()` and `fetch()`
-- the memory stage can consume long-term memory results without special casing
-- it can cooperate with the existing `OpenMemoryMemoryProvider`, `LocalNotesProvider`, and `SelectionFeedbackStore`
-- it supports `repo`, `root`, `namespace` or `container_tag`, `user_id`, `profile_key`, and `as_of`
+Implemented in the current codebase:
+
+- `LongTermMemoryStore`
+- `LongTermMemoryProvider`
+- `LongTermMemoryCaptureService`
+- repo-local SQLite storage under `context-map/long_term_memory.db`
+- observation and fact schema helpers
+- `as_of` filtering on the main retrieval path
+- integration with the memory-stage provider chain
+
+Current limitation:
+
+- the system is intentionally conservative and does not yet attempt a richer graph-evolution or advanced attribution model
 
 ### 5.2 User Issue Reporting
 
-Add a structured `issue_report` capability for collecting real user problems.
+Status: `implemented`
 
-Requirements:
+Implemented in the current codebase:
 
-- users can submit structured issues via CLI and MCP
-- the issue template must include:
-  - `title`
-  - `query`
-  - `repo`
-  - `root`
-  - `user_id`
-  - `profile_key`
-  - `occurred_at`
-  - `severity`
-  - `category`
-  - `expected_behavior`
-  - `actual_behavior`
-  - `repro_steps`
-  - `selected_path`
-  - `plan_payload_ref`
-  - `attachments`
-  - `status`
-  - `resolution_note`
-- each issue should be able to link to a concrete plan, run, or observability snapshot
-- issues should support lifecycle states such as `open`, `in_review`, `fixed`, and `rejected`
+- structured issue reporting through CLI
+- structured issue reporting through MCP
+- issue persistence and listing
+- issue export to benchmark case YAML
+- issue resolution from stored developer fixes
+- lifecycle persistence with issue-to-plan or issue-to-fix linkage
+
+Current limitation:
+
+- the issue lifecycle is operational, and benchmark/report already summarize `issue_report_time_to_fix_hours_mean`
+- reopen-oriented lifecycle metrics such as `issue_reopen_rate` and `time_to_triage` still do not have a stable event source
 
 ### 5.3 Developer Inner-Loop Feedback
 
-Local developer usage of ACE-Lite should feed real failures and manual corrections back into development decisions.
+Status: `partial`
 
-Requirements:
+Implemented in the current codebase:
 
-- automatic capture should include:
-  - `ace_plan` failure, timeout, and downgrade events
-  - `evidence_insufficient`
-  - `memory_fallback`
-  - `noisy_hit`
-  - latency budget exceeded
-  - repeated retries for the same query
-  - developer manual selection of a path different from the top candidate
-- manual confirmation should include:
-  - raising an automatically captured event to a `dev_issue`
-  - recording a `dev_fix` or `resolution_event`
-- captured events must include:
-  - query, repo, root, and git/version snapshot
-  - runtime profile and config fingerprint
-  - key observability summaries from memory, index, source_plan, and validation
-  - candidate files, selected path, error, and trace references
+- `dev_issue` and `dev_fix` persistence
+- CLI and MCP entry points for developer feedback
+- runtime event promotion into developer issues
+- developer fix application back into issue resolution
+- capture failure is non-blocking for the main pipeline
 
-### 5.4 Evaluation and Validation Loop
+Partially implemented:
 
-The benchmark system must be extended so that long-term memory and feedback can be measured explicitly.
+- runtime degradation and fallback reasons already exist and can feed feedback surfaces
+- selection feedback can be written back into long-term memory
+- developer feedback can be linked to issue resolution and later benchmark conversion
+- developer feedback reason codes now pass through a shared normalization taxonomy with canonical reason codes, reason families, and capture classes
+- runtime status and top-pain summaries now expose the same normalized reason taxonomy fields
+- developer feedback summaries now expose `resolved_issue_count`, `linked_fix_issue_count`, `dev_issue_to_fix_rate`, `issue_time_to_fix_case_count`, and `issue_time_to_fix_hours_mean`
+- runtime-originated `evidence_insufficient` and `noisy_hit` signals now flow from source-plan evidence and validation coverage signals into `RuntimeInvocationStats.degraded_reason_codes`
+- runtime-originated `repeated_retry` now flows from `agent_loop.stop_reason=max_iterations`, and generic `latency_budget_exceeded` now flows from retrieval time-budget overruns in addition to the stage-specific degraded reasons
+- generic `latency_budget_exceeded` now also covers parallel docs/worktree timeout and `xref_budget_exhausted` paths when runtime degraded reasons are materialized
+- runtime-originated `skills_budget_exhausted` now flows from `skills` stage token-budget exhaustion into durable stats and downstream runtime status surfaces
 
-Requirements:
+Still missing:
 
-- support these case classes:
+- a fully normalized auto-capture taxonomy for all planned cases
+- a runtime-originated `manual_override` signal; current `manual_override` remains a normalization target for explicit human-recorded issue/fix flows rather than an automatically emitted runtime event
+- first-class metrics for manual override frequency, retry clustering, and end-to-end developer issue capture coverage
+- automatic exporter coverage that stamps richer developer issue/fix lifecycle metadata into all feedback benchmark cases; issue-report benchmark export now derives minimal `dev_feedback` metadata from resolved reports with `dev-fix://...` attachments, but broader benchmark case generation still depends on explicit case metadata
+
+### 5.4 Evaluation and Validation
+
+Status: `partial`
+
+Implemented in the current codebase:
+
+- benchmark case classes for:
   - `memory-neutral`
   - `memory-helpful`
   - `memory-harmful-negative-control`
   - `time-sensitive`
   - `cross-session-recovery`
-- support these comparison lanes:
+- feedback-oriented benchmark lanes already in use:
+  - `issue_report_feedback`
+  - `dev_feedback_resolution`
+- benchmark summaries for core long-term memory and feedback metrics
+- regression checks for selected long-term memory and feedback metrics
+- runtime memory health summary
+- long-term memory explainability summary
+
+Still missing:
+
+- the originally proposed quartet of comparison lanes:
   - `baseline_none`
   - `ltm_readonly_seeded`
   - `ltm_readwrite_sequence`
   - `ltm_ablation`
-- support temporal validation through `as_of` replay
-- support converting real issues into benchmark cases
+- a dedicated run-mode or A/B benchmark dimension that would make those lanes meaningful
+- full metric coverage for advanced long-term memory and issue lifecycle reporting
 
-## 6. Proposed Architecture
+Important note:
 
-### 6.1 Storage Layer
+- the current benchmark system uses `comparison_lane` mainly as a case taxonomy label
+- the original four-lane design should only be revived if a true baseline-vs-variant execution model is added
+- until then, those four names should be treated as `deferred`, not as current benchmark requirements
 
-The first version should use `context-map/long_term_memory.db` or an equivalent local path.
+## 6. Scope
 
-Recommended core tables:
+### 6.1 In Scope
 
-- `observations`
-  - raw events such as query, plan, validation, feedback, issue_report, dev_issue, and dev_fix
-- `facts`
-  - stable facts derived from observations
-- `triples`
-  - lightweight relation edges as `subject/predicate/object`
-- `retrieval_log`
-  - records long-term memory hits, selection, and attribution
+- long-term memory storage, provider, and capture or ingestion pipeline
+- user issue-report templates, persistence, aggregation, and developer consumption paths
+- developer inner-loop automatic capture and manual confirmation paths
+- benchmark, summary, and regression metric expansion for long-term memory and feedback
+- CLI, MCP, runtime status, and runtime doctor surfaces for feedback and observability
 
-Optional additional tables:
+### 6.2 Out of Scope for Phase 1
 
-- `issue_reports`
-- `issue_links`
-- `ingestion_jobs`
+- no external graph store such as Neo4j or JanusGraph
+- no full Graphiti-style property graph evolution
+- no full web UI
+- no direct mutation of public `index` or `source_plan` contracts beyond the existing memory-stage integration
 
-### 6.2 Provider Layer
+## 7. Architecture
 
-Add `LongTermMemoryProvider`.
+### 7.1 Storage Layer
 
-Requirements:
+Status: `implemented`
 
-- continue exposing `search_compact()` and `fetch()` externally
-- support fused retrieval over observations, facts, and triples internally
-- support temporal, namespace, and repo filtering
-- support lightweight graph-neighborhood expansion, but only 1-hop and 2-hop in the first version
+The current storage path is:
 
-### 6.3 Capture and Ingestion Layer
+- `context-map/long_term_memory.db`
 
-Add `LongTermMemoryCaptureService` or an equivalent sink.
+Core persisted concepts already exist across the codebase:
 
-Recommended capture points:
+- observations
+- facts
+- lightweight relation or attribution payloads
+- issue reports
+- developer feedback records
 
-- after `source_plan`
-- after `validation`
-- when `selection_feedback` is recorded
-- when an `issue_report` is submitted
-- when `dev_issue` or `dev_fix` is recorded
+The originally proposed `retrieval_log`, `issue_links`, and `ingestion_jobs` remain useful architectural concepts, but they should be treated as implementation details or future expansion points rather than mandatory first-phase tables.
 
-Notes:
+### 7.2 Provider Layer
 
-- do not embed complex write logic into the provider itself
-- move expensive extraction into asynchronous or delayed processing where possible
+Status: `implemented`
 
-## 7. Data Model Requirements
+Requirements satisfied by the current provider layer:
 
-### 7.1 Observation
+- continue exposing `search_compact()` and `fetch()`
+- support repo, namespace, user, and temporal filtering
+- integrate into the existing memory-stage retrieval flow
+
+Still deferred:
+
+- stronger graph-neighborhood expansion beyond the current lightweight payload approach
+- richer retrieval attribution scoring that can be used directly as a benchmark metric
+
+### 7.3 Capture and Ingestion Layer
+
+Status: `partial`
+
+Capture points already present or linked:
+
+- after memory or planning related runs through runtime-linked feedback
+- when selection feedback is recorded
+- when an issue report is submitted
+- when a developer issue or developer fix is recorded
+- when a stored developer fix resolves an issue
+- when source-plan runtime evidence shows missing direct support, missing validation suggestions, or hint-heavy mixed support that should be surfaced as normalized degraded reasons
+
+Still deferred:
+
+- a broader normalized ingestion path for all runtime degradations
+- stronger delayed extraction and consolidation jobs for high-volume event streams
+
+## 8. Data Model Requirements
+
+### 8.1 Observation
+
+Status: `implemented`
 
 Required fields:
 
@@ -259,7 +304,9 @@ Required fields:
 - `severity`
 - `status`
 
-### 7.2 Fact
+### 8.2 Fact
+
+Status: `implemented`
 
 Required fields:
 
@@ -274,9 +321,11 @@ Required fields:
 - `superseded_by`
 - `derived_from_observation_id`
 
-### 7.3 Issue Report
+### 8.3 Issue Report
 
-Required fields:
+Status: `implemented`
+
+Required fields for the structured issue-report surface:
 
 - `issue_id`
 - `title`
@@ -297,28 +346,38 @@ Required fields:
 - `resolved_at`
 - `resolution_note`
 
-## 8. Integration Points
+## 9. Integration Points
 
-Priority integration points:
+### 9.1 Already Integrated
 
 - `src/ace_lite/cli_app/orchestrator_factory.py`
-  - wire in long-term memory providers and feedback channels
+  - wires long-term memory options into runtime planning and provider creation
 - `src/ace_lite/orchestrator_config.py`
-  - add `memory.long_term.*`, `feedback.issue_report.*`, and `feedback.dev_loop.*`
+  - exposes `memory.long_term.*` configuration
 - `src/ace_lite/orchestrator.py`
-  - connect the capture sink
+  - participates in runtime-linked capture flow through existing orchestration hooks
 - `src/ace_lite/pipeline/stages/memory.py`
-  - consume long-term memory results and attribution summaries
+  - consumes long-term memory results and explainability payloads
 - `src/ace_lite/mcp_server/service.py`
-  - expose new MCP surfaces
+  - exposes the MCP surface
 - `src/ace_lite/mcp_server/server_tool_registration.py`
-  - register issue and developer feedback tools
+  - registers issue and developer feedback tools
 - `src/ace_lite/benchmark/*`
-  - extend case schema, metrics, summaries, and regression checks
+  - already includes case schema, metrics, summaries, reporting, and regression checks for the first long-term memory and feedback loop
 
-## 9. Validation Requirements
+### 9.2 Still Worth Extending
 
-### 9.1 First-Class Outcome Metrics
+- stronger runtime-to-feedback linkage with normalized reason codes
+- more explicit summary and report surfaces for issue lifecycle timing
+- clearer benchmark support for baseline-vs-variant memory execution modes
+
+## 10. Validation Requirements
+
+### 10.1 First-Class Outcome Metrics
+
+Status: `partial`
+
+Stable metrics already used elsewhere in the benchmark stack remain valid:
 
 - `task_success_rate`
 - `precision_at_k`
@@ -327,66 +386,123 @@ Priority integration points:
 - `latency_p95_ms`
 - `memory_latency_p95_ms`
 
-### 9.2 Long-Term Memory Metrics
+These are not exclusive to long-term memory, but they remain the top-line guardrails for evaluating memory impact.
+
+### 10.2 Long-Term Memory Metrics
+
+Implemented:
 
 - `ltm_hit_ratio`
 - `ltm_effective_hit_rate`
 - `ltm_false_help_rate`
 - `ltm_stale_hit_rate`
-- `ltm_conflict_rate`
-- `ltm_cross_session_win_rate`
 - `ltm_replay_drift_rate`
 - `ltm_latency_overhead_ms`
 - `ltm_selected_count`
+- `ltm_explainability_summary`
+- `memory_health_summary`
+
+Deferred:
+
+- `ltm_conflict_rate`
+- `ltm_cross_session_win_rate`
 - `ltm_attributed_success`
 
-### 9.3 Feedback Loop Metrics
+Notes:
 
-- `issue_report_submission_rate`
+- `ltm_explainability_summary` is already available in summary and report surfaces, but it is not yet used as a regression gate
+- `ltm_latency_overhead_ms` is now derived from benchmark case rows using `memory_latency_ms` and `ltm_plan_constraint_count`
+- `runtime_stats_summary.memory_health_summary.memory_stage_latency_ms_avg` remains a useful report-side operational reference, but it is not the primary benchmark aggregation source
+
+### 10.3 Feedback Loop Metrics
+
+Implemented:
+
 - `issue_report_linked_plan_rate`
 - `issue_to_benchmark_case_conversion_rate`
+- `dev_feedback_resolution_rate`
+- `issue_report_time_to_fix_hours_mean`
+- `dev_issue_to_fix_rate`
+- `resolved_issue_count`
+- `linked_fix_issue_count`
+- `issue_time_to_fix_case_count`
+- `issue_time_to_fix_hours_mean`
+
+Deferred:
+
+- `issue_report_submission_rate`
 - `issue_reopen_rate`
 - `time_to_triage`
-- `time_to_fix`
 - `post_fix_regression_rate`
 - `dev_issue_capture_rate`
-- `dev_issue_to_fix_rate`
 - `manual_override_rate`
 
-### 9.4 Validation Gates
+Notes:
 
-On the `memory-helpful` subset, long-term memory should satisfy:
+- `dev_issue_to_fix_rate` is now implemented across `feedback summary`, `runtime stats`, `runtime status`, `runtime doctor`, benchmark aggregation, benchmark report, and regression gating
+- benchmark-side `dev_issue_to_fix_rate` is currently sourced from `case.dev_feedback.*` metadata on feedback benchmark cases; issue-report export now auto-derives that block for resolved reports with `dev-fix://...` attachments, but there is still no global runtime-store join or fully automatic backfill for all benchmark cases
+- `resolved_issue_count`, `linked_fix_issue_count`, and developer-side `issue_time_to_fix_*` are currently benchmark or report observability fields, but they are not all individual regression gates
 
-- `task_success_rate` is higher than the no-memory baseline
-- `precision_at_k` does not degrade materially
-- `noise_rate` does not increase materially
-- `latency_p95_ms` growth remains bounded
-- `ltm_false_help_rate` and `ltm_stale_hit_rate` remain below preset thresholds
+### 10.4 Validation Gates
 
-## 10. Main Risks
+Status: `partial`
+
+The current regression layer already gates a subset of the intended requirements:
+
+- memory-helpful success should not regress materially
+- `ltm_false_help_rate` should stay bounded
+- `ltm_stale_hit_rate` should stay bounded
+- replay-drift related safety signals should stay bounded
+- issue and developer feedback conversion metrics should not regress materially
+
+Still missing:
+
+- an explicit latency overhead gate for long-term memory
+- a gate for explainability or attribution quality
+- lifecycle-quality gates around triage, reopen, and fix timing
+
+## 11. Main Risks
+
+The original risks still stand:
 
 - memory contamination: incorrect observations are promoted into facts
 - replay distortion: missing `as_of` causes result drift
 - future-information leakage: benchmark replay reads future facts
-- more hits but lower quality: memory increases hit rate while hurting `precision` and `noise`
+- more hits but lower quality: memory increases hit rate while hurting precision and noise
 - write-path bloat: excessive capture causes database growth and analysis degradation
 - developer-feedback flooding: too many auto-captured events drown out high-value signals
 
-## 11. Success Criteria
+Additional current risk:
 
-This requirement set is successful if:
+- documentation drift can now be as damaging as implementation gaps, because several Phase 1 capabilities already shipped while the document still reads like they are pending
 
-1. long-term memory is integrated into the main pipeline without breaking the existing memory contract
-2. user issue reporting and developer inner-loop feedback both persist in structured form and can be linked to concrete runs
-3. at least one batch of real issues is converted into benchmark cases and used in regression gating
+## 12. Success Criteria
+
+This capability area is successful when:
+
+1. long-term memory stays integrated into the main pipeline without breaking the existing memory contract
+2. user issue reporting and developer inner-loop feedback persist in structured form and can be linked to concrete runs
+3. real issues can be converted into benchmark cases and used in regression analysis
 4. benchmark results can answer whether long-term memory is helpful or simply injecting noise
 5. developers can prioritize work quickly based on issue clusters, severity, frequency, and benchmark impact
+6. the remaining Phase 2 metrics are implemented without reopening the stable Phase 1 contracts
 
-## 12. Near-Term Recommendations
+## 13. Phase 2 Backlog
 
-Recommended implementation order:
+Recommended next iteration order:
 
-1. build `SQLite LongTermMemoryStore + LongTermMemoryProvider + as_of`
-2. build the `issue_report` and `dev_issue/dev_fix` data surfaces
-3. extend benchmark, summary, and regression support for long-term memory metrics
-4. add lightweight triple or edge neighborhood expansion and stronger automatic attribution later
+1. decide whether `ltm_latency_overhead_ms` should also become a regression gate, and whether it needs alignment reporting against `runtime_stats_summary.memory_health_summary.memory_stage_latency_ms_avg`
+2. extend the normalized developer auto-capture taxonomy to more runtime-originated signals so timeout, downgrade, repeated retry, manual override, and additional latency-budget style events are emitted consistently rather than only summarized consistently
+3. add issue lifecycle metrics such as `time_to_triage` and `issue_reopen_rate`, and only add them after a stable triage or reopen event source exists
+4. add coverage metrics such as `dev_issue_capture_rate`, and improve exporter or case-generation coverage so `dev_issue_to_fix_rate` and related lifecycle counts are stamped automatically rather than manually carried in case metadata
+5. decide whether the original four comparison lanes should be implemented as a new benchmark execution dimension rather than as `comparison_lane` labels
+6. add stronger explainability and attribution quality signals only after the metric source data is stable
+
+## 14. Near-Term Recommendations
+
+Recommended immediate working order:
+
+1. keep the current Phase 1 contracts stable
+2. treat this document as the source of truth for what is implemented, partial, and deferred
+3. prioritize metrics and observability gaps over large architectural rewrites
+4. only revive the original A/B lane design if the benchmark runner gains a true variant-execution model

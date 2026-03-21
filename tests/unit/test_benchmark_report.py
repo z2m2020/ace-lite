@@ -584,6 +584,7 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "ltm_false_help_rate" in report
     assert "ltm_stale_hit_rate" in report
     assert "ltm_replay_drift_rate" in report
+    assert "ltm_latency_overhead_ms" in report
     assert "contextual_sidecar_parent_symbol_chunk_count_mean" in report
     assert "contextual_sidecar_reference_hint_coverage_ratio" in report
     assert "robust_signature_count_mean" in report
@@ -1158,11 +1159,21 @@ def test_build_report_markdown_includes_feedback_loop_summary() -> None:
                 "issue_report_case_count": 2,
                 "issue_report_linked_case_count": 1,
                 "issue_report_linked_plan_case_count": 1,
+                "issue_report_resolved_case_count": 1,
                 "issue_to_benchmark_case_conversion_rate": 0.5,
                 "issue_report_linked_plan_rate": 1.0,
+                "issue_report_resolution_rate": 0.5,
+                "issue_report_time_to_fix_case_count": 1,
+                "issue_report_time_to_fix_hours_mean": 12.0,
                 "dev_feedback_resolution_case_count": 2,
                 "dev_feedback_resolved_case_count": 1,
                 "dev_feedback_resolution_rate": 0.5,
+                "dev_feedback_issue_count": 2,
+                "dev_feedback_linked_fix_issue_count": 1,
+                "dev_feedback_resolved_issue_count": 1,
+                "dev_issue_to_fix_rate": 0.5,
+                "dev_feedback_issue_time_to_fix_case_count": 1,
+                "dev_feedback_issue_time_to_fix_hours_mean": 6.0,
                 "feedback_surfaces": {
                     "issue_report_export_cli": 1,
                     "issue_resolution_cli": 1,
@@ -1174,8 +1185,15 @@ def test_build_report_markdown_includes_feedback_loop_summary() -> None:
     assert "## Feedback Loop Summary" in report
     assert "- Converted issue-report benchmark cases: 1 rate=0.5000" in report
     assert "- Linked-plan issue reports: 1 rate=1.0000" in report
+    assert "- Resolved issue reports: 1 rate=0.5000 time_to_fix_mean=12.00h" in report
+    assert (
+        "- Dev-feedback issue linkage: issues=2 linked_fixes=1 resolved_issues=1 issue_to_fix_rate=0.5000 time_to_fix_mean=6.00h"
+        in report
+    )
     assert "| issue_to_benchmark_case_conversion_rate | 0.5000 |" in report
+    assert "| issue_report_time_to_fix_hours_mean | 12.00 |" in report
     assert "| dev_feedback_resolution_rate | 0.5000 |" in report
+    assert "| dev_issue_to_fix_rate | 0.5000 |" in report
     assert "| issue_report_export_cli | 1 |" in report
 
 
@@ -1188,11 +1206,21 @@ def test_build_results_summary_preserves_feedback_loop_summary() -> None:
                 "issue_report_case_count": 2,
                 "issue_report_linked_case_count": 1,
                 "issue_report_linked_plan_case_count": 1,
+                "issue_report_resolved_case_count": 1,
                 "issue_to_benchmark_case_conversion_rate": 0.5,
                 "issue_report_linked_plan_rate": 1.0,
+                "issue_report_resolution_rate": 0.5,
+                "issue_report_time_to_fix_case_count": 1,
+                "issue_report_time_to_fix_hours_mean": 12.0,
                 "dev_feedback_resolution_case_count": 2,
                 "dev_feedback_resolved_case_count": 1,
                 "dev_feedback_resolution_rate": 0.5,
+                "dev_feedback_issue_count": 2,
+                "dev_feedback_linked_fix_issue_count": 1,
+                "dev_feedback_resolved_issue_count": 1,
+                "dev_issue_to_fix_rate": 0.5,
+                "dev_feedback_issue_time_to_fix_case_count": 1,
+                "dev_feedback_issue_time_to_fix_hours_mean": 6.0,
                 "feedback_surfaces": {"issue_report_export_cli": 1},
             },
         }
@@ -1200,6 +1228,8 @@ def test_build_results_summary_preserves_feedback_loop_summary() -> None:
 
     assert summary["feedback_loop_summary"]["issue_report_case_count"] == 2
     assert summary["feedback_loop_summary"]["dev_feedback_resolution_rate"] == 0.5
+    assert summary["feedback_loop_summary"]["dev_issue_to_fix_rate"] == 0.5
+    assert summary["feedback_loop_summary"]["issue_report_time_to_fix_hours_mean"] == 12.0
 
 
 def test_build_report_markdown_includes_reward_log_summary() -> None:

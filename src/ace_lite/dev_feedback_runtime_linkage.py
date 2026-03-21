@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ace_lite.dev_feedback_taxonomy import describe_dev_feedback_reason
+from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
 from ace_lite.dev_feedback_store import DevFeedbackStore, DevIssue
 from ace_lite.runtime_stats import RuntimeInvocationStats
 from ace_lite.runtime_stats_store import DurableStatsStore
@@ -20,17 +22,21 @@ def resolve_reason_code_for_invocation(
     invocation: RuntimeInvocationStats,
     reason_code: str | None,
 ) -> str:
-    normalized = " ".join(str(reason_code or "").strip().split()).lower().replace(" ", "_")
+    normalized = normalize_dev_feedback_reason_code(reason_code, default="")
     if normalized:
         return normalized
     candidates = [
-        str(item).strip() for item in invocation.degraded_reason_codes if str(item).strip()
+        normalize_dev_feedback_reason_code(item, default="")
+        for item in invocation.degraded_reason_codes
+        if str(item).strip()
     ]
+    candidates = [item for item in candidates if item]
+    unique_candidates = tuple(dict.fromkeys(candidates))
     if not candidates and str(invocation.contract_error_code or "").strip():
         return "contract_error"
-    if len(candidates) == 1:
-        return candidates[0]
-    if len(candidates) > 1:
+    if len(unique_candidates) == 1:
+        return unique_candidates[0]
+    if len(unique_candidates) > 1:
         raise ValueError(
             "reason_code is required when the runtime invocation has multiple degraded reasons"
         )
@@ -52,11 +58,14 @@ def build_dev_issue_payload_from_runtime_invocation(
         invocation=invocation,
         reason_code=reason_code,
     )
+    reason_details = describe_dev_feedback_reason(resolved_reason)
     normalized_title = " ".join(str(title or "").strip().split())
     note_lines = [
         "auto_captured_from=runtime_stats",
         f"runtime_status={invocation.status}",
         f"reason_code={resolved_reason}",
+        f"reason_family={reason_details['reason_family']}",
+        f"capture_class={reason_details['capture_class']}",
         f"total_latency_ms={invocation.total_latency_ms:.6f}",
         f"started_at={invocation.started_at}",
         f"finished_at={invocation.finished_at}",

@@ -119,3 +119,28 @@ def test_durable_stats_store_can_read_individual_invocation(tmp_path: Path) -> N
     assert loaded.invocation_id == "inv-lookup"
     assert loaded.repo_key == "repo-alpha"
     assert loaded.degraded_reason_codes == ("memory_fallback",)
+
+
+def test_durable_stats_store_canonicalizes_reason_aliases_but_preserves_unknown_codes(
+    tmp_path: Path,
+) -> None:
+    store = DurableStatsStore(db_path=tmp_path / "context-map" / "runtime-stats.db")
+    store.record_invocation(
+        RuntimeInvocationStats(
+            invocation_id="inv-alias",
+            session_id="sess-1",
+            repo_key="repo-alpha",
+            profile_key="bugfix",
+            status="degraded",
+            total_latency_ms=12.0,
+            degraded_reason_codes=("budget_exceeded", "custom_unknown_reason"),
+        )
+    )
+
+    loaded = store.read_invocation(invocation_id="inv-alias")
+
+    assert loaded is not None
+    assert loaded.degraded_reason_codes == (
+        "custom_unknown_reason",
+        "latency_budget_exceeded",
+    )

@@ -92,3 +92,8 @@ def test_runtime_stats_schema_reasons_cover_existing_runtime_fallback_signals() 
     assert "chunk_semantic_fallback" in RUNTIME_STATS_DEGRADED_REASON_CODES
     assert "xref_budget_exhausted" in RUNTIME_STATS_DEGRADED_REASON_CODES
     assert "router_fallback_applied" in RUNTIME_STATS_DEGRADED_REASON_CODES
+    assert "evidence_insufficient" in RUNTIME_STATS_DEGRADED_REASON_CODES
+    assert "noisy_hit" in RUNTIME_STATS_DEGRADED_REASON_CODES
+    assert "manual_override" in RUNTIME_STATS_DEGRADED_REASON_CODES
+    assert "repeated_retry" in RUNTIME_STATS_DEGRADED_REASON_CODES
+    assert "latency_budget_exceeded" in RUNTIME_STATS_DEGRADED_REASON_CODES
