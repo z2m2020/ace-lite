@@ -636,6 +636,7 @@ def test_pack_source_plan_chunks_can_disable_graph_closure_preference() -> None:
         "graph_closure_preference_enabled": False,
         "graph_closure_bonus_candidate_count": 1,
         "graph_closure_preferred_count": 0,
+        "granularity_preferred_count": 0,
         "focused_file_promoted_count": 3,
         "packed_path_count": 3,
         "reason": "disabled_by_policy",
@@ -679,6 +680,242 @@ def test_rank_source_plan_chunks_preserves_candidate_breakdown_for_packing() -> 
         "candidate": 10.0,
         "test_signal": 3.0,
     }
+
+
+def test_rank_source_plan_chunks_prefers_higher_granularity_on_score_tie() -> None:
+    ranked = rank_source_plan_chunks(
+        suspicious_chunks=[],
+        candidate_chunks=[
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.rich",
+                "kind": "function",
+                "lineno": 30,
+                "end_lineno": 40,
+                "score": 5.0,
+                "signature": "def rich(user_id: str) -> dict:",
+                "skeleton": {
+                    "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+                    "mode": "skeleton_light",
+                },
+                "robust_signature_summary": {"available": True},
+            },
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.plain",
+                "kind": "function",
+                "lineno": 10,
+                "end_lineno": 20,
+                "score": 5.0,
+            },
+        ],
+        test_signal_weight=1.0,
+    )
+
+    assert [item["qualified_name"] for item in ranked] == ["a.rich", "a.plain"]
+
+
+def test_rank_source_plan_chunks_prefers_higher_granularity_with_small_score_margin() -> None:
+    ranked = rank_source_plan_chunks(
+        suspicious_chunks=[],
+        candidate_chunks=[
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.plain",
+                "kind": "function",
+                "lineno": 10,
+                "end_lineno": 20,
+                "score": 5.0,
+            },
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.rich",
+                "kind": "function",
+                "lineno": 30,
+                "end_lineno": 40,
+                "score": 4.97,
+                "signature": "def rich(user_id: str) -> dict:",
+                "skeleton": {
+                    "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+                    "mode": "skeleton_light",
+                },
+                "robust_signature_summary": {"available": True},
+            },
+        ],
+        test_signal_weight=1.0,
+    )
+
+    assert [item["qualified_name"] for item in ranked] == ["a.rich", "a.plain"]
+
+
+def test_rank_source_plan_chunks_preserves_raw_score_when_margin_is_large() -> None:
+    ranked = rank_source_plan_chunks(
+        suspicious_chunks=[],
+        candidate_chunks=[
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.plain",
+                "kind": "function",
+                "lineno": 10,
+                "end_lineno": 20,
+                "score": 5.0,
+            },
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.rich",
+                "kind": "function",
+                "lineno": 30,
+                "end_lineno": 40,
+                "score": 4.9,
+                "signature": "def rich(user_id: str) -> dict:",
+                "skeleton": {
+                    "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+                    "mode": "skeleton_light",
+                },
+                "robust_signature_summary": {"available": True},
+            },
+        ],
+        test_signal_weight=1.0,
+    )
+
+    assert [item["qualified_name"] for item in ranked] == ["a.plain", "a.rich"]
+
+
+def test_pack_source_plan_chunks_prefers_higher_granularity_on_score_tie() -> None:
+    packed = pack_source_plan_chunks(
+        prioritized_chunks=[
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.rich",
+                "kind": "function",
+                "lineno": 30,
+                "end_lineno": 40,
+                "score": 5.0,
+                "signature": "def rich(user_id: str) -> dict:",
+                "skeleton": {
+                    "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+                    "mode": "skeleton_light",
+                },
+                "robust_signature_summary": {"available": True},
+            },
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.plain",
+                "kind": "function",
+                "lineno": 10,
+                "end_lineno": 20,
+                "score": 5.0,
+            },
+            {
+                "path": "src/b.py",
+                "qualified_name": "b.anchor",
+                "kind": "function",
+                "lineno": 10,
+                "end_lineno": 20,
+                "score": 7.0,
+            },
+        ],
+        focused_files=["src/b.py", "src/a.py"],
+        chunk_top_k=3,
+    )
+
+    assert [item["qualified_name"] for item in packed] == [
+        "b.anchor",
+        "a.rich",
+        "a.plain",
+    ]
+
+
+def test_pack_source_plan_chunks_prefers_higher_granularity_with_small_score_margin() -> None:
+    packed, metadata = pack_source_plan_chunks(
+        prioritized_chunks=[
+            {
+                "path": "src/b.py",
+                "qualified_name": "b.anchor",
+                "kind": "function",
+                "lineno": 10,
+                "end_lineno": 20,
+                "score": 7.0,
+            },
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.plain",
+                "kind": "function",
+                "lineno": 10,
+                "end_lineno": 20,
+                "score": 5.0,
+            },
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.rich",
+                "kind": "function",
+                "lineno": 30,
+                "end_lineno": 40,
+                "score": 4.97,
+                "signature": "def rich(user_id: str) -> dict:",
+                "skeleton": {
+                    "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+                    "mode": "skeleton_light",
+                },
+                "robust_signature_summary": {"available": True},
+            },
+        ],
+        focused_files=["src/b.py", "src/a.py"],
+        chunk_top_k=3,
+        return_metadata=True,
+    )
+
+    assert [item["qualified_name"] for item in packed] == [
+        "b.anchor",
+        "a.rich",
+        "a.plain",
+    ]
+    assert metadata["granularity_preferred_count"] == 1
+
+
+def test_pack_source_plan_chunks_preserves_raw_score_when_margin_is_large() -> None:
+    packed = pack_source_plan_chunks(
+        prioritized_chunks=[
+            {
+                "path": "src/b.py",
+                "qualified_name": "b.anchor",
+                "kind": "function",
+                "lineno": 10,
+                "end_lineno": 20,
+                "score": 7.0,
+            },
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.plain",
+                "kind": "function",
+                "lineno": 10,
+                "end_lineno": 20,
+                "score": 5.0,
+            },
+            {
+                "path": "src/a.py",
+                "qualified_name": "a.rich",
+                "kind": "function",
+                "lineno": 30,
+                "end_lineno": 40,
+                "score": 4.9,
+                "signature": "def rich(user_id: str) -> dict:",
+                "skeleton": {
+                    "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+                    "mode": "skeleton_light",
+                },
+                "robust_signature_summary": {"available": True},
+            },
+        ],
+        focused_files=["src/b.py", "src/a.py"],
+        chunk_top_k=3,
+    )
+
+    assert [item["qualified_name"] for item in packed] == [
+        "b.anchor",
+        "a.plain",
+        "a.rich",
+    ]
 
 
 def test_run_source_plan_prefers_packed_multi_file_chunk_order() -> None:
@@ -846,6 +1083,7 @@ def test_run_source_plan_packs_graph_closure_bonus_before_uncovered_focus() -> N
         "graph_closure_preference_enabled": True,
         "graph_closure_bonus_candidate_count": 1,
         "graph_closure_preferred_count": 1,
+        "granularity_preferred_count": 0,
         "focused_file_promoted_count": 3,
         "packed_path_count": 3,
         "reason": "ok",
@@ -935,6 +1173,7 @@ def test_run_source_plan_can_disable_graph_closure_packing_preference() -> None:
         "graph_closure_preference_enabled": False,
         "graph_closure_bonus_candidate_count": 1,
         "graph_closure_preferred_count": 0,
+        "granularity_preferred_count": 0,
         "focused_file_promoted_count": 3,
         "packed_path_count": 3,
         "reason": "disabled_by_policy",
@@ -957,6 +1196,15 @@ def test_run_source_plan_emits_machine_readable_grounding_roles() -> None:
                     "lineno": 10,
                     "end_lineno": 20,
                     "score": 5.0,
+                    "signature": "def direct_hit(token: str) -> bool:",
+                    "skeleton": {
+                        "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
+                        "mode": "skeleton_light",
+                    },
+                    "robust_signature_summary": {
+                        "available": True,
+                        "compatibility_domain": "src/direct.py::function",
+                    },
                 },
                 {
                     "path": "src/neighbor.py",
@@ -965,6 +1213,7 @@ def test_run_source_plan_emits_machine_readable_grounding_roles() -> None:
                     "lineno": 30,
                     "end_lineno": 40,
                     "score": 3.0,
+                    "signature": "def neighbor_hit(user_id: str) -> dict:",
                 },
             ],
             "chunk_metrics": {"chunk_budget_used": 42.0},
@@ -1029,6 +1278,7 @@ def test_run_source_plan_emits_machine_readable_grounding_roles() -> None:
         "hint_only": False,
         "hint_support": True,
         "sources": ["direct_candidate", "test_hint"],
+        "granularity": ["symbol", "signature", "skeleton", "robust_signature"],
     }
 
     chunk_step_ref = next(
@@ -1053,4 +1303,12 @@ def test_run_source_plan_emits_machine_readable_grounding_roles() -> None:
         "direct_ratio": 1.0 / 3.0,
         "neighbor_context_ratio": 1.0 / 3.0,
         "hint_only_ratio": 1.0 / 3.0,
+        "symbol_count": 3.0,
+        "signature_count": 2.0,
+        "skeleton_count": 1.0,
+        "robust_signature_count": 1.0,
+        "symbol_ratio": 1.0,
+        "signature_ratio": 2.0 / 3.0,
+        "skeleton_ratio": 1.0 / 3.0,
+        "robust_signature_ratio": 1.0 / 3.0,
     }

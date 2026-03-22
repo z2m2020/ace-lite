@@ -37,6 +37,7 @@ def _write_validation_rich_summary(
     latency_p95_ms: float,
     evidence_insufficient_rate: float,
     missing_validation_rate: float,
+    retrieval_control_plane_gate_summary: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -55,6 +56,10 @@ def _write_validation_rich_summary(
             "missing_validation_rate": missing_validation_rate,
         },
     }
+    if retrieval_control_plane_gate_summary is not None:
+        payload["retrieval_control_plane_gate_summary"] = (
+            retrieval_control_plane_gate_summary
+        )
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
@@ -82,6 +87,22 @@ def test_validation_rich_trend_report_main_writes_summary(
         latency_p95_ms=692.08,
         evidence_insufficient_rate=0.2,
         missing_validation_rate=0.2,
+        retrieval_control_plane_gate_summary={
+            "regression_evaluated": True,
+            "benchmark_regression_detected": True,
+            "benchmark_regression_passed": False,
+            "failed_checks": ["benchmark_regression_detected"],
+            "adaptive_router_shadow_coverage": 0.75,
+            "adaptive_router_shadow_coverage_threshold": 0.8,
+            "adaptive_router_shadow_coverage_passed": False,
+            "risk_upgrade_precision_gain": -0.01,
+            "risk_upgrade_precision_gain_threshold": 0.0,
+            "risk_upgrade_precision_gain_passed": False,
+            "latency_p95_ms": 692.08,
+            "latency_p95_ms_threshold": 850.0,
+            "latency_p95_ms_passed": True,
+            "gate_passed": False,
+        },
     )
     _write_validation_rich_summary(
         report_b,
@@ -97,6 +118,22 @@ def test_validation_rich_trend_report_main_writes_summary(
         latency_p95_ms=617.66,
         evidence_insufficient_rate=0.0,
         missing_validation_rate=0.0,
+        retrieval_control_plane_gate_summary={
+            "regression_evaluated": True,
+            "benchmark_regression_detected": False,
+            "benchmark_regression_passed": True,
+            "failed_checks": [],
+            "adaptive_router_shadow_coverage": 0.85,
+            "adaptive_router_shadow_coverage_threshold": 0.8,
+            "adaptive_router_shadow_coverage_passed": True,
+            "risk_upgrade_precision_gain": 0.05,
+            "risk_upgrade_precision_gain_threshold": 0.0,
+            "risk_upgrade_precision_gain_passed": True,
+            "latency_p95_ms": 617.66,
+            "latency_p95_ms_threshold": 850.0,
+            "latency_p95_ms_passed": True,
+            "gate_passed": True,
+        },
     )
 
     def fake_git_diff(cmd, cwd, check, capture_output, text):
@@ -135,6 +172,13 @@ def test_validation_rich_trend_report_main_writes_summary(
     assert output["history_count"] == 2
     assert output["latest"]["generated_at"] == "2026-03-12T00:00:00+00:00"
     assert output["previous"]["generated_at"] == "2026-03-11T00:00:00+00:00"
+    assert output["latest"]["retrieval_control_plane_gate_summary"]["gate_passed"] is True
+    assert (
+        output["previous"]["retrieval_control_plane_gate_summary"][
+            "benchmark_regression_detected"
+        ]
+        is True
+    )
     assert output["delta"]["task_success_rate"] == {
         "current": 1.0,
         "previous": 0.8,
@@ -163,6 +207,9 @@ def test_validation_rich_trend_report_main_writes_summary(
         encoding="utf-8"
     )
     assert "- Report only: True" in markdown
+    assert "## Latest Q2 Retrieval Control Plane Gate" in markdown
+    assert "- Gate passed: True" in markdown
+    assert "- Shadow coverage: 0.8500" in markdown
     assert "## Delta" in markdown
     assert "| task_success_rate | 1.0000 | 0.8000 | +0.2000 |" in markdown
     assert "| validation_test_count | 5.0000 | 4.0000 | +1.0000 |" in markdown

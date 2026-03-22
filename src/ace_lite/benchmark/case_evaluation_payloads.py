@@ -105,6 +105,18 @@ def normalize_source_plan_evidence_summary(value: Any) -> dict[str, float]:
             summary.get("neighbor_context_ratio", 0.0) or 0.0
         ),
         "hint_only_ratio": float(summary.get("hint_only_ratio", 0.0) or 0.0),
+        "symbol_count": float(summary.get("symbol_count", 0.0) or 0.0),
+        "signature_count": float(summary.get("signature_count", 0.0) or 0.0),
+        "skeleton_count": float(summary.get("skeleton_count", 0.0) or 0.0),
+        "robust_signature_count": float(
+            summary.get("robust_signature_count", 0.0) or 0.0
+        ),
+        "symbol_ratio": float(summary.get("symbol_ratio", 0.0) or 0.0),
+        "signature_ratio": float(summary.get("signature_ratio", 0.0) or 0.0),
+        "skeleton_ratio": float(summary.get("skeleton_ratio", 0.0) or 0.0),
+        "robust_signature_ratio": float(
+            summary.get("robust_signature_ratio", 0.0) or 0.0
+        ),
     }
 
 

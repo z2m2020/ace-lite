@@ -163,6 +163,26 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             if isinstance(parallel.get("worktree"), dict)
             else {}
         )
+        multi_channel_fusion = (
+            output.get("multi_channel_fusion", {})
+            if isinstance(output.get("multi_channel_fusion"), dict)
+            else {}
+        )
+        multi_channel_channels = (
+            multi_channel_fusion.get("channels", {})
+            if isinstance(multi_channel_fusion.get("channels"), dict)
+            else {}
+        )
+        multi_channel_granularity = (
+            multi_channel_channels.get("granularity", {})
+            if isinstance(multi_channel_channels.get("granularity"), dict)
+            else {}
+        )
+        multi_channel_fused = (
+            multi_channel_fusion.get("fused", {})
+            if isinstance(multi_channel_fusion.get("fused"), dict)
+            else {}
+        )
         chunk_semantic_reranked_count = int(
             chunk_semantic.get("reranked_count", 0) or 0
         )
@@ -172,6 +192,17 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
         chunk_semantic_ratio = (
             float(chunk_semantic_reranked_count) / float(chunk_semantic_pool_effective)
             if chunk_semantic_pool_effective > 0
+            else 0.0
+        )
+        multi_channel_granularity_count = max(
+            0, int(multi_channel_granularity.get("count", 0) or 0)
+        )
+        multi_channel_rrf_pool_size = max(
+            0, int(multi_channel_fused.get("pool_size", 0) or 0)
+        )
+        multi_channel_granularity_pool_ratio = (
+            float(multi_channel_granularity_count) / float(multi_channel_rrf_pool_size)
+            if multi_channel_rrf_pool_size > 0
             else 0.0
         )
         return {
@@ -310,6 +341,17 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
                 ranking.get("selected", output.get("candidate_ranker", "heuristic"))
             ),
             "candidate_ranker_fallback": bool(ranking.get("fallbacks")),
+            "multi_channel_rrf_enabled": bool(
+                multi_channel_fusion.get("enabled", False)
+            ),
+            "multi_channel_rrf_applied": bool(
+                multi_channel_fusion.get("applied", False)
+            ),
+            "multi_channel_rrf_granularity_count": multi_channel_granularity_count,
+            "multi_channel_rrf_pool_size": multi_channel_rrf_pool_size,
+            "multi_channel_rrf_granularity_pool_ratio": float(
+                round(multi_channel_granularity_pool_ratio, 6)
+            ),
             "parallel_enabled": bool(parallel.get("enabled", False)),
             "parallel_time_budget_ms": int(parallel.get("time_budget_ms", 0) or 0),
             "parallel_docs_timed_out": bool(parallel_docs.get("timed_out", False)),
@@ -323,6 +365,7 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "router_source": str(router.get("source", "")),
             "router_confidence": float(router.get("confidence", 0.0) or 0.0),
             "router_shadow_arm_id": str(router.get("shadow_arm_id", "")),
+            "router_shadow_source": str(router.get("shadow_source", "")),
             "router_shadow_confidence": float(router.get("shadow_confidence", 0.0) or 0.0),
             "router_online_bandit_requested": bool(
                 router_online_bandit.get("requested", False)
@@ -507,6 +550,9 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             ),
             "packing_graph_closure_preferred_count": int(
                 packing.get("graph_closure_preferred_count", 0) or 0
+            ),
+            "packing_granularity_preferred_count": int(
+                packing.get("granularity_preferred_count", 0) or 0
             ),
             "packing_focused_file_promoted_count": int(
                 packing.get("focused_file_promoted_count", 0) or 0

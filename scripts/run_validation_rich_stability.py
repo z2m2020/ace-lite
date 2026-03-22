@@ -34,6 +34,7 @@ class IterationResult:
     regressed: bool
     gate_failures: list[dict[str, Any]]
     metrics: dict[str, float]
+    retrieval_control_plane_gate_summary: dict[str, Any]
 
 
 def _resolve_path(*, root: Path, value: str) -> Path:
@@ -70,6 +71,26 @@ def _classify_passes(*, passed_count: int, run_count: int) -> str:
     if passed_count == 1:
         return "one_off_pass"
     return "mixed"
+
+
+def _normalize_retrieval_control_plane_gate_summary(
+    *, summary: dict[str, Any]
+) -> dict[str, Any]:
+    gate_raw = summary.get("retrieval_control_plane_gate_summary")
+    gate = gate_raw if isinstance(gate_raw, dict) else {}
+    normalized: dict[str, Any] = {}
+    for key, value in gate.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(value, bool):
+            normalized[key] = bool(value)
+        elif isinstance(value, (int, float)):
+            normalized[key] = float(value)
+        elif isinstance(value, list):
+            normalized[key] = [str(item) for item in value if str(item).strip()]
+        else:
+            normalized[key] = value
+    return normalized
 
 
 def _evaluate_summary(
@@ -212,6 +233,9 @@ def _run_validation_rich_iteration(
         regressed=bool(summary.get("regressed", False)) if summary else False,
         gate_failures=gate_failures,
         metrics=metrics,
+        retrieval_control_plane_gate_summary=_normalize_retrieval_control_plane_gate_summary(
+            summary=summary
+        ),
     )
 
 
@@ -263,6 +287,20 @@ def evaluate_stability(
             }
         )
 
+    q2_gate_failed_count = sum(
+        1
+        for item in iterations
+        if item.retrieval_control_plane_gate_summary
+        and not bool(
+            item.retrieval_control_plane_gate_summary.get("gate_passed", False)
+        )
+    )
+    latest_q2_gate_summary = (
+        dict(iterations[-1].retrieval_control_plane_gate_summary)
+        if iterations and iterations[-1].retrieval_control_plane_gate_summary
+        else {}
+    )
+
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "run_count": run_count,
@@ -273,6 +311,8 @@ def evaluate_stability(
         "classification": classification,
         "max_failure_rate": max_failure_rate,
         "passed": failure_rate <= max(0.0, float(max_failure_rate)),
+        "q2_gate_failed_count": q2_gate_failed_count,
+        "latest_retrieval_control_plane_gate_summary": latest_q2_gate_summary,
         "failed_runs": failed_runs,
         "metric_ranges": metric_ranges,
         "iterations": [
@@ -289,6 +329,9 @@ def evaluate_stability(
                     name: _safe_float(item.metrics.get(name), 0.0)
                     for name in METRIC_NAMES
                 },
+                "retrieval_control_plane_gate_summary": dict(
+                    item.retrieval_control_plane_gate_summary
+                ),
             }
             for item in iterations
         ],
@@ -300,6 +343,10 @@ def _render_markdown(*, payload: dict[str, Any], thresholds: dict[str, float]) -
     iterations = iterations_raw if isinstance(iterations_raw, list) else []
     metric_ranges_raw = payload.get("metric_ranges")
     metric_ranges = metric_ranges_raw if isinstance(metric_ranges_raw, list) else []
+    latest_q2_gate_raw = payload.get("latest_retrieval_control_plane_gate_summary")
+    latest_q2_gate = (
+        latest_q2_gate_raw if isinstance(latest_q2_gate_raw, dict) else {}
+    )
 
     lines = [
         "# Validation-Rich Stability Summary",
@@ -310,6 +357,7 @@ def _render_markdown(*, payload: dict[str, Any], thresholds: dict[str, float]) -
         f"- Failure rate: {_safe_float(payload.get('failure_rate'), 1.0):.4f}",
         f"- Classification: {str(payload.get('classification', 'no_data') or 'no_data')}",
         f"- Passed: {bool(payload.get('passed', False))}",
+        f"- Q2 gate failed count: {int(payload.get('q2_gate_failed_count', 0) or 0)}",
         "",
         "## Thresholds",
         "",
@@ -321,9 +369,40 @@ def _render_markdown(*, payload: dict[str, Any], thresholds: dict[str, float]) -
         f"- evidence_insufficient_rate <= {_safe_float(thresholds.get('max_evidence_insufficient_rate'), -1.0):.4f}",
         f"- missing_validation_rate <= {_safe_float(thresholds.get('max_missing_validation_rate'), -1.0):.4f}",
         "",
-        "## Metric Ranges",
-        "",
     ]
+
+    if latest_q2_gate:
+        lines.extend(
+            [
+                "## Latest Q2 Retrieval Control Plane Gate",
+                "",
+                f"- Gate passed: {bool(latest_q2_gate.get('gate_passed', False))}",
+                "- Regression evaluated: {evaluated}".format(
+                    evaluated=bool(latest_q2_gate.get("regression_evaluated", False))
+                ),
+                "- Regression detected: {detected}".format(
+                    detected=bool(
+                        latest_q2_gate.get("benchmark_regression_detected", False)
+                    )
+                ),
+                "- Shadow coverage: {shadow:.4f}".format(
+                    shadow=_safe_float(
+                        latest_q2_gate.get("adaptive_router_shadow_coverage"), 0.0
+                    )
+                ),
+                "- Risk upgrade gain: {gain:.4f}".format(
+                    gain=_safe_float(
+                        latest_q2_gate.get("risk_upgrade_precision_gain"), 0.0
+                    )
+                ),
+                "- Latency P95 ms: {latency:.2f}".format(
+                    latency=_safe_float(latest_q2_gate.get("latency_p95_ms"), 0.0)
+                ),
+                "",
+            ]
+        )
+
+    lines.extend(["## Metric Ranges", ""])
 
     if metric_ranges:
         lines.append("| Metric | Min | Max | Spread | Median | Latest |")
@@ -372,6 +451,19 @@ def _render_markdown(*, payload: dict[str, Any], thresholds: dict[str, float]) -
                 missing=_safe_float(metrics.get("missing_validation_rate"), 0.0),
             )
         )
+        gate_raw = row.get("retrieval_control_plane_gate_summary")
+        gate = gate_raw if isinstance(gate_raw, dict) else {}
+        if gate:
+            lines.append(
+                "  q2_gate: passed={passed}, shadow_coverage={shadow:.4f}, risk_upgrade_gain={gain:.4f}, latency_p95_ms={latency:.2f}".format(
+                    passed=bool(gate.get("gate_passed", False)),
+                    shadow=_safe_float(
+                        gate.get("adaptive_router_shadow_coverage"), 0.0
+                    ),
+                    gain=_safe_float(gate.get("risk_upgrade_precision_gain"), 0.0),
+                    latency=_safe_float(gate.get("latency_p95_ms"), 0.0),
+                )
+            )
 
     failed_runs_raw = payload.get("failed_runs")
     failed_runs = failed_runs_raw if isinstance(failed_runs_raw, list) else []

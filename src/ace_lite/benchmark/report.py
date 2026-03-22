@@ -32,6 +32,177 @@ def _append_metrics_table(
     lines.append("")
 
 
+def _append_source_plan_granularity_summary(
+    lines: list[str], metrics: dict[str, Any]
+) -> None:
+    granularity_rows = (
+        (
+            "symbol",
+            "source_plan_symbol_count_mean",
+            "source_plan_symbol_ratio",
+        ),
+        (
+            "signature",
+            "source_plan_signature_count_mean",
+            "source_plan_signature_ratio",
+        ),
+        (
+            "skeleton",
+            "source_plan_skeleton_count_mean",
+            "source_plan_skeleton_ratio",
+        ),
+        (
+            "robust_signature",
+            "source_plan_robust_signature_count_mean",
+            "source_plan_robust_signature_ratio",
+        ),
+    )
+    if not any(
+        float(metrics.get(count_metric, 0.0) or 0.0) > 0.0
+        or float(metrics.get(ratio_metric, 0.0) or 0.0) > 0.0
+        for _, count_metric, ratio_metric in granularity_rows
+    ):
+        return
+
+    lines.append("## Source Plan Granularity Summary")
+    lines.append("")
+    lines.append(
+        "- Evidence mix: direct={direct}, neighbor_context={neighbor}, hint_only={hint}".format(
+            direct=_format_metric(
+                "source_plan_direct_evidence_ratio",
+                metrics.get("source_plan_direct_evidence_ratio", 0.0),
+            ),
+            neighbor=_format_metric(
+                "source_plan_neighbor_context_ratio",
+                metrics.get("source_plan_neighbor_context_ratio", 0.0),
+            ),
+            hint=_format_metric(
+                "source_plan_hint_only_ratio",
+                metrics.get("source_plan_hint_only_ratio", 0.0),
+            ),
+        )
+    )
+    lines.append(
+        "- Packing granularity-preferred count mean: {value}".format(
+            value=_format_metric(
+                "source_plan_granularity_preferred_count_mean",
+                metrics.get("source_plan_granularity_preferred_count_mean", 0.0),
+            )
+        )
+    )
+    lines.append("")
+    lines.append("| Granularity | Count Mean | Ratio |")
+    lines.append("| --- | ---: | ---: |")
+    for label, count_metric, ratio_metric in granularity_rows:
+        lines.append(
+            "| "
+            f"{label} | {_format_metric(count_metric, metrics.get(count_metric, 0.0))}"
+            f" | {_format_metric(ratio_metric, metrics.get(ratio_metric, 0.0))} |"
+        )
+    lines.append("")
+
+
+def _append_index_fusion_granularity_summary(
+    lines: list[str], metrics: dict[str, Any]
+) -> None:
+    enabled_ratio = float(metrics.get("multi_channel_rrf_enabled_ratio", 0.0) or 0.0)
+    applied_ratio = float(metrics.get("multi_channel_rrf_applied_ratio", 0.0) or 0.0)
+    count_mean = float(
+        metrics.get("multi_channel_rrf_granularity_count_mean", 0.0) or 0.0
+    )
+    case_ratio = float(
+        metrics.get("multi_channel_rrf_granularity_case_ratio", 0.0) or 0.0
+    )
+    pool_ratio = float(
+        metrics.get("multi_channel_rrf_granularity_pool_ratio", 0.0) or 0.0
+    )
+    pool_size_mean = float(
+        metrics.get("multi_channel_rrf_pool_size_mean", 0.0) or 0.0
+    )
+    if (
+        enabled_ratio <= 0.0
+        and applied_ratio <= 0.0
+        and count_mean <= 0.0
+        and case_ratio <= 0.0
+        and pool_ratio <= 0.0
+        and pool_size_mean <= 0.0
+    ):
+        return
+
+    lines.append("## Index Fusion Granularity Summary")
+    lines.append("")
+    lines.append(
+        "- Channel enabled ratio: {enabled}; applied ratio: {applied}".format(
+            enabled=_format_metric("multi_channel_rrf_enabled_ratio", enabled_ratio),
+            applied=_format_metric("multi_channel_rrf_applied_ratio", applied_ratio),
+        )
+    )
+    lines.append(
+        "- Granularity channel case ratio: {case_ratio}; count mean: {count_mean}".format(
+            case_ratio=_format_metric(
+                "multi_channel_rrf_granularity_case_ratio", case_ratio
+            ),
+            count_mean=_format_metric(
+                "multi_channel_rrf_granularity_count_mean", count_mean
+            ),
+        )
+    )
+    lines.append(
+        "- Fusion pool size mean: {pool_size}; granularity/pool ratio: {pool_ratio}".format(
+            pool_size=_format_metric("multi_channel_rrf_pool_size_mean", pool_size_mean),
+            pool_ratio=_format_metric(
+                "multi_channel_rrf_granularity_pool_ratio", pool_ratio
+            ),
+        )
+    )
+    lines.append("")
+
+
+def _append_native_scip_summary(lines: list[str], metrics: dict[str, Any]) -> None:
+    loaded_rate = float(metrics.get("native_scip_loaded_rate", 0.0) or 0.0)
+    document_count_mean = float(
+        metrics.get("native_scip_document_count_mean", 0.0) or 0.0
+    )
+    definition_occurrence_count_mean = float(
+        metrics.get("native_scip_definition_occurrence_count_mean", 0.0) or 0.0
+    )
+    reference_occurrence_count_mean = float(
+        metrics.get("native_scip_reference_occurrence_count_mean", 0.0) or 0.0
+    )
+    symbol_definition_count_mean = float(
+        metrics.get("native_scip_symbol_definition_count_mean", 0.0) or 0.0
+    )
+    if (
+        loaded_rate <= 0.0
+        and document_count_mean <= 0.0
+        and definition_occurrence_count_mean <= 0.0
+        and reference_occurrence_count_mean <= 0.0
+        and symbol_definition_count_mean <= 0.0
+    ):
+        return
+
+    lines.append("## Native SCIP Summary")
+    lines.append("")
+    lines.append(
+        "- Native SCIP loaded rate: {value}".format(
+            value=_format_metric("native_scip_loaded_rate", loaded_rate)
+        )
+    )
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("| --- | ---: |")
+    for metric in (
+        "native_scip_document_count_mean",
+        "native_scip_definition_occurrence_count_mean",
+        "native_scip_reference_occurrence_count_mean",
+        "native_scip_symbol_definition_count_mean",
+    ):
+        lines.append(
+            f"| {metric} | {_format_metric(metric, metrics.get(metric, 0.0))} |"
+        )
+    lines.append("")
+
+
 def _build_ltm_latency_alignment_summary(*, results: dict[str, Any]) -> dict[str, Any]:
     metrics = _normalize_metrics(results.get("metrics"))
     runtime_stats_summary_raw = results.get("runtime_stats_summary")
@@ -685,6 +856,100 @@ def _append_evidence_insufficiency_summary(
         lines.append("")
 
 
+def _append_missing_context_risk_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("missing_context_risk_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    levels_raw = summary.get("levels")
+    levels: dict[str, Any] = levels_raw if isinstance(levels_raw, dict) else {}
+    signals_raw = summary.get("signals")
+    signals: dict[str, Any] = signals_raw if isinstance(signals_raw, dict) else {}
+    applicable_case_count = int(summary.get("applicable_case_count", 0) or 0)
+
+    lines.append("## Missing-Context Risk Summary")
+    lines.append("")
+    lines.append(
+        "- Applicable positive cases: {count}".format(count=applicable_case_count)
+    )
+    lines.append(
+        "- Excluded negative-control cases: {count}".format(
+            count=int(summary.get("excluded_negative_control_case_count", 0) or 0)
+        )
+    )
+    lines.append(
+        "- Elevated cases: {count} ({rate:.4f})".format(
+            count=int(summary.get("elevated_case_count", 0) or 0),
+            rate=float(summary.get("elevated_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- High-risk cases: {count} ({rate:.4f})".format(
+            count=int(summary.get("high_risk_case_count", 0) or 0),
+            rate=float(summary.get("high_risk_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Risk score mean / p95: {mean:.4f} / {p95:.4f}".format(
+            mean=float(summary.get("risk_score_mean", 0.0) or 0.0),
+            p95=float(summary.get("risk_score_p95", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Risk-driven upgrades: {count}/{elevated} ({rate:.4f})".format(
+            count=int(summary.get("risk_upgrade_case_count", 0) or 0),
+            elevated=int(summary.get("elevated_case_count", 0) or 0),
+            rate=float(summary.get("risk_upgrade_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Risk-upgrade precision mean / baseline / gain: {upgrade:.4f} / {baseline:.4f} / {gain:.4f}".format(
+            upgrade=float(summary.get("risk_upgrade_precision_mean", 0.0) or 0.0),
+            baseline=float(
+                summary.get("risk_baseline_precision_mean", 0.0) or 0.0
+            ),
+            gain=float(summary.get("risk_upgrade_precision_gain", 0.0) or 0.0),
+        )
+    )
+    lines.append("")
+
+    lines.append("### Levels")
+    lines.append("")
+    if not levels:
+        lines.append("- None")
+        lines.append("")
+    else:
+        lines.append("| Level | Count | Rate |")
+        lines.append("| --- | ---: | ---: |")
+        for name, count in sorted(
+            levels.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))
+        ):
+            rate = (
+                float(count or 0) / float(applicable_case_count)
+                if applicable_case_count > 0
+                else 0.0
+            )
+            lines.append(f"| {name} | {int(count or 0)} | {rate:.4f} |")
+        lines.append("")
+
+    lines.append("### Signals")
+    lines.append("")
+    if not signals:
+        lines.append("- None")
+        lines.append("")
+    else:
+        lines.append("| Signal | Count |")
+        lines.append("| --- | ---: |")
+        for name, count in sorted(
+            signals.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))
+        ):
+            lines.append(f"| {name} | {int(count or 0)} |")
+        lines.append("")
+
+
 def _append_retrieval_context_observability_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
@@ -1091,6 +1356,7 @@ def _append_adaptive_router_observability_summary(
         return
 
     enabled_case_count = int(summary.get("enabled_case_count", 0) or 0)
+    shadow_coverage_case_count = int(summary.get("shadow_coverage_case_count", 0) or 0)
     comparable_case_count = int(summary.get("comparable_case_count", 0) or 0)
     agreement_case_count = int(summary.get("agreement_case_count", 0) or 0)
     disagreement_case_count = int(summary.get("disagreement_case_count", 0) or 0)
@@ -1102,6 +1368,13 @@ def _append_adaptive_router_observability_summary(
             count=enabled_case_count,
             total=int(summary.get("case_count", 0) or 0),
             rate=float(summary.get("enabled_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Shadow coverage: {count}/{enabled} ({rate:.4f})".format(
+            count=shadow_coverage_case_count,
+            enabled=enabled_case_count,
+            rate=float(summary.get("shadow_coverage_rate", 0.0) or 0.0),
         )
     )
     lines.append(
@@ -1125,6 +1398,19 @@ def _append_adaptive_router_observability_summary(
             rate=float(summary.get("disagreement_rate", 0.0) or 0.0),
         )
     )
+    shadow_source_counts_raw = summary.get("shadow_source_counts")
+    shadow_source_counts: dict[str, Any] = (
+        shadow_source_counts_raw if isinstance(shadow_source_counts_raw, dict) else {}
+    )
+    if shadow_source_counts:
+        formatted = ", ".join(
+            f"{name}={int(count or 0)}"
+            for name, count in sorted(
+                shadow_source_counts.items(),
+                key=lambda item: (-int(item[1] or 0), str(item[0])),
+            )
+        )
+        lines.append(f"- Shadow sources: {formatted}")
     lines.append("")
 
     executed_arms = summary.get("executed_arms", [])
@@ -1216,6 +1502,87 @@ def _append_reward_log_summary(lines: list[str], results: dict[str, Any]) -> Non
     last_error = str(summary.get("last_error") or "").strip()
     if last_error:
         lines.append(f"- Last error: {last_error}")
+    lines.append("")
+
+
+def _append_retrieval_control_plane_gate_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("retrieval_control_plane_gate_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    failed_checks_raw = summary.get("failed_checks", [])
+    failed_checks = (
+        [str(item) for item in failed_checks_raw if str(item).strip()]
+        if isinstance(failed_checks_raw, list)
+        else []
+    )
+
+    lines.append("## Retrieval Control Plane Gate Summary")
+    lines.append("")
+    lines.append(
+        f"- Gate passed: {'yes' if bool(summary.get('gate_passed', False)) else 'no'}"
+    )
+    lines.append(
+        "- Regression evaluated: {value}".format(
+            value="yes" if bool(summary.get("regression_evaluated", False)) else "no"
+        )
+    )
+    lines.append(
+        "- Benchmark regression detected: {value}".format(
+            value="yes"
+            if bool(summary.get("benchmark_regression_detected", False))
+            else "no"
+        )
+    )
+    benchmark_regression_passed = (
+        bool(summary.get("benchmark_regression_passed", False))
+        if "benchmark_regression_passed" in summary
+        else not bool(summary.get("benchmark_regression_detected", False))
+    )
+    lines.append(
+        "- Benchmark regression gate: {value}".format(
+            value="pass" if benchmark_regression_passed else "fail"
+        )
+    )
+    lines.append(
+        "- Adaptive router shadow coverage: {value:.4f} (threshold >= {threshold:.4f}, {status})".format(
+            value=float(summary.get("adaptive_router_shadow_coverage", 0.0) or 0.0),
+            threshold=float(
+                summary.get("adaptive_router_shadow_coverage_threshold", 0.0) or 0.0
+            ),
+            status="pass"
+            if bool(summary.get("adaptive_router_shadow_coverage_passed", False))
+            else "fail",
+        )
+    )
+    lines.append(
+        "- Risk-upgrade precision gain: {value:.4f} (threshold >= {threshold:.4f}, {status})".format(
+            value=float(summary.get("risk_upgrade_precision_gain", 0.0) or 0.0),
+            threshold=float(
+                summary.get("risk_upgrade_precision_gain_threshold", 0.0) or 0.0
+            ),
+            status="pass"
+            if bool(summary.get("risk_upgrade_precision_gain_passed", False))
+            else "fail",
+        )
+    )
+    lines.append(
+        "- Latency p95 ms: {value:.2f} (threshold <= {threshold:.2f}, {status})".format(
+            value=float(summary.get("latency_p95_ms", 0.0) or 0.0),
+            threshold=float(summary.get("latency_p95_ms_threshold", 0.0) or 0.0),
+            status="pass"
+            if bool(summary.get("latency_p95_ms_passed", False))
+            else "fail",
+        )
+    )
+    lines.append(
+        "- Failed checks: {value}".format(
+            value=", ".join(failed_checks) if failed_checks else "(none)"
+        )
+    )
     lines.append("")
 
 
@@ -1601,6 +1968,10 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     lines.append("")
 
     _append_metrics_table(lines, "Metrics", metrics)
+    _append_source_plan_granularity_summary(lines, metrics)
+    _append_index_fusion_granularity_summary(lines, metrics)
+    _append_native_scip_summary(lines, metrics)
+    _append_retrieval_control_plane_gate_summary(lines, results)
 
     if policy_profiles:
         lines.append("## Policy Profile Distribution")
@@ -1636,6 +2007,7 @@ def build_report_markdown(results: dict[str, Any]) -> str:
 
     _append_comparison_lane_summary(lines, results)
     _append_evidence_insufficiency_summary(lines, results)
+    _append_missing_context_risk_summary(lines, results)
     _append_feedback_loop_summary(lines, results)
     _append_feedback_observability_summary(lines, results)
     _append_ltm_explainability_summary(lines, results)

@@ -44,6 +44,12 @@ def test_validation_rich_stability_evaluate_stability() -> None:
                 "evidence_insufficient_rate": 0.0,
                 "missing_validation_rate": 0.0,
             },
+            retrieval_control_plane_gate_summary={
+                "gate_passed": True,
+                "adaptive_router_shadow_coverage": 0.86,
+                "risk_upgrade_precision_gain": 0.02,
+                "latency_p95_ms": 640.0,
+            },
         ),
         module.IterationResult(
             run_id=2,
@@ -64,6 +70,12 @@ def test_validation_rich_stability_evaluate_stability() -> None:
                 "evidence_insufficient_rate": 0.2,
                 "missing_validation_rate": 0.2,
             },
+            retrieval_control_plane_gate_summary={
+                "gate_passed": False,
+                "adaptive_router_shadow_coverage": 0.74,
+                "risk_upgrade_precision_gain": -0.03,
+                "latency_p95_ms": 880.0,
+            },
         ),
     ]
 
@@ -79,6 +91,8 @@ def test_validation_rich_stability_evaluate_stability() -> None:
     assert summary["failure_rate"] == 0.5
     assert summary["classification"] == "one_off_pass"
     assert summary["passed"] is False
+    assert summary["q2_gate_failed_count"] == 1
+    assert summary["latest_retrieval_control_plane_gate_summary"]["gate_passed"] is False
     assert summary["failed_runs"][0]["run_id"] == 2
     precision_row = next(
         item for item in summary["metric_ranges"] if item["metric"] == "precision_at_k"
@@ -116,6 +130,12 @@ def test_validation_rich_stability_main_writes_report(
                 "evidence_insufficient_rate": 0.0 if passed else 0.2,
                 "missing_validation_rate": 0.0 if passed else 0.2,
             },
+            retrieval_control_plane_gate_summary={
+                "gate_passed": passed,
+                "adaptive_router_shadow_coverage": 0.86 if passed else 0.74,
+                "risk_upgrade_precision_gain": 0.02 if passed else -0.03,
+                "latency_p95_ms": 640.0 if passed else 880.0,
+            },
         )
 
     monkeypatch.setattr(
@@ -146,13 +166,19 @@ def test_validation_rich_stability_main_writes_report(
     assert payload["failed_count"] == 1
     assert payload["classification"] == "mixed"
     assert payload["passed"] is True
+    assert payload["q2_gate_failed_count"] == 1
+    assert payload["latest_retrieval_control_plane_gate_summary"]["gate_passed"] is False
     assert payload["thresholds"]["min_task_success_rate"] == pytest.approx(0.9)
     assert len(payload["iterations"]) == 3
+    assert payload["iterations"][2]["retrieval_control_plane_gate_summary"]["gate_passed"] is False
 
     markdown = (tmp_path / "stability" / "stability_summary.md").read_text(
         encoding="utf-8"
     )
     assert "# Validation-Rich Stability Summary" in markdown
+    assert "## Latest Q2 Retrieval Control Plane Gate" in markdown
+    assert "- Q2 gate failed count: 1" in markdown
+    assert "q2_gate: passed=False, shadow_coverage=0.7400, risk_upgrade_gain=-0.0300, latency_p95_ms=880.00" in markdown
     assert "## Metric Ranges" in markdown
     assert "| precision_at_k |" in markdown
 
@@ -183,6 +209,12 @@ def test_validation_rich_stability_main_fails_on_gate(
                 "validation_test_count": 4.0,
                 "evidence_insufficient_rate": 0.2,
                 "missing_validation_rate": 0.2,
+            },
+            retrieval_control_plane_gate_summary={
+                "gate_passed": False,
+                "adaptive_router_shadow_coverage": 0.74,
+                "risk_upgrade_precision_gain": -0.03,
+                "latency_p95_ms": 880.0,
             },
         )
 

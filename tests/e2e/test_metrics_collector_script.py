@@ -56,21 +56,25 @@ def _validation_rich_summary(
     precision: float,
     noise: float,
     validation_tests: float,
+    retrieval_control_plane_gate_summary: dict[str, object] | None = None,
 ) -> None:
+    payload = {
+        "metrics": {
+            "task_success_rate": task_success,
+            "precision_at_k": precision,
+            "noise_rate": noise,
+            "latency_p95_ms": 620.0,
+            "validation_test_count": validation_tests,
+            "missing_validation_rate": 0.0,
+            "evidence_insufficient_rate": 0.0,
+        }
+    }
+    if retrieval_control_plane_gate_summary is not None:
+        payload["retrieval_control_plane_gate_summary"] = (
+            retrieval_control_plane_gate_summary
+        )
     payload_path.write_text(
-        json.dumps(
-            {
-                "metrics": {
-                    "task_success_rate": task_success,
-                    "precision_at_k": precision,
-                    "noise_rate": noise,
-                    "latency_p95_ms": 620.0,
-                    "validation_test_count": validation_tests,
-                    "missing_validation_rate": 0.0,
-                    "evidence_insufficient_rate": 0.0,
-                }
-            }
-        ),
+        json.dumps(payload),
         encoding="utf-8",
     )
 
@@ -180,6 +184,22 @@ def test_metrics_collector_main_writes_validation_rich_section(
         precision=0.43,
         noise=0.57,
         validation_tests=5.0,
+        retrieval_control_plane_gate_summary={
+            "regression_evaluated": True,
+            "benchmark_regression_detected": False,
+            "benchmark_regression_passed": True,
+            "failed_checks": [],
+            "adaptive_router_shadow_coverage": 0.85,
+            "adaptive_router_shadow_coverage_threshold": 0.8,
+            "adaptive_router_shadow_coverage_passed": True,
+            "risk_upgrade_precision_gain": 0.04,
+            "risk_upgrade_precision_gain_threshold": 0.0,
+            "risk_upgrade_precision_gain_passed": True,
+            "latency_p95_ms": 620.0,
+            "latency_p95_ms_threshold": 850.0,
+            "latency_p95_ms_passed": True,
+            "gate_passed": True,
+        },
     )
     output_path = tmp_path / "report.json"
 
@@ -217,6 +237,10 @@ def test_metrics_collector_main_writes_validation_rich_section(
     assert payload["validation_rich_previous_path"] == str(validation_previous)
     assert payload["validation_rich_current_metrics"]["precision_at_k"] == 0.43
     assert payload["validation_rich_previous_metrics"]["precision_at_k"] == 0.425
+    assert payload["validation_rich_gate_summary"]["gate_passed"] is True
+    assert payload["validation_rich_gate_summary"][
+        "adaptive_router_shadow_coverage"
+    ] == 0.85
     assert payload["validation_rich_regressions"] == []
 
 

@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ace_lite.benchmark_ops import read_benchmark_retrieval_control_plane_gate_summary
+
 METRIC_NAMES = (
     "task_success_rate",
     "precision_at_k",
@@ -64,6 +66,9 @@ def _extract_summary(*, label: str, path: Path, payload: dict[str, Any]) -> dict
             name: _safe_float(metrics_input.get(name), 0.0)
             for name in METRIC_NAMES
         },
+        "retrieval_control_plane_gate_summary": (
+            read_benchmark_retrieval_control_plane_gate_summary(path)
+        ),
     }
 
 
@@ -154,6 +159,43 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     delta=_safe_float(row.get("delta"), 0.0),
                 )
             )
+
+    lines.extend(["", "## Q2 Retrieval Control Plane Gate", ""])
+    lines.append(
+        "| Label | Gate Passed | Regression Evaluated | Regression Detected | Shadow Coverage | Risk Upgrade Gain | Latency P95 ms | Failed Checks |"
+    )
+    lines.append("| --- | :---: | :---: | :---: | ---: | ---: | ---: | --- |")
+    for row in (baseline, current, tuned):
+        if not isinstance(row, dict):
+            continue
+        gate_raw = row.get("retrieval_control_plane_gate_summary")
+        gate = gate_raw if isinstance(gate_raw, dict) else {}
+        failed_checks_raw = gate.get("failed_checks", [])
+        failed_checks = (
+            ", ".join(str(item) for item in failed_checks_raw if str(item).strip())
+            if isinstance(failed_checks_raw, list)
+            else ""
+        )
+        lines.append(
+            "| {label} | {gate_passed} | {regression_evaluated} | {regression_detected} | {shadow:.4f} | {gain:.4f} | {latency:.2f} | {failed_checks} |".format(
+                label=str(row.get("label", "")),
+                gate_passed="yes" if bool(gate.get("gate_passed", False)) else "no",
+                regression_evaluated=(
+                    "yes" if bool(gate.get("regression_evaluated", False)) else "no"
+                ),
+                regression_detected=(
+                    "yes"
+                    if bool(gate.get("benchmark_regression_detected", False))
+                    else "no"
+                ),
+                shadow=_safe_float(
+                    gate.get("adaptive_router_shadow_coverage", 0.0), 0.0
+                ),
+                gain=_safe_float(gate.get("risk_upgrade_precision_gain", 0.0), 0.0),
+                latency=_safe_float(gate.get("latency_p95_ms", 0.0), 0.0),
+                failed_checks=failed_checks or "(none)",
+            )
+        )
 
     return "\n".join(lines).strip() + "\n"
 

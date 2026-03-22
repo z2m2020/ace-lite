@@ -124,6 +124,7 @@ def build_case_evaluation_row(
     source_plan_graph_closure_preference_enabled: bool,
     source_plan_graph_closure_bonus_candidate_count: int,
     source_plan_graph_closure_preferred_count: int,
+    source_plan_granularity_preferred_count: int,
     source_plan_focused_file_promoted_count: int,
     source_plan_packed_path_count: int,
     source_plan_chunk_retention_ratio: float,
@@ -142,6 +143,16 @@ def build_case_evaluation_row(
     feedback_matched_event_count: int,
     feedback_boosted_count: int,
     feedback_boosted_paths: int,
+    multi_channel_rrf_enabled: bool,
+    multi_channel_rrf_applied: bool,
+    multi_channel_rrf_granularity_count: int,
+    multi_channel_rrf_pool_size: int,
+    multi_channel_rrf_granularity_pool_ratio: float,
+    native_scip_loaded: bool,
+    native_scip_document_count: int,
+    native_scip_definition_occurrence_count: int,
+    native_scip_reference_occurrence_count: int,
+    native_scip_symbol_definition_count: int,
     policy_profile: str,
     graph_transfer_per_seed_ratio: float,
     router_enabled: bool,
@@ -150,6 +161,7 @@ def build_case_evaluation_row(
     router_arm_id: str,
     router_confidence: float,
     router_shadow_arm_id: str,
+    router_shadow_source: str,
     router_shadow_confidence: float,
     router_online_bandit_requested: bool,
     router_experiment_enabled: bool,
@@ -357,6 +369,30 @@ def build_case_evaluation_row(
         "source_plan_hint_only_ratio": float(
             source_plan_evidence_summary.get("hint_only_ratio", 0.0) or 0.0
         ),
+        "source_plan_symbol_count": float(
+            source_plan_evidence_summary.get("symbol_count", 0.0) or 0.0
+        ),
+        "source_plan_signature_count": float(
+            source_plan_evidence_summary.get("signature_count", 0.0) or 0.0
+        ),
+        "source_plan_skeleton_count": float(
+            source_plan_evidence_summary.get("skeleton_count", 0.0) or 0.0
+        ),
+        "source_plan_robust_signature_count": float(
+            source_plan_evidence_summary.get("robust_signature_count", 0.0) or 0.0
+        ),
+        "source_plan_symbol_ratio": float(
+            source_plan_evidence_summary.get("symbol_ratio", 0.0) or 0.0
+        ),
+        "source_plan_signature_ratio": float(
+            source_plan_evidence_summary.get("signature_ratio", 0.0) or 0.0
+        ),
+        "source_plan_skeleton_ratio": float(
+            source_plan_evidence_summary.get("skeleton_ratio", 0.0) or 0.0
+        ),
+        "source_plan_robust_signature_ratio": float(
+            source_plan_evidence_summary.get("robust_signature_ratio", 0.0) or 0.0
+        ),
         "source_plan_graph_closure_preference_enabled": (
             1.0 if source_plan_graph_closure_preference_enabled else 0.0
         ),
@@ -365,6 +401,9 @@ def build_case_evaluation_row(
         ),
         "source_plan_graph_closure_preferred_count": float(
             source_plan_graph_closure_preferred_count
+        ),
+        "source_plan_granularity_preferred_count": float(
+            source_plan_granularity_preferred_count
         ),
         "source_plan_focused_file_promoted_count": float(
             source_plan_focused_file_promoted_count
@@ -455,6 +494,15 @@ def build_case_evaluation_row(
         "feedback_matched_event_count": float(feedback_matched_event_count),
         "feedback_boosted_count": float(feedback_boosted_count),
         "feedback_boosted_paths": float(feedback_boosted_paths),
+        "multi_channel_rrf_enabled": 1.0 if multi_channel_rrf_enabled else 0.0,
+        "multi_channel_rrf_applied": 1.0 if multi_channel_rrf_applied else 0.0,
+        "multi_channel_rrf_granularity_count": float(
+            multi_channel_rrf_granularity_count
+        ),
+        "multi_channel_rrf_pool_size": float(multi_channel_rrf_pool_size),
+        "multi_channel_rrf_granularity_pool_ratio": float(
+            multi_channel_rrf_granularity_pool_ratio
+        ),
         "feedback_boost": {
             "enabled": bool(feedback_enabled),
             "reason": feedback_reason,
@@ -462,6 +510,35 @@ def build_case_evaluation_row(
             "matched_event_count": int(feedback_matched_event_count),
             "boosted_candidate_count": int(feedback_boosted_count),
             "boosted_unique_paths": int(feedback_boosted_paths),
+        },
+        "multi_channel_fusion": {
+            "enabled": bool(multi_channel_rrf_enabled),
+            "applied": bool(multi_channel_rrf_applied),
+            "granularity_count": int(multi_channel_rrf_granularity_count),
+            "pool_size": int(multi_channel_rrf_pool_size),
+            "granularity_pool_ratio": float(multi_channel_rrf_granularity_pool_ratio),
+        },
+        "native_scip_loaded": 1.0 if native_scip_loaded else 0.0,
+        "native_scip_document_count": float(native_scip_document_count),
+        "native_scip_definition_occurrence_count": float(
+            native_scip_definition_occurrence_count
+        ),
+        "native_scip_reference_occurrence_count": float(
+            native_scip_reference_occurrence_count
+        ),
+        "native_scip_symbol_definition_count": float(
+            native_scip_symbol_definition_count
+        ),
+        "native_scip": {
+            "loaded": bool(native_scip_loaded),
+            "document_count": int(native_scip_document_count),
+            "definition_occurrence_count": int(
+                native_scip_definition_occurrence_count
+            ),
+            "reference_occurrence_count": int(
+                native_scip_reference_occurrence_count
+            ),
+            "symbol_definition_count": int(native_scip_symbol_definition_count),
         },
         "policy_profile": policy_profile,
         "graph_transfer_per_seed_ratio": graph_transfer_per_seed_ratio,
@@ -471,6 +548,7 @@ def build_case_evaluation_row(
         "router_arm_id": router_arm_id,
         "router_confidence": router_confidence,
         "router_shadow_arm_id": router_shadow_arm_id,
+        "router_shadow_source": router_shadow_source,
         "router_shadow_confidence": router_shadow_confidence,
         "router_online_bandit_requested": (
             1.0 if router_online_bandit_requested else 0.0

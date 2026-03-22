@@ -848,6 +848,9 @@ def test_mcp_service_plan_quick_returns_candidate_files(tmp_path: Path) -> None:
     assert result["source_plan_steps"] == 3
     assert isinstance(result["candidate_files"], list)
     assert result["candidate_files"]
+    assert isinstance(result["retrieval_policy_profile"], str)
+    assert result["retrieval_policy_profile"]
+    assert result["retrieval_policy_observability"]["selected"] == result["retrieval_policy_profile"]
     assert isinstance(result.get("rows"), list)
     assert result["total_ms"] >= 0.0
 

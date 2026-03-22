@@ -25,6 +25,7 @@ def test_build_adaptive_router_payload_uses_defaults_and_configured_confidence()
         "source": "configured",
         "confidence": 1.0,
         "shadow_arm_id": "shadow_arm",
+        "shadow_source": "",
         "shadow_confidence": 0.25,
         "online_bandit": {"requested": True},
     }
@@ -47,5 +48,6 @@ def test_build_adaptive_router_payload_disables_arm_fields_when_router_disabled(
     assert payload["source"] == "disabled"
     assert payload["confidence"] == 0.0
     assert payload["shadow_arm_id"] == ""
+    assert payload["shadow_source"] == ""
     assert payload["shadow_confidence"] == 0.0
     assert payload["online_bandit"] == {"requested": False}

@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ace_lite.benchmark_ops import read_benchmark_retrieval_control_plane_gate_summary
+
 METRICS_TO_TRACK = {
     "precision_at_k": {"target": 0.65, "trend": "up"},
     "noise_rate": {"target": 0.35, "trend": "down"},
@@ -151,6 +153,10 @@ def collect_validation_rich_metrics(*, summary_path: Path) -> dict[str, float]:
             0.0, _safe_float(metrics.get("evidence_insufficient_rate"), 0.0)
         ),
     }
+
+
+def collect_validation_rich_gate_summary(*, summary_path: Path) -> dict[str, Any]:
+    return read_benchmark_retrieval_control_plane_gate_summary(summary_path)
 
 
 def _is_metric_active(
@@ -348,6 +354,11 @@ def main() -> int:
         if isinstance(validation_rich_current_path, Path)
         else {}
     )
+    validation_rich_gate_summary = (
+        collect_validation_rich_gate_summary(summary_path=validation_rich_current_path)
+        if isinstance(validation_rich_current_path, Path)
+        else {}
+    )
     validation_rich_previous_metrics = (
         collect_validation_rich_metrics(summary_path=validation_rich_previous_path)
         if isinstance(validation_rich_previous_path, Path)
@@ -427,6 +438,7 @@ def main() -> int:
         "matrix_lane": matrix_lane,
         "validation_rich_current_metrics": validation_rich_current_metrics,
         "validation_rich_previous_metrics": validation_rich_previous_metrics,
+        "validation_rich_gate_summary": validation_rich_gate_summary,
         "validation_rich_lane": validation_rich_lane,
         "regressions": regressions,
         "validation_rich_regressions": validation_rich_regressions,

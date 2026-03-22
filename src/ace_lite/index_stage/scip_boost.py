@@ -165,12 +165,21 @@ def apply_scip_boost(
         "enabled": True,
         "loaded": bool(loaded.get("loaded", False)),
         "edge_count": int(loaded.get("edge_count", (generated or {}).get("edge_count", 0)) or 0),
+        "document_count": int(loaded.get("document_count", 0) or 0),
+        "definition_occurrence_count": int(
+            loaded.get("definition_occurrence_count", 0) or 0
+        ),
+        "reference_occurrence_count": int(
+            loaded.get("reference_occurrence_count", 0) or 0
+        ),
+        "symbol_definition_count": int(loaded.get("symbol_definition_count", 0) or 0),
         "boost_applied": boost_applied,
         "boost_applied_inbound": boost_applied_inbound,
         "boost_applied_pagerank": boost_applied_pagerank,
         "boost_applied_centrality": boost_applied_centrality,
         "path": str(index_path),
         "provider": str(loaded.get("provider") or provider),
+        "schema_version": str(loaded.get("schema_version") or ""),
         "generate_fallback": bool(generate_fallback),
         "fallback_generated": fallback_generated,
         "weights": {

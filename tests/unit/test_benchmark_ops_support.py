@@ -13,6 +13,7 @@ from ace_lite.benchmark_ops import (
     read_benchmark_case_routing_source,
     read_benchmark_case_rows,
     read_benchmark_comparison_lane_metrics,
+    read_benchmark_retrieval_control_plane_gate_summary,
     read_benchmark_metrics,
     read_benchmark_results,
     require_success,
@@ -29,6 +30,10 @@ def test_benchmark_ops_facade_exports_match_support_module() -> None:
     assert read_benchmark_case_routing_source is module.read_benchmark_case_routing_source
     assert read_benchmark_case_rows is module.read_benchmark_case_rows
     assert read_benchmark_comparison_lane_metrics is module.read_benchmark_comparison_lane_metrics
+    assert (
+        read_benchmark_retrieval_control_plane_gate_summary
+        is module.read_benchmark_retrieval_control_plane_gate_summary
+    )
     assert read_benchmark_metrics is module.read_benchmark_metrics
     assert read_benchmark_results is module.read_benchmark_results
     assert require_success is module.require_success
@@ -91,6 +96,7 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
     assert read_benchmark_case_fingerprints(missing_path) == {}
     assert read_benchmark_case_routing_source(missing_path) == ""
     assert read_benchmark_comparison_lane_metrics(missing_path, lane="x") == {}
+    assert read_benchmark_retrieval_control_plane_gate_summary(missing_path) == {}
 
     invalid_path = tmp_path / "invalid.json"
     invalid_path.write_text("{", encoding="utf-8")
@@ -144,6 +150,22 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
         "ignored": "x"
       }
     ]
+  },
+  "retrieval_control_plane_gate_summary": {
+    "regression_evaluated": true,
+    "benchmark_regression_detected": false,
+    "benchmark_regression_passed": true,
+    "failed_checks": [],
+    "adaptive_router_shadow_coverage": 0.9,
+    "adaptive_router_shadow_coverage_threshold": 0.8,
+    "adaptive_router_shadow_coverage_passed": true,
+    "risk_upgrade_precision_gain": 0.12,
+    "risk_upgrade_precision_gain_threshold": 0.0,
+    "risk_upgrade_precision_gain_passed": true,
+    "latency_p95_ms": 640.0,
+    "latency_p95_ms_threshold": 850.0,
+    "latency_p95_ms_passed": true,
+    "gate_passed": true
   }
 }
 """.strip(),
@@ -194,4 +216,20 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
     assert read_benchmark_comparison_lane_metrics(payload_path, lane="same_stage") == {
         "task_success_rate": 0.5,
         "precision_at_k": 0.3125,
+    }
+    assert read_benchmark_retrieval_control_plane_gate_summary(payload_path) == {
+        "regression_evaluated": True,
+        "benchmark_regression_detected": False,
+        "benchmark_regression_passed": True,
+        "failed_checks": [],
+        "adaptive_router_shadow_coverage": 0.9,
+        "adaptive_router_shadow_coverage_threshold": 0.8,
+        "adaptive_router_shadow_coverage_passed": True,
+        "risk_upgrade_precision_gain": 0.12,
+        "risk_upgrade_precision_gain_threshold": 0.0,
+        "risk_upgrade_precision_gain_passed": True,
+        "latency_p95_ms": 640.0,
+        "latency_p95_ms_threshold": 850.0,
+        "latency_p95_ms_passed": True,
+        "gate_passed": True,
     }

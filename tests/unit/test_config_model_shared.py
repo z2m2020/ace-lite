@@ -53,6 +53,8 @@ def test_normalize_candidate_ranker_helper_preserves_valid_values() -> None:
 
 
 def test_validate_shared_choice_helpers_preserve_error_shape() -> None:
+    assert validate_scip_provider("scip", field_name="scip_provider") == "scip"
+
     with pytest.raises(
         ValueError,
         match="Unsupported chunk_disclosure: invalid. Expected one of:",

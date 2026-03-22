@@ -44,6 +44,26 @@ class CandidateFusionResult:
     multi_channel_fusion_payload: dict[str, Any]
     semantic_embedding_provider_impl: EmbeddingProvider | None
     semantic_cross_encoder_provider: CrossEncoderProvider | None
+
+
+def _candidate_granularity_score(entry: dict[str, Any]) -> float:
+    if not isinstance(entry, dict):
+        return 0.0
+
+    explicit_symbol_count = entry.get("symbol_count")
+    try:
+        if explicit_symbol_count is not None:
+            return max(0.0, float(explicit_symbol_count or 0.0))
+    except Exception:
+        pass
+
+    classes = entry.get("classes") if isinstance(entry.get("classes"), list) else []
+    functions = (
+        entry.get("functions") if isinstance(entry.get("functions"), list) else []
+    )
+    return float(len(classes) + len(functions))
+
+
 def apply_multi_channel_rrf_fusion(
     *,
     candidates: list[dict[str, Any]],
@@ -94,6 +114,7 @@ def apply_multi_channel_rrf_fusion(
             "code": {"count": 0, "cap": int(code_cap_effective), "top": []},
             "docs": {"count": 0, "cap": int(docs_cap_effective), "top": []},
             "memory": {"count": 0, "cap": int(memory_cap_effective), "top": []},
+            "granularity": {"count": 0, "cap": int(code_cap_effective), "top": []},
         },
         "fused": {
             "scored_count": 0,
@@ -172,20 +193,43 @@ def apply_multi_channel_rrf_fusion(
         if len(memory_ranking) >= memory_cap_effective:
             break
 
+    granularity_scored_paths: list[tuple[float, str]] = []
+    for path in pool_paths:
+        file_entry = files_map.get(path)
+        if not isinstance(file_entry, dict):
+            continue
+        score = _candidate_granularity_score(file_entry)
+        if score <= 0.0:
+            continue
+        granularity_scored_paths.append((score, path))
+    granularity_scored_paths.sort(key=lambda item: (-float(item[0]), str(item[1])))
+    granularity_ranking: list[str] = []
+    seen_granularity: set[str] = set()
+    for score, path in granularity_scored_paths:
+        _ = score
+        if path in seen_granularity:
+            continue
+        seen_granularity.add(path)
+        granularity_ranking.append(path)
+        if len(granularity_ranking) >= code_cap_effective:
+            break
+
     payload["channels"]["code"]["count"] = len(code_ranking)
     payload["channels"]["docs"]["count"] = len(docs_ranking)
     payload["channels"]["memory"]["count"] = len(memory_ranking)
+    payload["channels"]["granularity"]["count"] = len(granularity_ranking)
     payload["channels"]["code"]["top"] = list(code_ranking[:8])
     payload["channels"]["docs"]["top"] = list(docs_ranking[:8])
     payload["channels"]["memory"]["top"] = list(memory_ranking[:8])
+    payload["channels"]["granularity"]["top"] = list(granularity_ranking[:8])
 
-    if not docs_ranking and not memory_ranking:
+    if not docs_ranking and not memory_ranking and not granularity_ranking:
         payload["reason"] = "no_aux_rankings"
         return candidates, payload
 
     try:
         fused_raw = fuse_rrf(
-            [code_ranking, docs_ranking, memory_ranking],
+            [code_ranking, docs_ranking, memory_ranking, granularity_ranking],
             rrf_k=rrf_k_effective,
         )
         fused = normalize_rrf_scores(fused_raw)
@@ -197,6 +241,9 @@ def apply_multi_channel_rrf_fusion(
     code_pos = {path: rank for rank, path in enumerate(code_ranking, start=1)}
     docs_pos = {path: rank for rank, path in enumerate(docs_ranking, start=1)}
     memory_pos = {path: rank for rank, path in enumerate(memory_ranking, start=1)}
+    granularity_pos = {
+        path: rank for rank, path in enumerate(granularity_ranking, start=1)
+    }
 
     rrf_scores: dict[str, float] = {str(k): float(v) for k, v in fused.items()}
     payload["fused"]["scored_count"] = len(rrf_scores)
@@ -247,6 +294,7 @@ def apply_multi_channel_rrf_fusion(
                     "code": code_rank,
                     "docs": docs_rank,
                     "memory": memory_rank,
+                    "granularity": int(granularity_pos.get(path, 0) or 0),
                 },
                 "contrib": {
                     "code": float(round(1.0 / (rrf_k_effective + code_rank), 8))
@@ -259,6 +307,18 @@ def apply_multi_channel_rrf_fusion(
                         round(1.0 / (rrf_k_effective + memory_rank), 8)
                     )
                     if memory_rank > 0
+                    else 0.0,
+                    "granularity": float(
+                        round(
+                            1.0
+                            / (
+                                rrf_k_effective
+                                + int(granularity_pos.get(path, 0) or 0)
+                            ),
+                            8,
+                        )
+                    )
+                    if int(granularity_pos.get(path, 0) or 0) > 0
                     else 0.0,
                 },
             }

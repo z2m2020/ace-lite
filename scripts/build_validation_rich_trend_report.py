@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ace_lite.benchmark_ops import read_benchmark_retrieval_control_plane_gate_summary
+
 METRIC_NAMES = (
     "task_success_rate",
     "precision_at_k",
@@ -119,6 +121,9 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
             metric_name: _safe_float(metrics.get(metric_name), 0.0)
             for metric_name in METRIC_NAMES
         },
+        "retrieval_control_plane_gate_summary": (
+            read_benchmark_retrieval_control_plane_gate_summary(path)
+        ),
     }
 
 
@@ -185,6 +190,8 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
     if latest:
         latest_metrics_raw = latest.get("metrics")
         latest_metrics = latest_metrics_raw if isinstance(latest_metrics_raw, dict) else {}
+        latest_gate_raw = latest.get("retrieval_control_plane_gate_summary")
+        latest_gate = latest_gate_raw if isinstance(latest_gate_raw, dict) else {}
         lines.extend(
             [
                 "## Latest",
@@ -205,6 +212,44 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 "",
             ]
         )
+        if latest_gate:
+            failed_checks_raw = latest_gate.get("failed_checks", [])
+            failed_checks = (
+                ", ".join(str(item) for item in failed_checks_raw if str(item).strip())
+                if isinstance(failed_checks_raw, list)
+                else ""
+            )
+            lines.extend(
+                [
+                    "## Latest Q2 Retrieval Control Plane Gate",
+                    "",
+                    f"- Gate passed: {bool(latest_gate.get('gate_passed', False))}",
+                    "- Regression evaluated: {evaluated}".format(
+                        evaluated=bool(latest_gate.get("regression_evaluated", False))
+                    ),
+                    "- Regression detected: {detected}".format(
+                        detected=bool(
+                            latest_gate.get("benchmark_regression_detected", False)
+                        )
+                    ),
+                    "- Shadow coverage: {shadow:.4f}".format(
+                        shadow=_safe_float(
+                            latest_gate.get("adaptive_router_shadow_coverage", 0.0),
+                            0.0,
+                        )
+                    ),
+                    "- Risk upgrade gain: {gain:.4f}".format(
+                        gain=_safe_float(
+                            latest_gate.get("risk_upgrade_precision_gain", 0.0), 0.0
+                        )
+                    ),
+                    "- Latency P95 ms: {latency:.2f}".format(
+                        latency=_safe_float(latest_gate.get("latency_p95_ms", 0.0), 0.0)
+                    ),
+                    f"- Failed checks: {failed_checks or '(none)'}",
+                    "",
+                ]
+            )
 
     if previous:
         lines.extend(

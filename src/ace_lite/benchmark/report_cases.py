@@ -73,6 +73,21 @@ def _append_case_section(
         f"- feedback_boosted_count: {float(case.get('feedback_boosted_count', 0.0)):.4f}"
     )
     lines.append(
+        "- multi_channel_rrf_applied: "
+        f"{float(case.get('multi_channel_rrf_applied', 0.0)):.4f}"
+    )
+    lines.append(
+        "- multi_channel_rrf_granularity_count: "
+        f"{float(case.get('multi_channel_rrf_granularity_count', 0.0)):.4f}"
+    )
+    lines.append(
+        "- multi_channel_rrf_granularity_pool_ratio: "
+        f"{float(case.get('multi_channel_rrf_granularity_pool_ratio', 0.0)):.4f}"
+    )
+    lines.append(
+        f"- native_scip_loaded: {float(case.get('native_scip_loaded', 0.0)):.4f}"
+    )
+    lines.append(
         f"- source_plan_direct_evidence_ratio: {float(case.get('source_plan_direct_evidence_ratio', 0.0)):.4f}"
     )
     lines.append(
@@ -215,10 +230,13 @@ def _append_case_section(
     _append_subgraph_payload_details(lines, case=case)
     _append_graph_prior_details(lines, case=case)
     _append_graph_closure_details(lines, case=case)
+    _append_index_fusion_granularity_details(lines, case=case)
     _append_source_plan_packing_details(lines, case=case)
     _append_preference_capture_details(lines, case=case)
     _append_ltm_explainability_details(lines, case=case)
     _append_feedback_boost_details(lines, case=case)
+    _append_multi_channel_fusion_details(lines, case=case)
+    _append_native_scip_details(lines, case=case)
     _append_chunk_stage_miss_details(lines, case=case)
     lines.append(f"- latency_ms: {float(case.get('latency_ms', 0.0)):.2f}")
     lines.append("")
@@ -389,6 +407,45 @@ def _append_graph_closure_details(lines: list[str], *, case: dict[str, Any]) -> 
         )
 
 
+def _append_index_fusion_granularity_details(
+    lines: list[str], *, case: dict[str, Any]
+) -> None:
+    index_fusion_granularity = case.get("index_fusion_granularity")
+    if not isinstance(index_fusion_granularity, dict) or not index_fusion_granularity:
+        return
+    lines.append(
+        "- index_fusion_granularity: "
+        + ", ".join(
+            [
+                "enabled={value}".format(
+                    value=bool(index_fusion_granularity.get("enabled", False))
+                ),
+                "applied={value}".format(
+                    value=bool(index_fusion_granularity.get("applied", False))
+                ),
+                "granularity_count={value}".format(
+                    value=int(
+                        index_fusion_granularity.get("granularity_count", 0) or 0
+                    )
+                ),
+                "pool_size={value}".format(
+                    value=int(index_fusion_granularity.get("pool_size", 0) or 0)
+                ),
+                "granularity_pool_ratio={value}".format(
+                    value="{value:.4f}".format(
+                        value=float(
+                            index_fusion_granularity.get(
+                                "granularity_pool_ratio", 0.0
+                            )
+                            or 0.0
+                        )
+                    )
+                ),
+            ]
+        )
+    )
+
+
 def _append_source_plan_packing_details(
     lines: list[str], *, case: dict[str, Any]
 ) -> None:
@@ -417,6 +474,12 @@ def _append_source_plan_packing_details(
                 "graph_closure_preferred_count={value}".format(
                     value=int(
                         source_plan_packing.get("graph_closure_preferred_count", 0)
+                        or 0
+                    )
+                ),
+                "granularity_preferred_count={value}".format(
+                    value=int(
+                        source_plan_packing.get("granularity_preferred_count", 0)
                         or 0
                     )
                 ),
@@ -541,6 +604,64 @@ def _append_chunk_stage_miss_details(lines: list[str], *, case: dict[str, Any]) 
                     value=bool(
                         chunk_stage_miss_details.get("source_plan_chunk_present", False)
                     )
+                ),
+            ]
+        )
+    )
+
+
+def _append_multi_channel_fusion_details(lines: list[str], *, case: dict[str, Any]) -> None:
+    multi_channel_fusion = case.get("multi_channel_fusion")
+    if not isinstance(multi_channel_fusion, dict) or not multi_channel_fusion:
+        return
+    lines.append(
+        "- multi_channel_fusion: "
+        + ", ".join(
+            [
+                "enabled={value}".format(
+                    value=bool(multi_channel_fusion.get("enabled", False))
+                ),
+                "applied={value}".format(
+                    value=bool(multi_channel_fusion.get("applied", False))
+                ),
+                "granularity_count={value}".format(
+                    value=int(multi_channel_fusion.get("granularity_count", 0) or 0)
+                ),
+                "pool_size={value}".format(
+                    value=int(multi_channel_fusion.get("pool_size", 0) or 0)
+                ),
+                "granularity_pool_ratio={value}".format(
+                    value=f"{float(multi_channel_fusion.get('granularity_pool_ratio', 0.0) or 0.0):.4f}"
+                ),
+            ]
+        )
+    )
+
+
+def _append_native_scip_details(lines: list[str], *, case: dict[str, Any]) -> None:
+    native_scip = case.get("native_scip")
+    if not isinstance(native_scip, dict) or not native_scip:
+        return
+    lines.append(
+        "- native_scip: "
+        + ", ".join(
+            [
+                "loaded={value}".format(value=bool(native_scip.get("loaded", False))),
+                "document_count={value}".format(
+                    value=int(native_scip.get("document_count", 0) or 0)
+                ),
+                "definition_occurrence_count={value}".format(
+                    value=int(
+                        native_scip.get("definition_occurrence_count", 0) or 0
+                    )
+                ),
+                "reference_occurrence_count={value}".format(
+                    value=int(
+                        native_scip.get("reference_occurrence_count", 0) or 0
+                    )
+                ),
+                "symbol_definition_count={value}".format(
+                    value=int(native_scip.get("symbol_definition_count", 0) or 0)
                 ),
             ]
         )

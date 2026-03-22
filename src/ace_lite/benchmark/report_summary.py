@@ -6,6 +6,7 @@ from typing import Any
 OPTIONAL_SUMMARY_MAPPING_KEYS = (
     "task_success_summary",
     "evidence_insufficiency_summary",
+    "missing_context_risk_summary",
     "feedback_loop_summary",
     "feedback_observability_summary",
     "ltm_explainability_summary",
@@ -17,6 +18,7 @@ OPTIONAL_SUMMARY_MAPPING_KEYS = (
     "adaptive_router_observability_summary",
     "adaptive_router_pair_summary",
     "comparison_lane_summary",
+    "retrieval_control_plane_gate_summary",
     "stage_latency_summary",
     "slo_budget_summary",
     "reward_log_summary",

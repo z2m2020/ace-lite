@@ -167,6 +167,24 @@ def evaluate_case_result(
     feedback_matched_event_count = metrics.feedback_matched_event_count
     feedback_boosted_count = metrics.feedback_boosted_count
     feedback_boosted_paths = metrics.feedback_boosted_paths
+    multi_channel_rrf_enabled = metrics.multi_channel_rrf_enabled
+    multi_channel_rrf_applied = metrics.multi_channel_rrf_applied
+    multi_channel_rrf_granularity_count = (
+        metrics.multi_channel_rrf_granularity_count
+    )
+    multi_channel_rrf_pool_size = metrics.multi_channel_rrf_pool_size
+    multi_channel_rrf_granularity_pool_ratio = (
+        metrics.multi_channel_rrf_granularity_pool_ratio
+    )
+    native_scip_loaded = metrics.native_scip_loaded
+    native_scip_document_count = metrics.native_scip_document_count
+    native_scip_definition_occurrence_count = (
+        metrics.native_scip_definition_occurrence_count
+    )
+    native_scip_reference_occurrence_count = (
+        metrics.native_scip_reference_occurrence_count
+    )
+    native_scip_symbol_definition_count = metrics.native_scip_symbol_definition_count
     embedding_enabled = metrics.embedding_enabled
     embedding_fallback = metrics.embedding_fallback
     embedding_cache_hit = metrics.embedding_cache_hit
@@ -270,6 +288,9 @@ def evaluate_case_result(
     source_plan_graph_closure_preferred_count = (
         metrics.source_plan_graph_closure_preferred_count
     )
+    source_plan_granularity_preferred_count = (
+        metrics.source_plan_granularity_preferred_count
+    )
     source_plan_focused_file_promoted_count = (
         metrics.source_plan_focused_file_promoted_count
     )
@@ -293,6 +314,7 @@ def evaluate_case_result(
     router_arm_id = metrics.router_arm_id
     router_confidence = metrics.router_confidence
     router_shadow_arm_id = metrics.router_shadow_arm_id
+    router_shadow_source = metrics.router_shadow_source
     router_shadow_confidence = metrics.router_shadow_confidence
     router_online_bandit_requested = metrics.router_online_bandit_requested
     router_experiment_enabled = metrics.router_experiment_enabled
@@ -454,6 +476,9 @@ def evaluate_case_result(
         source_plan_graph_closure_preferred_count=(
             source_plan_graph_closure_preferred_count
         ),
+        source_plan_granularity_preferred_count=(
+            source_plan_granularity_preferred_count
+        ),
         source_plan_focused_file_promoted_count=(
             source_plan_focused_file_promoted_count
         ),
@@ -474,6 +499,22 @@ def evaluate_case_result(
         feedback_matched_event_count=feedback_matched_event_count,
         feedback_boosted_count=feedback_boosted_count,
         feedback_boosted_paths=feedback_boosted_paths,
+        multi_channel_rrf_enabled=multi_channel_rrf_enabled,
+        multi_channel_rrf_applied=multi_channel_rrf_applied,
+        multi_channel_rrf_granularity_count=multi_channel_rrf_granularity_count,
+        multi_channel_rrf_pool_size=multi_channel_rrf_pool_size,
+        multi_channel_rrf_granularity_pool_ratio=(
+            multi_channel_rrf_granularity_pool_ratio
+        ),
+        native_scip_loaded=native_scip_loaded,
+        native_scip_document_count=native_scip_document_count,
+        native_scip_definition_occurrence_count=(
+            native_scip_definition_occurrence_count
+        ),
+        native_scip_reference_occurrence_count=(
+            native_scip_reference_occurrence_count
+        ),
+        native_scip_symbol_definition_count=native_scip_symbol_definition_count,
         policy_profile=policy_profile,
         graph_transfer_per_seed_ratio=graph_transfer_per_seed_ratio,
         router_enabled=router_enabled,
@@ -482,6 +523,7 @@ def evaluate_case_result(
         router_arm_id=router_arm_id,
         router_confidence=router_confidence,
         router_shadow_arm_id=router_shadow_arm_id,
+        router_shadow_source=router_shadow_source,
         router_shadow_confidence=router_shadow_confidence,
         router_online_bandit_requested=router_online_bandit_requested,
         router_experiment_enabled=router_experiment_enabled,
@@ -638,6 +680,15 @@ def evaluate_case_result(
                 graph_closure_anchor_count=graph_closure_anchor_count,
                 graph_closure_support_edge_count=graph_closure_support_edge_count,
                 graph_closure_total=graph_closure_total,
+                multi_channel_rrf_enabled=multi_channel_rrf_enabled,
+                multi_channel_rrf_applied=multi_channel_rrf_applied,
+                multi_channel_rrf_granularity_count=(
+                    multi_channel_rrf_granularity_count
+                ),
+                multi_channel_rrf_pool_size=multi_channel_rrf_pool_size,
+                multi_channel_rrf_granularity_pool_ratio=(
+                    multi_channel_rrf_granularity_pool_ratio
+                ),
                 source_plan_graph_closure_preference_enabled=(
                     source_plan_graph_closure_preference_enabled
                 ),
@@ -646,6 +697,9 @@ def evaluate_case_result(
                 ),
                 source_plan_graph_closure_preferred_count=(
                     source_plan_graph_closure_preferred_count
+                ),
+                source_plan_granularity_preferred_count=(
+                    source_plan_granularity_preferred_count
                 ),
                 source_plan_focused_file_promoted_count=(
                     source_plan_focused_file_promoted_count

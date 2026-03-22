@@ -2549,6 +2549,15 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
                     "evidence_insufficient_rate": 0.0,
                     "missing_validation_rate": 0.0,
                 },
+                "retrieval_control_plane_gate_summary": {
+                    "regression_evaluated": True,
+                    "benchmark_regression_detected": False,
+                    "failed_checks": [],
+                    "adaptive_router_shadow_coverage": 0.85,
+                    "risk_upgrade_precision_gain": 0.04,
+                    "latency_p95_ms": 617.66,
+                    "gate_passed": True,
+                },
                 "previous_metrics": {
                     "task_success_rate": 0.8,
                     "precision_at_k": 0.35,
@@ -2557,6 +2566,15 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
                     "latency_p95_ms": 692.08,
                     "evidence_insufficient_rate": 0.2,
                     "missing_validation_rate": 0.2,
+                },
+                "previous_retrieval_control_plane_gate_summary": {
+                    "regression_evaluated": True,
+                    "benchmark_regression_detected": True,
+                    "failed_checks": ["benchmark_regression_detected"],
+                    "adaptive_router_shadow_coverage": 0.75,
+                    "risk_upgrade_precision_gain": -0.01,
+                    "latency_p95_ms": 692.08,
+                    "gate_passed": False,
                 },
                 "delta": {
                     "task_success_rate": {
@@ -2609,6 +2627,8 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
     assert "Failed checks: (none)" in markdown
     assert "Metrics: task_success=1.0000, precision=0.4250, noise=0.5750, validation_test_count=5.0000, latency_p95_ms=617.66, evidence_insufficient=0.0000, missing_validation=0.0000" in markdown
     assert "Previous metrics: task_success=0.8000, precision=0.3500, noise=0.6500, validation_test_count=4.0000, latency_p95_ms=692.08, evidence_insufficient=0.2000, missing_validation=0.2000" in markdown
+    assert "Q2 retrieval control plane gate: passed=True, regression_evaluated=True, regression_detected=False, shadow_coverage=0.8500, risk_upgrade_gain=0.0400, latency_p95_ms=617.66, failed_checks=(none)" in markdown
+    assert "Previous Q2 retrieval control plane gate: passed=False, regression_evaluated=True, regression_detected=True, shadow_coverage=0.7500, risk_upgrade_gain=-0.0100, latency_p95_ms=692.08, failed_checks=benchmark_regression_detected" in markdown
     assert "Delta summary:" in markdown
     assert "precision_at_k: current=0.4250, previous=0.3500, delta=+0.0750" in markdown
     assert "latency_p95_ms: current=617.6600, previous=692.0800, delta=-74.4200" in markdown
@@ -2911,6 +2931,22 @@ freeze:
                     "latency_p95_ms": 617.66,
                     "evidence_insufficient_rate": 0.0,
                     "missing_validation_rate": 0.0,
+                },
+                "retrieval_control_plane_gate_summary": {
+                    "regression_evaluated": True,
+                    "benchmark_regression_detected": False,
+                    "benchmark_regression_passed": True,
+                    "failed_checks": [],
+                    "adaptive_router_shadow_coverage": 0.85,
+                    "adaptive_router_shadow_coverage_threshold": 0.8,
+                    "adaptive_router_shadow_coverage_passed": True,
+                    "risk_upgrade_precision_gain": 0.04,
+                    "risk_upgrade_precision_gain_threshold": 0.0,
+                    "risk_upgrade_precision_gain_passed": True,
+                    "latency_p95_ms": 617.66,
+                    "latency_p95_ms_threshold": 850.0,
+                    "latency_p95_ms_passed": True,
+                    "gate_passed": True,
                 },
             }
         ),
@@ -3403,6 +3439,22 @@ def test_release_freeze_main_includes_validation_rich_summary(
                     "evidence_insufficient_rate": 0.0,
                     "missing_validation_rate": 0.0,
                 },
+                "retrieval_control_plane_gate_summary": {
+                    "regression_evaluated": True,
+                    "benchmark_regression_detected": False,
+                    "benchmark_regression_passed": True,
+                    "failed_checks": [],
+                    "adaptive_router_shadow_coverage": 0.85,
+                    "adaptive_router_shadow_coverage_threshold": 0.8,
+                    "adaptive_router_shadow_coverage_passed": True,
+                    "risk_upgrade_precision_gain": 0.04,
+                    "risk_upgrade_precision_gain_threshold": 0.0,
+                    "risk_upgrade_precision_gain_passed": True,
+                    "latency_p95_ms": 617.66,
+                    "latency_p95_ms_threshold": 850.0,
+                    "latency_p95_ms_passed": True,
+                    "gate_passed": True,
+                },
             }
         ),
         encoding="utf-8",
@@ -3422,6 +3474,22 @@ def test_release_freeze_main_includes_validation_rich_summary(
                     "latency_p95_ms": 692.08,
                     "evidence_insufficient_rate": 0.2,
                     "missing_validation_rate": 0.2,
+                },
+                "retrieval_control_plane_gate_summary": {
+                    "regression_evaluated": True,
+                    "benchmark_regression_detected": True,
+                    "benchmark_regression_passed": False,
+                    "failed_checks": ["benchmark_regression_detected"],
+                    "adaptive_router_shadow_coverage": 0.75,
+                    "adaptive_router_shadow_coverage_threshold": 0.8,
+                    "adaptive_router_shadow_coverage_passed": False,
+                    "risk_upgrade_precision_gain": -0.01,
+                    "risk_upgrade_precision_gain_threshold": 0.0,
+                    "risk_upgrade_precision_gain_passed": False,
+                    "latency_p95_ms": 692.08,
+                    "latency_p95_ms_threshold": 850.0,
+                    "latency_p95_ms_passed": True,
+                    "gate_passed": False,
                 },
             }
         ),
@@ -3509,6 +3577,10 @@ def test_release_freeze_main_includes_validation_rich_summary(
         "evidence_insufficient_rate": 0.0,
         "missing_validation_rate": 0.0,
     }
+    assert validation_payload["retrieval_control_plane_gate_summary"]["gate_passed"] is True
+    assert validation_payload["retrieval_control_plane_gate_summary"][
+        "adaptive_router_shadow_coverage"
+    ] == 0.85
     assert validation_payload["previous_metrics"] == {
         "task_success_rate": 0.8,
         "precision_at_k": 0.35,
@@ -3518,6 +3590,12 @@ def test_release_freeze_main_includes_validation_rich_summary(
         "evidence_insufficient_rate": 0.2,
         "missing_validation_rate": 0.2,
     }
+    assert (
+        validation_payload["previous_retrieval_control_plane_gate_summary"][
+            "benchmark_regression_detected"
+        ]
+        is True
+    )
     assert validation_payload["delta"]["task_success_rate"] == {
         "current": 1.0,
         "previous": 0.8,

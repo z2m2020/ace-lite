@@ -57,13 +57,33 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "plan_replay_cache_hit_ratio": 0.5,
                 "plan_replay_cache_stale_hit_safe_ratio": 1.0,
                 "source_plan_direct_evidence_ratio": 0.75,
+                "source_plan_symbol_count_mean": 1.0,
+                "source_plan_signature_count_mean": 0.75,
+                "source_plan_skeleton_count_mean": 0.5,
+                "source_plan_robust_signature_count_mean": 0.25,
+                "source_plan_symbol_ratio": 0.5,
+                "source_plan_signature_ratio": 0.375,
+                "source_plan_skeleton_ratio": 0.25,
+                "source_plan_robust_signature_ratio": 0.125,
                 "source_plan_neighbor_context_ratio": 0.25,
                 "source_plan_hint_only_ratio": 0.0,
                 "source_plan_graph_closure_preference_enabled_ratio": 1.0,
                 "source_plan_graph_closure_bonus_candidate_count_mean": 2.0,
                 "source_plan_graph_closure_preferred_count_mean": 1.0,
+                "source_plan_granularity_preferred_count_mean": 1.0,
                 "source_plan_focused_file_promoted_count_mean": 1.0,
                 "source_plan_packed_path_count_mean": 2.0,
+                "multi_channel_rrf_enabled_ratio": 1.0,
+                "multi_channel_rrf_applied_ratio": 1.0,
+                "multi_channel_rrf_granularity_count_mean": 2.0,
+                "multi_channel_rrf_pool_size_mean": 4.0,
+                "multi_channel_rrf_granularity_pool_ratio": 0.5,
+                "multi_channel_rrf_granularity_case_ratio": 1.0,
+                "native_scip_loaded_rate": 1.0,
+                "native_scip_document_count_mean": 5.0,
+                "native_scip_definition_occurrence_count_mean": 7.0,
+                "native_scip_reference_occurrence_count_mean": 11.0,
+                "native_scip_symbol_definition_count_mean": 3.0,
                 "evidence_insufficient_rate": 0.5,
                 "no_candidate_rate": 0.0,
                 "low_support_chunk_rate": 0.5,
@@ -110,13 +130,33 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "plan_replay_cache_hit_ratio": 0.0,
                 "plan_replay_cache_stale_hit_safe_ratio": 0.0,
                 "source_plan_direct_evidence_ratio": 0.5,
+                "source_plan_symbol_count_mean": 0.5,
+                "source_plan_signature_count_mean": 0.25,
+                "source_plan_skeleton_count_mean": 0.25,
+                "source_plan_robust_signature_count_mean": 0.0,
+                "source_plan_symbol_ratio": 0.25,
+                "source_plan_signature_ratio": 0.125,
+                "source_plan_skeleton_ratio": 0.125,
+                "source_plan_robust_signature_ratio": 0.0,
                 "source_plan_neighbor_context_ratio": 0.25,
                 "source_plan_hint_only_ratio": 0.25,
                 "source_plan_graph_closure_preference_enabled_ratio": 0.0,
                 "source_plan_graph_closure_bonus_candidate_count_mean": 0.0,
                 "source_plan_graph_closure_preferred_count_mean": 0.0,
+                "source_plan_granularity_preferred_count_mean": 0.0,
                 "source_plan_focused_file_promoted_count_mean": 0.0,
                 "source_plan_packed_path_count_mean": 1.0,
+                "multi_channel_rrf_enabled_ratio": 0.0,
+                "multi_channel_rrf_applied_ratio": 0.0,
+                "multi_channel_rrf_granularity_count_mean": 0.0,
+                "multi_channel_rrf_pool_size_mean": 0.0,
+                "multi_channel_rrf_granularity_pool_ratio": 0.0,
+                "multi_channel_rrf_granularity_case_ratio": 0.0,
+                "native_scip_loaded_rate": 0.0,
+                "native_scip_document_count_mean": 0.0,
+                "native_scip_definition_occurrence_count_mean": 0.0,
+                "native_scip_reference_occurrence_count_mean": 0.0,
+                "native_scip_symbol_definition_count_mean": 0.0,
                 "evidence_insufficient_rate": 0.25,
                 "no_candidate_rate": 0.0,
                 "low_support_chunk_rate": 0.25,
@@ -168,11 +208,20 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "plan_replay_cache_hit_ratio": 0.5,
                 "plan_replay_cache_stale_hit_safe_ratio": 1.0,
                 "source_plan_direct_evidence_ratio": 0.25,
+                "source_plan_symbol_count_mean": 0.5,
+                "source_plan_signature_count_mean": 0.5,
+                "source_plan_skeleton_count_mean": 0.25,
+                "source_plan_robust_signature_count_mean": 0.25,
+                "source_plan_symbol_ratio": 0.25,
+                "source_plan_signature_ratio": 0.25,
+                "source_plan_skeleton_ratio": 0.125,
+                "source_plan_robust_signature_ratio": 0.125,
                 "source_plan_neighbor_context_ratio": 0.0,
                 "source_plan_hint_only_ratio": -0.25,
                 "source_plan_graph_closure_preference_enabled_ratio": 1.0,
                 "source_plan_graph_closure_bonus_candidate_count_mean": 2.0,
                 "source_plan_graph_closure_preferred_count_mean": 1.0,
+                "source_plan_granularity_preferred_count_mean": 1.0,
                 "source_plan_focused_file_promoted_count_mean": 1.0,
                 "source_plan_packed_path_count_mean": 1.0,
                 "evidence_insufficient_rate": 0.25,
@@ -428,6 +477,7 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                     "source_plan_graph_closure_preference_enabled": 1.0,
                     "source_plan_graph_closure_bonus_candidate_count": 2.0,
                     "source_plan_graph_closure_preferred_count": 1.0,
+                    "source_plan_granularity_preferred_count": 1.0,
                     "source_plan_focused_file_promoted_count": 1.0,
                     "source_plan_packed_path_count": 2.0,
                     "robust_signature_count": 1.0,
@@ -468,10 +518,18 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                         "support_edge_count": 3,
                         "total": 0.14,
                     },
+                    "index_fusion_granularity": {
+                        "enabled": True,
+                        "applied": True,
+                        "granularity_count": 2,
+                        "pool_size": 4,
+                        "granularity_pool_ratio": 0.5,
+                    },
                     "source_plan_packing": {
                         "graph_closure_preference_enabled": True,
                         "graph_closure_bonus_candidate_count": 2,
                         "graph_closure_preferred_count": 1,
+                        "granularity_preferred_count": 1,
                         "focused_file_promoted_count": 1,
                         "packed_path_count": 2,
                         "reason": "graph_closure_preferred",
@@ -529,6 +587,7 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "## Task Success Summary" in report
     assert "## Comparison Lanes" in report
     assert "## Evidence Insufficiency Summary" in report
+    assert "## Source Plan Granularity Summary" in report
     assert "## Chunk Stage Miss Summary" in report
     assert "## Decision Observability Summary" in report
     assert "## Long-Term Explainability Summary" in report
@@ -603,11 +662,37 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "plan_replay_cache_stale_hit_safe_ratio" in report
     assert "| source_plan_pack_miss | 1 | 1.0000 |" in report
     assert "source_plan_direct_evidence_ratio" in report
+    assert "source_plan_symbol_count_mean" in report
+    assert "source_plan_signature_count_mean" in report
+    assert "source_plan_skeleton_count_mean" in report
+    assert "source_plan_robust_signature_count_mean" in report
+    assert "source_plan_symbol_ratio" in report
+    assert "source_plan_signature_ratio" in report
+    assert "source_plan_skeleton_ratio" in report
+    assert "source_plan_robust_signature_ratio" in report
     assert "source_plan_neighbor_context_ratio" in report
     assert "source_plan_hint_only_ratio" in report
     assert "source_plan_graph_closure_preference_enabled_ratio" in report
     assert "source_plan_graph_closure_bonus_candidate_count_mean" in report
+    assert "source_plan_granularity_preferred_count_mean" in report
     assert "source_plan_packed_path_count_mean" in report
+    assert "multi_channel_rrf_granularity_count_mean" in report
+    assert "multi_channel_rrf_granularity_pool_ratio" in report
+    assert "Evidence mix: direct=0.7500, neighbor_context=0.2500, hint_only=0.0000" in report
+    assert "Packing granularity-preferred count mean: 1.00" in report
+    assert "Channel enabled ratio: 1.0000; applied ratio: 1.0000" in report
+    assert "Granularity channel case ratio: 1.0000; count mean: 2.00" in report
+    assert "Fusion pool size mean: 4.00; granularity/pool ratio: 0.5000" in report
+    assert "## Native SCIP Summary" in report
+    assert "Native SCIP loaded rate: 1.0000" in report
+    assert "native_scip_document_count_mean" in report
+    assert "native_scip_definition_occurrence_count_mean" in report
+    assert "native_scip_reference_occurrence_count_mean" in report
+    assert "native_scip_symbol_definition_count_mean" in report
+    assert "| symbol | 1.00 | 0.5000 |" in report
+    assert "| signature | 0.75 | 0.3750 |" in report
+    assert "| skeleton | 0.50 | 0.2500 |" in report
+    assert "| robust_signature | 0.25 | 0.1250 |" in report
     assert "evidence_insufficient_rate" in report
     assert "missing_validation_rate" in report
     assert "parallel_time_budget_ms_mean" in report
@@ -617,7 +702,8 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "chunk_guard_expectation: scenario=stale_majority, expected_retained_hit=True, expected_filtered_hit_count=1, expected_filtered_hit_rate=1.0000, report_only_improved=True" in report
     assert "robust_signature: count=1, coverage_ratio=0.5000" in report
     assert "graph_closure: enabled=True, boosted_chunk_count=2, coverage_ratio=0.5000, anchor_count=1, support_edge_count=3, total=0.1400" in report
-    assert "source_plan_packing: graph_closure_preference_enabled=True, graph_closure_bonus_candidate_count=2, graph_closure_preferred_count=1, focused_file_promoted_count=1, packed_path_count=2, reason=graph_closure_preferred" in report
+    assert "index_fusion_granularity: enabled=True, applied=True, granularity_count=2, pool_size=4, granularity_pool_ratio=0.5000" in report
+    assert "source_plan_packing: graph_closure_preference_enabled=True, graph_closure_bonus_candidate_count=2, graph_closure_preferred_count=1, granularity_preferred_count=1, focused_file_promoted_count=1, packed_path_count=2, reason=graph_closure_preferred" in report
     assert "preference_capture: notes_hit_ratio=0.5000, profile_selected_count=2, capture_triggered=True" in report
     assert "ltm_explainability: selected_count=2, attribution_count=1, graph_neighbor_count=1, plan_constraint_count=1" in report
     assert (
@@ -849,6 +935,8 @@ def test_build_results_summary_preserves_adaptive_router_observability_summary()
                 "case_count": 2,
                 "enabled_case_count": 2,
                 "enabled_case_rate": 1.0,
+                "shadow_coverage_case_count": 2,
+                "shadow_coverage_rate": 1.0,
                 "comparable_case_count": 2,
                 "comparable_case_rate": 1.0,
                 "agreement_case_count": 1,
@@ -857,6 +945,7 @@ def test_build_results_summary_preserves_adaptive_router_observability_summary()
                 "disagreement_rate": 0.5,
                 "executed_arm_count": 1,
                 "shadow_arm_count": 2,
+                "shadow_source_counts": {"fallback": 1, "model": 1},
                 "executed_arms": [{"arm_id": "feature", "case_count": 2, "case_rate": 1.0}],
                 "shadow_arms": [
                     {"arm_id": "feature_graph", "case_count": 1, "case_rate": 0.5},
@@ -867,7 +956,44 @@ def test_build_results_summary_preserves_adaptive_router_observability_summary()
     )
 
     assert summary["adaptive_router_observability_summary"]["agreement_rate"] == 0.5
+    assert summary["adaptive_router_observability_summary"]["shadow_coverage_rate"] == 1.0
     assert summary["adaptive_router_observability_summary"]["executed_arms"][0]["arm_id"] == "feature"
+    assert summary["adaptive_router_observability_summary"]["shadow_source_counts"] == {
+        "fallback": 1,
+        "model": 1,
+    }
+
+
+def test_build_results_summary_preserves_retrieval_control_plane_gate_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "retrieval_control_plane_gate_summary": {
+                "regression_evaluated": True,
+                "benchmark_regression_detected": False,
+                "benchmark_regression_passed": True,
+                "failed_checks": [],
+                "adaptive_router_shadow_coverage": 0.9,
+                "adaptive_router_shadow_coverage_threshold": 0.8,
+                "adaptive_router_shadow_coverage_passed": True,
+                "risk_upgrade_precision_gain": 0.12,
+                "risk_upgrade_precision_gain_threshold": 0.0,
+                "risk_upgrade_precision_gain_passed": True,
+                "latency_p95_ms": 640.0,
+                "latency_p95_ms_threshold": 850.0,
+                "latency_p95_ms_passed": True,
+                "gate_passed": True,
+            },
+        }
+    )
+
+    assert summary["retrieval_control_plane_gate_summary"]["gate_passed"] is True
+    assert (
+        summary["retrieval_control_plane_gate_summary"][
+            "adaptive_router_shadow_coverage"
+        ]
+        == 0.9
+    )
 
 
 def test_build_results_summary_preserves_reward_log_summary() -> None:
@@ -938,6 +1064,59 @@ def test_build_results_summary_preserves_retrieval_context_observability_summary
         "reference_hint_coverage_ratio_mean": 0.5,
         "pool_chunk_count_mean": 1.0,
         "pool_coverage_ratio_mean": 0.5,
+    }
+
+
+def test_build_results_summary_preserves_missing_context_risk_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "missing_context_risk_summary": {
+                "case_count": 2,
+                "applicable_case_count": 2,
+                "excluded_negative_control_case_count": 0,
+                "elevated_case_count": 1,
+                "high_risk_case_count": 1,
+                "elevated_case_rate": 0.5,
+                "high_risk_case_rate": 0.5,
+                "risk_score_mean": 0.625,
+                "risk_score_p95": 0.85,
+                "risk_upgrade_case_count": 1,
+                "risk_upgrade_case_rate": 0.5,
+                "risk_upgrade_precision_mean": 0.7,
+                "risk_baseline_precision_mean": 0.4,
+                "risk_upgrade_precision_gain": 0.3,
+                "levels": {"elevated": 1, "high": 1},
+                "signals": {
+                    "budget_exhausted": 1,
+                    "evidence_insufficient": 1,
+                    "recall_miss": 1,
+                },
+            },
+        }
+    )
+
+    assert summary["missing_context_risk_summary"] == {
+        "case_count": 2,
+        "applicable_case_count": 2,
+        "excluded_negative_control_case_count": 0,
+        "elevated_case_count": 1,
+        "high_risk_case_count": 1,
+        "elevated_case_rate": 0.5,
+        "high_risk_case_rate": 0.5,
+        "risk_score_mean": 0.625,
+        "risk_score_p95": 0.85,
+        "risk_upgrade_case_count": 1,
+        "risk_upgrade_case_rate": 0.5,
+        "risk_upgrade_precision_mean": 0.7,
+        "risk_baseline_precision_mean": 0.4,
+        "risk_upgrade_precision_gain": 0.3,
+        "levels": {"elevated": 1, "high": 1},
+        "signals": {
+            "budget_exhausted": 1,
+            "evidence_insufficient": 1,
+            "recall_miss": 1,
+        },
     }
 
 
@@ -1032,6 +1211,7 @@ def test_build_report_markdown_includes_adaptive_router_observability_summary() 
                 "disagreement_rate": 0.5,
                 "executed_arm_count": 1,
                 "shadow_arm_count": 2,
+                "shadow_source_counts": {"fallback": 1, "model": 1},
                 "executed_arms": [{"arm_id": "feature", "case_count": 2, "case_rate": 1.0}],
                 "shadow_arms": [
                     {"arm_id": "feature_graph", "case_count": 1, "case_rate": 0.5},
@@ -1043,6 +1223,7 @@ def test_build_report_markdown_includes_adaptive_router_observability_summary() 
 
     assert "## Adaptive Router Observability" in report
     assert "- Agreement: 1/2 (0.5000)" in report
+    assert "- Shadow sources: fallback=1, model=1" in report
     assert "### Executed Arms" in report
     assert "- feature: cases=2 rate=1.0000 task_success=0.0000 mrr=0.0000 fallback_cases=0 downgrade_cases=0" in report
     assert "### Shadow Arms" in report
@@ -1085,6 +1266,131 @@ def test_build_report_markdown_includes_retrieval_context_observability_summary(
     assert "| parent_symbol_chunk_count_mean | 2.0000 |" in report
     assert "| reference_hint_coverage_ratio_mean | 0.5000 |" in report
     assert "| pool_coverage_ratio_mean | 0.5000 |" in report
+
+
+def test_build_report_markdown_includes_missing_context_risk_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-22T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {},
+            "missing_context_risk_summary": {
+                "case_count": 2,
+                "applicable_case_count": 2,
+                "excluded_negative_control_case_count": 0,
+                "elevated_case_count": 1,
+                "high_risk_case_count": 1,
+                "elevated_case_rate": 0.5,
+                "high_risk_case_rate": 0.5,
+                "risk_score_mean": 0.625,
+                "risk_score_p95": 0.85,
+                "risk_upgrade_case_count": 1,
+                "risk_upgrade_case_rate": 0.5,
+                "risk_upgrade_precision_mean": 0.7,
+                "risk_baseline_precision_mean": 0.4,
+                "risk_upgrade_precision_gain": 0.3,
+                "levels": {"elevated": 1, "high": 1},
+                "signals": {
+                    "budget_exhausted": 1,
+                    "evidence_insufficient": 1,
+                    "recall_miss": 1,
+                },
+            },
+        }
+    )
+
+    assert "## Missing-Context Risk Summary" in report
+    assert "- Elevated cases: 1 (0.5000)" in report
+    assert "- High-risk cases: 1 (0.5000)" in report
+    assert "- Risk score mean / p95: 0.6250 / 0.8500" in report
+    assert "- Risk-driven upgrades: 1/1 (0.5000)" in report
+    assert "- Risk-upgrade precision mean / baseline / gain: 0.7000 / 0.4000 / 0.3000" in report
+    assert "| high | 1 | 0.5000 |" in report
+    assert "| evidence_insufficient | 1 |" in report
+
+
+def test_build_report_markdown_includes_retrieval_control_plane_gate_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-22T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {},
+            "retrieval_control_plane_gate_summary": {
+                "regression_evaluated": True,
+                "benchmark_regression_detected": False,
+                "benchmark_regression_passed": True,
+                "failed_checks": [],
+                "adaptive_router_shadow_coverage": 0.9,
+                "adaptive_router_shadow_coverage_threshold": 0.8,
+                "adaptive_router_shadow_coverage_passed": True,
+                "risk_upgrade_precision_gain": 0.12,
+                "risk_upgrade_precision_gain_threshold": 0.0,
+                "risk_upgrade_precision_gain_passed": True,
+                "latency_p95_ms": 640.0,
+                "latency_p95_ms_threshold": 850.0,
+                "latency_p95_ms_passed": True,
+                "gate_passed": True,
+            },
+        }
+    )
+
+    assert "## Retrieval Control Plane Gate Summary" in report
+    assert "- Gate passed: yes" in report
+    assert "- Regression evaluated: yes" in report
+    assert "- Benchmark regression detected: no" in report
+    assert "- Benchmark regression gate: pass" in report
+    assert (
+        "- Adaptive router shadow coverage: 0.9000 (threshold >= 0.8000, pass)"
+        in report
+    )
+    assert "- Risk-upgrade precision gain: 0.1200 (threshold >= 0.0000, pass)" in report
+    assert "- Latency p95 ms: 640.00 (threshold <= 850.00, pass)" in report
+
+
+def test_build_report_markdown_includes_retrieval_control_plane_gate_failure_state() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-22T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {},
+            "retrieval_control_plane_gate_summary": {
+                "regression_evaluated": True,
+                "benchmark_regression_detected": True,
+                "benchmark_regression_passed": False,
+                "failed_checks": [
+                    "benchmark_regression_detected",
+                    "adaptive_router_shadow_coverage",
+                ],
+                "adaptive_router_shadow_coverage": 0.74,
+                "adaptive_router_shadow_coverage_threshold": 0.8,
+                "adaptive_router_shadow_coverage_passed": False,
+                "risk_upgrade_precision_gain": -0.03,
+                "risk_upgrade_precision_gain_threshold": 0.0,
+                "risk_upgrade_precision_gain_passed": False,
+                "latency_p95_ms": 880.0,
+                "latency_p95_ms_threshold": 850.0,
+                "latency_p95_ms_passed": False,
+                "gate_passed": False,
+            },
+        }
+    )
+
+    assert "- Gate passed: no" in report
+    assert "- Benchmark regression detected: yes" in report
+    assert "- Benchmark regression gate: fail" in report
+    assert (
+        "- Adaptive router shadow coverage: 0.7400 (threshold >= 0.8000, fail)"
+        in report
+    )
+    assert "- Risk-upgrade precision gain: -0.0300 (threshold >= 0.0000, fail)" in report
+    assert "- Latency p95 ms: 880.00 (threshold <= 850.00, fail)" in report
+    assert (
+        "- Failed checks: benchmark_regression_detected, adaptive_router_shadow_coverage"
+        in report
+    )
 
 
 def test_build_report_markdown_includes_preference_observability_summary() -> None:

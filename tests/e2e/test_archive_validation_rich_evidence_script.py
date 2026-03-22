@@ -30,7 +30,25 @@ def test_archive_validation_rich_evidence_main_copies_files(tmp_path: Path) -> N
     comparison_dir = tmp_path / "latest" / "comparison"
     decision = tmp_path / "latest" / "promotion_decision.json"
     summary.parent.mkdir(parents=True, exist_ok=True)
-    summary.write_text("{}", encoding="utf-8")
+    summary.write_text(
+        json.dumps(
+            {
+                "retrieval_control_plane_gate_summary": {
+                    "regression_evaluated": True,
+                    "benchmark_regression_detected": True,
+                    "failed_checks": [
+                        "benchmark_regression_detected",
+                        "adaptive_router_shadow_coverage",
+                    ],
+                    "adaptive_router_shadow_coverage": 0.75,
+                    "risk_upgrade_precision_gain": -0.01,
+                    "latency_p95_ms": 692.08,
+                    "gate_passed": False,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     results.write_text("{}", encoding="utf-8")
     report.write_text("# report\n", encoding="utf-8")
     trend_dir.mkdir(parents=True, exist_ok=True)
@@ -79,3 +97,17 @@ def test_archive_validation_rich_evidence_main_copies_files(tmp_path: Path) -> N
     assert (dated_root / "promotion_decision.json").exists()
     assert (dated_root / "archive_manifest.json").exists()
     assert (dated_root / "next_cycle_todo.md").exists()
+
+    manifest = json.loads((dated_root / "archive_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["retrieval_control_plane_gate_summary"]["gate_passed"] is False
+    assert (
+        manifest["retrieval_control_plane_gate_summary"][
+            "benchmark_regression_detected"
+        ]
+        is True
+    )
+
+    todo = (dated_root / "next_cycle_todo.md").read_text(encoding="utf-8")
+    assert "## Q2 Retrieval Control Plane Gate" in todo
+    assert "- Gate passed: False" in todo
+    assert "- Resolve: need more evidence" in todo

@@ -96,6 +96,16 @@ class CaseEvaluationMetrics:
     feedback_matched_event_count: int
     feedback_boosted_count: int
     feedback_boosted_paths: int
+    multi_channel_rrf_enabled: bool
+    multi_channel_rrf_applied: bool
+    multi_channel_rrf_granularity_count: int
+    multi_channel_rrf_pool_size: int
+    multi_channel_rrf_granularity_pool_ratio: float
+    native_scip_loaded: bool
+    native_scip_document_count: int
+    native_scip_definition_occurrence_count: int
+    native_scip_reference_occurrence_count: int
+    native_scip_symbol_definition_count: int
     embedding_enabled: bool
     embedding_fallback: bool
     embedding_cache_hit: bool
@@ -183,6 +193,7 @@ class CaseEvaluationMetrics:
     source_plan_graph_closure_preference_enabled: bool
     source_plan_graph_closure_bonus_candidate_count: int
     source_plan_graph_closure_preferred_count: int
+    source_plan_granularity_preferred_count: int
     source_plan_focused_file_promoted_count: int
     source_plan_packed_path_count: int
     source_plan_packing_reason: str
@@ -198,6 +209,7 @@ class CaseEvaluationMetrics:
     router_arm_id: str
     router_confidence: float
     router_shadow_arm_id: str
+    router_shadow_source: str
     router_shadow_confidence: float
     router_online_bandit_requested: bool
     router_experiment_enabled: bool
@@ -235,6 +247,7 @@ def build_case_evaluation_metrics(
     topological_shield_payload = _as_dict(index_payload.get("topological_shield"))
     chunk_guard_payload = _as_dict(index_payload.get("chunk_guard"))
     chunk_contract_payload = _as_dict(index_payload.get("chunk_contract"))
+    scip_payload = _as_dict(index_payload.get("scip"))
     parallel_payload = _as_dict(index_payload.get("parallel"))
     parallel_docs_payload = _as_dict(parallel_payload.get("docs"))
     parallel_worktree_payload = _as_dict(parallel_payload.get("worktree"))
@@ -361,6 +374,70 @@ def build_case_evaluation_metrics(
     feedback_boosted_paths = max(
         0,
         int(candidate_ranking_payload.get("feedback_boosted_paths", 0) or 0),
+    )
+    multi_channel_rrf_enabled = bool(
+        candidate_ranking_payload.get("multi_channel_rrf_enabled", False)
+    )
+    multi_channel_rrf_applied = bool(
+        candidate_ranking_payload.get("multi_channel_rrf_applied", False)
+    )
+    multi_channel_rrf_granularity_count = max(
+        0,
+        int(
+            candidate_ranking_payload.get(
+                "multi_channel_rrf_granularity_count",
+                index_metadata.get(
+                    "multi_channel_rrf_granularity_count",
+                    index_tags.get("multi_channel_rrf_granularity_count", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    multi_channel_rrf_pool_size = max(
+        0,
+        int(
+            candidate_ranking_payload.get(
+                "multi_channel_rrf_pool_size",
+                index_metadata.get(
+                    "multi_channel_rrf_pool_size",
+                    index_tags.get("multi_channel_rrf_pool_size", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    multi_channel_rrf_granularity_pool_ratio = float(
+        candidate_ranking_payload.get(
+            "multi_channel_rrf_granularity_pool_ratio",
+            index_metadata.get(
+                "multi_channel_rrf_granularity_pool_ratio",
+                index_tags.get("multi_channel_rrf_granularity_pool_ratio", 0.0),
+            ),
+        )
+        or 0.0
+    )
+    native_scip_provider = str(scip_payload.get("provider", "") or "").strip().lower()
+    native_scip_loaded = bool(scip_payload.get("loaded", False)) and native_scip_provider == "scip"
+    native_scip_document_count = (
+        max(0, int(scip_payload.get("document_count", 0) or 0))
+        if native_scip_loaded
+        else 0
+    )
+    native_scip_definition_occurrence_count = (
+        max(0, int(scip_payload.get("definition_occurrence_count", 0) or 0))
+        if native_scip_loaded
+        else 0
+    )
+    native_scip_reference_occurrence_count = (
+        max(0, int(scip_payload.get("reference_occurrence_count", 0) or 0))
+        if native_scip_loaded
+        else 0
+    )
+    native_scip_symbol_definition_count = (
+        max(0, int(scip_payload.get("symbol_definition_count", 0) or 0))
+        if native_scip_loaded
+        else 0
     )
     embedding_enabled = bool(embeddings_payload.get("enabled", False))
     embedding_fallback = bool(embeddings_payload.get("fallback", False))
@@ -867,6 +944,16 @@ def build_case_evaluation_metrics(
             or 0
         ),
     )
+    source_plan_granularity_preferred_count = max(
+        0,
+        int(
+            source_plan_packing_payload.get(
+                "granularity_preferred_count",
+                source_plan_tags.get("packing_granularity_preferred_count", 0),
+            )
+            or 0
+        ),
+    )
     source_plan_focused_file_promoted_count = max(
         0,
         int(
@@ -970,6 +1057,16 @@ def build_case_evaluation_metrics(
             index_metadata.get(
                 "router_shadow_arm_id",
                 index_tags.get("router_shadow_arm_id", ""),
+            ),
+        )
+        or ""
+    )
+    router_shadow_source = str(
+        adaptive_router_payload.get(
+            "shadow_source",
+            index_metadata.get(
+                "router_shadow_source",
+                index_tags.get("router_shadow_source", ""),
             ),
         )
         or ""
@@ -1109,6 +1206,22 @@ def build_case_evaluation_metrics(
         feedback_matched_event_count=feedback_matched_event_count,
         feedback_boosted_count=feedback_boosted_count,
         feedback_boosted_paths=feedback_boosted_paths,
+        multi_channel_rrf_enabled=multi_channel_rrf_enabled,
+        multi_channel_rrf_applied=multi_channel_rrf_applied,
+        multi_channel_rrf_granularity_count=multi_channel_rrf_granularity_count,
+        multi_channel_rrf_pool_size=multi_channel_rrf_pool_size,
+        multi_channel_rrf_granularity_pool_ratio=(
+            multi_channel_rrf_granularity_pool_ratio
+        ),
+        native_scip_loaded=native_scip_loaded,
+        native_scip_document_count=native_scip_document_count,
+        native_scip_definition_occurrence_count=(
+            native_scip_definition_occurrence_count
+        ),
+        native_scip_reference_occurrence_count=(
+            native_scip_reference_occurrence_count
+        ),
+        native_scip_symbol_definition_count=native_scip_symbol_definition_count,
         embedding_enabled=embedding_enabled,
         embedding_fallback=embedding_fallback,
         embedding_cache_hit=embedding_cache_hit,
@@ -1210,6 +1323,9 @@ def build_case_evaluation_metrics(
         source_plan_graph_closure_preferred_count=(
             source_plan_graph_closure_preferred_count
         ),
+        source_plan_granularity_preferred_count=(
+            source_plan_granularity_preferred_count
+        ),
         source_plan_focused_file_promoted_count=(
             source_plan_focused_file_promoted_count
         ),
@@ -1233,6 +1349,7 @@ def build_case_evaluation_metrics(
         router_arm_id=router_arm_id,
         router_confidence=router_confidence,
         router_shadow_arm_id=router_shadow_arm_id,
+        router_shadow_source=router_shadow_source,
         router_shadow_confidence=router_shadow_confidence,
         router_online_bandit_requested=router_online_bandit_requested,
         router_experiment_enabled=router_experiment_enabled,

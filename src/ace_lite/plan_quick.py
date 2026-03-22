@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ace_lite.parsers.languages import parse_language_csv
+from ace_lite.index_stage.policy import resolve_retrieval_policy
 from ace_lite.repomap.builder import build_repo_map, build_stage_repo_map
 from ace_lite.retrieval_shared import (
     CandidateSelectionResult,
@@ -21,6 +22,36 @@ PLAN_QUICK_STEPS: tuple[str, ...] = (
     "Open highest-fused files and confirm symbol-level relevance.",
     "Escalate to ace_plan only after narrowing to concrete edit targets.",
 )
+
+
+def build_plan_quick_policy_observability(
+    *,
+    query: str,
+) -> tuple[str, dict[str, Any]]:
+    policy = resolve_retrieval_policy(
+        query=str(query or "").strip(),
+        retrieval_policy="auto",
+        policy_version="v1",
+        cochange_enabled=True,
+        embedding_enabled=True,
+    )
+    policy_name = str(policy.get("name", "general") or "general")
+    return policy_name, {
+        "requested": "auto",
+        "selected": policy_name,
+        "source": str(policy.get("source", "") or ""),
+        "version": str(policy.get("version", "") or ""),
+        "embedding_enabled": bool(policy.get("embedding_enabled", False)),
+        "docs_enabled": bool(policy.get("docs_enabled", False)),
+        "repomap_enabled": bool(policy.get("repomap_enabled", False)),
+        "graph_lookup_enabled": bool(policy.get("graph_lookup_enabled", False)),
+        "chunk_semantic_rerank_enabled": bool(
+            policy.get("chunk_semantic_rerank_enabled", False)
+        ),
+        "semantic_rerank_time_budget_ms": int(
+            policy.get("semantic_rerank_time_budget_ms", 0) or 0
+        ),
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +164,9 @@ def build_plan_quick(
     corpus_size = snapshot.corpus_size
 
     terms = extract_retrieval_terms(query=normalized_query, memory_stage={})
+    retrieval_policy_profile, retrieval_policy_observability = (
+        build_plan_quick_policy_observability(query=normalized_query)
+    )
     runtime_profile = build_retrieval_runtime_profile(
         candidate_ranker=str(candidate_ranker or ""),
         min_candidate_score=1,
@@ -243,6 +277,8 @@ def build_plan_quick(
         "candidate_ranker_selected": str(selection_observability["selected"]),
         "candidate_ranker_fallbacks": list(selection_observability["fallbacks"]),
         "candidate_min_score_used": int(selection_observability["min_score_used"]),
+        "retrieval_policy_profile": retrieval_policy_profile,
+        "retrieval_policy_observability": retrieval_policy_observability,
         "terms": list(terms),
         "index_cache_path": str(cache_path),
         "index_cache": dict(cache_info or {}),
@@ -269,6 +305,7 @@ def build_plan_quick(
 __all__ = [
     "PLAN_QUICK_STEPS",
     "PlanQuickScoredRow",
+    "build_plan_quick_policy_observability",
     "build_plan_quick",
     "score_plan_quick_rows",
 ]

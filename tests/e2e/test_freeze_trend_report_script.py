@@ -33,6 +33,7 @@ def _write_report(
     external_noise: float,
     embedding_ratio: float,
     failures: list[dict[str, object]],
+    validation_rich_q2_gate_summary: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -71,6 +72,10 @@ def _write_report(
             "failures": [],
         },
     }
+    if validation_rich_q2_gate_summary is not None:
+        payload["validation_rich_benchmark"] = {
+            "retrieval_control_plane_gate_summary": validation_rich_q2_gate_summary
+        }
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
@@ -94,6 +99,13 @@ def test_freeze_trend_report_main_writes_summary(
         external_noise=0.40,
         embedding_ratio=0.8,
         failures=[],
+        validation_rich_q2_gate_summary={
+            "gate_passed": True,
+            "adaptive_router_shadow_coverage": 0.86,
+            "risk_upgrade_precision_gain": 0.02,
+            "latency_p95_ms": 640.0,
+            "failed_checks": [],
+        },
     )
     _write_report(
         report_b,
@@ -113,6 +125,13 @@ def test_freeze_trend_report_main_writes_summary(
                 "expected": 0.38,
             }
         ],
+        validation_rich_q2_gate_summary={
+            "gate_passed": False,
+            "adaptive_router_shadow_coverage": 0.74,
+            "risk_upgrade_precision_gain": -0.03,
+            "latency_p95_ms": 880.0,
+            "failed_checks": ["adaptive_router_shadow_coverage"],
+        },
     )
 
     def fake_git_diff(cmd, cwd, check, capture_output, text):
@@ -147,11 +166,19 @@ def test_freeze_trend_report_main_writes_summary(
     assert output["history_count"] == 2
     assert output["latest"]["passed"] is False
     assert output["previous"]["passed"] is True
+    assert output["latest"]["validation_rich_q2_gate_passed"] is False
+    assert output["latest"]["validation_rich_q2_shadow_coverage"] == pytest.approx(0.74)
+    assert "validation_rich_q2_gate:adaptive_router_shadow_coverage" in output["latest"]["failure_signatures"]
     assert output["failure_top3"][0]["signature"] == "concept_gate:noise_rate"
     assert output["suspect_files"] == [
         "src/ace_lite/index_stage/graph_lookup.py",
         "scripts/run_release_freeze_regression.py",
     ]
+
+    markdown = (tmp_path / "trend" / "freeze_trend_report.md").read_text(encoding="utf-8")
+    assert "Validation-rich Q2 gate: passed=False, shadow_coverage=0.7400, risk_upgrade_gain=-0.0300, latency_p95_ms=880.00" in markdown
+    assert "validation_q2_shadow=-0.1200" in markdown
+    assert "validation_rich_q2_gate:adaptive_router_shadow_coverage" in markdown or output["failure_top3"][1]["signature"] == "validation_rich_q2_gate:adaptive_router_shadow_coverage"
 
 
 def test_freeze_trend_report_extract_failure_signatures() -> None:

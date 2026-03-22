@@ -21,8 +21,10 @@ from ace_lite.benchmark.scoring import (
     build_evidence_insufficiency_summary,
     build_feedback_loop_summary,
     build_feedback_observability_summary,
+    build_missing_context_risk_summary,
     build_ltm_explainability_summary,
     build_preference_observability_summary,
+    build_retrieval_control_plane_gate_summary,
     build_retrieval_context_observability_summary,
     build_slo_budget_summary,
     build_stage_latency_summary,
@@ -561,6 +563,9 @@ class BenchmarkRunner:
             "evidence_insufficiency_summary": build_evidence_insufficiency_summary(
                 case_results
             ),
+            "missing_context_risk_summary": build_missing_context_risk_summary(
+                case_results
+            ),
             "feedback_loop_summary": build_feedback_loop_summary(case_results),
             "feedback_observability_summary": build_feedback_observability_summary(
                 case_results
@@ -600,6 +605,13 @@ class BenchmarkRunner:
             output["regression"] = detect_regression(
                 current=metrics, baseline=baseline_metrics, **thresholds
             )
+
+        output["retrieval_control_plane_gate_summary"] = (
+            build_retrieval_control_plane_gate_summary(
+                metrics=metrics,
+                regression=output.get("regression"),
+            )
+        )
 
         return output
 

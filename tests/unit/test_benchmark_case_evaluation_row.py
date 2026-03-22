@@ -117,6 +117,7 @@ def _base_row_kwargs() -> dict[str, object]:
         "source_plan_graph_closure_preference_enabled": True,
         "source_plan_graph_closure_bonus_candidate_count": 2,
         "source_plan_graph_closure_preferred_count": 1,
+        "source_plan_granularity_preferred_count": 1,
         "source_plan_focused_file_promoted_count": 1,
         "source_plan_packed_path_count": 1,
         "source_plan_chunk_retention_ratio": 0.5,
@@ -137,6 +138,16 @@ def _base_row_kwargs() -> dict[str, object]:
         "feedback_matched_event_count": 2,
         "feedback_boosted_count": 1,
         "feedback_boosted_paths": 1,
+        "multi_channel_rrf_enabled": True,
+        "multi_channel_rrf_applied": True,
+        "multi_channel_rrf_granularity_count": 2,
+        "multi_channel_rrf_pool_size": 4,
+        "multi_channel_rrf_granularity_pool_ratio": 0.5,
+        "native_scip_loaded": True,
+        "native_scip_document_count": 5,
+        "native_scip_definition_occurrence_count": 7,
+        "native_scip_reference_occurrence_count": 11,
+        "native_scip_symbol_definition_count": 3,
         "policy_profile": "doc_intent",
         "graph_transfer_per_seed_ratio": 2.0,
         "router_enabled": True,
@@ -145,6 +156,7 @@ def _base_row_kwargs() -> dict[str, object]:
         "router_arm_id": "arm-a",
         "router_confidence": 0.82,
         "router_shadow_arm_id": "arm-b",
+        "router_shadow_source": "model",
         "router_shadow_confidence": 0.21,
         "router_online_bandit_requested": True,
         "router_experiment_enabled": True,
@@ -209,10 +221,15 @@ def test_build_case_evaluation_row_contract() -> None:
     assert row["chunk_contract_fallback_count"] == 1.0
     assert row["skills_budget_exhausted"] == 1.0
     assert row["plan_replay_cache_hit"] == 1.0
+    assert row["source_plan_granularity_preferred_count"] == 1.0
     assert row["source_plan_packed_path_ratio"] == 0.5
+    assert row["multi_channel_rrf_enabled"] == 1.0
+    assert row["multi_channel_rrf_granularity_count"] == 2.0
+    assert row["multi_channel_rrf_granularity_pool_ratio"] == 0.5
     assert row["contextual_sidecar_parent_symbol_chunk_count"] == 2.0
     assert row["contextual_sidecar_reference_hint_coverage_ratio"] == 0.5
     assert row["router_fallback_reason"] == "low_confidence"
+    assert row["router_shadow_source"] == "model"
     assert row["docs_enabled"] == 1.0
     assert row["chunk_guard_mode"] == "strict"
     assert row["decision_trace_count"] == 1
@@ -245,6 +262,30 @@ def test_build_case_evaluation_row_contract() -> None:
         "matched_event_count": 2,
         "boosted_candidate_count": 1,
         "boosted_unique_paths": 1,
+    }
+    assert row["multi_channel_rrf_enabled"] == 1.0
+    assert row["multi_channel_rrf_applied"] == 1.0
+    assert row["multi_channel_rrf_granularity_count"] == 2.0
+    assert row["multi_channel_rrf_pool_size"] == 4.0
+    assert row["multi_channel_rrf_granularity_pool_ratio"] == 0.5
+    assert row["multi_channel_fusion"] == {
+        "enabled": True,
+        "applied": True,
+        "granularity_count": 2,
+        "pool_size": 4,
+        "granularity_pool_ratio": 0.5,
+    }
+    assert row["native_scip_loaded"] == 1.0
+    assert row["native_scip_document_count"] == 5.0
+    assert row["native_scip_definition_occurrence_count"] == 7.0
+    assert row["native_scip_reference_occurrence_count"] == 11.0
+    assert row["native_scip_symbol_definition_count"] == 3.0
+    assert row["native_scip"] == {
+        "loaded": True,
+        "document_count": 5,
+        "definition_occurrence_count": 7,
+        "reference_occurrence_count": 11,
+        "symbol_definition_count": 3,
     }
     assert row["feedback_loop"] == {
         "feedback_surface": "issue_report_export_cli",

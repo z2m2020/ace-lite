@@ -45,6 +45,26 @@ def _load_json(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _extract_retrieval_control_plane_gate_summary(
+    *, payload: dict[str, Any]
+) -> dict[str, Any]:
+    summary_raw = payload.get("retrieval_control_plane_gate_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    normalized: dict[str, Any] = {}
+    for key, value in summary.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(value, bool):
+            normalized[key] = bool(value)
+        elif isinstance(value, (int, float)):
+            normalized[key] = float(value)
+        elif isinstance(value, list):
+            normalized[key] = [str(item) for item in value if str(item).strip()]
+        else:
+            normalized[key] = value
+    return normalized
+
+
 def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
     archived_raw = payload.get("archived_files")
     archived_files = archived_raw if isinstance(archived_raw, list) else []
@@ -52,6 +72,8 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
     decision = decision_raw if isinstance(decision_raw, dict) else {}
     reasons_raw = decision.get("reasons")
     reasons = reasons_raw if isinstance(reasons_raw, list) else []
+    gate_raw = payload.get("retrieval_control_plane_gate_summary")
+    gate = gate_raw if isinstance(gate_raw, dict) else {}
 
     lines = [
         "# Validation-Rich Next Cycle Todo",
@@ -68,10 +90,47 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
     else:
         lines.append("- None")
 
+    if gate:
+        failed_checks_raw = gate.get("failed_checks")
+        failed_checks = (
+            failed_checks_raw if isinstance(failed_checks_raw, list) else []
+        )
+        lines.extend(
+            [
+                "",
+                "## Q2 Retrieval Control Plane Gate",
+                "",
+                f"- Gate passed: {bool(gate.get('gate_passed', False))}",
+                "- Regression evaluated: {evaluated}".format(
+                    evaluated=bool(gate.get("regression_evaluated", False))
+                ),
+                "- Regression detected: {detected}".format(
+                    detected=bool(gate.get("benchmark_regression_detected", False))
+                ),
+                "- Shadow coverage: {shadow:.4f}".format(
+                    shadow=float(gate.get("adaptive_router_shadow_coverage", 0.0) or 0.0)
+                ),
+                "- Risk upgrade gain: {gain:.4f}".format(
+                    gain=float(gate.get("risk_upgrade_precision_gain", 0.0) or 0.0)
+                ),
+                "- Latency P95 ms: {latency:.2f}".format(
+                    latency=float(gate.get("latency_p95_ms", 0.0) or 0.0)
+                ),
+                "- Failed checks: {checks}".format(
+                    checks=",".join(str(item) for item in failed_checks)
+                    if failed_checks
+                    else "(none)"
+                ),
+            ]
+        )
+
     lines.extend(["", "## Follow-ups", ""])
     if reasons:
         for reason in reasons:
             lines.append(f"- Resolve: {reason}")
+    elif gate and isinstance(gate.get("failed_checks"), list) and gate.get("failed_checks"):
+        for item in gate.get("failed_checks", []):
+            lines.append(f"- Resolve Q2 gate: {item}")
     else:
         lines.append("- Review whether `validation_rich_gate.mode` can move beyond `report_only`.")
     return "\n".join(lines).strip() + "\n"
@@ -103,12 +162,14 @@ def main() -> int:
     dated_root.mkdir(parents=True, exist_ok=True)
 
     archived_files: list[str] = []
+    summary_path = _resolve_path(root=root, value=str(args.summary))
+    summary_payload = _load_json(summary_path)
     for name, value in (
         ("summary.json", args.summary),
         ("results.json", args.results),
         ("report.md", args.report),
     ):
-        source = _resolve_path(root=root, value=str(value))
+        source = summary_path if name == "summary.json" else _resolve_path(root=root, value=str(value))
         if not source.exists():
             print(f"[validation-rich-archive] missing required file: {source}", file=sys.stderr)
             return 2
@@ -154,6 +215,9 @@ def main() -> int:
         "dated_root": str(dated_root),
         "archived_files": archived_files,
         "promotion_decision": promotion_decision,
+        "retrieval_control_plane_gate_summary": _extract_retrieval_control_plane_gate_summary(
+            payload=summary_payload
+        ),
     }
     manifest_path = dated_root / "archive_manifest.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

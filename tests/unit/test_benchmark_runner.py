@@ -464,6 +464,7 @@ class _RouterStubOrchestrator(_StubOrchestrator):
                     "arm_id": arm_id,
                     "confidence": 0.0,
                     "shadow_arm_id": shadow_arm_id,
+                    "shadow_source": "fallback",
                     "shadow_confidence": 0.75,
                     "online_bandit": {
                         "requested": True,
@@ -679,6 +680,8 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
         "case_count": 2,
         "enabled_case_count": 2,
         "enabled_case_rate": 1.0,
+        "shadow_coverage_case_count": 2,
+        "shadow_coverage_rate": 1.0,
         "comparable_case_count": 2,
         "comparable_case_rate": 1.0,
         "agreement_case_count": 0,
@@ -687,6 +690,7 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
         "disagreement_rate": 1.0,
         "executed_arm_count": 2,
         "shadow_arm_count": 2,
+        "shadow_source_counts": {"fallback": 2},
         "executed_arms": [
             {
                 "arm_id": "feature",
@@ -768,6 +772,23 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
             },
         ],
     }
+    assert results["metrics"]["adaptive_router_shadow_coverage"] == 1.0
+    assert results["retrieval_control_plane_gate_summary"] == {
+        "regression_evaluated": False,
+        "benchmark_regression_detected": False,
+        "benchmark_regression_passed": False,
+        "failed_checks": [],
+        "adaptive_router_shadow_coverage": 1.0,
+        "adaptive_router_shadow_coverage_threshold": 0.8,
+        "adaptive_router_shadow_coverage_passed": True,
+        "risk_upgrade_precision_gain": 0.0,
+        "risk_upgrade_precision_gain_threshold": 0.0,
+        "risk_upgrade_precision_gain_passed": True,
+        "latency_p95_ms": 30.0,
+        "latency_p95_ms_threshold": 850.0,
+        "latency_p95_ms_passed": True,
+        "gate_passed": False,
+    }
 
 
 def test_benchmark_runner_submits_router_reward_events_when_writer_is_present() -> None:
@@ -817,6 +838,68 @@ def test_benchmark_runner_submits_router_reward_events_when_writer_is_present() 
         "written_count": 1,
         "error_count": 0,
         "last_error": "",
+    }
+
+
+def test_benchmark_runner_preserves_failed_retrieval_control_plane_gate_summary(
+    monkeypatch,
+) -> None:
+    time_points = iter([0.0, 0.010, 0.020, 0.050])
+    monkeypatch.setattr(
+        "ace_lite.benchmark.runner.perf_counter",
+        lambda: next(time_points),
+    )
+    orchestrator = _RouterStubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {
+            "case_id": "c1",
+            "query": "feature route",
+            "expected_keys": ["app"],
+            "top_k": 4,
+        },
+        {
+            "case_id": "c2",
+            "query": "general lookup",
+            "expected_keys": ["app"],
+            "top_k": 4,
+        },
+    ]
+
+    monkeypatch.setattr(
+        "ace_lite.benchmark.runner.detect_regression",
+        lambda **kwargs: {
+            "regressed": True,
+            "failed_checks": ["precision_at_k", "latency_p95_ms"],
+        },
+    )
+
+    results = runner.run(
+        cases=cases,
+        repo="demo",
+        root=".",
+        baseline_metrics={"task_success_rate": 1.0},
+    )
+
+    assert results["regression"] == {
+        "regressed": True,
+        "failed_checks": ["precision_at_k", "latency_p95_ms"],
+    }
+    assert results["retrieval_control_plane_gate_summary"] == {
+        "regression_evaluated": True,
+        "benchmark_regression_detected": True,
+        "benchmark_regression_passed": False,
+        "failed_checks": ["precision_at_k", "latency_p95_ms"],
+        "adaptive_router_shadow_coverage": 1.0,
+        "adaptive_router_shadow_coverage_threshold": 0.8,
+        "adaptive_router_shadow_coverage_passed": True,
+        "risk_upgrade_precision_gain": 0.0,
+        "risk_upgrade_precision_gain_threshold": 0.0,
+        "risk_upgrade_precision_gain_passed": True,
+        "latency_p95_ms": 30.0,
+        "latency_p95_ms_threshold": 850.0,
+        "latency_p95_ms_passed": True,
+        "gate_passed": False,
     }
 
 
@@ -1386,6 +1469,7 @@ def test_benchmark_runner_aggregates_evidence_insufficiency_summary() -> None:
 
     assert results["metrics"]["evidence_insufficient_rate"] == 0.5
     assert results["metrics"]["missing_validation_rate"] == 0.5
+    assert results["metrics"]["risk_upgrade_precision_gain"] == 0.0
     assert results["evidence_insufficiency_summary"] == {
         "case_count": 2,
         "applicable_case_count": 1,
@@ -1399,5 +1483,26 @@ def test_benchmark_runner_aggregates_evidence_insufficiency_summary() -> None:
             "missing_docs_evidence": 1,
             "missing_repomap_neighbors": 1,
             "missing_validation_tests": 1,
+        },
+    }
+    assert results["missing_context_risk_summary"] == {
+        "case_count": 2,
+        "applicable_case_count": 1,
+        "excluded_negative_control_case_count": 1,
+        "elevated_case_count": 1,
+        "high_risk_case_count": 0,
+        "elevated_case_rate": 1.0,
+        "high_risk_case_rate": 0.0,
+        "risk_score_mean": 0.5,
+        "risk_score_p95": 0.5,
+        "risk_upgrade_case_count": 0,
+        "risk_upgrade_case_rate": 0.0,
+        "risk_upgrade_precision_mean": 0.0,
+        "risk_baseline_precision_mean": 1.0,
+        "risk_upgrade_precision_gain": 0.0,
+        "levels": {"elevated": 1},
+        "signals": {
+            "chunk_miss_after_recall": 1,
+            "evidence_insufficient": 1,
         },
     }

@@ -34,6 +34,7 @@ def _write_summary(
     missing_validation_rate: float,
     regressed: bool,
     failed_checks: list[str],
+    retrieval_control_plane_gate_summary: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -52,6 +53,10 @@ def _write_summary(
             "missing_validation_rate": missing_validation_rate,
         },
     }
+    if retrieval_control_plane_gate_summary is not None:
+        payload["retrieval_control_plane_gate_summary"] = (
+            retrieval_control_plane_gate_summary
+        )
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
@@ -73,6 +78,26 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
         missing_validation_rate=0.2,
         regressed=True,
         failed_checks=["precision_at_k"],
+        retrieval_control_plane_gate_summary={
+            "regression_evaluated": True,
+            "benchmark_regression_detected": True,
+            "benchmark_regression_passed": False,
+            "failed_checks": [
+                "benchmark_regression_detected",
+                "adaptive_router_shadow_coverage",
+                "risk_upgrade_precision_gain",
+            ],
+            "adaptive_router_shadow_coverage": 0.75,
+            "adaptive_router_shadow_coverage_threshold": 0.8,
+            "adaptive_router_shadow_coverage_passed": False,
+            "risk_upgrade_precision_gain": -0.01,
+            "risk_upgrade_precision_gain_threshold": 0.0,
+            "risk_upgrade_precision_gain_passed": False,
+            "latency_p95_ms": 692.08,
+            "latency_p95_ms_threshold": 850.0,
+            "latency_p95_ms_passed": True,
+            "gate_passed": False,
+        },
     )
     _write_summary(
         current,
@@ -86,6 +111,22 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
         missing_validation_rate=0.0,
         regressed=False,
         failed_checks=[],
+        retrieval_control_plane_gate_summary={
+            "regression_evaluated": True,
+            "benchmark_regression_detected": False,
+            "benchmark_regression_passed": True,
+            "failed_checks": [],
+            "adaptive_router_shadow_coverage": 0.85,
+            "adaptive_router_shadow_coverage_threshold": 0.8,
+            "adaptive_router_shadow_coverage_passed": True,
+            "risk_upgrade_precision_gain": 0.05,
+            "risk_upgrade_precision_gain_threshold": 0.0,
+            "risk_upgrade_precision_gain_passed": True,
+            "latency_p95_ms": 617.66,
+            "latency_p95_ms_threshold": 850.0,
+            "latency_p95_ms_passed": True,
+            "gate_passed": True,
+        },
     )
     _write_summary(
         tuned,
@@ -99,6 +140,22 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
         missing_validation_rate=0.0,
         regressed=False,
         failed_checks=[],
+        retrieval_control_plane_gate_summary={
+            "regression_evaluated": True,
+            "benchmark_regression_detected": False,
+            "benchmark_regression_passed": True,
+            "failed_checks": [],
+            "adaptive_router_shadow_coverage": 0.9,
+            "adaptive_router_shadow_coverage_threshold": 0.8,
+            "adaptive_router_shadow_coverage_passed": True,
+            "risk_upgrade_precision_gain": 0.08,
+            "risk_upgrade_precision_gain_threshold": 0.0,
+            "risk_upgrade_precision_gain_passed": True,
+            "latency_p95_ms": 590.0,
+            "latency_p95_ms_threshold": 850.0,
+            "latency_p95_ms_passed": True,
+            "gate_passed": True,
+        },
     )
 
     module.sys.argv = [
@@ -124,6 +181,13 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
     assert payload["baseline"]["regressed"] is True
     assert payload["current"]["metrics"]["task_success_rate"] == pytest.approx(1.0)
     assert payload["tuned"]["metrics"]["precision_at_k"] == pytest.approx(0.45)
+    assert payload["baseline"]["retrieval_control_plane_gate_summary"]["gate_passed"] is False
+    assert payload["current"]["retrieval_control_plane_gate_summary"][
+        "adaptive_router_shadow_coverage"
+    ] == pytest.approx(0.85)
+    assert payload["tuned"]["retrieval_control_plane_gate_summary"][
+        "risk_upgrade_precision_gain"
+    ] == pytest.approx(0.08)
     assert payload["comparisons"]["baseline_vs_current"]["precision_at_k"]["delta"] == pytest.approx(
         0.075
     )
@@ -136,7 +200,14 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
     ).read_text(encoding="utf-8")
     assert "# Validation-Rich Comparison Report" in markdown
     assert "## baseline_vs_current" in markdown
+    assert "## Q2 Retrieval Control Plane Gate" in markdown
     assert "| precision_at_k | 0.3500 | 0.4250 | +0.0750 |" in markdown
+    assert (
+        "| baseline | no | yes | yes | 0.7500 | -0.0100 | 692.08 | "
+        "benchmark_regression_detected, adaptive_router_shadow_coverage, "
+        "risk_upgrade_precision_gain |"
+    ) in markdown
+    assert "| current | yes | yes | no | 0.8500 | 0.0500 | 617.66 | (none) |" in markdown
 
 
 def test_validation_rich_comparison_report_requires_all_inputs(tmp_path: Path) -> None:

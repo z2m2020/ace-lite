@@ -77,6 +77,24 @@ def _extract_failure_signatures(payload: dict[str, Any]) -> list[str]:
             row = item if isinstance(item, dict) else {"metric": str(item)}
             metric = str(row.get("metric") or "unknown")
             signatures.append(f"{gate_name}:{metric}")
+    validation_rich_raw = payload.get("validation_rich_benchmark")
+    validation_rich = (
+        validation_rich_raw if isinstance(validation_rich_raw, dict) else {}
+    )
+    validation_gate_raw = validation_rich.get("retrieval_control_plane_gate_summary")
+    validation_gate = (
+        validation_gate_raw if isinstance(validation_gate_raw, dict) else {}
+    )
+    if validation_gate and not bool(validation_gate.get("gate_passed", False)):
+        failed_checks_raw = validation_gate.get("failed_checks")
+        failed_checks = failed_checks_raw if isinstance(failed_checks_raw, list) else []
+        if failed_checks:
+            for item in failed_checks:
+                metric = str(item).strip()
+                if metric:
+                    signatures.append(f"validation_rich_q2_gate:{metric}")
+        else:
+            signatures.append("validation_rich_q2_gate:gate_failed")
     return signatures
 
 
@@ -100,6 +118,10 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     embedding_gate = embedding_gate_raw if isinstance(embedding_gate_raw, dict) else {}
     embedding_means_raw = embedding_gate.get("means")
     embedding_means = embedding_means_raw if isinstance(embedding_means_raw, dict) else {}
+    validation_rich_raw = payload.get("validation_rich_benchmark")
+    validation_rich = validation_rich_raw if isinstance(validation_rich_raw, dict) else {}
+    validation_gate_raw = validation_rich.get("retrieval_control_plane_gate_summary")
+    validation_gate = validation_gate_raw if isinstance(validation_gate_raw, dict) else {}
 
     return {
         "generated_at": str(payload.get("generated_at", "") or ""),
@@ -115,6 +137,16 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "external_noise_rate": _safe_float(external_metrics.get("noise_rate"), 0.0),
         "embedding_enabled_ratio": _safe_float(
             embedding_means.get("embedding_enabled_ratio"), 0.0
+        ),
+        "validation_rich_q2_gate_passed": bool(validation_gate.get("gate_passed", False)),
+        "validation_rich_q2_shadow_coverage": _safe_float(
+            validation_gate.get("adaptive_router_shadow_coverage"), 0.0
+        ),
+        "validation_rich_q2_risk_upgrade_gain": _safe_float(
+            validation_gate.get("risk_upgrade_precision_gain"), 0.0
+        ),
+        "validation_rich_q2_latency_p95_ms": _safe_float(
+            validation_gate.get("latency_p95_ms"), 0.0
         ),
         "failure_signatures": _extract_failure_signatures(payload),
     }
@@ -145,6 +177,9 @@ def _build_delta(*, latest: dict[str, Any], previous: dict[str, Any]) -> dict[st
         "external_precision_at_k",
         "external_noise_rate",
         "embedding_enabled_ratio",
+        "validation_rich_q2_shadow_coverage",
+        "validation_rich_q2_risk_upgrade_gain",
+        "validation_rich_q2_latency_p95_ms",
     )
     delta: dict[str, float] = {}
     for key in keys:
@@ -185,6 +220,20 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 emb=_safe_float(latest.get("embedding_enabled_ratio"), 0.0),
             )
         )
+        lines.append(
+            "- Validation-rich Q2 gate: passed={passed}, shadow_coverage={shadow:.4f}, risk_upgrade_gain={gain:.4f}, latency_p95_ms={latency:.2f}".format(
+                passed=bool(latest.get("validation_rich_q2_gate_passed", False)),
+                shadow=_safe_float(
+                    latest.get("validation_rich_q2_shadow_coverage"), 0.0
+                ),
+                gain=_safe_float(
+                    latest.get("validation_rich_q2_risk_upgrade_gain"), 0.0
+                ),
+                latency=_safe_float(
+                    latest.get("validation_rich_q2_latency_p95_ms"), 0.0
+                ),
+            )
+        )
         lines.append("")
 
     if previous:
@@ -194,7 +243,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         lines.append("")
         lines.append(f"- Previous path: `{previous.get('path', '')}`")
         lines.append(
-            "- Delta: tabiv3_p95={tabi:+.2f}, tabiv3_repomap_p95={repomap:+.2f}, concept_precision={c_prec:+.4f}, concept_noise={c_noise:+.4f}, external_precision={e_prec:+.4f}, external_noise={e_noise:+.4f}, embedding_enabled_ratio={emb:+.4f}".format(
+            "- Delta: tabiv3_p95={tabi:+.2f}, tabiv3_repomap_p95={repomap:+.2f}, concept_precision={c_prec:+.4f}, concept_noise={c_noise:+.4f}, external_precision={e_prec:+.4f}, external_noise={e_noise:+.4f}, embedding_enabled_ratio={emb:+.4f}, validation_q2_shadow={shadow:+.4f}, validation_q2_gain={gain:+.4f}, validation_q2_latency={latency:+.2f}".format(
                 tabi=_safe_float(delta.get("tabiv3_latency_p95_ms"), 0.0),
                 repomap=_safe_float(delta.get("tabiv3_repomap_latency_p95_ms"), 0.0),
                 c_prec=_safe_float(delta.get("concept_precision_at_k"), 0.0),
@@ -202,6 +251,15 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 e_prec=_safe_float(delta.get("external_precision_at_k"), 0.0),
                 e_noise=_safe_float(delta.get("external_noise_rate"), 0.0),
                 emb=_safe_float(delta.get("embedding_enabled_ratio"), 0.0),
+                shadow=_safe_float(
+                    delta.get("validation_rich_q2_shadow_coverage"), 0.0
+                ),
+                gain=_safe_float(
+                    delta.get("validation_rich_q2_risk_upgrade_gain"), 0.0
+                ),
+                latency=_safe_float(
+                    delta.get("validation_rich_q2_latency_p95_ms"), 0.0
+                ),
             )
         )
         lines.append("")
@@ -237,13 +295,13 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
 
     lines.append("## History")
     lines.append("")
-    lines.append("| Generated | Passed | Tabiv3 p95 | Repomap p95 | Concept P | Concept N | External P | External N | Embedding Ratio |")
-    lines.append("| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    lines.append("| Generated | Passed | Tabiv3 p95 | Repomap p95 | Concept P | Concept N | External P | External N | Embedding Ratio | Validation Q2 Gate |")
+    lines.append("| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |")
     for row in rows:
         if not isinstance(row, dict):
             continue
         lines.append(
-            "| {generated} | {passed} | {tabi:.2f} | {repomap:.2f} | {cp:.4f} | {cn:.4f} | {ep:.4f} | {en:.4f} | {emb:.4f} |".format(
+            "| {generated} | {passed} | {tabi:.2f} | {repomap:.2f} | {cp:.4f} | {cn:.4f} | {ep:.4f} | {en:.4f} | {emb:.4f} | {vq2} |".format(
                 generated=str(row.get("generated_at", "")),
                 passed="✅" if bool(row.get("passed", False)) else "❌",
                 tabi=_safe_float(row.get("tabiv3_latency_p95_ms"), 0.0),
@@ -253,6 +311,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 ep=_safe_float(row.get("external_precision_at_k"), 0.0),
                 en=_safe_float(row.get("external_noise_rate"), 0.0),
                 emb=_safe_float(row.get("embedding_enabled_ratio"), 0.0),
+                vq2="✅" if bool(row.get("validation_rich_q2_gate_passed", False)) else "❌",
             )
         )
 

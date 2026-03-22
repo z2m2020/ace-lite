@@ -5,6 +5,7 @@ from pathlib import Path
 from ace_lite.indexer import build_index
 from ace_lite.retrieval_shared import CandidateSelectionResult
 from ace_lite.plan_quick import build_plan_quick
+from ace_lite.plan_quick import build_plan_quick_policy_observability
 from ace_lite.plan_quick import score_plan_quick_rows
 from ace_lite.repomap.ranking import rank_index_files
 
@@ -165,6 +166,56 @@ def test_build_plan_quick_candidate_ranker_option(tmp_path: Path) -> None:
     assert bm25["candidate_files"]
 
 
+def test_build_plan_quick_policy_observability_uses_shared_policy_resolution(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_resolve_retrieval_policy(**kwargs):
+        captured.update(kwargs)
+        return {
+            "name": "doc_intent",
+            "source": "auto",
+            "version": "v1",
+            "embedding_enabled": True,
+            "docs_enabled": True,
+            "repomap_enabled": True,
+            "graph_lookup_enabled": False,
+            "chunk_semantic_rerank_enabled": True,
+            "semantic_rerank_time_budget_ms": 120,
+        }
+
+    monkeypatch.setattr(
+        "ace_lite.plan_quick.resolve_retrieval_policy",
+        fake_resolve_retrieval_policy,
+    )
+
+    profile, payload = build_plan_quick_policy_observability(
+        query="how architecture works",
+    )
+
+    assert profile == "doc_intent"
+    assert payload == {
+        "requested": "auto",
+        "selected": "doc_intent",
+        "source": "auto",
+        "version": "v1",
+        "embedding_enabled": True,
+        "docs_enabled": True,
+        "repomap_enabled": True,
+        "graph_lookup_enabled": False,
+        "chunk_semantic_rerank_enabled": True,
+        "semantic_rerank_time_budget_ms": 120,
+    }
+    assert captured == {
+        "query": "how architecture works",
+        "retrieval_policy": "auto",
+        "policy_version": "v1",
+        "cochange_enabled": True,
+        "embedding_enabled": True,
+    }
+
+
 def test_build_plan_quick_uses_shared_candidate_selection(monkeypatch, tmp_path: Path) -> None:
     _write_file(tmp_path / "src/app.py", "def auth_token():\n    return True\n")
     captured: dict[str, object] = {}
@@ -241,6 +292,32 @@ def test_build_plan_quick_uses_shared_candidate_selection(monkeypatch, tmp_path:
         "allow_empty_terms_fail_open": False,
     }
     assert captured["corpus_size"] == 1
+
+
+def test_build_plan_quick_includes_retrieval_policy_observability(tmp_path: Path) -> None:
+    _write_file(tmp_path / "docs/architecture.md", "System architecture overview\n")
+
+    result = build_plan_quick(
+        query="how architecture works",
+        root=tmp_path,
+        languages="python,markdown",
+        top_k_files=3,
+        repomap_top_k=8,
+    )
+
+    assert result["retrieval_policy_profile"] == "doc_intent"
+    assert result["retrieval_policy_observability"] == {
+        "requested": "auto",
+        "selected": "doc_intent",
+        "source": "auto",
+        "version": "v1",
+        "embedding_enabled": True,
+        "docs_enabled": True,
+        "repomap_enabled": True,
+        "graph_lookup_enabled": False,
+        "chunk_semantic_rerank_enabled": True,
+        "semantic_rerank_time_budget_ms": 120,
+    }
 
 
 def test_build_plan_quick_preserves_repomap_fallback_when_selection_is_empty(

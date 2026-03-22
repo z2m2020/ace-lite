@@ -101,9 +101,15 @@ def build_case_detail_payload(
     graph_closure_anchor_count: int,
     graph_closure_support_edge_count: int,
     graph_closure_total: float,
+    multi_channel_rrf_enabled: bool,
+    multi_channel_rrf_applied: bool,
+    multi_channel_rrf_granularity_count: int,
+    multi_channel_rrf_pool_size: int,
+    multi_channel_rrf_granularity_pool_ratio: float,
     source_plan_graph_closure_preference_enabled: bool,
     source_plan_graph_closure_bonus_candidate_count: int,
     source_plan_graph_closure_preferred_count: int,
+    source_plan_granularity_preferred_count: int,
     source_plan_focused_file_promoted_count: int,
     source_plan_packed_path_count: int,
     source_plan_packed_path_ratio: float,
@@ -272,6 +278,16 @@ def build_case_detail_payload(
             "support_edge_count": graph_closure_support_edge_count,
             "total": round(graph_closure_total, 6),
         },
+        "index_fusion_granularity": {
+            "enabled": multi_channel_rrf_enabled,
+            "applied": multi_channel_rrf_applied,
+            "granularity_count": multi_channel_rrf_granularity_count,
+            "pool_size": multi_channel_rrf_pool_size,
+            "granularity_pool_ratio": round(
+                multi_channel_rrf_granularity_pool_ratio,
+                6,
+            ),
+        },
         "source_plan_packing": {
             "graph_closure_preference_enabled": (
                 source_plan_graph_closure_preference_enabled
@@ -280,6 +296,7 @@ def build_case_detail_payload(
                 source_plan_graph_closure_bonus_candidate_count
             ),
             "graph_closure_preferred_count": source_plan_graph_closure_preferred_count,
+            "granularity_preferred_count": source_plan_granularity_preferred_count,
             "focused_file_promoted_count": source_plan_focused_file_promoted_count,
             "packed_path_count": source_plan_packed_path_count,
             "packed_path_ratio": round(source_plan_packed_path_ratio, 6),

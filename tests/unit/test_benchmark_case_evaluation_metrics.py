@@ -30,11 +30,20 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
                 "direct_ratio": 0.5,
                 "neighbor_context_ratio": 0.5,
                 "hint_only_ratio": 0.0,
+                "symbol_count": 2.0,
+                "signature_count": 1.0,
+                "skeleton_count": 1.0,
+                "robust_signature_count": 1.0,
+                "symbol_ratio": 1.0,
+                "signature_ratio": 0.5,
+                "skeleton_ratio": 0.5,
+                "robust_signature_ratio": 0.5,
             },
             "packing": {
                 "graph_closure_preference_enabled": True,
                 "graph_closure_bonus_candidate_count": 2,
                 "graph_closure_preferred_count": 1,
+                "granularity_preferred_count": 1,
                 "focused_file_promoted_count": 1,
                 "packed_path_count": 2,
                 "reason": "graph_closure_preferred",
@@ -86,6 +95,11 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
             "exact_search": {"requested": True},
             "second_pass": {"applied": True},
             "refine_pass": {"applied": False},
+            "multi_channel_rrf_enabled": True,
+            "multi_channel_rrf_applied": True,
+            "multi_channel_rrf_granularity_count": 3,
+            "multi_channel_rrf_pool_size": 6,
+            "multi_channel_rrf_granularity_pool_ratio": 0.5,
         },
         "docs": {
             "enabled": True,
@@ -124,6 +138,15 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
             "docs": {"timed_out": True},
             "worktree": {"timed_out": False},
         },
+        "scip": {
+            "enabled": True,
+            "loaded": True,
+            "provider": "scip",
+            "document_count": 5,
+            "definition_occurrence_count": 7,
+            "reference_occurrence_count": 11,
+            "symbol_definition_count": 3,
+        },
         "adaptive_router": {
             "enabled": True,
             "mode": "bandit",
@@ -131,6 +154,7 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
             "arm_id": "arm-a",
             "confidence": 0.73,
             "shadow_arm_id": "arm-b",
+            "shadow_source": "model",
             "shadow_confidence": 0.22,
             "online_bandit": {
                 "requested": True,
@@ -189,11 +213,23 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
     assert metrics.chunk_contract_fallback_count == 2
     assert metrics.unsupported_language_fallback_count == 1
     assert metrics.skills_selected_count == 2.0
+    assert metrics.source_plan_granularity_preferred_count == 1
+    assert metrics.multi_channel_rrf_enabled is True
+    assert metrics.multi_channel_rrf_applied is True
+    assert metrics.multi_channel_rrf_granularity_count == 3
+    assert metrics.multi_channel_rrf_pool_size == 6
+    assert metrics.multi_channel_rrf_granularity_pool_ratio == 0.5
+    assert metrics.native_scip_loaded is True
+    assert metrics.native_scip_document_count == 5
+    assert metrics.native_scip_definition_occurrence_count == 7
+    assert metrics.native_scip_reference_occurrence_count == 11
+    assert metrics.native_scip_symbol_definition_count == 3
     assert metrics.skills_budget_exhausted is True
     assert metrics.plan_replay_cache_hit is True
     assert metrics.source_plan_packed_path_ratio == 1.0
     assert metrics.router_online_bandit_requested is True
     assert metrics.router_fallback_reason == "cold_start"
+    assert metrics.router_shadow_source == "model"
     assert metrics.docs_enabled_flag is True
     assert metrics.docs_hit == 1.0
     assert metrics.hint_inject == 1.0
@@ -210,4 +246,12 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
         "direct_ratio": 0.5,
         "neighbor_context_ratio": 0.5,
         "hint_only_ratio": 0.0,
+        "symbol_count": 2.0,
+        "signature_count": 1.0,
+        "skeleton_count": 1.0,
+        "robust_signature_count": 1.0,
+        "symbol_ratio": 1.0,
+        "signature_ratio": 0.5,
+        "skeleton_ratio": 0.5,
+        "robust_signature_ratio": 0.5,
     }

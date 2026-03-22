@@ -3,6 +3,34 @@ from __future__ import annotations
 from typing import Any
 
 
+def _build_multi_channel_granularity_observability(
+    multi_channel_fusion_payload: dict[str, Any],
+) -> dict[str, float | int]:
+    channels = (
+        multi_channel_fusion_payload.get("channels", {})
+        if isinstance(multi_channel_fusion_payload.get("channels"), dict)
+        else {}
+    )
+    granularity = (
+        channels.get("granularity", {})
+        if isinstance(channels.get("granularity"), dict)
+        else {}
+    )
+    fused = (
+        multi_channel_fusion_payload.get("fused", {})
+        if isinstance(multi_channel_fusion_payload.get("fused"), dict)
+        else {}
+    )
+    count = max(0, int(granularity.get("count", 0) or 0))
+    pool_size = max(0, int(fused.get("pool_size", 0) or 0))
+    pool_ratio = float(count) / float(pool_size) if pool_size > 0 else 0.0
+    return {
+        "count": count,
+        "pool_size": pool_size,
+        "pool_ratio": round(pool_ratio, 6),
+    }
+
+
 def _resolve_online_bandit_payload(
     *, adaptive_router_payload: dict[str, Any]
 ) -> dict[str, Any]:
@@ -31,6 +59,9 @@ def build_candidate_ranking_payload(
     second_pass_payload: dict[str, Any],
     refine_pass_payload: dict[str, Any],
 ) -> dict[str, Any]:
+    granularity = _build_multi_channel_granularity_observability(
+        multi_channel_fusion_payload
+    )
     return {
         **selection_observability,
         "embedding_enabled": bool(embeddings_payload.get("enabled", False)),
@@ -61,6 +92,9 @@ def build_candidate_ranking_payload(
         "multi_channel_rrf_k": int(
             multi_channel_fusion_payload.get("rrf_k", 0) or 0
         ),
+        "multi_channel_rrf_granularity_count": int(granularity["count"]),
+        "multi_channel_rrf_pool_size": int(granularity["pool_size"]),
+        "multi_channel_rrf_granularity_pool_ratio": float(granularity["pool_ratio"]),
         "worktree_enabled": bool(worktree_prior.get("enabled", False)),
         "worktree_changed_count": int(worktree_prior.get("changed_count", 0) or 0),
         "worktree_seed_count": len(worktree_prior.get("seed_paths", []))
@@ -176,6 +210,9 @@ def build_result_metadata(
     online_bandit_payload = _resolve_online_bandit_payload(
         adaptive_router_payload=adaptive_router_payload
     )
+    granularity = _build_multi_channel_granularity_observability(
+        multi_channel_fusion_payload
+    )
     return {
         "candidate_ranker": str(selection_observability["selected"]),
         "candidate_ranker_requested": str(selection_observability["requested"]),
@@ -195,6 +232,9 @@ def build_result_metadata(
         "multi_channel_rrf_k": int(
             multi_channel_fusion_payload.get("rrf_k", 0) or 0
         ),
+        "multi_channel_rrf_granularity_count": int(granularity["count"]),
+        "multi_channel_rrf_pool_size": int(granularity["pool_size"]),
+        "multi_channel_rrf_granularity_pool_ratio": float(granularity["pool_ratio"]),
         "router_enabled": bool(adaptive_router_payload.get("enabled", False)),
         "router_mode": str(adaptive_router_payload.get("mode", "")),
         "router_model_path": str(adaptive_router_payload.get("model_path", "")),
@@ -204,6 +244,7 @@ def build_result_metadata(
         "router_source": str(adaptive_router_payload.get("source", "")),
         "router_confidence": float(adaptive_router_payload.get("confidence", 0.0) or 0.0),
         "router_shadow_arm_id": str(adaptive_router_payload.get("shadow_arm_id", "")),
+        "router_shadow_source": str(adaptive_router_payload.get("shadow_source", "")),
         "router_shadow_confidence": float(
             adaptive_router_payload.get("shadow_confidence", 0.0) or 0.0
         ),

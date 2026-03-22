@@ -25,6 +25,31 @@ def _positive_breakdown_value(score_breakdown: dict[str, Any], key: str) -> bool
         return False
 
 
+def _build_granularity_evidence(item: dict[str, Any]) -> list[str]:
+    granularity: list[str] = []
+    qualified_name = str(item.get("qualified_name") or "").strip()
+    kind = str(item.get("kind") or "").strip().lower()
+
+    if qualified_name or kind in {"function", "method", "class", "heading", "section"}:
+        granularity.append("symbol")
+
+    if str(item.get("signature") or "").strip():
+        granularity.append("signature")
+
+    skeleton = item.get("skeleton")
+    if isinstance(skeleton, dict) and skeleton:
+        granularity.append("skeleton")
+
+    robust_signature = item.get("robust_signature_summary")
+    if isinstance(robust_signature, dict) and (
+        robust_signature
+        and bool(robust_signature.get("available", True))
+    ):
+        granularity.append("robust_signature")
+
+    return granularity
+
+
 def annotate_source_plan_grounding(
     *,
     prioritized_chunks: list[dict[str, Any]],
@@ -91,6 +116,7 @@ def annotate_source_plan_grounding(
         if has_test_hint:
             sources.append("test_hint")
 
+        granularity = _build_granularity_evidence(payload)
         payload["evidence"] = {
             "role": role,
             "direct_retrieval": bool(direct_retrieval),
@@ -98,6 +124,7 @@ def annotate_source_plan_grounding(
             "hint_only": role == "hint_only",
             "hint_support": bool(has_test_hint),
             "sources": sources,
+            "granularity": granularity,
         }
         annotated.append(payload)
 
@@ -109,6 +136,10 @@ def summarize_source_plan_grounding(chunks: list[dict[str, Any]]) -> dict[str, f
     direct_count = 0
     neighbor_count = 0
     hint_only_count = 0
+    symbol_count = 0
+    signature_count = 0
+    skeleton_count = 0
+    robust_signature_count = 0
 
     for item in chunks:
         if not isinstance(item, dict):
@@ -123,6 +154,22 @@ def summarize_source_plan_grounding(chunks: list[dict[str, Any]]) -> dict[str, f
             neighbor_count += 1
         elif role == "hint_only":
             hint_only_count += 1
+        granularity = (
+            evidence.get("granularity") if isinstance(evidence.get("granularity"), list) else []
+        )
+        normalized_granularity = {
+            str(value).strip()
+            for value in granularity
+            if str(value).strip()
+        }
+        if "symbol" in normalized_granularity:
+            symbol_count += 1
+        if "signature" in normalized_granularity:
+            signature_count += 1
+        if "skeleton" in normalized_granularity:
+            skeleton_count += 1
+        if "robust_signature" in normalized_granularity:
+            robust_signature_count += 1
 
     return {
         "direct_count": float(direct_count),
@@ -131,6 +178,14 @@ def summarize_source_plan_grounding(chunks: list[dict[str, Any]]) -> dict[str, f
         "direct_ratio": float(direct_count) / float(total),
         "neighbor_context_ratio": float(neighbor_count) / float(total),
         "hint_only_ratio": float(hint_only_count) / float(total),
+        "symbol_count": float(symbol_count),
+        "signature_count": float(signature_count),
+        "skeleton_count": float(skeleton_count),
+        "robust_signature_count": float(robust_signature_count),
+        "symbol_ratio": float(symbol_count) / float(total),
+        "signature_ratio": float(signature_count) / float(total),
+        "skeleton_ratio": float(skeleton_count) / float(total),
+        "robust_signature_ratio": float(robust_signature_count) / float(total),
     }
 
 

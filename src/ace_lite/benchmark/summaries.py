@@ -18,10 +18,13 @@ from ace_lite.benchmark.summary_quality import (
     build_evidence_insufficiency_summary as _build_evidence_insufficiency_summary_impl,
     build_feedback_loop_summary as _build_feedback_loop_summary_impl,
     build_feedback_observability_summary as _build_feedback_observability_summary_impl,
+    build_missing_context_risk_summary as _build_missing_context_risk_summary_impl,
     build_preference_observability_summary as _build_preference_observability_summary_impl,
     build_retrieval_context_observability_summary as _build_retrieval_context_observability_summary_impl,
     build_slo_budget_summary as _build_slo_budget_summary_impl,
     build_stage_latency_summary as _build_stage_latency_summary_impl,
+    is_risk_upgrade_case as _is_risk_upgrade_case_impl,
+    summarize_missing_context_risk_case as _summarize_missing_context_risk_case_impl,
 )
 from ace_lite.benchmark.summary_router import (
     build_adaptive_router_arm_summary as _build_adaptive_router_arm_summary_impl,
@@ -249,9 +252,62 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         float(item.get("plan_replay_cache_stale_hit_safe", 0.0))
         for item in case_results
     ]
+    adaptive_router_enabled_cases = [
+        item
+        for item in case_results
+        if float(item.get("router_enabled", 0.0) or 0.0) > 0.0
+    ]
+    adaptive_router_shadow_cases = [
+        item
+        for item in adaptive_router_enabled_cases
+        if str(item.get("router_shadow_arm_id") or "").strip()
+    ]
+    elevated_risk_cases = [
+        item
+        for item in case_results
+        if isinstance(item, dict)
+        and _summarize_missing_context_risk_case_impl(item)[0]
+        and _summarize_missing_context_risk_case_impl(item)[2] in {"elevated", "high"}
+    ]
+    risk_upgrade_cases = [
+        item for item in elevated_risk_cases if _is_risk_upgrade_case_impl(item)
+    ]
+    risk_baseline_cases = [
+        item for item in elevated_risk_cases if not _is_risk_upgrade_case_impl(item)
+    ]
     validation_counts = [float(item.get("validation_test_count", 0.0)) for item in case_results]
     source_plan_direct_ratios = [
         float(item.get("source_plan_direct_evidence_ratio", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_symbol_counts = [
+        float(item.get("source_plan_symbol_count", 0.0) or 0.0) for item in case_results
+    ]
+    source_plan_signature_counts = [
+        float(item.get("source_plan_signature_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_skeleton_counts = [
+        float(item.get("source_plan_skeleton_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_robust_signature_counts = [
+        float(item.get("source_plan_robust_signature_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_symbol_ratios = [
+        float(item.get("source_plan_symbol_ratio", 0.0) or 0.0) for item in case_results
+    ]
+    source_plan_signature_ratios = [
+        float(item.get("source_plan_signature_ratio", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_skeleton_ratios = [
+        float(item.get("source_plan_skeleton_ratio", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_robust_signature_ratios = [
+        float(item.get("source_plan_robust_signature_ratio", 0.0) or 0.0)
         for item in case_results
     ]
     source_plan_neighbor_context_ratios = [
@@ -272,6 +328,10 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     ]
     source_plan_graph_closure_preferred_counts = [
         float(item.get("source_plan_graph_closure_preferred_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_granularity_preferred_counts = [
+        float(item.get("source_plan_granularity_preferred_count", 0.0) or 0.0)
         for item in case_results
     ]
     source_plan_focused_file_promoted_counts = [
@@ -416,6 +476,45 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         for item in dev_feedback_resolution_cases
     )
     embedding_enabled = [float(item.get("embedding_enabled", 0.0)) for item in case_results]
+    multi_channel_rrf_enabled = [
+        float(item.get("multi_channel_rrf_enabled", 0.0) or 0.0)
+        for item in case_results
+    ]
+    multi_channel_rrf_applied = [
+        float(item.get("multi_channel_rrf_applied", 0.0) or 0.0)
+        for item in case_results
+    ]
+    multi_channel_rrf_granularity_counts = [
+        float(item.get("multi_channel_rrf_granularity_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    multi_channel_rrf_pool_sizes = [
+        float(item.get("multi_channel_rrf_pool_size", 0.0) or 0.0)
+        for item in case_results
+    ]
+    multi_channel_rrf_granularity_pool_ratios = [
+        float(item.get("multi_channel_rrf_granularity_pool_ratio", 0.0) or 0.0)
+        for item in case_results
+    ]
+    native_scip_loaded = [
+        float(item.get("native_scip_loaded", 0.0) or 0.0) for item in case_results
+    ]
+    native_scip_document_counts = [
+        float(item.get("native_scip_document_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    native_scip_definition_occurrence_counts = [
+        float(item.get("native_scip_definition_occurrence_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    native_scip_reference_occurrence_counts = [
+        float(item.get("native_scip_reference_occurrence_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    native_scip_symbol_definition_counts = [
+        float(item.get("native_scip_symbol_definition_count", 0.0) or 0.0)
+        for item in case_results
+    ]
     embedding_similarity_means = [
         float(item.get("embedding_similarity_mean", 0.0)) for item in case_results
     ]
@@ -493,6 +592,32 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "docs_enabled_ratio": mean(docs_enabled),
         "docs_hit_ratio": mean(docs_hits),
         "hint_inject_ratio": mean(hint_injects),
+        "multi_channel_rrf_enabled_ratio": mean(multi_channel_rrf_enabled),
+        "multi_channel_rrf_applied_ratio": mean(multi_channel_rrf_applied),
+        "multi_channel_rrf_granularity_count_mean": mean(
+            multi_channel_rrf_granularity_counts
+        ),
+        "multi_channel_rrf_pool_size_mean": mean(multi_channel_rrf_pool_sizes),
+        "multi_channel_rrf_granularity_pool_ratio": mean(
+            multi_channel_rrf_granularity_pool_ratios
+        ),
+        "multi_channel_rrf_granularity_case_ratio": mean(
+            [
+                1.0 if value > 0.0 else 0.0
+                for value in multi_channel_rrf_granularity_counts
+            ]
+        ),
+        "native_scip_loaded_rate": mean(native_scip_loaded),
+        "native_scip_document_count_mean": mean(native_scip_document_counts),
+        "native_scip_definition_occurrence_count_mean": mean(
+            native_scip_definition_occurrence_counts
+        ),
+        "native_scip_reference_occurrence_count_mean": mean(
+            native_scip_reference_occurrence_counts
+        ),
+        "native_scip_symbol_definition_count_mean": mean(
+            native_scip_symbol_definition_counts
+        ),
         "dependency_recall": mean(dependencies),
         "memory_latency_p95_ms": _p95(memory_latencies),
         "index_latency_p95_ms": _p95(index_latencies),
@@ -593,8 +718,35 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "plan_replay_cache_stale_hit_safe_ratio": mean(
             plan_replay_cache_stale_hit_safe
         ),
+        "adaptive_router_shadow_coverage": (
+            float(len(adaptive_router_shadow_cases))
+            / float(len(adaptive_router_enabled_cases))
+            if adaptive_router_enabled_cases
+            else 0.0
+        ),
+        "risk_upgrade_precision_gain": (
+            mean(float(item.get("precision_at_k", 0.0) or 0.0) for item in risk_upgrade_cases)
+            - mean(
+                float(item.get("precision_at_k", 0.0) or 0.0)
+                for item in risk_baseline_cases
+            )
+            if risk_upgrade_cases and risk_baseline_cases
+            else 0.0
+        ),
         "validation_test_count": mean(validation_counts),
         "source_plan_direct_evidence_ratio": mean(source_plan_direct_ratios),
+        "source_plan_symbol_count_mean": mean(source_plan_symbol_counts),
+        "source_plan_signature_count_mean": mean(source_plan_signature_counts),
+        "source_plan_skeleton_count_mean": mean(source_plan_skeleton_counts),
+        "source_plan_robust_signature_count_mean": mean(
+            source_plan_robust_signature_counts
+        ),
+        "source_plan_symbol_ratio": mean(source_plan_symbol_ratios),
+        "source_plan_signature_ratio": mean(source_plan_signature_ratios),
+        "source_plan_skeleton_ratio": mean(source_plan_skeleton_ratios),
+        "source_plan_robust_signature_ratio": mean(
+            source_plan_robust_signature_ratios
+        ),
         "source_plan_neighbor_context_ratio": mean(
             source_plan_neighbor_context_ratios
         ),
@@ -607,6 +759,9 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         ),
         "source_plan_graph_closure_preferred_count_mean": mean(
             source_plan_graph_closure_preferred_counts
+        ),
+        "source_plan_granularity_preferred_count_mean": mean(
+            source_plan_granularity_preferred_counts
         ),
         "source_plan_focused_file_promoted_count_mean": mean(
             source_plan_focused_file_promoted_counts
@@ -722,10 +877,79 @@ def compare_metrics(
     }
 
 
+def build_retrieval_control_plane_gate_summary(
+    *,
+    metrics: dict[str, Any],
+    regression: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized_metrics = normalize_metrics(metrics)
+    regression_payload = regression if isinstance(regression, dict) else {}
+    failed_checks_raw = regression_payload.get("failed_checks", [])
+    failed_checks = (
+        [str(item) for item in failed_checks_raw if str(item).strip()]
+        if isinstance(failed_checks_raw, list)
+        else []
+    )
+    regression_evaluated = bool(regression_payload)
+    benchmark_regression_detected = bool(regression_payload.get("regressed", False))
+    adaptive_router_shadow_coverage = float(
+        normalized_metrics.get("adaptive_router_shadow_coverage", 0.0) or 0.0
+    )
+    risk_upgrade_precision_gain = float(
+        normalized_metrics.get("risk_upgrade_precision_gain", 0.0) or 0.0
+    )
+    latency_p95_ms = float(normalized_metrics.get("latency_p95_ms", 0.0) or 0.0)
+
+    shadow_coverage_threshold = 0.8
+    risk_upgrade_precision_gain_threshold = 0.0
+    latency_p95_ms_threshold = 850.0
+
+    benchmark_regression_passed = (
+        regression_evaluated and not benchmark_regression_detected
+    )
+    shadow_coverage_passed = (
+        adaptive_router_shadow_coverage >= shadow_coverage_threshold
+    )
+    risk_upgrade_precision_gain_passed = (
+        risk_upgrade_precision_gain >= risk_upgrade_precision_gain_threshold
+    )
+    latency_p95_ms_passed = latency_p95_ms <= latency_p95_ms_threshold
+
+    return {
+        "regression_evaluated": regression_evaluated,
+        "benchmark_regression_detected": benchmark_regression_detected,
+        "benchmark_regression_passed": benchmark_regression_passed,
+        "failed_checks": failed_checks,
+        "adaptive_router_shadow_coverage": round(adaptive_router_shadow_coverage, 6),
+        "adaptive_router_shadow_coverage_threshold": shadow_coverage_threshold,
+        "adaptive_router_shadow_coverage_passed": shadow_coverage_passed,
+        "risk_upgrade_precision_gain": round(risk_upgrade_precision_gain, 6),
+        "risk_upgrade_precision_gain_threshold": (
+            risk_upgrade_precision_gain_threshold
+        ),
+        "risk_upgrade_precision_gain_passed": risk_upgrade_precision_gain_passed,
+        "latency_p95_ms": round(latency_p95_ms, 6),
+        "latency_p95_ms_threshold": latency_p95_ms_threshold,
+        "latency_p95_ms_passed": latency_p95_ms_passed,
+        "gate_passed": (
+            benchmark_regression_passed
+            and shadow_coverage_passed
+            and risk_upgrade_precision_gain_passed
+            and latency_p95_ms_passed
+        ),
+    }
+
+
 def build_evidence_insufficiency_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return _build_evidence_insufficiency_summary_impl(case_results)
+
+
+def build_missing_context_risk_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return _build_missing_context_risk_summary_impl(case_results)
 
 
 def build_chunk_stage_miss_summary(
@@ -866,8 +1090,10 @@ __all__ = [
     "build_evidence_insufficiency_summary",
     "build_feedback_loop_summary",
     "build_feedback_observability_summary",
+    "build_missing_context_risk_summary",
     "build_ltm_explainability_summary",
     "build_preference_observability_summary",
+    "build_retrieval_control_plane_gate_summary",
     "build_retrieval_context_observability_summary",
     "build_slo_budget_summary",
     "build_stage_latency_summary",

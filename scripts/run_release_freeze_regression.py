@@ -926,7 +926,15 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
 
     metrics_raw = payload.get("metrics")
     metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
-    return {
+    retrieval_control_plane_gate_summary_raw = payload.get(
+        "retrieval_control_plane_gate_summary"
+    )
+    retrieval_control_plane_gate_summary = (
+        retrieval_control_plane_gate_summary_raw
+        if isinstance(retrieval_control_plane_gate_summary_raw, dict)
+        else {}
+    )
+    summary = {
         "path": str(summary_path),
         "repo": str(payload.get("repo", "") or ""),
         "case_count": max(0, int(payload.get("case_count", 0) or 0)),
@@ -942,6 +950,26 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
             if isinstance(key, str)
         },
     }
+    gate_summary = {
+            str(key): (
+                bool(value)
+                if isinstance(value, bool)
+                else (
+                    float(value)
+                    if isinstance(value, (int, float))
+                    else (
+                        [str(item) for item in value if str(item).strip()]
+                        if isinstance(value, list)
+                        else value
+                    )
+                )
+            )
+            for key, value in retrieval_control_plane_gate_summary.items()
+            if isinstance(key, str)
+    }
+    if gate_summary:
+        summary["retrieval_control_plane_gate_summary"] = gate_summary
+    return summary
 
 
 def _build_metric_delta(
@@ -2305,6 +2333,89 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                             previous_metrics.get("missing_validation_rate", 0.0)
                             or 0.0
                         ),
+                    )
+                )
+            gate_summary_raw = validation_rich.get("retrieval_control_plane_gate_summary")
+            gate_summary = (
+                gate_summary_raw if isinstance(gate_summary_raw, dict) else {}
+            )
+            if gate_summary:
+                gate_failed_checks_raw = gate_summary.get("failed_checks")
+                gate_failed_checks = (
+                    gate_failed_checks_raw
+                    if isinstance(gate_failed_checks_raw, list)
+                    else []
+                )
+                lines.append(
+                    "- Q2 retrieval control plane gate: passed={passed}, regression_evaluated={evaluated}, regression_detected={detected}, shadow_coverage={shadow:.4f}, risk_upgrade_gain={gain:.4f}, latency_p95_ms={latency:.2f}, failed_checks={failed_checks}".format(
+                        passed=bool(gate_summary.get("gate_passed", False)),
+                        evaluated=bool(gate_summary.get("regression_evaluated", False)),
+                        detected=bool(
+                            gate_summary.get("benchmark_regression_detected", False)
+                        ),
+                        shadow=float(
+                            gate_summary.get("adaptive_router_shadow_coverage", 0.0)
+                            or 0.0
+                        ),
+                        gain=float(
+                            gate_summary.get("risk_upgrade_precision_gain", 0.0) or 0.0
+                        ),
+                        latency=float(gate_summary.get("latency_p95_ms", 0.0) or 0.0),
+                        failed_checks=",".join(
+                            str(item) for item in gate_failed_checks if str(item).strip()
+                        )
+                        or "(none)",
+                    )
+                )
+            previous_gate_summary_raw = validation_rich.get(
+                "previous_retrieval_control_plane_gate_summary"
+            )
+            previous_gate_summary = (
+                previous_gate_summary_raw
+                if isinstance(previous_gate_summary_raw, dict)
+                else {}
+            )
+            if previous_gate_summary:
+                previous_gate_failed_checks_raw = previous_gate_summary.get(
+                    "failed_checks"
+                )
+                previous_gate_failed_checks = (
+                    previous_gate_failed_checks_raw
+                    if isinstance(previous_gate_failed_checks_raw, list)
+                    else []
+                )
+                lines.append(
+                    "- Previous Q2 retrieval control plane gate: passed={passed}, regression_evaluated={evaluated}, regression_detected={detected}, shadow_coverage={shadow:.4f}, risk_upgrade_gain={gain:.4f}, latency_p95_ms={latency:.2f}, failed_checks={failed_checks}".format(
+                        passed=bool(previous_gate_summary.get("gate_passed", False)),
+                        evaluated=bool(
+                            previous_gate_summary.get("regression_evaluated", False)
+                        ),
+                        detected=bool(
+                            previous_gate_summary.get(
+                                "benchmark_regression_detected", False
+                            )
+                        ),
+                        shadow=float(
+                            previous_gate_summary.get(
+                                "adaptive_router_shadow_coverage", 0.0
+                            )
+                            or 0.0
+                        ),
+                        gain=float(
+                            previous_gate_summary.get(
+                                "risk_upgrade_precision_gain", 0.0
+                            )
+                            or 0.0
+                        ),
+                        latency=float(
+                            previous_gate_summary.get("latency_p95_ms", 0.0) or 0.0
+                        ),
+                        failed_checks=",".join(
+                            str(item)
+                            for item in previous_gate_failed_checks
+                            if str(item).strip()
+                        )
+                        or "(none)",
                     )
                 )
             delta_raw = validation_rich.get("delta")
@@ -4366,9 +4477,31 @@ def main() -> int:
                 if isinstance(validation_rich_summary.get("metrics"), dict)
                 else {}
             ),
+            "retrieval_control_plane_gate_summary": (
+                validation_rich_summary.get("retrieval_control_plane_gate_summary", {})
+                if isinstance(
+                    validation_rich_summary.get(
+                        "retrieval_control_plane_gate_summary", {}
+                    ),
+                    dict,
+                )
+                else {}
+            ),
             "previous_metrics": (
                 validation_rich_previous_summary.get("metrics", {})
                 if isinstance(validation_rich_previous_summary.get("metrics"), dict)
+                else {}
+            ),
+            "previous_retrieval_control_plane_gate_summary": (
+                validation_rich_previous_summary.get(
+                    "retrieval_control_plane_gate_summary", {}
+                )
+                if isinstance(
+                    validation_rich_previous_summary.get(
+                        "retrieval_control_plane_gate_summary", {}
+                    ),
+                    dict,
+                )
                 else {}
             ),
             "delta": validation_rich_delta,

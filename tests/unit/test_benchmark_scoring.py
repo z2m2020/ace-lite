@@ -7,6 +7,8 @@ from ace_lite.benchmark.scoring import (
     build_comparison_lane_summary,
     build_feedback_loop_summary,
     build_ltm_explainability_summary,
+    build_missing_context_risk_summary,
+    build_retrieval_control_plane_gate_summary,
     compare_metrics,
     detect_regression,
     evaluate_case_result,
@@ -68,9 +70,25 @@ def test_evaluate_case_result_and_aggregate() -> None:
                 "docs_section_count": 2,
                 "docs_injected_count": 1,
             },
-            "docs": {"enabled": True, "section_count": 2},
-            "embeddings": {
-                "enabled": True,
+                "docs": {"enabled": True, "section_count": 2},
+                "candidate_ranking": {
+                    "multi_channel_rrf_enabled": True,
+                    "multi_channel_rrf_applied": True,
+                    "multi_channel_rrf_granularity_count": 2,
+                    "multi_channel_rrf_pool_size": 5,
+                    "multi_channel_rrf_granularity_pool_ratio": 0.4,
+                },
+                "scip": {
+                    "enabled": True,
+                    "loaded": True,
+                    "provider": "scip",
+                    "document_count": 5,
+                    "definition_occurrence_count": 7,
+                    "reference_occurrence_count": 11,
+                    "symbol_definition_count": 3,
+                },
+                "embeddings": {
+                    "enabled": True,
                 "cache_hit": True,
                 "similarity_mean": 0.42,
                 "similarity_max": 0.88,
@@ -106,11 +124,20 @@ def test_evaluate_case_result_and_aggregate() -> None:
                 "direct_ratio": 1.0,
                 "neighbor_context_ratio": 0.0,
                 "hint_only_ratio": 0.0,
+                "symbol_count": 1.0,
+                "signature_count": 1.0,
+                "skeleton_count": 1.0,
+                "robust_signature_count": 1.0,
+                "symbol_ratio": 1.0,
+                "signature_ratio": 1.0,
+                "skeleton_ratio": 1.0,
+                "robust_signature_ratio": 1.0,
             },
             "packing": {
                 "graph_closure_preference_enabled": True,
                 "graph_closure_bonus_candidate_count": 2,
                 "graph_closure_preferred_count": 1,
+                "granularity_preferred_count": 1,
                 "focused_file_promoted_count": 1,
                 "packed_path_count": 2,
                 "reason": "graph_closure_preferred",
@@ -187,6 +214,14 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert row["source_plan_direct_evidence_ratio"] == 1.0
     assert row["source_plan_neighbor_context_ratio"] == 0.0
     assert row["source_plan_hint_only_ratio"] == 0.0
+    assert row["source_plan_symbol_count"] == 1.0
+    assert row["source_plan_signature_count"] == 1.0
+    assert row["source_plan_skeleton_count"] == 1.0
+    assert row["source_plan_robust_signature_count"] == 1.0
+    assert row["source_plan_symbol_ratio"] == 1.0
+    assert row["source_plan_signature_ratio"] == 1.0
+    assert row["source_plan_skeleton_ratio"] == 1.0
+    assert row["source_plan_robust_signature_ratio"] == 1.0
     assert row["robust_signature_count"] == 1.0
     assert row["robust_signature_coverage_ratio"] == 0.5
     assert row["graph_prior_chunk_count"] == 1.0
@@ -207,6 +242,7 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert row["source_plan_graph_closure_preference_enabled"] == 1.0
     assert row["source_plan_graph_closure_bonus_candidate_count"] == 2.0
     assert row["source_plan_graph_closure_preferred_count"] == 1.0
+    assert row["source_plan_granularity_preferred_count"] == 1.0
     assert row["source_plan_focused_file_promoted_count"] == 1.0
     assert row["source_plan_packed_path_count"] == 2.0
     assert row["memory_latency_ms"] == 0.0
@@ -249,6 +285,14 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "direct_ratio": 1.0,
         "neighbor_context_ratio": 0.0,
         "hint_only_ratio": 0.0,
+        "symbol_count": 1.0,
+        "signature_count": 1.0,
+        "skeleton_count": 1.0,
+        "robust_signature_count": 1.0,
+        "symbol_ratio": 1.0,
+        "signature_ratio": 1.0,
+        "skeleton_ratio": 1.0,
+        "robust_signature_ratio": 1.0,
     }
     assert row["skills_budget"] == {
         "selected_count": 1,
@@ -284,10 +328,25 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "support_edge_count": 3,
         "total": 0.14,
     }
+    assert row["index_fusion_granularity"] == {
+        "enabled": True,
+        "applied": True,
+        "granularity_count": 2,
+        "pool_size": 5,
+        "granularity_pool_ratio": 0.4,
+    }
+    assert row["native_scip"] == {
+        "loaded": True,
+        "document_count": 5,
+        "definition_occurrence_count": 7,
+        "reference_occurrence_count": 11,
+        "symbol_definition_count": 3,
+    }
     assert row["source_plan_packing"] == {
         "graph_closure_preference_enabled": True,
         "graph_closure_bonus_candidate_count": 2,
         "graph_closure_preferred_count": 1,
+        "granularity_preferred_count": 1,
         "focused_file_promoted_count": 1,
         "packed_path_count": 2,
         "packed_path_ratio": 1.0,
@@ -330,10 +389,21 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "utility_rate",
         "noise_rate",
         "memory_helpful_task_success_rate",
-        "docs_enabled_ratio",
-        "docs_hit_ratio",
-        "hint_inject_ratio",
-        "dependency_recall",
+            "docs_enabled_ratio",
+            "docs_hit_ratio",
+            "hint_inject_ratio",
+            "multi_channel_rrf_enabled_ratio",
+            "multi_channel_rrf_applied_ratio",
+            "multi_channel_rrf_granularity_count_mean",
+            "multi_channel_rrf_pool_size_mean",
+            "multi_channel_rrf_granularity_pool_ratio",
+            "multi_channel_rrf_granularity_case_ratio",
+            "native_scip_loaded_rate",
+            "native_scip_document_count_mean",
+            "native_scip_definition_occurrence_count_mean",
+            "native_scip_reference_occurrence_count_mean",
+            "native_scip_symbol_definition_count_mean",
+            "dependency_recall",
         "memory_latency_p95_ms",
         "index_latency_p95_ms",
         "repomap_latency_p95_ms",
@@ -403,13 +473,24 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "plan_replay_cache_stale_hit_safe_ratio",
         "validation_test_count",
         "source_plan_direct_evidence_ratio",
+        "source_plan_symbol_count_mean",
+        "source_plan_signature_count_mean",
+        "source_plan_skeleton_count_mean",
+        "source_plan_robust_signature_count_mean",
+        "source_plan_symbol_ratio",
+        "source_plan_signature_ratio",
+        "source_plan_skeleton_ratio",
+        "source_plan_robust_signature_ratio",
         "source_plan_neighbor_context_ratio",
         "source_plan_hint_only_ratio",
         "source_plan_graph_closure_preference_enabled_ratio",
         "source_plan_graph_closure_bonus_candidate_count_mean",
         "source_plan_graph_closure_preferred_count_mean",
+        "source_plan_granularity_preferred_count_mean",
         "source_plan_focused_file_promoted_count_mean",
         "source_plan_packed_path_count_mean",
+        "adaptive_router_shadow_coverage",
+        "risk_upgrade_precision_gain",
         "evidence_insufficient_rate",
         "no_candidate_rate",
         "low_support_chunk_rate",
@@ -450,7 +531,13 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "xref_budget_exhausted_ratio",
         "slo_downgrade_case_rate",
     }
-
+    assert metrics["adaptive_router_shadow_coverage"] == 0.0
+    assert metrics["risk_upgrade_precision_gain"] == 0.0
+    assert metrics["native_scip_loaded_rate"] == 1.0
+    assert metrics["native_scip_document_count_mean"] == 5.0
+    assert metrics["native_scip_definition_occurrence_count_mean"] == 7.0
+    assert metrics["native_scip_reference_occurrence_count_mean"] == 11.0
+    assert metrics["native_scip_symbol_definition_count_mean"] == 3.0
 
     assert metrics["latency_p95_ms"] == 12.5
     assert metrics["latency_median_ms"] == 12.5
@@ -514,6 +601,7 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["source_plan_graph_closure_preference_enabled_ratio"] == 1.0
     assert metrics["source_plan_graph_closure_bonus_candidate_count_mean"] == 2.0
     assert metrics["source_plan_graph_closure_preferred_count_mean"] == 1.0
+    assert metrics["source_plan_granularity_preferred_count_mean"] == 1.0
     assert metrics["source_plan_focused_file_promoted_count_mean"] == 1.0
     assert metrics["source_plan_packed_path_count_mean"] == 2.0
     assert metrics["source_plan_neighbor_context_ratio"] == 0.0
@@ -932,6 +1020,46 @@ def test_build_comparison_lane_summary_groups_chunk_guard_signals() -> None:
     assert stale_majority["chunk_guard_report_only_improved_rate"] == 0.5
     assert stale_majority["chunk_guard_expected_filtered_hit_rate_mean"] == 0.5
     assert stale_majority["chunk_guard_pairwise_conflict_count_mean"] == 2.0
+
+
+def test_missing_context_risk_summary_reports_risk_upgrade_precision_gain() -> None:
+    summary = build_missing_context_risk_summary(
+        [
+            {
+                "task_success_mode": "positive",
+                "recall_hit": 1.0,
+                "chunk_hit_at_k": 0.0,
+                "noise_rate": 0.0,
+                "evidence_insufficient": 1.0,
+                "precision_at_k": 1.0,
+                "decision_trace": [
+                    {
+                        "stage": "index",
+                        "action": "retry",
+                        "target": "deterministic_refine",
+                        "reason": "low_candidate_count",
+                        "outcome": "applied",
+                    }
+                ],
+            },
+            {
+                "task_success_mode": "positive",
+                "recall_hit": 1.0,
+                "chunk_hit_at_k": 0.0,
+                "noise_rate": 0.0,
+                "evidence_insufficient": 1.0,
+                "precision_at_k": 0.25,
+                "decision_trace": [],
+            },
+        ]
+    )
+
+    assert summary["elevated_case_count"] == 2
+    assert summary["risk_upgrade_case_count"] == 1
+    assert summary["risk_upgrade_case_rate"] == 0.5
+    assert summary["risk_upgrade_precision_mean"] == 1.0
+    assert summary["risk_baseline_precision_mean"] == 0.25
+    assert summary["risk_upgrade_precision_gain"] == 0.75
 
 
 def test_evaluate_case_result_tracks_chunk_guard_expectation_hits() -> None:
@@ -1728,6 +1856,11 @@ def test_evaluate_case_result_extracts_memory_metrics() -> None:
                 "feedback_matched_event_count": 2,
                 "feedback_boosted_count": 1,
                 "feedback_boosted_paths": 1,
+                "multi_channel_rrf_enabled": True,
+                "multi_channel_rrf_applied": True,
+                "multi_channel_rrf_granularity_count": 2,
+                "multi_channel_rrf_pool_size": 5,
+                "multi_channel_rrf_granularity_pool_ratio": 0.4,
             },
         },
     }
@@ -1750,6 +1883,11 @@ def test_evaluate_case_result_extracts_memory_metrics() -> None:
     assert row["feedback_matched_event_count"] == 2.0
     assert row["feedback_boosted_count"] == 1.0
     assert row["feedback_boosted_paths"] == 1.0
+    assert row["multi_channel_rrf_enabled"] == 1.0
+    assert row["multi_channel_rrf_applied"] == 1.0
+    assert row["multi_channel_rrf_granularity_count"] == 2.0
+    assert row["multi_channel_rrf_pool_size"] == 5.0
+    assert row["multi_channel_rrf_granularity_pool_ratio"] == 0.4
 
 
 def test_detect_regression_for_memory_metric_drop() -> None:
@@ -2218,3 +2356,57 @@ def test_evaluate_case_result_reports_subgraph_payload_kpis() -> None:
     assert metrics["subgraph_seed_path_count_mean"] == 2.0
     assert metrics["subgraph_edge_type_count_mean"] == 3.0
     assert metrics["subgraph_edge_total_count_mean"] == 4.0
+
+
+def test_build_retrieval_control_plane_gate_summary_requires_regression_evidence() -> None:
+    summary = build_retrieval_control_plane_gate_summary(
+        metrics={
+            "adaptive_router_shadow_coverage": 0.91,
+            "risk_upgrade_precision_gain": 0.04,
+            "latency_p95_ms": 640.0,
+        },
+        regression=None,
+    )
+
+    assert summary == {
+        "regression_evaluated": False,
+        "benchmark_regression_detected": False,
+        "benchmark_regression_passed": False,
+        "failed_checks": [],
+        "adaptive_router_shadow_coverage": 0.91,
+        "adaptive_router_shadow_coverage_threshold": 0.8,
+        "adaptive_router_shadow_coverage_passed": True,
+        "risk_upgrade_precision_gain": 0.04,
+        "risk_upgrade_precision_gain_threshold": 0.0,
+        "risk_upgrade_precision_gain_passed": True,
+        "latency_p95_ms": 640.0,
+        "latency_p95_ms_threshold": 850.0,
+        "latency_p95_ms_passed": True,
+        "gate_passed": False,
+    }
+
+
+def test_build_retrieval_control_plane_gate_summary_reports_multi_check_failures() -> None:
+    summary = build_retrieval_control_plane_gate_summary(
+        metrics={
+            "adaptive_router_shadow_coverage": 0.74,
+            "risk_upgrade_precision_gain": -0.03,
+            "latency_p95_ms": 880.0,
+        },
+        regression={
+            "regressed": True,
+            "failed_checks": [
+                "precision_at_k",
+                "latency_p95_ms",
+            ],
+        },
+    )
+
+    assert summary["regression_evaluated"] is True
+    assert summary["benchmark_regression_detected"] is True
+    assert summary["benchmark_regression_passed"] is False
+    assert summary["adaptive_router_shadow_coverage_passed"] is False
+    assert summary["risk_upgrade_precision_gain_passed"] is False
+    assert summary["latency_p95_ms_passed"] is False
+    assert summary["failed_checks"] == ["precision_at_k", "latency_p95_ms"]
+    assert summary["gate_passed"] is False

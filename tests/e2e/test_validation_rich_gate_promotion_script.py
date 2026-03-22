@@ -40,6 +40,12 @@ def test_validation_rich_gate_promotion_reports_stay_report_only(tmp_path: Path)
                     "validation_test_count": 4.0,
                     "evidence_insufficient_rate": 0.2,
                     "missing_validation_rate": 0.2,
+                    "retrieval_control_plane_gate_summary": {
+                        "gate_passed": False,
+                        "regression_evaluated": True,
+                        "benchmark_regression_detected": True,
+                        "failed_checks": ["benchmark_regression_detected"],
+                    },
                 },
                 "failed_check_top3": [{"check": "precision_at_k", "count": 1}],
             }
@@ -70,7 +76,15 @@ def test_validation_rich_gate_promotion_reports_stay_report_only(tmp_path: Path)
     assert payload["recommendation"] == "stay_report_only"
     assert payload["eligible"] is False
     assert any("history_count" in reason for reason in payload["reasons"])
+    assert any(
+        "retrieval control plane gate is not passed" in reason
+        for reason in payload["reasons"]
+    )
     assert any("stability classification" in reason for reason in payload["reasons"])
+    assert any(
+        gate["name"] == "retrieval_control_plane" and gate["passed"] is False
+        for gate in payload["gates"]
+    )
 
 
 def test_validation_rich_gate_promotion_reports_eligible(tmp_path: Path) -> None:
@@ -92,6 +106,12 @@ def test_validation_rich_gate_promotion_reports_eligible(tmp_path: Path) -> None
                     "validation_test_count": 5.0,
                     "evidence_insufficient_rate": 0.0,
                     "missing_validation_rate": 0.0,
+                    "retrieval_control_plane_gate_summary": {
+                        "gate_passed": True,
+                        "regression_evaluated": True,
+                        "benchmark_regression_detected": False,
+                        "failed_checks": [],
+                    },
                 },
                 "failed_check_top3": [],
             }
@@ -129,6 +149,10 @@ def test_validation_rich_gate_promotion_reports_eligible(tmp_path: Path) -> None
     payload = json.loads((tmp_path / "decision.json").read_text(encoding="utf-8"))
     assert payload["recommendation"] == "eligible_for_enforced"
     assert payload["eligible"] is True
+    assert any(
+        gate["name"] == "retrieval_control_plane" and gate["passed"] is True
+        for gate in payload["gates"]
+    )
 
 
 def test_validation_rich_gate_promotion_treats_history_failed_checks_as_warning(
@@ -152,6 +176,12 @@ def test_validation_rich_gate_promotion_treats_history_failed_checks_as_warning(
                     "validation_test_count": 5.0,
                     "evidence_insufficient_rate": 0.0,
                     "missing_validation_rate": 0.0,
+                    "retrieval_control_plane_gate_summary": {
+                        "gate_passed": True,
+                        "regression_evaluated": True,
+                        "benchmark_regression_detected": False,
+                        "failed_checks": [],
+                    },
                 },
                 "failed_check_top3": [{"check": "latency_p95_ms", "count": 3}],
             }

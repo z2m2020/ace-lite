@@ -200,6 +200,32 @@ def read_benchmark_comparison_lane_metrics(
     return {}
 
 
+def read_benchmark_retrieval_control_plane_gate_summary(
+    results_path: Path,
+) -> dict[str, Any]:
+    payload = read_benchmark_results(results_path)
+    summary_raw = payload.get("retrieval_control_plane_gate_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return {}
+
+    normalized: dict[str, Any] = {}
+    for key, value in summary.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(value, bool):
+            normalized[key] = bool(value)
+            continue
+        if isinstance(value, (int, float)):
+            normalized[key] = float(value)
+            continue
+        if isinstance(value, list):
+            normalized[key] = [str(item) for item in value if str(item).strip()]
+            continue
+        normalized[key] = value
+    return normalized
+
+
 __all__ = [
     "CommandResult",
     "load_yaml",
@@ -207,6 +233,7 @@ __all__ = [
     "read_benchmark_case_routing_source",
     "read_benchmark_case_rows",
     "read_benchmark_comparison_lane_metrics",
+    "read_benchmark_retrieval_control_plane_gate_summary",
     "read_benchmark_metrics",
     "read_benchmark_results",
     "require_success",

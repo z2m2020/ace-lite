@@ -95,6 +95,7 @@ def test_shared_plan_runtime_config_helpers_support_validate_and_runtime_modes()
     )
     assert resolve_plan_replay_cache_path(" ") == "context-map/plan-replay/cache.json"
 
+    assert resolve_scip_provider("SCIP", field_name="scip.provider") == "scip"
     assert resolve_scip_provider("SCIP_LITE", field_name="scip.provider") == "scip_lite"
     assert resolve_scip_provider(None, default="auto", field_name="scip.provider") == "auto"
     with pytest.raises(ValueError, match="scip.provider"):

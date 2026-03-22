@@ -340,13 +340,36 @@ def build_adaptive_router_observability_summary(
     comparable_case_count = int(pair_summary.get("comparable_case_count", 0) or 0)
     disagreement_case_count = int(pair_summary.get("disagreement_case_count", 0) or 0)
     agreement_case_count = max(0, comparable_case_count - disagreement_case_count)
+    shadow_source_counts: dict[str, int] = {}
+    shadow_coverage_case_count = 0
+
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        if not bool(item.get("router_enabled", False)):
+            continue
+        shadow_arm_id = str(item.get("router_shadow_arm_id") or "").strip()
+        if not shadow_arm_id:
+            continue
+        shadow_coverage_case_count += 1
+        shadow_source = str(item.get("router_shadow_source") or "").strip() or "(unknown)"
+        shadow_source_counts[shadow_source] = (
+            shadow_source_counts.get(shadow_source, 0) + 1
+        )
 
     executed = arm_summary.get("executed", {})
     shadow = arm_summary.get("shadow", {})
+    enabled_case_count = int(arm_summary.get("enabled_case_count", 0) or 0)
     return {
         "case_count": int(arm_summary.get("case_count", 0) or 0),
-        "enabled_case_count": int(arm_summary.get("enabled_case_count", 0) or 0),
+        "enabled_case_count": enabled_case_count,
         "enabled_case_rate": float(arm_summary.get("enabled_case_rate", 0.0) or 0.0),
+        "shadow_coverage_case_count": shadow_coverage_case_count,
+        "shadow_coverage_rate": (
+            float(shadow_coverage_case_count) / float(enabled_case_count)
+            if enabled_case_count > 0
+            else 0.0
+        ),
         "comparable_case_count": comparable_case_count,
         "comparable_case_rate": float(pair_summary.get("comparable_case_rate", 0.0) or 0.0),
         "agreement_case_count": agreement_case_count,
@@ -359,6 +382,12 @@ def build_adaptive_router_observability_summary(
         "disagreement_rate": float(pair_summary.get("disagreement_rate", 0.0) or 0.0),
         "executed_arm_count": int(executed.get("arm_count", 0) or 0),
         "shadow_arm_count": int(shadow.get("arm_count", 0) or 0),
+        "shadow_source_counts": dict(
+            sorted(
+                shadow_source_counts.items(),
+                key=lambda item: (-int(item[1] or 0), str(item[0])),
+            )
+        ),
         "executed_arms": list(executed.get("arms", []))
         if isinstance(executed.get("arms"), list)
         else [],

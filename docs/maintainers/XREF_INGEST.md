@@ -6,7 +6,8 @@ ACE-Lite supports protocolized xref ingest through `scip` stage scoring.
 
 Use `--scip-provider` (or config `scip_provider`) with one of:
 
-- `auto` (default): tries `scip_lite -> xref_json -> stack_graphs_json`
+- `auto` (default): tries `scip -> scip_lite -> xref_json -> stack_graphs_json`
+- `scip`: JSON-serialized native SCIP `Index` payload with `documents` / `occurrences`
 - `scip_lite`
 - `xref_json`
 - `stack_graphs_json`
@@ -14,6 +15,28 @@ Use `--scip-provider` (or config `scip_provider`) with one of:
 `--scip-generate-fallback/--no-scip-generate-fallback` controls whether ACE-Lite generates local `scip-lite` index when the external ingest source is missing/invalid.
 
 ## Expected payload examples
+
+### scip
+
+```json
+{
+  "documents": [
+    {
+      "relative_path": "src/a.py",
+      "occurrences": [
+        {"symbol": "scip-python python demo src/a.py A#", "symbol_roles": 1},
+        {"symbol": "scip-python python demo src/b.py B#", "symbol_roles": 8}
+      ]
+    },
+    {
+      "relative_path": "src/b.py",
+      "occurrences": [
+        {"symbol": "scip-python python demo src/b.py B#", "symbol_roles": 1}
+      ]
+    }
+  ]
+}
+```
 
 ### xref_json
 

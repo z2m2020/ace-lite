@@ -5,6 +5,58 @@ from __future__ import annotations
 from typing import Any
 
 
+def _chunk_granularity_signals(item: dict[str, Any]) -> tuple[int, int, int, int, int]:
+    evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+    evidence_granularity = (
+        evidence.get("granularity") if isinstance(evidence.get("granularity"), list) else []
+    )
+    granularity = {
+        str(value).strip()
+        for value in evidence_granularity
+        if str(value).strip()
+    }
+
+    qualified_name = str(item.get("qualified_name") or "").strip()
+    kind = str(item.get("kind") or "").strip().lower()
+    if qualified_name or kind in {"function", "method", "class", "heading", "section"}:
+        granularity.add("symbol")
+    if str(item.get("signature") or "").strip():
+        granularity.add("signature")
+    if isinstance(item.get("skeleton"), dict) and item.get("skeleton"):
+        granularity.add("skeleton")
+    robust_signature = (
+        item.get("robust_signature_summary")
+        if isinstance(item.get("robust_signature_summary"), dict)
+        else {}
+    )
+    if robust_signature and bool(robust_signature.get("available", True)):
+        granularity.add("robust_signature")
+
+    return (
+        len(granularity),
+        1 if "skeleton" in granularity else 0,
+        1 if "signature" in granularity else 0,
+        1 if "robust_signature" in granularity else 0,
+        1 if "symbol" in granularity else 0,
+    )
+
+
+def _chunk_granularity_bias(item: dict[str, Any]) -> float:
+    """Return a tiny bias so richer chunks win only within a narrow score margin."""
+
+    signal_count, skeleton, signature, robust_signature, symbol = (
+        _chunk_granularity_signals(item)
+    )
+    return round(
+        (signal_count * 0.01)
+        + (skeleton * 0.004)
+        + (signature * 0.002)
+        + (robust_signature * 0.001)
+        + (symbol * 0.0005),
+        6,
+    )
+
+
 def rank_source_plan_chunks(
     *,
     suspicious_chunks: list[dict[str, Any]],
@@ -148,7 +200,8 @@ def rank_source_plan_chunks(
     ranked = [item for item in merged.values() if float(item.get("score") or 0.0) > 0.0]
     ranked.sort(
         key=lambda item: (
-            -float(item.get("score") or 0.0),
+            -(float(item.get("score") or 0.0) + _chunk_granularity_bias(item)),
+            tuple(-value for value in _chunk_granularity_signals(item)),
             str(item.get("path") or ""),
             int(item.get("lineno") or 0),
             str(item.get("qualified_name") or ""),
@@ -180,6 +233,7 @@ def pack_source_plan_chunks(
         "graph_closure_preference_enabled": enabled,
         "graph_closure_bonus_candidate_count": 0,
         "graph_closure_preferred_count": 0,
+        "granularity_preferred_count": 0,
         "focused_file_promoted_count": 0,
         "packed_path_count": 0,
         "reason": "no_candidates",
@@ -223,13 +277,15 @@ def pack_source_plan_chunks(
     used: set[tuple[str, int, int, str]] = set()
     packed_paths: set[str] = set()
     graph_closure_preferred_count = 0
+    granularity_preferred_count = 0
     focused_file_promoted_count = 0
 
     while len(packed) < limit:
         best_item: dict[str, Any] | None = None
-        best_sort_key: tuple[float, float, int, float, str, int, str] | None = None
+        best_sort_key: tuple[float, float, int, float, tuple[int, int, int, int, int], str, int, str] | None = None
         best_closure_pack = False
         best_focused_uncovered = False
+        best_priority_identity: tuple[float, float, int] | None = None
         for item in prioritized_chunks:
             if not isinstance(item, dict):
                 continue
@@ -247,11 +303,13 @@ def pack_source_plan_chunks(
             focused_uncovered = (
                 1.0 if path in focused_rank and path not in packed_paths else 0.0
             )
+            granularity_signals = _chunk_granularity_signals(item)
             sort_key = (
                 -closure_pack,
                 -focused_uncovered,
                 focused_rank.get(path, len(focused_rank) + 1024),
-                -float(item.get("score") or 0.0),
+                -(float(item.get("score") or 0.0) + _chunk_granularity_bias(item)),
+                tuple(-value for value in granularity_signals),
                 path,
                 int(item.get("lineno") or 0),
                 str(item.get("qualified_name") or ""),
@@ -261,8 +319,51 @@ def pack_source_plan_chunks(
                 best_item = item
                 best_closure_pack = closure_pack > 0.0
                 best_focused_uncovered = focused_uncovered > 0.0
+                best_priority_identity = (
+                    closure_pack,
+                    focused_uncovered,
+                    focused_rank.get(path, len(focused_rank) + 1024),
+                )
         if best_item is None:
             break
+        if (
+            best_priority_identity is not None
+            and _chunk_granularity_bias(best_item) > 0.0
+        ):
+            best_raw_score = float(best_item.get("score") or 0.0)
+            best_adjusted_score = best_raw_score + _chunk_granularity_bias(best_item)
+            for candidate in prioritized_chunks:
+                if not isinstance(candidate, dict):
+                    continue
+                candidate_key = chunk_key(candidate)
+                if candidate_key in used or candidate is best_item:
+                    continue
+                candidate_path = str(candidate.get("path") or "").strip()
+                if not candidate_path:
+                    continue
+                candidate_priority_identity = (
+                    1.0
+                    if enabled
+                    and packed
+                    and candidate_path in packed_paths
+                    and closure_bonus(candidate) > 0.0
+                    else 0.0,
+                    1.0
+                    if candidate_path in focused_rank and candidate_path not in packed_paths
+                    else 0.0,
+                    focused_rank.get(candidate_path, len(focused_rank) + 1024),
+                )
+                candidate_raw_score = float(candidate.get("score") or 0.0)
+                candidate_adjusted_score = (
+                    candidate_raw_score + _chunk_granularity_bias(candidate)
+                )
+                if (
+                    candidate_priority_identity == best_priority_identity
+                    and candidate_raw_score > best_raw_score
+                    and candidate_adjusted_score < best_adjusted_score
+                ):
+                    granularity_preferred_count += 1
+                    break
         key = chunk_key(best_item)
         packed.append(best_item)
         used.add(key)
@@ -276,6 +377,7 @@ def pack_source_plan_chunks(
         "graph_closure_preference_enabled": enabled,
         "graph_closure_bonus_candidate_count": int(graph_closure_bonus_candidate_count),
         "graph_closure_preferred_count": int(graph_closure_preferred_count),
+        "granularity_preferred_count": int(granularity_preferred_count),
         "focused_file_promoted_count": int(focused_file_promoted_count),
         "packed_path_count": int(len(packed_paths)),
         "reason": (

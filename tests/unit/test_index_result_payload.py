@@ -118,10 +118,22 @@ def _base_inputs() -> dict:
             "boosted_unique_paths": 0,
         },
         "multi_channel_fusion_payload": {
-            "enabled": False,
-            "applied": False,
-            "reason": "disabled",
-            "rrf_k": 0,
+            "enabled": True,
+            "applied": True,
+            "reason": "ok",
+            "rrf_k": 60,
+            "channels": {
+                "granularity": {
+                    "count": 2,
+                    "cap": 8,
+                    "top": ["src/auth.py", "src/session.py"],
+                }
+            },
+            "fused": {
+                "scored_count": 2,
+                "pool_size": 4,
+                "top": [],
+            },
         },
         "second_pass_payload": {
             "triggered": False,
@@ -221,9 +233,15 @@ def test_build_index_stage_result_limits_files_and_attaches_why() -> None:
     assert payload["candidate_chunks"][0]["why"].startswith("signals:")
     assert payload["context_budget"]["chunk_budget_used"] == 48
     assert payload["candidate_ranking"]["chunk_semantic_rerank_reason"] == "ok"
+    assert payload["candidate_ranking"]["multi_channel_rrf_granularity_count"] == 2
+    assert payload["candidate_ranking"]["multi_channel_rrf_pool_size"] == 4
+    assert payload["candidate_ranking"]["multi_channel_rrf_granularity_pool_ratio"] == 0.5
     assert payload["candidate_ranking"]["topological_shield"]["mode"] == "report_only"
     assert payload["chunk_guard"]["mode"] == "report_only"
     assert payload["metadata"]["selection_fingerprint"]
+    assert payload["metadata"]["multi_channel_rrf_granularity_count"] == 2
+    assert payload["metadata"]["multi_channel_rrf_pool_size"] == 4
+    assert payload["metadata"]["multi_channel_rrf_granularity_pool_ratio"] == 0.5
     assert payload["metadata"]["robust_signature_count"] == 1
     assert payload["metadata"]["robust_signature_coverage_ratio"] == 1.0
     assert payload["metadata"]["topological_shield_enabled"] is True
@@ -369,10 +387,22 @@ def test_build_index_stage_result_preserves_payload_contract() -> None:
     assert payload["embeddings"]["runtime_provider"] == "hash_cross"
     assert payload["feedback"]["reason"] == "disabled"
     assert payload["multi_channel_fusion"] == {
-        "enabled": False,
-        "applied": False,
-        "reason": "disabled",
-        "rrf_k": 0,
+        "enabled": True,
+        "applied": True,
+        "reason": "ok",
+        "rrf_k": 60,
+        "channels": {
+            "granularity": {
+                "count": 2,
+                "cap": 8,
+                "top": ["src/auth.py", "src/session.py"],
+            }
+        },
+        "fused": {
+            "scored_count": 2,
+            "pool_size": 4,
+            "top": [],
+        },
     }
     assert payload["topological_shield"]["selection_order_changed"] is False
     assert payload["chunk_guard"]["reason"] == "report_only"
@@ -403,13 +433,17 @@ def test_build_index_stage_result_normalizes_fusion_modes() -> None:
 def test_build_index_stage_result_preserves_shadow_router_metadata() -> None:
     inputs = _base_inputs()
     inputs["adaptive_router_payload"]["shadow_arm_id"] = "doc_intent_hybrid"
+    inputs["adaptive_router_payload"]["shadow_source"] = "model"
     inputs["adaptive_router_payload"]["shadow_confidence"] = 0.84
 
     payload = build_index_stage_result(**inputs)
 
     assert payload["adaptive_router"]["shadow_arm_id"] == "doc_intent_hybrid"
+    assert payload["adaptive_router"]["shadow_source"] == "model"
     assert payload["candidate_ranking"]["adaptive_router"]["shadow_arm_id"] == "doc_intent_hybrid"
+    assert payload["candidate_ranking"]["adaptive_router"]["shadow_source"] == "model"
     assert payload["metadata"]["router_shadow_arm_id"] == "doc_intent_hybrid"
+    assert payload["metadata"]["router_shadow_source"] == "model"
     assert payload["metadata"]["router_shadow_confidence"] == 0.84
 
 

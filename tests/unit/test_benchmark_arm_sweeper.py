@@ -166,6 +166,7 @@ def test_build_summary_orders_leaderboard_by_contract() -> None:
                 },
                 "task_success_summary": {"task_success_rate": 1.0},
                 "decision_observability_summary": {},
+                "retrieval_control_plane_gate_summary": {"gate_passed": True},
                 "results_json": "a",
                 "summary_json": "b",
                 "report_md": "c",
@@ -183,6 +184,7 @@ def test_build_summary_orders_leaderboard_by_contract() -> None:
                 },
                 "task_success_summary": {"task_success_rate": 0.5},
                 "decision_observability_summary": {},
+                "retrieval_control_plane_gate_summary": {"gate_passed": False},
                 "results_json": "d",
                 "summary_json": "e",
                 "report_md": "f",
@@ -199,3 +201,49 @@ def test_build_summary_orders_leaderboard_by_contract() -> None:
         "slower_better",
         "faster_worse",
     ]
+    assert summary["leaderboard"][0]["retrieval_control_plane_gate_summary"] == {
+        "gate_passed": True
+    }
+
+
+def test_render_summary_markdown_includes_q2_gate_column() -> None:
+    module = _load_script()
+    report = module.render_summary_markdown(
+        {
+            "generated_at": "2026-03-22T00:00:00Z",
+            "catalog": {"name": "default_v1"},
+            "cases_path": "benchmark/cases/default.yaml",
+            "best_arm_id": "slower_better",
+            "leaderboard": [
+                {
+                    "arm_id": "slower_better",
+                    "regressed": False,
+                    "metrics": {
+                        "task_success_rate": 1.0,
+                        "precision_at_k": 0.6,
+                        "noise_rate": 0.2,
+                        "latency_p95_ms": 20.0,
+                    },
+                    "task_success_summary": {"task_success_rate": 1.0},
+                    "retrieval_control_plane_gate_summary": {"gate_passed": True},
+                },
+                {
+                    "arm_id": "faster_worse",
+                    "regressed": False,
+                    "metrics": {
+                        "task_success_rate": 0.5,
+                        "precision_at_k": 0.9,
+                        "noise_rate": 0.1,
+                        "latency_p95_ms": 5.0,
+                    },
+                    "task_success_summary": {"task_success_rate": 0.5},
+                    "retrieval_control_plane_gate_summary": {"gate_passed": False},
+                },
+            ],
+            "oracle_relabel": {"case_count": 0, "oracle_distribution": {}},
+        }
+    )
+
+    assert "| Arm | task_success_rate | precision_at_k | noise_rate | latency_p95_ms | regressed | q2_gate |" in report
+    assert "| slower_better | 1.0000 | 0.6000 | 0.2000 | 20.00 | no | pass |" in report
+    assert "| faster_worse | 0.5000 | 0.9000 | 0.1000 | 5.00 | no | fail |" in report

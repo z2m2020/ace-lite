@@ -97,6 +97,14 @@ def evaluate_promotion(
     )
     latest_metrics = _extract_latest_metrics(trend_payload)
     threshold_failures = _evaluate_thresholds(metrics=latest_metrics, thresholds=thresholds)
+    retrieval_control_plane_gate_raw = trend_latest.get(
+        "retrieval_control_plane_gate_summary"
+    )
+    retrieval_control_plane_gate = (
+        retrieval_control_plane_gate_raw
+        if isinstance(retrieval_control_plane_gate_raw, dict)
+        else {}
+    )
 
     trend_ok = history_count >= max(1, int(min_history_count))
     if not trend_ok:
@@ -121,6 +129,33 @@ def evaluate_promotion(
             "historical_failed_checks": trend_failed_checks,
         }
     )
+
+    retrieval_control_plane_ok = True
+    retrieval_control_plane_summary: dict[str, Any] = {"present": False, "passed": True}
+    if retrieval_control_plane_gate:
+        retrieval_control_plane_ok = bool(
+            retrieval_control_plane_gate.get("gate_passed", False)
+        )
+        if not retrieval_control_plane_ok:
+            reasons.append("retrieval control plane gate is not passed")
+        retrieval_control_plane_summary = {
+            "present": True,
+            "passed": retrieval_control_plane_ok,
+            "regression_evaluated": bool(
+                retrieval_control_plane_gate.get("regression_evaluated", False)
+            ),
+            "benchmark_regression_detected": bool(
+                retrieval_control_plane_gate.get("benchmark_regression_detected", False)
+            ),
+            "failed_checks": [
+                str(item)
+                for item in retrieval_control_plane_gate.get("failed_checks", [])
+                if str(item).strip()
+            ]
+            if isinstance(retrieval_control_plane_gate.get("failed_checks"), list)
+            else [],
+        }
+    gates.append({"name": "retrieval_control_plane", **retrieval_control_plane_summary})
 
     classification = str(stability_payload.get("classification", "no_data") or "no_data")
     stability_ok = bool(stability_payload.get("passed", False)) and classification == "stable_pass"
@@ -177,6 +212,7 @@ def evaluate_promotion(
 
     eligible = (
         trend_ok
+        and retrieval_control_plane_ok
         and stability_ok
         and comparison_ok
         and not threshold_failures

@@ -33,6 +33,9 @@ def build_adaptive_router_payload(
         "shadow_arm_id": (
             str(shadow_payload.get("arm_id", "")).strip() if router_enabled else ""
         ),
+        "shadow_source": (
+            str(shadow_payload.get("source", "")).strip() if router_enabled else ""
+        ),
         "shadow_confidence": (
             float(shadow_payload.get("confidence", 0.0) or 0.0)
             if router_enabled

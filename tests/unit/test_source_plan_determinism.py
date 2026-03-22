@@ -105,6 +105,7 @@ def test_source_plan_packing_is_deterministic_across_repeated_rank_inputs() -> N
     assert expected_metadata["graph_closure_preference_enabled"] is True
     assert expected_metadata["graph_closure_bonus_candidate_count"] == 1
     assert expected_metadata["graph_closure_preferred_count"] == 1
+    assert expected_metadata["granularity_preferred_count"] == 0
     assert expected_metadata["focused_file_promoted_count"] == 2
     assert expected_metadata["packed_path_count"] == 2
     assert str(expected_metadata.get("reason") or "").strip()

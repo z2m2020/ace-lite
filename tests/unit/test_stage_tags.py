@@ -51,7 +51,19 @@ def test_index_stage_tags_include_adaptive_router_metadata() -> None:
             "embeddings": {},
             "feedback": {},
             "worktree_prior": {},
-            "multi_channel_fusion": {"enabled": False, "applied": False, "reason": ""},
+            "multi_channel_fusion": {
+                "enabled": True,
+                "applied": True,
+                "reason": "ok",
+                "channels": {
+                    "granularity": {
+                        "count": 2,
+                        "cap": 4,
+                        "top": ["src/app.py", "src/util.py"],
+                    }
+                },
+                "fused": {"pool_size": 4},
+            },
             "adaptive_router": {
                 "enabled": True,
                 "mode": "shadow",
@@ -60,6 +72,7 @@ def test_index_stage_tags_include_adaptive_router_metadata() -> None:
                 "source": "auto",
                 "confidence": 0.0,
                 "shadow_arm_id": "feature_graph",
+                "shadow_source": "fallback",
                 "shadow_confidence": 0.88,
                 "online_bandit": {
                     "requested": True,
@@ -84,6 +97,7 @@ def test_index_stage_tags_include_adaptive_router_metadata() -> None:
     assert tags["router_arm_id"] == "feature"
     assert tags["router_source"] == "auto"
     assert tags["router_shadow_arm_id"] == "feature_graph"
+    assert tags["router_shadow_source"] == "fallback"
     assert tags["router_shadow_confidence"] == 0.88
     assert tags["router_online_bandit_requested"] is True
     assert tags["router_experiment_enabled"] is True
@@ -109,6 +123,11 @@ def test_index_stage_tags_include_adaptive_router_metadata() -> None:
     assert tags["graph_closure_anchor_count"] == 1
     assert tags["graph_closure_support_edge_count"] == 2
     assert tags["graph_closure_total"] == 0.12
+    assert tags["multi_channel_rrf_enabled"] is True
+    assert tags["multi_channel_rrf_applied"] is True
+    assert tags["multi_channel_rrf_granularity_count"] == 2
+    assert tags["multi_channel_rrf_pool_size"] == 4
+    assert tags["multi_channel_rrf_granularity_pool_ratio"] == 0.5
 
 
 def test_source_plan_stage_tags_include_packing_observability() -> None:
@@ -126,6 +145,7 @@ def test_source_plan_stage_tags_include_packing_observability() -> None:
                 "graph_closure_preference_enabled": True,
                 "graph_closure_bonus_candidate_count": 2,
                 "graph_closure_preferred_count": 1,
+                "granularity_preferred_count": 1,
                 "focused_file_promoted_count": 3,
                 "packed_path_count": 3,
                 "reason": "ok",
@@ -152,6 +172,7 @@ def test_source_plan_stage_tags_include_packing_observability() -> None:
     assert tags["packing_graph_closure_preference_enabled"] is True
     assert tags["packing_graph_closure_bonus_candidate_count"] == 2
     assert tags["packing_graph_closure_preferred_count"] == 1
+    assert tags["packing_granularity_preferred_count"] == 1
     assert tags["packing_focused_file_promoted_count"] == 3
     assert tags["packing_packed_path_count"] == 3
     assert tags["packing_reason"] == "ok"

@@ -8,6 +8,183 @@ from typing import Any
 from ace_lite.benchmark.summary_common import PIPELINE_STAGE_ORDER, p95
 
 
+def summarize_missing_context_risk_case(item: dict[str, Any]) -> tuple[bool, float, str]:
+    mode = str(item.get("task_success_mode") or "").strip().lower() or "positive"
+    if mode == "negative_control":
+        return False, 0.0, ""
+
+    recall_hit = float(item.get("recall_hit", 0.0) or 0.0)
+    chunk_hit_at_k = float(item.get("chunk_hit_at_k", 0.0) or 0.0)
+    noise_rate = float(item.get("noise_rate", 0.0) or 0.0)
+    evidence_insufficient = float(item.get("evidence_insufficient", 0.0) or 0.0)
+    budget_exhausted = max(
+        float(item.get("skills_budget_exhausted", 0.0) or 0.0),
+        float(item.get("xref_budget_exhausted", 0.0) or 0.0),
+    )
+
+    score = 0.0
+    if recall_hit <= 0.0:
+        score += 0.35
+    if recall_hit > 0.0 and chunk_hit_at_k <= 0.0:
+        score += 0.25
+    if noise_rate > 0.0:
+        score += min(0.2, noise_rate * 0.2)
+    if evidence_insufficient > 0.0:
+        score += 0.25
+    if budget_exhausted > 0.0:
+        score += 0.15
+
+    score = max(0.0, min(1.0, score))
+    if score >= 0.75:
+        return True, score, "high"
+    if score >= 0.40:
+        return True, score, "elevated"
+    return True, score, "low"
+
+
+def is_risk_upgrade_case(item: dict[str, Any]) -> bool:
+    trace_raw = item.get("decision_trace", [])
+    decision_trace = trace_raw if isinstance(trace_raw, list) else []
+    for event in decision_trace:
+        if not isinstance(event, dict):
+            continue
+        if str(event.get("stage") or "").strip() != "index":
+            continue
+        if str(event.get("action") or "").strip() not in {"boost", "retry"}:
+            continue
+        return True
+    return False
+
+
+def build_missing_context_risk_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {
+            "case_count": 0,
+            "applicable_case_count": 0,
+            "excluded_negative_control_case_count": 0,
+            "elevated_case_count": 0,
+            "high_risk_case_count": 0,
+            "elevated_case_rate": 0.0,
+            "high_risk_case_rate": 0.0,
+            "risk_score_mean": 0.0,
+            "risk_score_p95": 0.0,
+            "risk_upgrade_case_count": 0,
+            "risk_upgrade_case_rate": 0.0,
+            "risk_upgrade_precision_mean": 0.0,
+            "risk_baseline_precision_mean": 0.0,
+            "risk_upgrade_precision_gain": 0.0,
+            "levels": {},
+            "signals": {},
+        }
+
+    applicable_case_count = 0
+    excluded_negative_control_case_count = 0
+    elevated_case_count = 0
+    high_risk_case_count = 0
+    risk_scores: list[float] = []
+    risk_upgrade_precisions: list[float] = []
+    risk_baseline_precisions: list[float] = []
+    levels: dict[str, int] = {}
+    signals: dict[str, int] = {}
+
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        applicable, score, level = summarize_missing_context_risk_case(item)
+        if not applicable:
+            excluded_negative_control_case_count += 1
+            continue
+
+        applicable_case_count += 1
+
+        recall_hit = float(item.get("recall_hit", 0.0) or 0.0)
+        chunk_hit_at_k = float(item.get("chunk_hit_at_k", 0.0) or 0.0)
+        noise_rate = float(item.get("noise_rate", 0.0) or 0.0)
+        evidence_insufficient = float(item.get("evidence_insufficient", 0.0) or 0.0)
+        budget_exhausted = max(
+            float(item.get("skills_budget_exhausted", 0.0) or 0.0),
+            float(item.get("xref_budget_exhausted", 0.0) or 0.0),
+        )
+
+        score = 0.0
+        if recall_hit <= 0.0:
+            score += 0.35
+            signals["recall_miss"] = signals.get("recall_miss", 0) + 1
+        if recall_hit > 0.0 and chunk_hit_at_k <= 0.0:
+            score += 0.25
+            signals["chunk_miss_after_recall"] = (
+                signals.get("chunk_miss_after_recall", 0) + 1
+            )
+        if noise_rate > 0.0:
+            score += min(0.2, noise_rate * 0.2)
+            signals["noisy_candidates"] = signals.get("noisy_candidates", 0) + 1
+        if evidence_insufficient > 0.0:
+            score += 0.25
+            signals["evidence_insufficient"] = (
+                signals.get("evidence_insufficient", 0) + 1
+            )
+        if budget_exhausted > 0.0:
+            score += 0.15
+            signals["budget_exhausted"] = signals.get("budget_exhausted", 0) + 1
+
+        risk_scores.append(score)
+
+        if score >= 0.75:
+            high_risk_case_count += 1
+            elevated_case_count += 1
+        elif score >= 0.40:
+            elevated_case_count += 1
+        levels[level] = levels.get(level, 0) + 1
+        if level in {"elevated", "high"}:
+            precision = float(item.get("precision_at_k", 0.0) or 0.0)
+            if is_risk_upgrade_case(item):
+                risk_upgrade_precisions.append(precision)
+            else:
+                risk_baseline_precisions.append(precision)
+
+    return {
+        "case_count": case_count,
+        "applicable_case_count": applicable_case_count,
+        "excluded_negative_control_case_count": excluded_negative_control_case_count,
+        "elevated_case_count": elevated_case_count,
+        "high_risk_case_count": high_risk_case_count,
+        "elevated_case_rate": (
+            float(elevated_case_count) / float(applicable_case_count)
+            if applicable_case_count > 0
+            else 0.0
+        ),
+        "high_risk_case_rate": (
+            float(high_risk_case_count) / float(applicable_case_count)
+            if applicable_case_count > 0
+            else 0.0
+        ),
+        "risk_score_mean": mean(risk_scores) if risk_scores else 0.0,
+        "risk_score_p95": p95(risk_scores),
+        "risk_upgrade_case_count": len(risk_upgrade_precisions),
+        "risk_upgrade_case_rate": (
+            float(len(risk_upgrade_precisions)) / float(elevated_case_count)
+            if elevated_case_count > 0
+            else 0.0
+        ),
+        "risk_upgrade_precision_mean": (
+            mean(risk_upgrade_precisions) if risk_upgrade_precisions else 0.0
+        ),
+        "risk_baseline_precision_mean": (
+            mean(risk_baseline_precisions) if risk_baseline_precisions else 0.0
+        ),
+        "risk_upgrade_precision_gain": (
+            mean(risk_upgrade_precisions) - mean(risk_baseline_precisions)
+            if risk_upgrade_precisions and risk_baseline_precisions
+            else 0.0
+        ),
+        "levels": dict(sorted(levels.items())),
+        "signals": dict(sorted(signals.items())),
+    }
+
+
 def build_evidence_insufficiency_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -863,6 +1040,7 @@ def build_slo_budget_summary(case_results: list[dict[str, Any]]) -> dict[str, An
 
 
 __all__ = [
+    "build_missing_context_risk_summary",
     "build_chunk_stage_miss_summary",
     "build_comparison_lane_summary",
     "build_decision_observability_summary",
@@ -873,4 +1051,6 @@ __all__ = [
     "build_retrieval_context_observability_summary",
     "build_slo_budget_summary",
     "build_stage_latency_summary",
+    "is_risk_upgrade_case",
+    "summarize_missing_context_risk_case",
 ]

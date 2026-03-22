@@ -120,6 +120,7 @@ def test_orchestrator_trace_export_writes_jsonl(tmp_path: Path, fake_skill_manif
     assert index_tags["router_arm_set"] == "retrieval_policy_shadow"
     assert index_tags["router_arm_id"] == "feature"
     assert index_tags["router_shadow_arm_id"] == "feature_graph"
+    assert index_tags["router_shadow_source"] == "fallback"
     assert index_tags["router_shadow_confidence"] == 0.25
 
     adaptive_router = payload["index"]["adaptive_router"]
@@ -128,6 +129,7 @@ def test_orchestrator_trace_export_writes_jsonl(tmp_path: Path, fake_skill_manif
     assert adaptive_router["arm_set"] == "retrieval_policy_shadow"
     assert adaptive_router["arm_id"] == "feature"
     assert adaptive_router["shadow_arm_id"] == "feature_graph"
+    assert adaptive_router["shadow_source"] == "fallback"
     assert adaptive_router["shadow_confidence"] == 0.25
 
 

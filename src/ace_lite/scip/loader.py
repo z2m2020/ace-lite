@@ -6,6 +6,7 @@ from typing import Any
 
 SCIP_PROVIDERS: tuple[str, ...] = (
     "auto",
+    "scip",
     "scip_lite",
     "xref_json",
     "stack_graphs_json",
@@ -19,6 +20,10 @@ def _empty_payload(*, path: Path, provider: str, error: str = "") -> dict[str, A
         "pagerank": {},
         "degree_centrality": {},
         "edges": [],
+        "document_count": 0,
+        "definition_occurrence_count": 0,
+        "reference_occurrence_count": 0,
+        "symbol_definition_count": 0,
         "loaded": False,
         "path": str(path),
         "provider": provider,
@@ -124,6 +129,138 @@ def _coerce_inbound_counts(raw: Any) -> dict[str, float]:
     return inbound
 
 
+def _coerce_symbol_roles(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except Exception:
+        return 0
+
+
+def _is_definition_occurrence(symbol_roles: int) -> bool:
+    # Mirrors SCIP SymbolRole bit flags for Definition and ForwardDefinition.
+    return bool(symbol_roles & 0x1) or bool(symbol_roles & 0x40)
+
+
+def _extract_document_path(document: dict[str, Any]) -> str:
+    return _extract_path(
+        document.get("relative_path")
+        or document.get("path")
+        or document.get("document")
+        or document.get("uri")
+    )
+
+
+def _extract_document_symbols(document: dict[str, Any]) -> list[str]:
+    symbols_raw = document.get("symbols")
+    symbols = symbols_raw if isinstance(symbols_raw, list) else []
+    collected: list[str] = []
+    for item in symbols:
+        if isinstance(item, str):
+            symbol = item.strip()
+        elif isinstance(item, dict):
+            symbol = str(item.get("symbol") or "").strip()
+        else:
+            symbol = ""
+        if symbol:
+            collected.append(symbol)
+    return collected
+
+
+def _parse_scip(payload: dict[str, Any], *, path: Path) -> dict[str, Any] | None:
+    documents_raw = payload.get("documents")
+    documents = documents_raw if isinstance(documents_raw, list) else []
+    if not documents:
+        return None
+
+    schema = str(payload.get("schema_version") or payload.get("protocol") or "scip").strip().lower()
+    symbol_to_paths: dict[str, set[str]] = {}
+    document_paths: list[str] = []
+    definition_occurrence_count = 0
+    reference_occurrence_count = 0
+
+    for item in documents:
+        if not isinstance(item, dict):
+            continue
+        document_path = _extract_document_path(item)
+        if not document_path:
+            continue
+        document_paths.append(document_path)
+        occurrences_raw = item.get("occurrences")
+        occurrences = occurrences_raw if isinstance(occurrences_raw, list) else []
+
+        for occurrence in occurrences:
+            if not isinstance(occurrence, dict):
+                continue
+            symbol = str(occurrence.get("symbol") or "").strip()
+            if not symbol:
+                continue
+            symbol_roles = _coerce_symbol_roles(occurrence.get("symbol_roles"))
+            if not _is_definition_occurrence(symbol_roles):
+                continue
+            definition_occurrence_count += 1
+            symbol_to_paths.setdefault(symbol, set()).add(document_path)
+
+    if not symbol_to_paths:
+        for item in documents:
+            if not isinstance(item, dict):
+                continue
+            document_path = _extract_document_path(item)
+            if not document_path:
+                continue
+            for symbol in _extract_document_symbols(item):
+                symbol_to_paths.setdefault(symbol, set()).add(document_path)
+
+    edge_weights: dict[tuple[str, str], float] = {}
+    for item in documents:
+        if not isinstance(item, dict):
+            continue
+        source_path = _extract_document_path(item)
+        if not source_path:
+            continue
+        occurrences_raw = item.get("occurrences")
+        occurrences = occurrences_raw if isinstance(occurrences_raw, list) else []
+        for occurrence in occurrences:
+            if not isinstance(occurrence, dict):
+                continue
+            symbol = str(occurrence.get("symbol") or "").strip()
+            if not symbol:
+                continue
+            symbol_roles = _coerce_symbol_roles(occurrence.get("symbol_roles"))
+            if _is_definition_occurrence(symbol_roles):
+                continue
+            reference_occurrence_count += 1
+            for target_path in sorted(symbol_to_paths.get(symbol, ())):
+                if not target_path or target_path == source_path:
+                    continue
+                edge_key = (source_path, target_path)
+                edge_weights[edge_key] = float(edge_weights.get(edge_key, 0.0)) + 1.0
+
+    edges = [
+        {"source": source, "target": target, "weight": weight}
+        for (source, target), weight in sorted(edge_weights.items())
+    ]
+    inbound_counts = _compute_inbound_from_edges(edges) if edges else {}
+
+    if not symbol_to_paths and not document_paths:
+        return None
+
+    return {
+        "edge_count": len(edges),
+        "inbound_counts": inbound_counts,
+        "pagerank": {},
+        "degree_centrality": {},
+        "edges": edges,
+        "document_count": len(document_paths),
+        "definition_occurrence_count": definition_occurrence_count,
+        "reference_occurrence_count": reference_occurrence_count,
+        "symbol_definition_count": len(symbol_to_paths),
+        "loaded": True,
+        "path": str(path),
+        "provider": "scip",
+        "schema_version": schema or "scip",
+    }
+
+
 def _parse_scip_lite(payload: dict[str, Any], *, path: Path) -> dict[str, Any] | None:
     schema = str(payload.get("schema_version") or "").strip().lower()
     inbound_counts = _coerce_inbound_counts(payload.get("inbound_counts"))
@@ -145,6 +282,10 @@ def _parse_scip_lite(payload: dict[str, Any], *, path: Path) -> dict[str, Any] |
         "pagerank": pagerank,
         "degree_centrality": degree_centrality,
         "edges": edges,
+        "document_count": 0,
+        "definition_occurrence_count": 0,
+        "reference_occurrence_count": 0,
+        "symbol_definition_count": 0,
         "loaded": True,
         "path": str(path),
         "provider": "scip_lite",
@@ -175,6 +316,10 @@ def _parse_xref_json(payload: dict[str, Any], *, path: Path) -> dict[str, Any] |
         "pagerank": pagerank,
         "degree_centrality": degree_centrality,
         "edges": edges,
+        "document_count": 0,
+        "definition_occurrence_count": 0,
+        "reference_occurrence_count": 0,
+        "symbol_definition_count": 0,
         "loaded": True,
         "path": str(path),
         "provider": "xref_json",
@@ -205,6 +350,10 @@ def _parse_stack_graphs(payload: dict[str, Any], *, path: Path) -> dict[str, Any
         "pagerank": pagerank,
         "degree_centrality": degree_centrality,
         "edges": edges,
+        "document_count": 0,
+        "definition_occurrence_count": 0,
+        "reference_occurrence_count": 0,
+        "symbol_definition_count": 0,
         "loaded": True,
         "path": str(path),
         "provider": "stack_graphs_json",
@@ -228,6 +377,7 @@ def load_scip_edges(path: str | Path, *, provider: str = "auto") -> dict[str, An
         return _empty_payload(path=source, provider=selected_provider)
 
     parsers = {
+        "scip": _parse_scip,
         "scip_lite": _parse_scip_lite,
         "xref_json": _parse_xref_json,
         "stack_graphs_json": _parse_stack_graphs,
@@ -235,7 +385,7 @@ def load_scip_edges(path: str | Path, *, provider: str = "auto") -> dict[str, An
 
     parser_order: list[str]
     if selected_provider == "auto":
-        parser_order = ["scip_lite", "xref_json", "stack_graphs_json"]
+        parser_order = ["scip", "scip_lite", "xref_json", "stack_graphs_json"]
     else:
         parser_order = [selected_provider]
 
