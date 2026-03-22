@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from ace_lite.benchmark.case_contracts import derive_benchmark_case_dev_feedback
+
 
 def _normalize_timestamp(value: Any) -> str:
     normalized = str(value or "").strip()
@@ -207,8 +209,7 @@ def build_case_evaluation_row(
         start=issue_report.get("occurred_at") or issue_report.get("created_at"),
         end=issue_report.get("resolved_at"),
     )
-    dev_feedback_raw = case.get("dev_feedback")
-    dev_feedback = dev_feedback_raw if isinstance(dev_feedback_raw, dict) else {}
+    dev_feedback = derive_benchmark_case_dev_feedback(case)
     dev_feedback_issue_count = max(0, int(dev_feedback.get("issue_count", 0) or 0))
     dev_feedback_linked_fix_issue_count = max(
         0, int(dev_feedback.get("linked_fix_issue_count", 0) or 0)

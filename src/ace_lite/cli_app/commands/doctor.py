@@ -101,6 +101,12 @@ from ace_lite.cli_app.commands import runtime as runtime_module
     default="",
     help="Optional stage artifact temp payload root override path.",
 )
+@click.option(
+    "--record-runtime-event/--no-record-runtime-event",
+    default=False,
+    show_default=True,
+    help="Persist doctor degraded reasons as a synthetic runtime invocation in durable stats.",
+)
 def doctor_command(
     root: str,
     config_file: str,
@@ -119,6 +125,7 @@ def doctor_command(
     cache_db_path: str,
     payload_root: str,
     temp_root: str,
+    record_runtime_event: bool,
 ) -> None:
     runtime_module.runtime_doctor_command.callback(
         root=root,
@@ -138,6 +145,7 @@ def doctor_command(
         cache_db_path=cache_db_path,
         payload_root=payload_root,
         temp_root=temp_root,
+        record_runtime_event=record_runtime_event,
     )
 
 

@@ -177,6 +177,57 @@ class DurableStatsStore:
         finally:
             conn.close()
 
+    def list_invocations(
+        self,
+        *,
+        session_id: str | None = None,
+        repo_key: str | None = None,
+        profile_key: str | None = None,
+        event_class: str | None = None,
+        exclude_event_classes: tuple[str, ...] = (),
+    ) -> tuple[RuntimeInvocationStats, ...]:
+        normalized_session = str(session_id or "").strip()
+        normalized_repo = str(repo_key or "").strip()
+        normalized_profile = str(profile_key or "").strip()
+        normalized_event_class = str(event_class or "").strip()
+        normalized_excluded_event_classes = tuple(
+            item.strip()
+            for item in exclude_event_classes
+            if str(item or "").strip()
+        )
+        conn = self._connect()
+        try:
+            clauses: list[str] = []
+            params: list[Any] = []
+            if normalized_session:
+                clauses.append("session_id = ?")
+                params.append(normalized_session)
+            if normalized_repo:
+                clauses.append("repo_key = ?")
+                params.append(normalized_repo)
+            if normalized_profile:
+                clauses.append("profile_key = ?")
+                params.append(normalized_profile)
+            if normalized_event_class:
+                clauses.append("event_class = ?")
+                params.append(normalized_event_class)
+            for item in normalized_excluded_event_classes:
+                clauses.append("event_class != ?")
+                params.append(item)
+            sql = f"SELECT invocation_id FROM {RUNTIME_STATS_INVOCATIONS_TABLE}"
+            if clauses:
+                sql += " WHERE " + " AND ".join(clauses)
+            sql += " ORDER BY finished_at, invocation_id"
+            rows = conn.execute(sql, tuple(params)).fetchall()
+            result: list[RuntimeInvocationStats] = []
+            for row in rows:
+                loaded = self._load_invocation(conn, str(row["invocation_id"]))
+                if loaded is not None:
+                    result.append(loaded)
+            return tuple(result)
+        finally:
+            conn.close()
+
     def _load_invocation(self, conn: Any, invocation_id: str) -> RuntimeInvocationStats | None:
         row = conn.execute(
             f"SELECT * FROM {RUNTIME_STATS_INVOCATIONS_TABLE} WHERE invocation_id = ?",
@@ -190,6 +241,7 @@ class DurableStatsStore:
                 "session_id": row["session_id"],
                 "repo_key": row["repo_key"],
                 "profile_key": row["profile_key"],
+                "event_class": row["event_class"],
                 "settings_fingerprint": row["settings_fingerprint"],
                 "status": row["status"],
                 "total_latency_ms": row["total_latency_ms"],
@@ -210,15 +262,16 @@ class DurableStatsStore:
         payload = stats.to_storage_payload()
         conn.execute(
             f"INSERT INTO {RUNTIME_STATS_INVOCATIONS_TABLE}("
-            "invocation_id, session_id, repo_key, profile_key, settings_fingerprint, "
+            "invocation_id, session_id, repo_key, profile_key, event_class, settings_fingerprint, "
             "status, contract_error_code, degraded_reason_codes, stage_latency_json, "
             "plan_replay_hit, plan_replay_safe_hit, plan_replay_store_written, "
             "trace_exported, trace_export_failed, total_latency_ms, started_at, finished_at"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(invocation_id) DO UPDATE SET "
             "session_id = excluded.session_id, "
             "repo_key = excluded.repo_key, "
             "profile_key = excluded.profile_key, "
+            "event_class = excluded.event_class, "
             "settings_fingerprint = excluded.settings_fingerprint, "
             "status = excluded.status, "
             "contract_error_code = excluded.contract_error_code, "
@@ -237,6 +290,7 @@ class DurableStatsStore:
                 payload["session_id"],
                 payload["repo_key"],
                 payload["profile_key"],
+                payload["event_class"],
                 payload["settings_fingerprint"],
                 payload["status"],
                 payload["contract_error_code"],

@@ -154,6 +154,12 @@ def detect_regression(
     baseline_ltm_false_help_rate = float(baseline.get("ltm_false_help_rate", 0.0))
     current_ltm_stale_hit_rate = float(current.get("ltm_stale_hit_rate", 0.0))
     baseline_ltm_stale_hit_rate = float(baseline.get("ltm_stale_hit_rate", 0.0))
+    current_ltm_latency_overhead_ms = float(
+        current.get("ltm_latency_overhead_ms", 0.0)
+    )
+    baseline_ltm_latency_overhead_ms = float(
+        baseline.get("ltm_latency_overhead_ms", 0.0)
+    )
     current_plan_replay_cache_stale_hit_safe_ratio = float(
         current.get("plan_replay_cache_stale_hit_safe_ratio", 0.0)
     )
@@ -224,6 +230,11 @@ def detect_regression(
     capture_trigger_threshold = (
         baseline_capture_trigger_ratio - capture_trigger_tolerance
     )
+    ltm_latency_overhead_threshold = (
+        baseline_ltm_latency_overhead_ms * latency_growth_factor
+        if baseline_ltm_latency_overhead_ms > 0.0
+        else 0.0
+    )
     ltm_false_help_threshold = baseline_ltm_false_help_rate + ltm_false_help_tolerance
     ltm_stale_hit_threshold = baseline_ltm_stale_hit_rate + ltm_stale_hit_tolerance
     plan_replay_cache_stale_hit_safe_threshold = (
@@ -276,6 +287,10 @@ def detect_regression(
     profile_selected_regressed = current_profile_selected < profile_selected_threshold
     capture_trigger_regressed = (
         current_capture_trigger_ratio < capture_trigger_threshold
+    )
+    ltm_latency_overhead_regressed = (
+        baseline_ltm_latency_overhead_ms > 0.0
+        and current_ltm_latency_overhead_ms > ltm_latency_overhead_threshold
     )
     ltm_false_help_regressed = current_ltm_false_help_rate > ltm_false_help_threshold
     ltm_stale_hit_regressed = current_ltm_stale_hit_rate > ltm_stale_hit_threshold
@@ -421,6 +436,16 @@ def detect_regression(
                 "operator": "<",
                 "current": current_capture_trigger_ratio,
                 "threshold": capture_trigger_threshold,
+            }
+        )
+    if ltm_latency_overhead_regressed:
+        failed_checks.append("ltm_latency_overhead_ms")
+        failed_thresholds.append(
+            {
+                "metric": "ltm_latency_overhead_ms",
+                "operator": ">",
+                "current": current_ltm_latency_overhead_ms,
+                "threshold": ltm_latency_overhead_threshold,
             }
         )
     if ltm_false_help_regressed:

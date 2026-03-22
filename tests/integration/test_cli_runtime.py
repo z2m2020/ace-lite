@@ -12,6 +12,7 @@ from ace_lite.cli_app.commands import runtime as runtime_module
 from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.runtime_stats import RuntimeInvocationStats
+from ace_lite.runtime_stats_schema import RUNTIME_STATS_DOCTOR_EVENT_CLASS
 from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.runtime_settings import RuntimeSettingsManager
 from ace_lite.runtime_settings_store import (
@@ -384,6 +385,7 @@ def test_cli_runtime_doctor_groups_settings_stats_cache_and_integration(
     payload = json.loads(lines[-1])
     assert payload["event"] == "runtime_doctor"
     assert payload["ok"] is True
+    assert payload["degraded_reason_codes"] == []
     assert "settings" in payload
     assert "stats" in payload
     assert "cache" in payload
@@ -399,6 +401,36 @@ def test_cli_runtime_doctor_groups_settings_stats_cache_and_integration(
     assert payload["version_sync"]["ok"] is True
     assert payload["cache"]["entry_count"] == 1
     assert payload["integration"]["event"] == "mcp_doctor"
+
+
+def test_cli_runtime_doctor_can_record_synthetic_runtime_event(tmp_path: Path) -> None:
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    db_path = tmp_path / "runtime-stats.db"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "doctor",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(skills_dir),
+            "--stats-db-path",
+            str(db_path),
+            "--record-runtime-event",
+            "--no-probe-endpoints",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads([line for line in result.output.splitlines() if line.strip()][-1])
+    assert payload["degraded_reason_codes"] == []
+    assert payload["runtime_event_recording"]["recorded"] is False
+    assert payload["runtime_event_recording"]["reason"] == "no_degraded_reasons"
 
 
 def test_cli_doctor_alias_runs_grouped_runtime_doctor(tmp_path: Path) -> None:
@@ -423,6 +455,166 @@ def test_cli_doctor_alias_runs_grouped_runtime_doctor(tmp_path: Path) -> None:
     payload = json.loads(lines[-1])
     assert payload["event"] == "runtime_doctor"
     assert payload["ok"] is True
+
+
+def test_cli_doctor_alias_can_record_synthetic_runtime_event(tmp_path: Path) -> None:
+    (tmp_path / "skills").mkdir(parents=True, exist_ok=True)
+    db_path = tmp_path / "runtime-stats.db"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "doctor",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(tmp_path / "skills"),
+            "--stats-db-path",
+            str(db_path),
+            "--record-runtime-event",
+            "--no-probe-endpoints",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads([line for line in result.output.splitlines() if line.strip()][-1])
+    assert payload["runtime_event_recording"]["recorded"] is False
+    assert payload["runtime_event_recording"]["reason"] == "no_degraded_reasons"
+
+
+def test_cli_runtime_doctor_records_degraded_runtime_event_when_requested(
+    tmp_path: Path, monkeypatch
+) -> None:
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    db_path = tmp_path / "runtime-stats.db"
+
+    monkeypatch.setattr(
+        runtime_module,
+        "build_runtime_doctor_payload",
+        lambda **kwargs: {
+            "ok": False,
+            "event": "runtime_doctor",
+            "degraded_reason_codes": ["git_unavailable", "install_drift"],
+            "settings": {"fingerprint": "fp-doctor"},
+            "stats": {"latest_match": None, "summary": {}},
+            "cache": {"ok": True},
+            "git": {"ok": False, "issue_type": "git_unavailable"},
+            "version_sync": {"ok": False, "reason": "install_drift"},
+            "integration": {"ok": True, "event": "mcp_doctor"},
+        },
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "doctor",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(skills_dir),
+            "--stats-db-path",
+            str(db_path),
+            "--record-runtime-event",
+            "--no-probe-endpoints",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 1
+    payload = next(
+        json.loads(line)
+        for line in result.output.splitlines()
+        if line.strip().startswith("{")
+    )
+    assert payload["runtime_event_recording"]["recorded"] is True
+    invocation_id = payload["runtime_event_recording"]["invocation_id"]
+    stored = DurableStatsStore(db_path=db_path).read_invocation(invocation_id=invocation_id)
+    assert stored is not None
+    assert stored.degraded_reason_codes == ("git_unavailable", "install_drift")
+
+
+def test_cli_runtime_doctor_recorded_event_does_not_override_runtime_stats_latest_match(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    db_path = tmp_path / "runtime-stats.db"
+    _seed_runtime_stats_db(db_path)
+
+    monkeypatch.setattr(
+        runtime_module,
+        "build_runtime_doctor_payload",
+        lambda **kwargs: {
+            "ok": False,
+            "event": "runtime_doctor",
+            "degraded_reason_codes": ["git_unavailable"],
+            "settings": {"fingerprint": "fp-doctor"},
+            "stats": {"latest_match": None, "summary": {}},
+            "cache": {"ok": True},
+            "git": {"ok": False, "issue_type": "git_unavailable"},
+            "version_sync": {"ok": True, "reason": ""},
+            "integration": {"ok": True, "event": "mcp_doctor"},
+        },
+    )
+
+    runner = CliRunner()
+    doctor_result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "doctor",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(skills_dir),
+            "--stats-db-path",
+            str(db_path),
+            "--record-runtime-event",
+            "--no-probe-endpoints",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert doctor_result.exit_code == 1
+    doctor_payload = next(
+        json.loads(line)
+        for line in doctor_result.output.splitlines()
+        if line.strip().startswith("{")
+    )
+    assert doctor_payload["runtime_event_recording"]["recorded"] is True
+    assert (
+        doctor_payload["runtime_event_recording"]["event_class"]
+        == RUNTIME_STATS_DOCTOR_EVENT_CLASS
+    )
+
+    stats_result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "stats",
+            "--db-path",
+            str(db_path),
+            "--repo",
+            "repo-beta",
+            "--profile",
+            "docs",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert stats_result.exit_code == 0
+    stats_payload = json.loads(
+        [line for line in stats_result.output.splitlines() if line.strip()][-1]
+    )
+    assert stats_payload["latest_match"]["invocation_id"] == "inv-b1"
+    assert stats_payload["latest_match"]["session_id"] == "session-gamma"
+    assert stats_payload["latest_match"]["repo_key"] == "repo-beta"
 
 
 def test_cli_runtime_doctor_applies_user_id_filter_to_preference_capture_summary(
@@ -1182,6 +1374,7 @@ def test_cli_runtime_stats_reports_latest_session_and_global_rollups(
     assert payload["event"] == "runtime_stats"
     assert payload["latest_match"]["session_id"] == "session-gamma"
     assert payload["latest_match"]["repo_key"] == "repo-beta"
+    assert payload["latest_match"]["event_class"] == "runtime_invocation"
     assert payload["summary"]["session"]["counters"]["invocation_count"] == 1
     assert payload["summary"]["all_time"]["counters"]["invocation_count"] == 3
     assert payload["summary"]["all_time"]["latency"]["latency_ms_avg"] == 86.666667
@@ -1216,6 +1409,55 @@ def test_cli_runtime_stats_honors_repo_and_profile_filters(tmp_path: Path) -> No
     assert payload["filters"] == {"repo": "repo-alpha", "profile": "bugfix"}
     assert payload["latest_match"]["session_id"] == "session-beta"
     assert payload["summary"]["session"]["scope_key"] == "session-beta"
+    assert payload["summary"]["repo"]["counters"]["invocation_count"] == 2
+    assert payload["summary"]["profile"]["counters"]["invocation_count"] == 2
+    assert payload["summary"]["repo_profile"]["counters"]["invocation_count"] == 2
+    assert (
+        payload["summary"]["repo_profile"]["degraded_states"][0]["reason_code"]
+        == "memory_fallback"
+    )
+
+
+def test_cli_runtime_stats_excludes_synthetic_doctor_sessions_from_scope_summaries(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "runtime-stats.db"
+    _seed_runtime_stats_db(db_path)
+    DurableStatsStore(db_path=db_path).record_invocation(
+        RuntimeInvocationStats(
+            invocation_id="inv-doctor-alpha",
+            session_id="runtime-doctor::repo-alpha",
+            repo_key="repo-alpha",
+            profile_key="bugfix",
+            status="degraded",
+            total_latency_ms=0.0,
+            started_at="2026-03-11T00:03:00+00:00",
+            finished_at="2026-03-11T00:03:00+00:00",
+            degraded_reason_codes=("git_unavailable",),
+        )
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "stats",
+            "--db-path",
+            str(db_path),
+            "--repo",
+            "repo-alpha",
+            "--profile",
+            "bugfix",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["latest_match"]["session_id"] == "session-beta"
+    assert payload["summary"]["all_time"]["counters"]["invocation_count"] == 3
     assert payload["summary"]["repo"]["counters"]["invocation_count"] == 2
     assert payload["summary"]["profile"]["counters"]["invocation_count"] == 2
     assert payload["summary"]["repo_profile"]["counters"]["invocation_count"] == 2

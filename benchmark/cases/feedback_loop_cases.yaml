@@ -37,10 +37,6 @@ cases:
   - case_id: ace-feedback-resolution-cli-03
     query: how does the feedback CLI resolve an issue report from a stored dev fix and persist resolution_note
     expected_keys: [feedback, resolution, issue]
-    dev_feedback:
-      issue_count: 1
-      linked_fix_issue_count: 1
-      resolved_issue_count: 1
     filters:
       include_paths:
         - src/ace_lite/cli_app/commands/feedback.py
@@ -55,13 +51,27 @@ cases:
       mode: positive
       min_validation_tests: 1
 
+  - case_id: ace-feedback-runtime-capture-cli-04
+    query: how does the feedback CLI promote an auto-captured runtime event into a developer issue and persist reason metadata
+    expected_keys: [feedback, runtime, issue]
+    filters:
+      include_paths:
+        - src/ace_lite/cli_app/commands/feedback.py
+        - src/ace_lite/dev_feedback_runtime_linkage.py
+        - src/ace_lite/dev_feedback_store.py
+        - src/ace_lite/runtime_stats.py
+        - src/ace_lite/runtime_stats_store.py
+        - tests/integration/test_cli_feedback.py
+    top_k: 8
+    comparison_lane: dev_issue_capture
+    feedback_surface: runtime_issue_capture_cli
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
   - case_id: ace-feedback-resolution-mcp-04
     query: how does the mcp service apply a stored dev fix to resolve an issue report and attach dev-fix references
     expected_keys: [mcp, resolution, issue]
-    dev_feedback:
-      issue_count: 1
-      linked_fix_issue_count: 1
-      resolved_issue_count: 1
     filters:
       include_paths:
         - src/ace_lite/mcp_server/service_issue_report_handlers.py
@@ -75,6 +85,24 @@ cases:
     top_k: 8
     comparison_lane: dev_feedback_resolution
     feedback_surface: issue_resolution_mcp
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: ace-feedback-runtime-capture-mcp-05
+    query: how does the mcp service promote an auto-captured runtime event into a developer issue and mirror long-term capture metadata
+    expected_keys: [mcp, runtime, issue]
+    filters:
+      include_paths:
+        - src/ace_lite/mcp_server/service_dev_feedback_handlers.py
+        - src/ace_lite/dev_feedback_runtime_linkage.py
+        - src/ace_lite/dev_feedback_store.py
+        - src/ace_lite/runtime_stats.py
+        - src/ace_lite/runtime_stats_store.py
+        - tests/unit/test_mcp_service_dev_feedback_handlers.py
+    top_k: 8
+    comparison_lane: dev_issue_capture
+    feedback_surface: runtime_issue_capture_mcp
     task_success:
       mode: positive
       min_validation_tests: 1

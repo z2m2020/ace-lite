@@ -104,6 +104,7 @@ METRIC_ORDER = (
     "issue_report_linked_plan_rate",
     "issue_to_benchmark_case_conversion_rate",
     "issue_report_time_to_fix_hours_mean",
+    "dev_issue_capture_rate",
     "dev_feedback_resolution_rate",
     "dev_issue_to_fix_rate",
     "embedding_enabled_ratio",

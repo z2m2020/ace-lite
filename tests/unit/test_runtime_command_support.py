@@ -462,6 +462,43 @@ def test_load_runtime_stats_summary_includes_dev_feedback_and_top_pain_summary(
     assert payload["memory_health_summary"]["reasons"][0]["linked_fix_issue_count"] == 1
 
 
+def test_load_runtime_stats_summary_excludes_synthetic_doctor_sessions_from_scope_summaries(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / ".ace-lite" / "runtime_state.db"
+    _seed_runtime_stats_with_degraded_reason(db_path)
+    store = DurableStatsStore(db_path=db_path)
+    store.record_invocation(
+        RuntimeInvocationStats(
+            invocation_id="inv-doctor",
+            session_id="runtime-doctor::repo-alpha",
+            repo_key="repo-alpha",
+            profile_key="bugfix",
+            status="degraded",
+            total_latency_ms=0.0,
+            started_at="2026-03-19T00:10:00+00:00",
+            finished_at="2026-03-19T00:10:00+00:00",
+            degraded_reason_codes=("git_unavailable",),
+        )
+    )
+
+    payload = load_runtime_stats_summary(
+        db_path=db_path,
+        repo_key="repo-alpha",
+        profile_key="bugfix",
+        home_path=tmp_path,
+    )
+
+    assert payload["latest_match"]["session_id"] == "session-alpha"
+    assert payload["summary"]["all_time"]["counters"]["invocation_count"] == 1
+    assert payload["summary"]["repo"]["counters"]["invocation_count"] == 1
+    assert payload["summary"]["profile"]["counters"]["invocation_count"] == 1
+    assert payload["summary"]["repo_profile"]["counters"]["invocation_count"] == 1
+    assert payload["top_pain_summary"]["count"] == 1
+    assert payload["top_pain_summary"]["items"][0]["reason_code"] == "memory_fallback"
+    assert payload["memory_health_summary"]["reason_count"] == 1
+
+
 def test_load_runtime_stats_summary_canonicalizes_runtime_reason_aliases_in_top_pain_summary(
     tmp_path: Path,
 ) -> None:

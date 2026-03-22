@@ -7,7 +7,10 @@ from typing import Any
 
 from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
 from ace_lite.runtime_stats_schema import (
+    RUNTIME_STATS_DEFAULT_EVENT_CLASS,
     RUNTIME_STATS_DEGRADED_REASON_CODES,
+    RUNTIME_STATS_DOCTOR_EVENT_CLASS,
+    RUNTIME_STATS_EVENT_CLASS_VALUES,
     RUNTIME_STATS_STAGE_NAMES,
     RUNTIME_STATS_STATUS_VALUES,
 )
@@ -52,6 +55,7 @@ class RuntimeInvocationStats:
     session_id: str
     repo_key: str
     profile_key: str = ""
+    event_class: str = RUNTIME_STATS_DEFAULT_EVENT_CLASS
     settings_fingerprint: str = ""
     status: str = "succeeded"
     total_latency_ms: float = 0.0
@@ -72,6 +76,7 @@ class RuntimeInvocationStats:
             "session_id": self.session_id,
             "repo_key": self.repo_key,
             "profile_key": self.profile_key,
+            "event_class": self.event_class,
             "settings_fingerprint": self.settings_fingerprint,
             "status": self.status,
             "total_latency_ms": self.total_latency_ms,
@@ -93,6 +98,7 @@ class RuntimeInvocationStats:
             "session_id": self.session_id,
             "repo_key": self.repo_key,
             "profile_key": self.profile_key,
+            "event_class": self.event_class,
             "settings_fingerprint": self.settings_fingerprint,
             "status": self.status,
             "total_latency_ms": self.total_latency_ms,
@@ -207,6 +213,16 @@ def normalize_runtime_invocation_stats(
         raise ValueError("session_id must be non-empty")
     if not repo_key:
         raise ValueError("repo_key must be non-empty")
+    raw_event_class = _normalize_text(raw.get("event_class"), max_len=64).lower()
+    if session_id.startswith("runtime-doctor::") and raw_event_class in {
+        "",
+        RUNTIME_STATS_DEFAULT_EVENT_CLASS,
+    }:
+        event_class = RUNTIME_STATS_DOCTOR_EVENT_CLASS
+    else:
+        event_class = raw_event_class or RUNTIME_STATS_DEFAULT_EVENT_CLASS
+    if event_class not in RUNTIME_STATS_EVENT_CLASS_VALUES:
+        raise ValueError(f"unsupported runtime stats event_class: {event_class}")
 
     status = _normalize_text(raw.get("status"), max_len=32).lower() or "succeeded"
     if status not in RUNTIME_STATS_STATUS_VALUES:
@@ -219,6 +235,7 @@ def normalize_runtime_invocation_stats(
         session_id=session_id,
         repo_key=repo_key,
         profile_key=_normalize_text(raw.get("profile_key"), max_len=128),
+        event_class=event_class,
         settings_fingerprint=_normalize_text(
             raw.get("settings_fingerprint"),
             max_len=128,

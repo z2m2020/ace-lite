@@ -2,40 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ace_lite.cli_app import runtime_status_support
-from ace_lite.cli_app.runtime_command_support import (
-    DEFAULT_RUNTIME_STATS_DB_PATH,
-    build_runtime_status_payload,
-    build_runtime_status_snapshot,
-    load_latest_runtime_stats_match,
-    load_runtime_dev_feedback_summary,
-    load_runtime_preference_capture_summary,
-    load_runtime_stats_summary,
-    resolve_user_runtime_stats_path,
-)
+from ace_lite.cli_app.runtime_stats_query_support import load_latest_runtime_stats_match
 from ace_lite.runtime_stats import RuntimeInvocationStats
 from ace_lite.runtime_stats_schema import RUNTIME_STATS_DOCTOR_EVENT_CLASS
 from ace_lite.runtime_stats_store import DurableStatsStore
 
 
-def test_runtime_status_support_facade_reexports_status_helpers() -> None:
-    assert DEFAULT_RUNTIME_STATS_DB_PATH == runtime_status_support.DEFAULT_RUNTIME_STATS_DB_PATH
-    assert resolve_user_runtime_stats_path is runtime_status_support.resolve_user_runtime_stats_path
-    assert load_latest_runtime_stats_match is runtime_status_support.load_latest_runtime_stats_match
-    assert load_runtime_stats_summary is runtime_status_support.load_runtime_stats_summary
-    assert (
-        load_runtime_dev_feedback_summary
-        is runtime_status_support.load_runtime_dev_feedback_summary
-    )
-    assert (
-        load_runtime_preference_capture_summary
-        is runtime_status_support.load_runtime_preference_capture_summary
-    )
-    assert build_runtime_status_payload is runtime_status_support.build_runtime_status_payload
-    assert build_runtime_status_snapshot is runtime_status_support.build_runtime_status_snapshot
-
-
-def test_load_latest_runtime_stats_match_excludes_synthetic_doctor_sessions_by_default(
+def test_runtime_stats_query_support_excludes_synthetic_doctor_sessions_by_default(
     tmp_path: Path,
 ) -> None:
     db_path = tmp_path / "runtime-stats.db"
@@ -78,7 +51,7 @@ def test_load_latest_runtime_stats_match_excludes_synthetic_doctor_sessions_by_d
     assert latest_match["event_class"] == "runtime_invocation"
 
 
-def test_load_latest_runtime_stats_match_keeps_explicit_doctor_session_queries(
+def test_runtime_stats_query_support_keeps_explicit_doctor_session_queries(
     tmp_path: Path,
 ) -> None:
     db_path = tmp_path / "runtime-stats.db"

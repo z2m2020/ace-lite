@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from ace_lite.runtime_stats import RuntimeInvocationStats, RuntimeStageLatency
+from ace_lite.runtime_stats_schema import (
+    RUNTIME_STATS_DEFAULT_EVENT_CLASS,
+    RUNTIME_STATS_DOCTOR_EVENT_CLASS,
+)
 from ace_lite.runtime_stats_store import DurableStatsStore
 
 
@@ -118,6 +122,7 @@ def test_durable_stats_store_can_read_individual_invocation(tmp_path: Path) -> N
     assert loaded is not None
     assert loaded.invocation_id == "inv-lookup"
     assert loaded.repo_key == "repo-alpha"
+    assert loaded.event_class == RUNTIME_STATS_DEFAULT_EVENT_CLASS
     assert loaded.degraded_reason_codes == ("memory_fallback",)
 
 
@@ -144,3 +149,43 @@ def test_durable_stats_store_canonicalizes_reason_aliases_but_preserves_unknown_
         "custom_unknown_reason",
         "latency_budget_exceeded",
     )
+
+
+def test_durable_stats_store_can_filter_invocations_by_event_class(tmp_path: Path) -> None:
+    store = DurableStatsStore(db_path=tmp_path / "context-map" / "runtime-stats.db")
+    store.record_invocation(
+        RuntimeInvocationStats(
+            invocation_id="inv-runtime",
+            session_id="session-alpha",
+            repo_key="repo-alpha",
+            profile_key="bugfix",
+            status="succeeded",
+            total_latency_ms=12.0,
+        )
+    )
+    store.record_invocation(
+        RuntimeInvocationStats(
+            invocation_id="inv-doctor",
+            session_id="runtime-doctor::repo-alpha",
+            repo_key="repo-alpha",
+            profile_key="bugfix",
+            event_class=RUNTIME_STATS_DOCTOR_EVENT_CLASS,
+            status="degraded",
+            total_latency_ms=0.0,
+            degraded_reason_codes=("git_unavailable",),
+        )
+    )
+
+    visible = store.list_invocations(
+        repo_key="repo-alpha",
+        profile_key="bugfix",
+        exclude_event_classes=(RUNTIME_STATS_DOCTOR_EVENT_CLASS,),
+    )
+    doctor_only = store.list_invocations(
+        repo_key="repo-alpha",
+        profile_key="bugfix",
+        event_class=RUNTIME_STATS_DOCTOR_EVENT_CLASS,
+    )
+
+    assert [item.invocation_id for item in visible] == ["inv-runtime"]
+    assert [item.invocation_id for item in doctor_only] == ["inv-doctor"]

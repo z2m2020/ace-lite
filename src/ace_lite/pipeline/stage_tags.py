@@ -521,6 +521,11 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
 
     if stage_name == "validation":
         sandbox = output.get("sandbox", {}) if isinstance(output.get("sandbox"), dict) else {}
+        apply_result = (
+            sandbox.get("apply_result", {})
+            if isinstance(sandbox.get("apply_result"), dict)
+            else {}
+        )
         result = output.get("result", {}) if isinstance(output.get("result"), dict) else {}
         summary = result.get("summary", {}) if isinstance(result.get("summary"), dict) else {}
         xref = output.get("xref", {}) if isinstance(output.get("xref"), dict) else {}
@@ -530,6 +535,8 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "patch_artifact_present": bool(output.get("patch_artifact_present", False)),
             "patch_applied": bool(sandbox.get("patch_applied", False)),
             "cleanup_ok": bool(sandbox.get("cleanup_ok", False)),
+            "sandbox_apply_reason": str(apply_result.get("reason", "")),
+            "sandbox_apply_timed_out": bool(apply_result.get("timed_out", False)),
             "diagnostic_count": int(output.get("diagnostic_count", 0) or 0),
             "xref_enabled": bool(output.get("xref_enabled", False)),
             "xref_count": int(xref.get("count", 0) or 0),

@@ -393,6 +393,16 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         for item in case_results
         if str(item.get("comparison_lane") or "").strip() == "dev_feedback_resolution"
     ]
+    dev_issue_capture_cases = [
+        item
+        for item in case_results
+        if str(item.get("comparison_lane") or "").strip() == "dev_issue_capture"
+    ]
+    dev_issue_captured_cases = [
+        item
+        for item in dev_issue_capture_cases
+        if float(item.get("dev_feedback_issue_count", 0.0) or 0.0) > 0.0
+    ]
     dev_feedback_resolution_hits = [
         float(item.get("task_success_hit", item.get("utility_hit", 0.0)) or 0.0)
         for item in dev_feedback_resolution_cases
@@ -658,6 +668,11 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "issue_report_time_to_fix_hours_mean": (
             mean(issue_report_time_to_fix_hours)
             if issue_report_time_to_fix_hours
+            else 0.0
+        ),
+        "dev_issue_capture_rate": (
+            float(len(dev_issue_captured_cases)) / float(len(dev_issue_capture_cases))
+            if dev_issue_capture_cases
             else 0.0
         ),
         "dev_feedback_resolution_rate": (

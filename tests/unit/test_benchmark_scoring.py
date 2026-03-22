@@ -428,6 +428,7 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "issue_report_linked_plan_rate",
         "issue_to_benchmark_case_conversion_rate",
         "issue_report_time_to_fix_hours_mean",
+        "dev_issue_capture_rate",
         "dev_feedback_resolution_rate",
         "dev_issue_to_fix_rate",
         "embedding_enabled_ratio",
@@ -498,6 +499,7 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["chunk_guard_report_only_ratio"] == 0.0
     assert metrics["chunk_guard_filtered_count_mean"] == 0.0
     assert metrics["chunk_guard_filter_ratio"] == 0.0
+    assert metrics["dev_issue_capture_rate"] == 0.0
 
     assert metrics["chunk_guard_pairwise_conflict_count_mean"] == 0.0
     assert metrics["chunk_guard_fallback_ratio"] == 0.0
@@ -556,6 +558,20 @@ def test_feedback_loop_summary_and_metrics() -> None:
             "task_success_hit": 1.0,
         },
         {
+            "case_id": "runtime-captured-cli",
+            "comparison_lane": "dev_issue_capture",
+            "feedback_surface": "runtime_issue_capture_cli",
+            "dev_feedback_issue_count": 1.0,
+            "task_success_hit": 1.0,
+        },
+        {
+            "case_id": "runtime-captured-mcp",
+            "comparison_lane": "dev_issue_capture",
+            "feedback_surface": "runtime_issue_capture_mcp",
+            "dev_feedback_issue_count": 1.0,
+            "task_success_hit": 1.0,
+        },
+        {
             "case_id": "resolved",
             "comparison_lane": "dev_feedback_resolution",
             "feedback_surface": "issue_resolution_cli",
@@ -582,6 +598,7 @@ def test_feedback_loop_summary_and_metrics() -> None:
     assert metrics["issue_to_benchmark_case_conversion_rate"] == 0.5
     assert metrics["issue_report_linked_plan_rate"] == 1.0
     assert metrics["issue_report_time_to_fix_hours_mean"] == 12.0
+    assert metrics["dev_issue_capture_rate"] == 1.0
     assert metrics["dev_feedback_resolution_rate"] == 0.5
     assert metrics["dev_issue_to_fix_rate"] == 0.5
     assert summary["issue_report_case_count"] == 2
@@ -591,6 +608,9 @@ def test_feedback_loop_summary_and_metrics() -> None:
     assert summary["issue_report_resolution_rate"] == 0.5
     assert summary["issue_report_time_to_fix_case_count"] == 1
     assert summary["issue_report_time_to_fix_hours_mean"] == 12.0
+    assert summary["dev_issue_capture_case_count"] == 2
+    assert summary["dev_issue_captured_case_count"] == 2
+    assert summary["dev_issue_capture_rate"] == 1.0
     assert summary["dev_feedback_resolution_case_count"] == 2
     assert summary["dev_feedback_resolved_case_count"] == 1
     assert summary["dev_feedback_issue_count"] == 2
@@ -602,6 +622,8 @@ def test_feedback_loop_summary_and_metrics() -> None:
     assert summary["feedback_surfaces"] == {
         "issue_report_export_cli": 1,
         "issue_report_export_mcp": 1,
+        "runtime_issue_capture_cli": 1,
+        "runtime_issue_capture_mcp": 1,
         "issue_resolution_cli": 1,
         "issue_resolution_mcp": 1,
     }
@@ -1849,6 +1871,55 @@ def test_detect_regression_for_memory_lane_and_replay_drift_metrics() -> None:
     assert "ltm_false_help_rate" in regression["failed_checks"]
     assert "ltm_stale_hit_rate" in regression["failed_checks"]
     assert "plan_replay_cache_stale_hit_safe_ratio" in regression["failed_checks"]
+
+
+def test_detect_regression_for_ltm_latency_overhead_growth() -> None:
+    baseline = {
+        "precision_at_k": 0.8,
+        "task_success_rate": 0.8,
+        "noise_rate": 0.2,
+        "latency_p95_ms": 100.0,
+        "dependency_recall": 0.8,
+        "chunk_hit_at_k": 0.8,
+        "chunk_budget_used": 20.0,
+        "validation_test_count": 2.0,
+        "ltm_latency_overhead_ms": 4.0,
+    }
+    current = dict(baseline)
+    current["ltm_latency_overhead_ms"] = 6.0
+
+    regression = detect_regression(
+        current=current,
+        baseline=baseline,
+        latency_growth_factor=1.25,
+    )
+
+    assert regression["regressed"] is True
+    assert "ltm_latency_overhead_ms" in regression["failed_checks"]
+
+
+def test_detect_regression_does_not_gate_ltm_latency_overhead_without_baseline() -> None:
+    baseline = {
+        "precision_at_k": 0.8,
+        "task_success_rate": 0.8,
+        "noise_rate": 0.2,
+        "latency_p95_ms": 100.0,
+        "dependency_recall": 0.8,
+        "chunk_hit_at_k": 0.8,
+        "chunk_budget_used": 20.0,
+        "validation_test_count": 2.0,
+        "ltm_latency_overhead_ms": 0.0,
+    }
+    current = dict(baseline)
+    current["ltm_latency_overhead_ms"] = 20.0
+
+    regression = detect_regression(
+        current=current,
+        baseline=baseline,
+        latency_growth_factor=1.10,
+    )
+
+    assert "ltm_latency_overhead_ms" not in regression["failed_checks"]
 
 
 def test_detect_regression_for_embedding_metric_drop() -> None:

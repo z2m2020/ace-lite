@@ -262,3 +262,70 @@ def test_build_case_evaluation_row_contract() -> None:
         "dev_feedback_issue_time_to_fix_hours": 6.0,
         "dev_issue_to_fix_rate": 1.0,
     }
+
+
+def test_build_case_evaluation_row_derives_runtime_issue_capture_feedback() -> None:
+    kwargs = _base_row_kwargs()
+    case = dict(kwargs["case"])
+    case.pop("dev_feedback")
+    case["comparison_lane"] = "dev_issue_capture"
+    case["feedback_surface"] = "runtime_issue_capture_cli"
+    kwargs["case"] = case
+
+    row = build_case_evaluation_row(**kwargs)
+
+    assert row["dev_feedback_issue_count"] == 1.0
+    assert row["dev_feedback_linked_fix_issue_count"] == 0.0
+    assert row["dev_feedback_resolved_issue_count"] == 0.0
+    assert row["dev_feedback_created_at"] == "2026-03-19T00:00:00+00:00"
+    assert row["dev_issue_to_fix_rate"] == 0.0
+    assert row["feedback_loop"]["feedback_surface"] == "runtime_issue_capture_cli"
+    assert row["feedback_loop"]["dev_feedback_issue_count"] == 1
+    assert row["feedback_loop"]["dev_feedback_linked_fix_issue_count"] == 0
+    assert row["feedback_loop"]["dev_feedback_resolved_issue_count"] == 0
+
+
+def test_build_case_evaluation_row_derives_issue_resolution_feedback() -> None:
+    kwargs = _base_row_kwargs()
+    case = dict(kwargs["case"])
+    case.pop("dev_feedback")
+    case["comparison_lane"] = "dev_feedback_resolution"
+    case["feedback_surface"] = "issue_resolution_mcp"
+    kwargs["case"] = case
+
+    row = build_case_evaluation_row(**kwargs)
+
+    assert row["dev_feedback_issue_count"] == 1.0
+    assert row["dev_feedback_linked_fix_issue_count"] == 1.0
+    assert row["dev_feedback_resolved_issue_count"] == 1.0
+    assert row["dev_feedback_created_at"] == "2026-03-19T00:00:00+00:00"
+    assert row["dev_feedback_resolved_at"] == "2026-03-19T12:00:00+00:00"
+    assert row["dev_issue_to_fix_rate"] == 1.0
+    assert row["feedback_loop"]["feedback_surface"] == "issue_resolution_mcp"
+    assert row["feedback_loop"]["dev_feedback_issue_count"] == 1
+    assert row["feedback_loop"]["dev_feedback_linked_fix_issue_count"] == 1
+    assert row["feedback_loop"]["dev_feedback_resolved_issue_count"] == 1
+
+
+def test_build_case_evaluation_row_derives_feedback_from_issue_report_payload() -> None:
+    kwargs = _base_row_kwargs()
+    case = dict(kwargs["case"])
+    case.pop("dev_feedback")
+    issue_report = dict(case["issue_report"])
+    issue_report["attachments"] = [
+        "artifact://validation.json",
+        "dev-fix://devf_demo1234",
+    ]
+    case["issue_report"] = issue_report
+    case["comparison_lane"] = "issue_report_feedback"
+    case["feedback_surface"] = "issue_report_export_cli"
+    kwargs["case"] = case
+
+    row = build_case_evaluation_row(**kwargs)
+
+    assert row["dev_feedback_issue_count"] == 1.0
+    assert row["dev_feedback_linked_fix_issue_count"] == 1.0
+    assert row["dev_feedback_resolved_issue_count"] == 1.0
+    assert row["dev_feedback_created_at"] == "2026-03-19T00:00:00+00:00"
+    assert row["dev_feedback_resolved_at"] == "2026-03-19T12:00:00+00:00"
+    assert row["dev_issue_to_fix_rate"] == 1.0

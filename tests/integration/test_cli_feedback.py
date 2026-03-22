@@ -989,3 +989,7 @@ def test_cli_feedback_issue_export_case_and_apply_fix_round_trip(tmp_path: Path)
         exported_resolved_payload["case"]["dev_feedback"]["resolved_at"]
         == "2026-03-19T00:05:00+00:00"
     )
+    assert (
+        exported_resolved_payload["case"]["issue_report"]["attachments"]
+        == resolved_payload["report"]["attachments"]
+    )

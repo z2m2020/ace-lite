@@ -6,7 +6,9 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from ace_lite.benchmark.case_contracts import normalize_benchmark_case
 from ace_lite.dev_feedback_store import DevFix
+from ace_lite.feedback_case_contracts import derive_dev_feedback_case_payload
 
 if TYPE_CHECKING:
     from ace_lite.issue_report_store import IssueReport
@@ -31,33 +33,6 @@ def _unique_non_empty(items: list[str], *, limit: int | None = None) -> list[str
         if limit is not None and len(out) >= limit:
             break
     return out
-
-
-def _derive_dev_feedback_case_payload(*, report: IssueReport) -> dict[str, Any] | None:
-    attachments = [
-        str(item).strip()
-        for item in getattr(report, "attachments", ())
-        if str(item).strip()
-    ]
-    fix_refs = [item for item in attachments if item.startswith("dev-fix://")]
-    if not fix_refs:
-        return None
-    resolved_statuses = {"resolved", "fixed", "closed"}
-    resolved = bool(str(report.resolved_at or "").strip()) or (
-        str(report.status or "").strip().lower() in resolved_statuses
-    )
-    payload: dict[str, Any] = {
-        "issue_count": 1,
-        "linked_fix_issue_count": 1,
-        "resolved_issue_count": 1 if resolved else 0,
-    }
-    occurred_at = str(report.occurred_at or report.created_at or "").strip()
-    resolved_at = str(report.resolved_at or "").strip()
-    if occurred_at:
-        payload["created_at"] = occurred_at
-    if resolved_at:
-        payload["resolved_at"] = resolved_at
-    return payload
 
 
 def build_issue_report_case_id(*, report: IssueReport) -> str:
@@ -117,6 +92,7 @@ def build_issue_report_benchmark_case(
             "severity": str(report.severity),
             "status": str(report.status),
             "selected_path": str(report.selected_path),
+            "attachments": list(report.attachments),
             "plan_payload_ref": str(report.plan_payload_ref),
             "occurred_at": str(report.occurred_at),
             "resolved_at": str(report.resolved_at),
@@ -125,10 +101,7 @@ def build_issue_report_benchmark_case(
             "resolution_note": str(report.resolution_note),
         },
     }
-    dev_feedback = _derive_dev_feedback_case_payload(report=report)
-    if dev_feedback is not None:
-        payload["dev_feedback"] = dev_feedback
-    return payload
+    return normalize_benchmark_case(payload)
 
 
 def export_issue_report_benchmark_case(
@@ -153,7 +126,13 @@ def export_issue_report_benchmark_case(
     if append and target.exists():
         loaded = yaml.safe_load(target.read_text(encoding="utf-8"))
         if isinstance(loaded, dict) and isinstance(loaded.get("cases"), list):
-            payload = {"cases": list(loaded.get("cases", []))}
+            payload = {
+                "cases": [
+                    normalize_benchmark_case(item)
+                    for item in loaded.get("cases", [])
+                    if isinstance(item, dict)
+                ]
+            }
     existing_cases = payload["cases"]
     if not isinstance(existing_cases, list):
         existing_cases = []
@@ -204,6 +183,7 @@ __all__ = [
     "build_issue_report_benchmark_case",
     "build_issue_report_case_id",
     "build_issue_report_resolution_from_fix",
+    "derive_dev_feedback_case_payload",
     "derive_issue_report_expected_keys",
     "export_issue_report_benchmark_case",
 ]

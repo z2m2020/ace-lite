@@ -173,7 +173,7 @@ Still missing:
 - a fully normalized auto-capture taxonomy for all planned cases
 - a runtime-originated `manual_override` signal; current `manual_override` remains a normalization target for explicit human-recorded issue/fix flows rather than an automatically emitted runtime event
 - first-class metrics for manual override frequency, retry clustering, and end-to-end developer issue capture coverage
-- automatic exporter coverage that stamps richer developer issue/fix lifecycle metadata into all feedback benchmark cases; issue-report benchmark export now derives minimal `dev_feedback` metadata from resolved reports with `dev-fix://...` attachments, but broader benchmark case generation still depends on explicit case metadata
+- automatic exporter or case-generation coverage that stamps richer developer issue/fix lifecycle metadata into all feedback benchmark cases; issue-report benchmark export now carries `attachments` inside the exported `issue_report` payload and derives minimal `dev_feedback` metadata from resolved reports with `dev-fix://...` attachments, benchmark case loading now normalizes the same metadata through a shared contract before runner evaluation, the shared contract also restores `created_at` and `resolved_at` from `issue_report` for recognized issue-capture and issue-resolution lanes when explicit `dev_feedback` is absent, and benchmark row assembly still keeps the same derivation logic as a fail-open fallback, but broader generic case generation still lacks a universal derivation contract
 
 ### 5.4 Evaluation and Validation
 
@@ -497,6 +497,15 @@ Recommended next iteration order:
 4. add coverage metrics such as `dev_issue_capture_rate`, and improve exporter or case-generation coverage so `dev_issue_to_fix_rate` and related lifecycle counts are stamped automatically rather than manually carried in case metadata
 5. decide whether the original four comparison lanes should be implemented as a new benchmark execution dimension rather than as `comparison_lane` labels
 6. add stronger explainability and attribution quality signals only after the metric source data is stable
+
+2026-03-21 incremental note:
+
+- item 1 is now partially resolved: `ltm_latency_overhead_ms` is promoted into the regression checker using the existing `latency_growth_factor`, while report and summary surfaces now expose a dedicated alignment summary against `runtime_stats_summary.memory_health_summary.memory_stage_latency_ms_avg`
+- the remaining open part of item 1 is whether the latency-overhead gate should eventually receive its own dedicated threshold knob instead of sharing the general latency growth factor
+- item 2 is now partially addressed for runtime-originated degradation capture: `chunk_guard_fallback`, `validation_timeout`, and `validation_apply_failed` are emitted as canonical degraded reason codes, validation stage tags now expose sandbox apply reason and timeout state for downstream runtime stats, top-pain summaries, and runtime-to-dev-issue promotion, runtime doctor payloads now also expose canonical doctor-only degraded reasons for `stage_artifact_cache_corrupt`, `git_unavailable`, and `install_drift`, and `runtime doctor --record-runtime-event` can now persist those doctor degraded reasons as an explicit synthetic runtime invocation when the operator intentionally opts in
+- the remaining gap in item 2 is that doctor-only and manual-override style signals still do not flow through durable runtime invocation facts by default and do not yet participate in a dedicated first-class doctor-event model; current persistence is explicit opt-in and still shares the generic runtime invocation contract
+- item 4 is now partially addressed through benchmark coverage for runtime-promoted developer issues: `feedback_loop_cases.yaml` includes CLI/MCP runtime issue-capture cases, summary/report surfaces expose `dev_issue_capture_rate`, exported issue-report benchmark cases now preserve `attachments` inside `issue_report`, `benchmark.runner.load_cases()` normalizes `dev_feedback` metadata through a shared contract at load time, and `case_evaluation_row` still auto-derives the same lifecycle counters as a fail-open fallback
+- the remaining gap in item 4 is a broader universal derivation contract so `dev_issue_to_fix_rate` and related lifecycle counters no longer depend on manually curated metadata outside the currently recognized issue-report attachment patterns and feedback-surface patterns
 
 ## 14. Near-Term Recommendations
 

@@ -153,3 +153,7 @@ def test_handle_issue_report_export_case_and_apply_fix(tmp_path: Path) -> None:
         "created_at": "2026-03-19T00:00:00+00:00",
         "resolved_at": "2026-03-19T00:05:00+00:00",
     }
+    assert exported_after_resolution["case"]["issue_report"]["attachments"] == [
+        "artifact://validation.json",
+        "dev-fix://devf_demo1234",
+    ]

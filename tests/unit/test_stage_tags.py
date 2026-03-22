@@ -195,6 +195,10 @@ def test_validation_stage_tags_include_sandbox_and_result_summary() -> None:
             "sandbox": {
                 "patch_applied": True,
                 "cleanup_ok": True,
+                "apply_result": {
+                    "reason": "ok",
+                    "timed_out": False,
+                },
             },
             "result": {
                 "summary": {
@@ -212,6 +216,8 @@ def test_validation_stage_tags_include_sandbox_and_result_summary() -> None:
     assert tags["patch_artifact_present"] is True
     assert tags["patch_applied"] is True
     assert tags["cleanup_ok"] is True
+    assert tags["sandbox_apply_reason"] == "ok"
+    assert tags["sandbox_apply_timed_out"] is False
     assert tags["diagnostic_count"] == 2
     assert tags["xref_enabled"] is True
     assert tags["xref_count"] == 1

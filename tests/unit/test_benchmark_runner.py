@@ -3,8 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import yaml
+
 from ace_lite.benchmark.runner import BenchmarkRunner
 from ace_lite.benchmark.runner import load_baseline_metrics
+from ace_lite.benchmark.runner import load_cases
 
 
 class _StubOrchestrator:
@@ -97,6 +100,81 @@ def test_load_baseline_metrics_preserves_full_metric_contract_from_summary_json(
     assert metrics["contextual_sidecar_reference_hint_chunk_count_mean"] == 10.0
     assert metrics["contextual_sidecar_reference_hint_coverage_ratio"] == 0.8
     assert metrics["robust_signature_count_mean"] == 13.5
+
+
+def test_load_cases_normalizes_feedback_loop_metadata(tmp_path: Path) -> None:
+    cases_path = tmp_path / "benchmark" / "cases.yaml"
+    cases_path.parent.mkdir(parents=True, exist_ok=True)
+    cases_path.write_text(
+        yaml.safe_dump(
+            {
+                "cases": [
+                    {
+                        "case_id": "issue-derived",
+                        "query": "issue export",
+                        "expected_keys": ["issue"],
+                        "top_k": 8,
+                        "issue_report": {
+                            "status": "resolved",
+                            "occurred_at": "2026-03-19T00:00:00+00:00",
+                            "resolved_at": "2026-03-19T00:05:00+00:00",
+                            "attachments": [
+                                "artifact://validation.json",
+                                "dev-fix://devf_demo1234",
+                            ],
+                        },
+                    },
+                    {
+                        "case_id": "runtime-derived",
+                        "query": "runtime capture",
+                        "expected_keys": ["runtime"],
+                        "top_k": 8,
+                        "comparison_lane": "dev_issue_capture",
+                        "feedback_surface": "runtime_issue_capture_cli",
+                        "issue_report": {
+                            "occurred_at": "2026-03-19T01:00:00+00:00",
+                        },
+                    },
+                    {
+                        "case_id": "resolution-derived",
+                        "query": "issue resolution",
+                        "expected_keys": ["resolution"],
+                        "top_k": 8,
+                        "comparison_lane": "dev_feedback_resolution",
+                        "feedback_surface": "issue_resolution_cli",
+                        "issue_report": {
+                            "status": "resolved",
+                            "occurred_at": "2026-03-19T02:00:00+00:00",
+                            "resolved_at": "2026-03-19T03:30:00+00:00",
+                        },
+                    },
+                ]
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    cases = load_cases(cases_path)
+
+    assert cases[0]["dev_feedback"] == {
+        "issue_count": 1,
+        "linked_fix_issue_count": 1,
+        "resolved_issue_count": 1,
+        "created_at": "2026-03-19T00:00:00+00:00",
+        "resolved_at": "2026-03-19T00:05:00+00:00",
+    }
+    assert cases[1]["dev_feedback"] == {
+        "issue_count": 1,
+        "created_at": "2026-03-19T01:00:00+00:00",
+    }
+    assert cases[2]["dev_feedback"] == {
+        "issue_count": 1,
+        "linked_fix_issue_count": 1,
+        "resolved_issue_count": 1,
+        "created_at": "2026-03-19T02:00:00+00:00",
+        "resolved_at": "2026-03-19T03:30:00+00:00",
+    }
 
 
 def test_benchmark_runner_can_omit_plan_payloads() -> None:

@@ -147,6 +147,26 @@ def test_collect_durable_stats_reasons_marks_latency_budget_exceeded_from_parall
     assert "latency_budget_exceeded" in reasons
 
 
+def test_collect_durable_stats_reasons_marks_chunk_guard_fallback() -> None:
+    reasons = AceOrchestrator._collect_durable_stats_reasons(
+        stage_metrics=[
+            StageMetric(
+                stage="index",
+                elapsed_ms=12.0,
+                plugins=[],
+                tags={
+                    "chunk_guard_fallback": True,
+                },
+            )
+        ],
+        contract_error=None,
+        replay_cache_info=None,
+        trace_export={},
+    )
+
+    assert "chunk_guard_fallback" in reasons
+
+
 def test_collect_durable_stats_reasons_marks_latency_budget_exceeded_from_xref_budget_exhaustion() -> None:
     reasons = AceOrchestrator._collect_durable_stats_reasons(
         stage_metrics=[
@@ -166,6 +186,53 @@ def test_collect_durable_stats_reasons_marks_latency_budget_exceeded_from_xref_b
 
     assert "xref_budget_exhausted" in reasons
     assert "latency_budget_exceeded" in reasons
+
+
+def test_collect_durable_stats_reasons_marks_validation_timeout_as_latency_budget_event() -> None:
+    reasons = AceOrchestrator._collect_durable_stats_reasons(
+        stage_metrics=[
+            StageMetric(
+                stage="validation",
+                elapsed_ms=12.0,
+                plugins=[],
+                tags={
+                    "reason": "patch_apply_failed",
+                    "sandbox_apply_reason": "timeout",
+                    "sandbox_apply_timed_out": True,
+                },
+            )
+        ],
+        contract_error=None,
+        replay_cache_info=None,
+        trace_export={},
+    )
+
+    assert "validation_timeout" in reasons
+    assert "latency_budget_exceeded" in reasons
+    assert "validation_apply_failed" not in reasons
+
+
+def test_collect_durable_stats_reasons_marks_validation_apply_failure() -> None:
+    reasons = AceOrchestrator._collect_durable_stats_reasons(
+        stage_metrics=[
+            StageMetric(
+                stage="validation",
+                elapsed_ms=12.0,
+                plugins=[],
+                tags={
+                    "reason": "patch_apply_failed",
+                    "sandbox_apply_reason": "apply_failed",
+                    "sandbox_apply_timed_out": False,
+                },
+            )
+        ],
+        contract_error=None,
+        replay_cache_info=None,
+        trace_export={},
+    )
+
+    assert "validation_apply_failed" in reasons
+    assert "validation_timeout" not in reasons
 
 
 def test_collect_durable_stats_reasons_marks_skills_budget_exhausted() -> None:

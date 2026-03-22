@@ -483,6 +483,9 @@ def build_feedback_loop_summary(
             "issue_report_resolution_rate": 0.0,
             "issue_report_time_to_fix_case_count": 0,
             "issue_report_time_to_fix_hours_mean": 0.0,
+            "dev_issue_capture_case_count": 0,
+            "dev_issue_captured_case_count": 0,
+            "dev_issue_capture_rate": 0.0,
             "dev_feedback_resolution_case_count": 0,
             "dev_feedback_resolved_case_count": 0,
             "dev_feedback_resolution_rate": 0.0,
@@ -500,6 +503,8 @@ def build_feedback_loop_summary(
     issue_report_linked_plan_case_count = 0
     issue_report_resolved_case_count = 0
     issue_report_time_to_fix_hours: list[float] = []
+    dev_issue_capture_case_count = 0
+    dev_issue_captured_case_count = 0
     dev_feedback_resolution_case_count = 0
     dev_feedback_resolved_case_count = 0
     dev_feedback_issue_count = 0
@@ -530,6 +535,12 @@ def build_feedback_loop_summary(
             time_to_fix_hours = float(item.get("issue_report_time_to_fix_hours", 0.0) or 0.0)
             if time_to_fix_hours > 0.0:
                 issue_report_time_to_fix_hours.append(time_to_fix_hours)
+            continue
+
+        if lane == "dev_issue_capture":
+            dev_issue_capture_case_count += 1
+            if int(item.get("dev_feedback_issue_count", 0) or 0) > 0:
+                dev_issue_captured_case_count += 1
             continue
 
         if lane == "dev_feedback_resolution":
@@ -578,6 +589,13 @@ def build_feedback_loop_summary(
         "issue_report_time_to_fix_hours_mean": (
             mean(issue_report_time_to_fix_hours)
             if issue_report_time_to_fix_hours
+            else 0.0
+        ),
+        "dev_issue_capture_case_count": dev_issue_capture_case_count,
+        "dev_issue_captured_case_count": dev_issue_captured_case_count,
+        "dev_issue_capture_rate": (
+            float(dev_issue_captured_case_count) / float(dev_issue_capture_case_count)
+            if dev_issue_capture_case_count > 0
             else 0.0
         ),
         "dev_feedback_resolution_case_count": dev_feedback_resolution_case_count,

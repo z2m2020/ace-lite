@@ -7,18 +7,25 @@ _REASON_ALIASES = {
     "docs_timeout": "parallel_docs_timeout",
     "document_timeout": "parallel_docs_timeout",
     "worktree_timeout": "parallel_worktree_timeout",
+    "sandbox_timeout": "validation_timeout",
+    "validation_timed_out": "validation_timeout",
     "manual_selection_override": "manual_override",
     "selection_override": "manual_override",
     "manual_path_override": "manual_override",
     "repeated_retries": "repeated_retry",
     "retry_loop": "repeated_retry",
     "retry_exhausted": "repeated_retry",
+    "patch_apply_failed": "validation_apply_failed",
+    "apply_failed": "validation_apply_failed",
     "budget_exceeded": "latency_budget_exceeded",
     "time_budget_exceeded": "latency_budget_exceeded",
     "slo_downgrade": "latency_budget_exceeded",
     "low_support_chunk": "evidence_insufficient",
     "missing_validation": "evidence_insufficient",
     "no_candidate": "evidence_insufficient",
+    "cache_corruption": "stage_artifact_cache_corrupt",
+    "stage_artifact_cache_error": "stage_artifact_cache_corrupt",
+    "editable_install_drift": "install_drift",
 }
 
 _REASON_METADATA = {
@@ -87,6 +94,14 @@ _REASON_METADATA = {
         "reason_family": "plugin_policy",
         "capture_class": "policy",
     },
+    "validation_timeout": {
+        "reason_family": "validation",
+        "capture_class": "timeout",
+    },
+    "validation_apply_failed": {
+        "reason_family": "validation",
+        "capture_class": "apply_failure",
+    },
     "contract_error": {
         "reason_family": "contract",
         "capture_class": "contract_error",
@@ -94,6 +109,18 @@ _REASON_METADATA = {
     "trace_export_failed": {
         "reason_family": "trace_export",
         "capture_class": "export_failure",
+    },
+    "stage_artifact_cache_corrupt": {
+        "reason_family": "cache",
+        "capture_class": "cache_integrity",
+    },
+    "git_unavailable": {
+        "reason_family": "runtime_environment",
+        "capture_class": "environment",
+    },
+    "install_drift": {
+        "reason_family": "runtime_environment",
+        "capture_class": "configuration_drift",
     },
     "evidence_insufficient": {
         "reason_family": "evidence",

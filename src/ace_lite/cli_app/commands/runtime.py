@@ -35,6 +35,7 @@ from ace_lite.cli_app.runtime_command_support import (
     collect_runtime_mcp_doctor_payload,
     load_runtime_stats_summary,
 )
+from ace_lite.cli_app.runtime_doctor_support import persist_runtime_doctor_invocation
 from ace_lite.cli_app.output import echo_json
 from ace_lite.config import find_git_root, load_layered_config
 from ace_lite.config_models import validate_cli_config
@@ -840,6 +841,12 @@ def runtime_cache_vacuum_command(
     default="",
     help="Optional stage artifact temp payload root override path.",
 )
+@click.option(
+    "--record-runtime-event/--no-record-runtime-event",
+    default=False,
+    show_default=True,
+    help="Persist doctor degraded reasons as a synthetic runtime invocation in durable stats.",
+)
 def runtime_doctor_command(
     root: str,
     config_file: str,
@@ -858,6 +865,7 @@ def runtime_doctor_command(
     cache_db_path: str,
     payload_root: str,
     temp_root: str,
+    record_runtime_event: bool,
 ) -> None:
     payload = build_runtime_doctor_payload(
         root=root,
@@ -878,6 +886,13 @@ def runtime_doctor_command(
         payload_root=payload_root,
         temp_root=temp_root,
     )
+    if record_runtime_event:
+        payload["runtime_event_recording"] = persist_runtime_doctor_invocation(
+            root=root,
+            payload=payload,
+            stats_db_path=stats_db_path,
+            profile_key=runtime_profile,
+        )
     echo_json(payload)
     if not bool(payload.get("ok")):
         raise click.ClickException("Runtime doctor checks failed")

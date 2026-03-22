@@ -585,6 +585,7 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "ltm_stale_hit_rate" in report
     assert "ltm_replay_drift_rate" in report
     assert "ltm_latency_overhead_ms" in report
+    assert "dev_issue_capture_rate" in report
     assert "contextual_sidecar_parent_symbol_chunk_count_mean" in report
     assert "contextual_sidecar_reference_hint_coverage_ratio" in report
     assert "robust_signature_count_mean" in report
@@ -1268,7 +1269,9 @@ def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> N
             "generated_at": "2026-03-17T00:00:00Z",
             "repo": "demo",
             "case_count": 2,
-            "metrics": {},
+            "metrics": {
+                "ltm_latency_overhead_ms": 3.5,
+            },
             "runtime_stats_summary": {
                 "db_path": "runtime_state.db",
                 "latest_match": {
@@ -1410,6 +1413,9 @@ def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> N
     assert "Runtime memory events: 1" in report
     assert "Developer issues: 1 open=1 fixes=1 resolution_rate=1.0000" in report
     assert "Memory stage latency avg: 5.00 ms" in report
+    assert "Benchmark LTM latency overhead: 3.50 ms" in report
+    assert "Benchmark/runtime alignment gap: 1.50 ms" in report
+    assert "Benchmark/runtime ratio: 0.7000" in report
     assert "| memory_fallback | 1 | 1 | 1 | 1 | 2026-03-17T00:00:00Z |" in report
     assert "### Preference Snapshot" in report
     assert "- Preference observed cases: 2/2 (1.0000)" in report
@@ -1433,6 +1439,50 @@ def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> N
     assert "- Durable validation-preference events: 1 paths=1 total_weight=0.2500" in report
 
 
+def test_build_report_markdown_includes_dev_issue_capture_feedback_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-21T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {},
+            "feedback_loop_summary": {
+                "case_count": 2,
+                "issue_report_case_count": 0,
+                "issue_report_linked_case_count": 0,
+                "issue_report_linked_plan_case_count": 0,
+                "issue_report_resolved_case_count": 0,
+                "issue_to_benchmark_case_conversion_rate": 0.0,
+                "issue_report_linked_plan_rate": 0.0,
+                "issue_report_resolution_rate": 0.0,
+                "issue_report_time_to_fix_case_count": 0,
+                "issue_report_time_to_fix_hours_mean": 0.0,
+                "dev_issue_capture_case_count": 2,
+                "dev_issue_captured_case_count": 2,
+                "dev_issue_capture_rate": 1.0,
+                "dev_feedback_resolution_case_count": 0,
+                "dev_feedback_resolved_case_count": 0,
+                "dev_feedback_resolution_rate": 0.0,
+                "dev_feedback_issue_count": 2,
+                "dev_feedback_linked_fix_issue_count": 0,
+                "dev_feedback_resolved_issue_count": 0,
+                "dev_issue_to_fix_rate": 0.0,
+                "dev_feedback_issue_time_to_fix_case_count": 0,
+                "dev_feedback_issue_time_to_fix_hours_mean": 0.0,
+                "feedback_surfaces": {
+                    "runtime_issue_capture_cli": 1,
+                    "runtime_issue_capture_mcp": 1,
+                },
+            },
+        }
+    )
+
+    assert "Dev-issue capture cases: 2 captured=2 rate=1.0000" in report
+    assert "| dev_issue_capture_rate | 1.0000 |" in report
+    assert "| runtime_issue_capture_cli | 1 |" in report
+    assert "| runtime_issue_capture_mcp | 1 |" in report
+
+
 def test_build_results_summary_backfills_task_success_alias() -> None:
     summary = build_results_summary(
         {
@@ -1445,3 +1495,29 @@ def test_build_results_summary_backfills_task_success_alias() -> None:
 
     assert summary["metrics"]["task_success_rate"] == 0.75
     assert summary["metrics"]["utility_rate"] == 0.75
+
+
+def test_build_results_summary_includes_ltm_latency_alignment_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "metrics": {
+                "ltm_latency_overhead_ms": 4.0,
+            },
+            "runtime_stats_summary": {
+                "memory_health_summary": {
+                    "memory_stage_latency_ms_avg": 5.0,
+                }
+            },
+        }
+    )
+
+    assert summary["ltm_latency_alignment_summary"] == {
+        "benchmark_ltm_latency_overhead_ms": 4.0,
+        "runtime_memory_stage_latency_ms_avg": 5.0,
+        "alignment_gap_ms": 1.0,
+        "benchmark_to_runtime_ratio": 0.8,
+        "has_runtime_reference": True,
+        "has_benchmark_signal": True,
+        "comparable": True,
+    }

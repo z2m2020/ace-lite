@@ -912,6 +912,8 @@ class AceOrchestrator:
                     reasons.add("latency_budget_exceeded")
                 if bool(tags.get("chunk_semantic_fallback", False)):
                     reasons.add("chunk_semantic_fallback")
+                if bool(tags.get("chunk_guard_fallback", False)):
+                    reasons.add("chunk_guard_fallback")
                 if bool(tags.get("parallel_docs_timed_out", False)):
                     reasons.add("parallel_docs_timeout")
                     reasons.add("latency_budget_exceeded")
@@ -920,6 +922,18 @@ class AceOrchestrator:
                     reasons.add("latency_budget_exceeded")
                 if bool(tags.get("router_fallback_applied", False)):
                     reasons.add("router_fallback_applied")
+            if metric.stage == "validation":
+                validation_reason = str(tags.get("reason") or "").strip().lower()
+                sandbox_apply_reason = str(tags.get("sandbox_apply_reason") or "").strip().lower()
+                sandbox_apply_timed_out = bool(tags.get("sandbox_apply_timed_out", False))
+                if sandbox_apply_timed_out or sandbox_apply_reason == "timeout":
+                    reasons.add("validation_timeout")
+                    reasons.add("latency_budget_exceeded")
+                elif (
+                    validation_reason == "patch_apply_failed"
+                    or sandbox_apply_reason == "apply_failed"
+                ):
+                    reasons.add("validation_apply_failed")
             if metric.stage == "augment" and bool(tags.get("xref_budget_exhausted", False)):
                 reasons.add("xref_budget_exhausted")
                 reasons.add("latency_budget_exceeded")

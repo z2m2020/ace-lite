@@ -8,9 +8,15 @@ from ace_lite.runtime_db_migrate import build_runtime_db_migration_bootstrap
 
 
 RUNTIME_STATS_SCHEMA_NAME = "runtime_stats"
-RUNTIME_STATS_SCHEMA_VERSION = 1
-RUNTIME_STATS_SCHEMA_LABEL = "ace-lite-runtime-stats-v1"
+RUNTIME_STATS_SCHEMA_VERSION = 2
+RUNTIME_STATS_SCHEMA_LABEL = "ace-lite-runtime-stats-v2"
 RUNTIME_STATS_ALL_TIME_SCOPE_KEY = "all"
+RUNTIME_STATS_DEFAULT_EVENT_CLASS = "runtime_invocation"
+RUNTIME_STATS_DOCTOR_EVENT_CLASS = "doctor_runtime_event"
+RUNTIME_STATS_EVENT_CLASS_VALUES = (
+    RUNTIME_STATS_DEFAULT_EVENT_CLASS,
+    RUNTIME_STATS_DOCTOR_EVENT_CLASS,
+)
 
 RUNTIME_STATS_REQUIRED_ROLLUP_KINDS = (
     "session",
@@ -60,6 +66,8 @@ RUNTIME_STATS_DEGRADED_REASON_CODES = (
     "chunk_guard_fallback",
     "parallel_docs_timeout",
     "parallel_worktree_timeout",
+    "validation_timeout",
+    "validation_apply_failed",
     "xref_budget_exhausted",
     "skills_budget_exhausted",
     "router_fallback_applied",
@@ -67,6 +75,9 @@ RUNTIME_STATS_DEGRADED_REASON_CODES = (
     "plugin_policy_warn",
     "contract_error",
     "trace_export_failed",
+    "stage_artifact_cache_corrupt",
+    "git_unavailable",
+    "install_drift",
     "evidence_insufficient",
     "noisy_hit",
     "manual_override",
@@ -186,6 +197,7 @@ def _build_table_specs() -> tuple[RuntimeStatsTableSpec, ...]:
             "session_id TEXT NOT NULL, "
             "repo_key TEXT NOT NULL, "
             "profile_key TEXT NOT NULL DEFAULT '', "
+            f"event_class TEXT NOT NULL DEFAULT '{RUNTIME_STATS_DEFAULT_EVENT_CLASS}', "
             "settings_fingerprint TEXT NOT NULL DEFAULT '', "
             "status TEXT NOT NULL, "
             "contract_error_code TEXT NOT NULL DEFAULT '', "
@@ -205,11 +217,14 @@ def _build_table_specs() -> tuple[RuntimeStatsTableSpec, ...]:
             f"ON {RUNTIME_STATS_INVOCATIONS_TABLE}(session_id)",
             "CREATE INDEX IF NOT EXISTS idx_runtime_stats_invocations_repo_profile "
             f"ON {RUNTIME_STATS_INVOCATIONS_TABLE}(repo_key, profile_key)",
+            "CREATE INDEX IF NOT EXISTS idx_runtime_stats_invocations_event_class "
+            f"ON {RUNTIME_STATS_INVOCATIONS_TABLE}(event_class)",
             "CREATE INDEX IF NOT EXISTS idx_runtime_stats_invocations_status "
             f"ON {RUNTIME_STATS_INVOCATIONS_TABLE}(status)",
         ),
         key_fields=("invocation_id", "session_id", "repo_key", "profile_key"),
         measure_fields=(
+            "event_class",
             "status",
             "contract_error_code",
             "degraded_reason_codes",
@@ -345,8 +360,43 @@ def _apply_runtime_stats_schema_v1(conn: Any) -> None:
             conn.execute(index_sql)
 
 
+def _table_has_column(conn: Any, *, table_name: str, column_name: str) -> bool:
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    for row in rows:
+        try:
+            if str(row["name"]) == column_name:
+                return True
+        except Exception:
+            if len(row) > 1 and str(row[1]) == column_name:
+                return True
+    return False
+
+
+def _apply_runtime_stats_schema_v2(conn: Any) -> None:
+    if not _table_has_column(
+        conn,
+        table_name=RUNTIME_STATS_INVOCATIONS_TABLE,
+        column_name="event_class",
+    ):
+        conn.execute(
+            f"ALTER TABLE {RUNTIME_STATS_INVOCATIONS_TABLE} "
+            f"ADD COLUMN event_class TEXT NOT NULL DEFAULT '{RUNTIME_STATS_DEFAULT_EVENT_CLASS}'"
+        )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_runtime_stats_invocations_event_class "
+        f"ON {RUNTIME_STATS_INVOCATIONS_TABLE}(event_class)"
+    )
+    conn.execute(
+        f"UPDATE {RUNTIME_STATS_INVOCATIONS_TABLE} "
+        "SET event_class = ? "
+        "WHERE session_id LIKE ?",
+        (RUNTIME_STATS_DOCTOR_EVENT_CLASS, "runtime-doctor::%"),
+    )
+
+
 RUNTIME_STATS_MIGRATIONS = (
     RuntimeDbMigration(version=1, apply=_apply_runtime_stats_schema_v1),
+    RuntimeDbMigration(version=2, apply=_apply_runtime_stats_schema_v2),
 )
 
 
@@ -366,6 +416,7 @@ def build_runtime_stats_schema_document() -> dict[str, Any]:
         "rollup_kinds": list(RUNTIME_STATS_ROLLUP_KINDS),
         "stage_names": list(RUNTIME_STATS_STAGE_NAMES),
         "status_values": list(RUNTIME_STATS_STATUS_VALUES),
+        "event_class_values": list(RUNTIME_STATS_EVENT_CLASS_VALUES),
         "counter_fields": list(RUNTIME_STATS_COUNTER_FIELDS),
         "latency_aggregate_fields": list(RUNTIME_STATS_LATENCY_AGGREGATE_FIELDS),
         "degraded_reason_codes": list(RUNTIME_STATS_DEGRADED_REASON_CODES),
@@ -388,7 +439,10 @@ __all__ = [
     "RUNTIME_STATS_ALL_TIME_SCOPE_KEY",
     "RUNTIME_STATS_COUNTER_FIELDS",
     "RUNTIME_STATS_DEGRADED_REASON_CODES",
+    "RUNTIME_STATS_DEFAULT_EVENT_CLASS",
+    "RUNTIME_STATS_DOCTOR_EVENT_CLASS",
     "RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE",
+    "RUNTIME_STATS_EVENT_CLASS_VALUES",
     "RUNTIME_STATS_INVOCATIONS_TABLE",
     "RUNTIME_STATS_LATENCY_AGGREGATE_FIELDS",
     "RUNTIME_STATS_MIGRATIONS",

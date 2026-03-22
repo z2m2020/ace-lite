@@ -32,6 +32,54 @@ def _append_metrics_table(
     lines.append("")
 
 
+def _build_ltm_latency_alignment_summary(*, results: dict[str, Any]) -> dict[str, Any]:
+    metrics = _normalize_metrics(results.get("metrics"))
+    runtime_stats_summary_raw = results.get("runtime_stats_summary")
+    runtime_stats_summary: dict[str, Any] = (
+        runtime_stats_summary_raw if isinstance(runtime_stats_summary_raw, dict) else {}
+    )
+    memory_health_summary_raw = runtime_stats_summary.get("memory_health_summary")
+    memory_health_summary: dict[str, Any] = (
+        memory_health_summary_raw
+        if isinstance(memory_health_summary_raw, dict)
+        else {}
+    )
+
+    benchmark_ltm_latency_overhead_ms = float(
+        metrics.get("ltm_latency_overhead_ms", 0.0) or 0.0
+    )
+    runtime_memory_stage_latency_ms_avg = float(
+        memory_health_summary.get("memory_stage_latency_ms_avg", 0.0) or 0.0
+    )
+    has_runtime_reference = bool(memory_health_summary)
+    has_benchmark_signal = benchmark_ltm_latency_overhead_ms > 0.0
+    comparable = has_runtime_reference and runtime_memory_stage_latency_ms_avg > 0.0
+
+    if not has_runtime_reference and not has_benchmark_signal:
+        return {}
+
+    return {
+        "benchmark_ltm_latency_overhead_ms": benchmark_ltm_latency_overhead_ms,
+        "runtime_memory_stage_latency_ms_avg": runtime_memory_stage_latency_ms_avg,
+        "alignment_gap_ms": round(
+            runtime_memory_stage_latency_ms_avg - benchmark_ltm_latency_overhead_ms,
+            6,
+        ),
+        "benchmark_to_runtime_ratio": (
+            round(
+                benchmark_ltm_latency_overhead_ms
+                / runtime_memory_stage_latency_ms_avg,
+                6,
+            )
+            if comparable
+            else 0.0
+        ),
+        "has_runtime_reference": has_runtime_reference,
+        "has_benchmark_signal": has_benchmark_signal,
+        "comparable": comparable,
+    }
+
+
 def _append_plugin_policy_summary(lines: list[str], summary: dict[str, Any]) -> None:
     totals_raw = summary.get("totals")
     totals: dict[str, Any] = totals_raw if isinstance(totals_raw, dict) else {}
@@ -258,6 +306,31 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
                 )
             )
         )
+        alignment_summary = _build_ltm_latency_alignment_summary(results=results)
+        if alignment_summary:
+            lines.append(
+                "- Benchmark LTM latency overhead: {value:.2f} ms".format(
+                    value=float(
+                        alignment_summary.get("benchmark_ltm_latency_overhead_ms", 0.0)
+                        or 0.0
+                    )
+                )
+            )
+            lines.append(
+                "- Benchmark/runtime alignment gap: {value:.2f} ms".format(
+                    value=float(alignment_summary.get("alignment_gap_ms", 0.0) or 0.0)
+                )
+            )
+            lines.append(
+                "- Benchmark/runtime ratio: {value:.4f}".format(
+                    value=float(
+                        alignment_summary.get("benchmark_to_runtime_ratio", 0.0) or 0.0
+                    )
+                )
+            )
+            lines.append(
+                "- Alignment note: runtime memory stage latency is an operational reference, not the primary benchmark aggregation source"
+            )
         lines.append("")
         reason_rows_raw = memory_health_summary.get("reasons")
         reason_rows = reason_rows_raw if isinstance(reason_rows_raw, list) else []
@@ -932,6 +1005,13 @@ def _append_feedback_loop_summary(lines: list[str], results: dict[str, Any]) -> 
         )
     )
     lines.append(
+        "- Dev-issue capture cases: {count} captured={captured} rate={rate:.4f}".format(
+            count=int(summary.get("dev_issue_capture_case_count", 0) or 0),
+            captured=int(summary.get("dev_issue_captured_case_count", 0) or 0),
+            rate=float(summary.get("dev_issue_capture_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
         "- Dev-feedback resolution cases: {count} resolved={resolved} rate={rate:.4f}".format(
             count=int(summary.get("dev_feedback_resolution_case_count", 0) or 0),
             resolved=int(summary.get("dev_feedback_resolved_case_count", 0) or 0),
@@ -967,6 +1047,11 @@ def _append_feedback_loop_summary(lines: list[str], results: dict[str, Any]) -> 
     lines.append(
         "| issue_report_time_to_fix_hours_mean | {value:.2f} |".format(
             value=float(summary.get("issue_report_time_to_fix_hours_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| dev_issue_capture_rate | {value:.4f} |".format(
+            value=float(summary.get("dev_issue_capture_rate", 0.0) or 0.0)
         )
     )
     lines.append(
@@ -1481,6 +1566,9 @@ def build_results_summary(results: dict[str, Any]) -> dict[str, Any]:
         "metrics": metric_snapshot,
     }
     summary.update(copy_optional_summary_sections(results=results))
+    latency_alignment_summary = _build_ltm_latency_alignment_summary(results=results)
+    if latency_alignment_summary:
+        summary["ltm_latency_alignment_summary"] = latency_alignment_summary
 
     return summary
 

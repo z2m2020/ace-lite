@@ -8,6 +8,7 @@ from typing import Any
 
 import yaml
 
+from ace_lite.benchmark.case_contracts import normalize_benchmark_case
 from ace_lite.benchmark.report_metrics import ALL_METRIC_ORDER, normalize_metrics
 from ace_lite.benchmark.scoring import (
     aggregate_metrics,
@@ -609,11 +610,15 @@ def load_cases(path: str | Path) -> list[dict[str, Any]]:
 
     if isinstance(data, dict):
         if isinstance(data.get("cases"), list):
-            return [item for item in data["cases"] if isinstance(item, dict)]
+            return [
+                normalize_benchmark_case(item)
+                for item in data["cases"]
+                if isinstance(item, dict)
+            ]
         return []
 
     if isinstance(data, list):
-        return [item for item in data if isinstance(item, dict)]
+        return [normalize_benchmark_case(item) for item in data if isinstance(item, dict)]
 
     return []
 

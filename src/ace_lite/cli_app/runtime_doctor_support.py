@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 from typing import Any
 
 from ace_lite.cli_app.runtime_status_support import load_runtime_stats_summary
 from ace_lite.config import find_git_root
+from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
+from ace_lite.runtime_stats import RuntimeInvocationStats, utc_now_iso
+from ace_lite.runtime_stats_schema import RUNTIME_STATS_DOCTOR_EVENT_CLASS
+from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.stage_artifact_cache_gc import (
     vacuum_stage_artifact_cache,
     verify_stage_artifact_cache,
@@ -13,6 +18,101 @@ from ace_lite.stage_artifact_cache_gc import (
 from ace_lite.vcs_history import collect_git_head_snapshot
 from ace_lite.vcs_worktree import collect_git_worktree_summary
 from ace_lite.version import get_version_info
+
+
+def _collect_runtime_doctor_degraded_reason_codes(
+    *,
+    cache_report: dict[str, Any],
+    git_payload: dict[str, Any],
+    version_sync: dict[str, Any],
+) -> list[str]:
+    reasons: list[str] = []
+    if int(cache_report.get("severe_issue_count", 0) or 0) > 0:
+        reasons.append("stage_artifact_cache_corrupt")
+    if str(git_payload.get("issue_type") or "").strip() == "git_unavailable":
+        reasons.append("git_unavailable")
+    if str(version_sync.get("reason") or "").strip() == "install_drift":
+        reasons.append("install_drift")
+    normalized: list[str] = []
+    for item in reasons:
+        canonical = normalize_dev_feedback_reason_code(item, default="")
+        if canonical and canonical not in normalized:
+            normalized.append(canonical)
+    return normalized
+
+
+def _resolve_runtime_doctor_repo_key(root: str) -> str:
+    requested_root = Path(root).resolve()
+    repo_root = find_git_root(requested_root) or requested_root
+    return str(repo_root.name or str(repo_root))
+
+
+def persist_runtime_doctor_invocation(
+    *,
+    root: str,
+    payload: dict[str, Any],
+    stats_db_path: str,
+    profile_key: str | None = None,
+) -> dict[str, Any]:
+    degraded_reason_codes = [
+        normalize_dev_feedback_reason_code(item, default="")
+        for item in payload.get("degraded_reason_codes", [])
+        if str(item).strip()
+    ]
+    degraded_reason_codes = [item for item in degraded_reason_codes if item]
+    if not degraded_reason_codes:
+        return {
+            "enabled": True,
+            "recorded": False,
+            "reason": "no_degraded_reasons",
+            "stats_db_path": str(Path(stats_db_path).expanduser().resolve()),
+            "invocation_id": "",
+        }
+
+    occurred_at = utc_now_iso()
+    repo_key = _resolve_runtime_doctor_repo_key(root)
+    normalized_profile = " ".join(str(profile_key or "").strip().split())
+    invocation_seed = "|".join(
+        (
+            "runtime_doctor",
+            repo_key,
+            normalized_profile,
+            occurred_at,
+            ",".join(degraded_reason_codes),
+        )
+    )
+    invocation_id = hashlib.sha256(invocation_seed.encode("utf-8")).hexdigest()[:24]
+    session_id = f"runtime-doctor::{repo_key}"
+    store = DurableStatsStore(db_path=stats_db_path)
+    store.record_invocation(
+        RuntimeInvocationStats(
+            invocation_id=invocation_id,
+            session_id=session_id,
+            repo_key=repo_key,
+            profile_key=normalized_profile,
+            event_class=RUNTIME_STATS_DOCTOR_EVENT_CLASS,
+            settings_fingerprint=str(
+                (payload.get("settings", {}) or {}).get("fingerprint") or ""
+            ).strip(),
+            status="degraded",
+            total_latency_ms=0.0,
+            started_at=occurred_at,
+            finished_at=occurred_at,
+            degraded_reason_codes=tuple(degraded_reason_codes),
+        )
+    )
+    return {
+        "enabled": True,
+        "recorded": True,
+        "reason": "recorded",
+        "stats_db_path": str(store.db_path),
+        "invocation_id": invocation_id,
+        "session_id": session_id,
+        "repo_key": repo_key,
+        "profile_key": normalized_profile,
+        "event_class": RUNTIME_STATS_DOCTOR_EVENT_CLASS,
+        "degraded_reason_codes": degraded_reason_codes,
+    }
 
 
 def build_runtime_cache_doctor_payload(
@@ -297,6 +397,11 @@ def build_runtime_doctor_payload(
         and isinstance(resolved.snapshot.get("plan", {}).get("plugins"), dict)
         else {}
     )
+    degraded_reason_codes = _collect_runtime_doctor_degraded_reason_codes(
+        cache_report=cache_report,
+        git_payload=git_payload,
+        version_sync=version_sync,
+    )
     return {
         "ok": (
             bool(integration.get("ok"))
@@ -305,6 +410,7 @@ def build_runtime_doctor_payload(
             and bool(version_sync.get("ok"))
         ),
         "event": "runtime_doctor",
+        "degraded_reason_codes": degraded_reason_codes,
         "settings": build_runtime_settings_payload(bundle),
         "stats": runtime_stats,
         "cache": cache_report,
@@ -323,6 +429,8 @@ def build_runtime_doctor_payload(
 __all__ = [
     "build_runtime_cache_doctor_payload",
     "build_runtime_cache_vacuum_payload",
+    "_collect_runtime_doctor_degraded_reason_codes",
+    "persist_runtime_doctor_invocation",
     "build_runtime_doctor_payload",
     "build_runtime_git_doctor_payload",
     "build_runtime_version_sync_payload",

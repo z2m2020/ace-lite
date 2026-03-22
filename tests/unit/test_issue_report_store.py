@@ -105,6 +105,10 @@ def test_issue_report_store_exports_case_and_applies_fix(tmp_path: Path) -> None
 
     assert exported["case"]["case_id"] == "issue-report-iss-demo1234"
     assert exported_yaml["cases"][0]["filters"]["include_paths"] == ["src/demo.py"]
+    assert exported_yaml["cases"][0]["issue_report"]["attachments"] == [
+        "artifact://validation.json",
+        "dev-fix://devf_demo1234",
+    ]
     assert resolved.status == "resolved"
     assert resolved.resolution_note == "patched validation payload"
     assert "dev-fix://devf_demo1234" in resolved.attachments

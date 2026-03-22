@@ -357,7 +357,7 @@ def test_feedback_loop_cases_cover_issue_export_and_resolution_surfaces() -> Non
     payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
     cases = payload.get("cases", []) if isinstance(payload, dict) else []
-    assert len(cases) == 4
+    assert len(cases) == 6
 
     case_ids = {str(item.get("case_id") or "") for item in cases if isinstance(item, dict)}
     assert case_ids == {
@@ -365,6 +365,8 @@ def test_feedback_loop_cases_cover_issue_export_and_resolution_surfaces() -> Non
         "ace-feedback-issue-export-mcp-02",
         "ace-feedback-resolution-cli-03",
         "ace-feedback-resolution-mcp-04",
+        "ace-feedback-runtime-capture-cli-04",
+        "ace-feedback-runtime-capture-mcp-05",
     }
 
     surfaces = {
@@ -377,6 +379,8 @@ def test_feedback_loop_cases_cover_issue_export_and_resolution_surfaces() -> Non
         "issue_report_export_mcp",
         "issue_resolution_cli",
         "issue_resolution_mcp",
+        "runtime_issue_capture_cli",
+        "runtime_issue_capture_mcp",
     }
 
     expected_lanes = {
@@ -384,6 +388,8 @@ def test_feedback_loop_cases_cover_issue_export_and_resolution_surfaces() -> Non
         "ace-feedback-issue-export-mcp-02": "issue_report_feedback",
         "ace-feedback-resolution-cli-03": "dev_feedback_resolution",
         "ace-feedback-resolution-mcp-04": "dev_feedback_resolution",
+        "ace-feedback-runtime-capture-cli-04": "dev_issue_capture",
+        "ace-feedback-runtime-capture-mcp-05": "dev_issue_capture",
     }
     expected_include_paths = {
         "ace-feedback-issue-export-cli-01": [
@@ -418,18 +424,28 @@ def test_feedback_loop_cases_cover_issue_export_and_resolution_surfaces() -> Non
             "tests/unit/test_mcp_service_issue_report_handlers.py",
             "tests/unit/test_mcp_server.py",
         ],
+        "ace-feedback-runtime-capture-cli-04": [
+            "src/ace_lite/cli_app/commands/feedback.py",
+            "src/ace_lite/dev_feedback_runtime_linkage.py",
+            "src/ace_lite/dev_feedback_store.py",
+            "src/ace_lite/runtime_stats.py",
+            "src/ace_lite/runtime_stats_store.py",
+            "tests/integration/test_cli_feedback.py",
+        ],
+        "ace-feedback-runtime-capture-mcp-05": [
+            "src/ace_lite/mcp_server/service_dev_feedback_handlers.py",
+            "src/ace_lite/dev_feedback_runtime_linkage.py",
+            "src/ace_lite/dev_feedback_store.py",
+            "src/ace_lite/runtime_stats.py",
+            "src/ace_lite/runtime_stats_store.py",
+            "tests/unit/test_mcp_service_dev_feedback_handlers.py",
+        ],
     }
-    expected_dev_feedback = {
-        "ace-feedback-resolution-cli-03": {
-            "issue_count": 1,
-            "linked_fix_issue_count": 1,
-            "resolved_issue_count": 1,
-        },
-        "ace-feedback-resolution-mcp-04": {
-            "issue_count": 1,
-            "linked_fix_issue_count": 1,
-            "resolved_issue_count": 1,
-        },
+    auto_derived_dev_feedback_case_ids = {
+        "ace-feedback-resolution-cli-03",
+        "ace-feedback-resolution-mcp-04",
+        "ace-feedback-runtime-capture-cli-04",
+        "ace-feedback-runtime-capture-mcp-05",
     }
 
     for item in cases:
@@ -441,8 +457,8 @@ def test_feedback_loop_cases_cover_issue_export_and_resolution_surfaces() -> Non
             "min_validation_tests": 1,
         }
         assert item["filters"]["include_paths"] == expected_include_paths[case_id]
-        if case_id in expected_dev_feedback:
-            assert item["dev_feedback"] == expected_dev_feedback[case_id]
+        if case_id in auto_derived_dev_feedback_case_ids:
+            assert "dev_feedback" not in item
 
 
 def test_memory_feedback_cases_cover_memory_taxonomy_surfaces() -> None:

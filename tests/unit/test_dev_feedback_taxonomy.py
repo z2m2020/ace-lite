@@ -11,8 +11,18 @@ def test_normalize_dev_feedback_reason_code_maps_known_aliases() -> None:
         "manual_override"
     )
     assert normalize_dev_feedback_reason_code("retry_loop") == "repeated_retry"
+    assert normalize_dev_feedback_reason_code("sandbox_timeout") == "validation_timeout"
+    assert normalize_dev_feedback_reason_code("patch_apply_failed") == (
+        "validation_apply_failed"
+    )
     assert normalize_dev_feedback_reason_code("missing_validation") == (
         "evidence_insufficient"
+    )
+    assert normalize_dev_feedback_reason_code("cache_corruption") == (
+        "stage_artifact_cache_corrupt"
+    )
+    assert normalize_dev_feedback_reason_code("editable_install_drift") == (
+        "install_drift"
     )
 
 
@@ -23,6 +33,16 @@ def test_describe_dev_feedback_reason_returns_family_and_capture_class() -> None
         "reason_code": "parallel_docs_timeout",
         "reason_family": "parallelism",
         "capture_class": "timeout",
+    }
+    assert describe_dev_feedback_reason("validation_timeout") == {
+        "reason_code": "validation_timeout",
+        "reason_family": "validation",
+        "capture_class": "timeout",
+    }
+    assert describe_dev_feedback_reason("git_unavailable") == {
+        "reason_code": "git_unavailable",
+        "reason_family": "runtime_environment",
+        "capture_class": "environment",
     }
 
 
