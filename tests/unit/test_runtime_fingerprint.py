@@ -140,6 +140,39 @@ def test_build_git_fast_fingerprint_degrades_to_git_partial_on_timeout() -> None
     assert fingerprint.fallback_reason == "timeout"
 
 
+def test_build_git_fast_fingerprint_keeps_exact_when_only_diff_timeout_occurs() -> None:
+    fingerprint = build_git_fast_fingerprint(
+        repo_root="F:/repo/demo",
+        settings_fingerprint="settings-diff-timeout",
+        collect_head_snapshot_fn=lambda **_kwargs: {
+            "enabled": True,
+            "reason": "ok",
+            "head_commit": "abc123",
+            "head_ref": "main",
+            "elapsed_ms": 5.0,
+        },
+        collect_worktree_summary_fn=lambda **_kwargs: {
+            "enabled": True,
+            "reason": "partial",
+            "error": "diff_timeout",
+            "changed_count": 2,
+            "entries": [
+                {"path": "src/a.py", "status": "M "},
+                {"path": "src/b.py", "status": "??"},
+            ],
+            "truncated": False,
+            "elapsed_ms": 7.5,
+        },
+        build_worktree_state_token_fn=lambda summary, max_entries=32: "diff-timeout-token",
+    )
+
+    assert fingerprint.trust_class == "exact"
+    assert fingerprint.timed_out is False
+    assert fingerprint.fallback_reason == ""
+    assert fingerprint.metadata is not None
+    assert fingerprint.metadata["worktree_reason"] == "partial"
+
+
 def test_build_git_fast_fingerprint_uses_budgeted_subcall_timeouts() -> None:
     captured: dict[str, float | None] = {}
 

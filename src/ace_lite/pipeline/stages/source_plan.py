@@ -103,9 +103,16 @@ def _build_constraints(
     *,
     memory_hits: list[dict[str, Any]],
     profile: dict[str, Any],
-    ltm_selected_map: dict[str, dict[str, Any]],
-    ltm_attribution_map: dict[str, dict[str, Any]],
-) -> tuple[list[str], list[dict[str, Any]], dict[str, Any]]:
+    ltm_selected_map: dict[str, dict[str, Any]] | None = None,
+    ltm_attribution_map: dict[str, dict[str, Any]] | None = None,
+    return_details: bool = False,
+) -> list[str] | tuple[list[str], list[dict[str, Any]], dict[str, Any]]:
+    resolved_ltm_selected_map = (
+        ltm_selected_map if isinstance(ltm_selected_map, dict) else {}
+    )
+    resolved_ltm_attribution_map = (
+        ltm_attribution_map if isinstance(ltm_attribution_map, dict) else {}
+    )
     raw: list[dict[str, Any]] = []
     for text in _extract_profile_constraints(profile):
         raw.append({"text": text, "source": "profile"})
@@ -119,10 +126,10 @@ def _build_constraints(
             "source": "memory",
             "handle": handle,
         }
-        if handle and handle in ltm_selected_map:
+        if handle and handle in resolved_ltm_selected_map:
             entry["source"] = "ltm"
-            entry["ltm_selected"] = ltm_selected_map.get(handle, {})
-            entry["ltm_attribution"] = ltm_attribution_map.get(handle, {})
+            entry["ltm_selected"] = resolved_ltm_selected_map.get(handle, {})
+            entry["ltm_attribution"] = resolved_ltm_attribution_map.get(handle, {})
         raw.append(entry)
 
     sanitized: list[str] = []
@@ -172,7 +179,7 @@ def _build_constraints(
             break
 
     summary = {
-        "selected_count": len(ltm_selected_map),
+        "selected_count": len(resolved_ltm_selected_map),
         "constraint_count": len(selected_ltm_constraints),
         "graph_neighbor_count": sum(
             1
@@ -185,6 +192,8 @@ def _build_constraints(
             if str(item.get("handle") or "").strip()
         ],
     }
+    if not return_details:
+        return sanitized
     return sanitized, selected_ltm_constraints, summary
 
 
@@ -245,6 +254,7 @@ def run_source_plan(
         profile=profile_payload,
         ltm_selected_map=ltm_selected_map,
         ltm_attribution_map=ltm_attribution_map,
+        return_details=True,
     )
 
     diagnostics = _coerce_list(augment_stage.get("diagnostics", []))

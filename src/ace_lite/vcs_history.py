@@ -65,6 +65,25 @@ def _read_git_head_commit_fast(*, repo_root: Path) -> str:
     return head_raw
 
 
+def _read_git_head_ref_fast(*, repo_root: Path) -> str:
+    git_dir = repo_root / ".git"
+    if not git_dir.exists():
+        return ""
+    head_path = git_dir / "HEAD"
+    if not head_path.exists() or not head_path.is_file():
+        return ""
+    try:
+        head_raw = head_path.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return ""
+    if not head_raw or not head_raw.lower().startswith("ref:"):
+        return ""
+    ref_name = head_raw.split(":", 1)[1].strip()
+    if ref_name.startswith("refs/heads/"):
+        return ref_name[len("refs/heads/") :]
+    return ref_name
+
+
 def _build_commit_history_cache_key(
     *,
     repo_root: Path,
@@ -106,6 +125,19 @@ def collect_git_head_snapshot(
         resolved_timeout = _DEFAULT_TIMEOUT_SECONDS
 
     started = perf_counter()
+    head_commit_fast = _read_git_head_commit_fast(repo_root=root)
+    if head_commit_fast:
+        head_ref_fast = _read_git_head_ref_fast(repo_root=root)
+        return {
+            "enabled": True,
+            "reason": "ok" if head_ref_fast else "partial",
+            "head_commit": head_commit_fast,
+            "head_ref": head_ref_fast,
+            "error": None if head_ref_fast else "head_ref_unavailable",
+            "elapsed_ms": round((perf_counter() - started) * 1000.0, 3),
+            "timeout_seconds": float(resolved_timeout),
+        }
+
     head_code, head_stdout, head_stderr, head_timed_out = run_capture_output(
         ["git", "rev-parse", "HEAD"],
         cwd=root,

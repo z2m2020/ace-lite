@@ -262,6 +262,7 @@ def build_git_fast_fingerprint(
 
     head_reason = str(head.get("reason") or "").strip()
     worktree_reason = str(worktree.get("reason") or "").strip()
+    worktree_error = str(worktree.get("error") or "").strip()
     head_commit = _normalize_text(head.get("head_commit"), max_len=64)
     head_ref = _normalize_text(head.get("head_ref"), max_len=128)
     dirty_paths_sample = _normalize_dirty_paths(
@@ -279,12 +280,16 @@ def build_git_fast_fingerprint(
     downgrade_reason = ""
     git_available = bool(head.get("enabled", False))
     worktree_available = bool(worktree.get("enabled", False))
+    worktree_status_complete = (
+        worktree_reason == "ok"
+        or (worktree_reason == "partial" and worktree_error == "diff_timeout")
+    )
     if head_commit:
         if (
             git_available
             and worktree_available
             and head_reason == "ok"
-            and worktree_reason == "ok"
+            and worktree_status_complete
             and not worktree_truncated
         ):
             trust_class = "exact"

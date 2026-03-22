@@ -15,6 +15,10 @@ _DEFAULT_TIMEOUT_SECONDS = 0.35
 _DEFAULT_MAX_FILES = 64
 
 
+def _remaining_timeout_seconds(*, started: float, total_timeout_seconds: float) -> float:
+    return max(0.0, float(total_timeout_seconds) - (perf_counter() - started))
+
+
 def collect_git_worktree_summary(
     *,
     repo_root: str | Path,
@@ -48,7 +52,21 @@ def collect_git_worktree_summary(
     resolved_max_files = max(1, int(max_files))
     started = perf_counter()
 
-    status = _collect_porcelain_status(root=root, timeout_seconds=resolved_timeout)
+    status_remaining = _remaining_timeout_seconds(
+        started=started,
+        total_timeout_seconds=resolved_timeout,
+    )
+    if status_remaining <= 0.0:
+        return _fail_payload(
+            enabled=True,
+            reason="timeout",
+            error="status_timeout",
+            elapsed_ms=(perf_counter() - started) * 1000.0,
+            timeout_seconds=resolved_timeout,
+            max_files=resolved_max_files,
+        )
+
+    status = _collect_porcelain_status(root=root, timeout_seconds=status_remaining)
     if status.get("timed_out"):
         return _fail_payload(
             enabled=True,
@@ -73,18 +91,37 @@ def collect_git_worktree_summary(
         entries = []
     status_truncated = len(entries) > resolved_max_files
 
-    diff_unstaged = _collect_numstat(
-        root=root,
-        args=["git", "--no-pager", "diff", "--numstat"],
-        timeout_seconds=resolved_timeout,
-        max_files=resolved_max_files,
+    unstaged_remaining = _remaining_timeout_seconds(
+        started=started,
+        total_timeout_seconds=resolved_timeout,
     )
-    diff_staged = _collect_numstat(
-        root=root,
-        args=["git", "--no-pager", "diff", "--cached", "--numstat"],
-        timeout_seconds=resolved_timeout,
-        max_files=resolved_max_files,
+    if unstaged_remaining <= 0.0:
+        diff_unstaged = _empty_diffstat()
+        diff_unstaged["timed_out"] = True
+        diff_unstaged["error"] = "timeout"
+    else:
+        diff_unstaged = _collect_numstat(
+            root=root,
+            args=["git", "--no-pager", "diff", "--numstat"],
+            timeout_seconds=unstaged_remaining,
+            max_files=resolved_max_files,
+        )
+
+    staged_remaining = _remaining_timeout_seconds(
+        started=started,
+        total_timeout_seconds=resolved_timeout,
     )
+    if staged_remaining <= 0.0:
+        diff_staged = _empty_diffstat()
+        diff_staged["timed_out"] = True
+        diff_staged["error"] = "timeout"
+    else:
+        diff_staged = _collect_numstat(
+            root=root,
+            args=["git", "--no-pager", "diff", "--cached", "--numstat"],
+            timeout_seconds=staged_remaining,
+            max_files=resolved_max_files,
+        )
 
     staged_count, unstaged_count, untracked_count = _count_status_entries(entries)
     changed_count = len(entries)
