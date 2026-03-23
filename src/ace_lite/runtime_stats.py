@@ -18,6 +18,8 @@ from ace_lite.runtime_stats_schema import (
     RUNTIME_STATS_STATUS_VALUES,
 )
 
+BRANCH_VALIDATION_ARCHIVE_SCHEMA_VERSION = "branch_validation_archive_v1"
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -414,11 +416,74 @@ def build_learning_router_rollout_decision_payload(
     }
 
 
+def build_branch_validation_archive_payload(
+    *,
+    branch_batch: dict[str, Any] | None,
+    branch_selection: dict[str, Any] | None,
+) -> dict[str, Any]:
+    batch = branch_batch if isinstance(branch_batch, dict) else {}
+    selection = branch_selection if isinstance(branch_selection, dict) else {}
+    winner_branch_id = _normalize_text(selection.get("winner_branch_id"), max_len=128)
+    candidates = (
+        batch.get("candidates", [])
+        if isinstance(batch.get("candidates"), list)
+        else []
+    )
+    winner_artifact_refs: list[str] = []
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        branch_id = _normalize_text(item.get("branch_id"), max_len=128)
+        if branch_id != winner_branch_id:
+            continue
+        artifact_rows = item.get("artifact_refs", [])
+        if not isinstance(artifact_rows, list):
+            continue
+        winner_artifact_refs = [
+            ref
+            for ref in (
+                _normalize_text(candidate, max_len=255) for candidate in artifact_rows
+            )
+            if ref
+        ]
+        break
+
+    rejected_rows = (
+        selection.get("rejected", [])
+        if isinstance(selection.get("rejected"), list)
+        else []
+    )
+    rejected: list[dict[str, Any]] = []
+    for item in rejected_rows:
+        if not isinstance(item, dict):
+            continue
+        branch_id = _normalize_text(item.get("branch_id"), max_len=128)
+        rejected_reason = _normalize_text(item.get("rejected_reason"), max_len=128)
+        if not branch_id:
+            continue
+        rejected.append(
+            {
+                "branch_id": branch_id,
+                "rejected_reason": rejected_reason,
+            }
+        )
+
+    return {
+        "schema_version": BRANCH_VALIDATION_ARCHIVE_SCHEMA_VERSION,
+        "winner_branch_id": winner_branch_id,
+        "winner_artifact_refs": winner_artifact_refs,
+        "rejected": rejected,
+        "candidate_count": _normalize_count(batch.get("candidate_count")),
+    }
+
+
 __all__ = [
+    "BRANCH_VALIDATION_ARCHIVE_SCHEMA_VERSION",
     "RuntimeInvocationStats",
     "RuntimeScopeRollup",
     "RuntimeStageLatency",
     "RuntimeStatsSnapshot",
+    "build_branch_validation_archive_payload",
     "build_learning_router_rollout_decision_payload",
     "normalize_runtime_degraded_reason_codes",
     "normalize_runtime_invocation_stats",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ace_lite.agent_loop.controller import BoundedLoopController
 from ace_lite.agent_loop.contracts import build_agent_loop_action_v1
+from ace_lite.validation.result import build_validation_result_v1
 
 
 def test_controller_prefers_explicit_stage_action() -> None:
@@ -56,9 +57,19 @@ def test_controller_synthesizes_and_records_validation_driven_iteration() -> Non
         query=incremental_query,
         rerun_stages=["index", "source_plan", "validation"],
         source_plan_stage={"steps": [{"stage": "source_plan"}]},
+        previous_validation_stage={
+            "result": build_validation_result_v1(
+                syntax_issues=[{"code": "syntax.error", "message": "bad syntax"}],
+                replay_key="before",
+                status="failed",
+            ).as_dict()
+        },
         validation_stage={
             "diagnostic_count": 1,
-            "result": {"summary": {"status": "failed"}},
+            "result": build_validation_result_v1(
+                replay_key="after",
+                status="passed",
+            ).as_dict(),
         },
     )
 
@@ -70,8 +81,15 @@ def test_controller_synthesizes_and_records_validation_driven_iteration() -> Non
 
     assert summary["iteration_count"] == 1
     assert summary["actions_executed"] == 1
-    assert summary["iterations"][0]["validation_status"] == "failed"
+    assert summary["iterations"][0]["validation_status"] == "passed"
     assert summary["iterations"][0]["diagnostic_count"] == 1
+    assert summary["iterations"][0]["validation_branch_score"]["issue_delta"] == 1
+    assert summary["iterations"][0]["validation_branch_score"]["passed"] is True
+    assert summary["branch_batch"]["schema_version"] == "agent_loop_branch_batch_v1"
+    assert summary["branch_batch"]["candidate_count"] == 1
+    assert summary["branch_batch"]["candidates"][0]["branch_id"] == "iteration-1"
+    assert summary["branch_selection"]["winner_branch_id"] == "iteration-1"
+    assert summary["branch_selection"]["ranked_branch_ids"] == ["iteration-1"]
 
 
 def test_controller_synthesizes_action_from_failed_validation_probes() -> None:

@@ -12,6 +12,7 @@ from ace_lite.orchestrator_runtime_support_types import (
 from ace_lite.pipeline.hooks import HookBus
 from ace_lite.pipeline.registry import StageRegistry
 from ace_lite.pipeline.types import StageContext, StageMetric
+from ace_lite.runtime_stats import build_branch_validation_archive_payload
 
 
 def execute_post_source_plan_runtime(
@@ -55,6 +56,15 @@ def execute_post_source_plan_runtime(
         hook_bus=hook_bus,
         stage_metrics=stage_metrics,
     )
+    if isinstance(agent_loop_result.summary, dict):
+        branch_validation_archive = build_branch_validation_archive_payload(
+            branch_batch=agent_loop_result.summary.get("branch_batch"),
+            branch_selection=agent_loop_result.summary.get("branch_selection"),
+        )
+        agent_loop_result.summary["branch_validation_archive"] = (
+            branch_validation_archive
+        )
+        ctx.state["_branch_validation_archive"] = branch_validation_archive
     ctx.state["_agent_loop"] = agent_loop_result.summary
     return agent_loop_result.contract_error
 
@@ -95,6 +105,7 @@ def execute_post_source_plan_agent_loop(
         last_action = dict(pending_action)
         action_type = str(last_action.get("action_type") or "")
         rerun_stages = resolve_agent_loop_rerun_stages_fn(action_type=action_type)
+        previous_validation_stage = get_stage_state_fn(ctx=ctx, stage_name="validation")
         current_query = controller.build_incremental_query(
             base_query=current_query,
             action=last_action,
@@ -135,6 +146,7 @@ def execute_post_source_plan_agent_loop(
             query=current_query,
             rerun_stages=rerun_stages,
             source_plan_stage=get_stage_state_fn(ctx=ctx, stage_name="source_plan"),
+            previous_validation_stage=previous_validation_stage,
             validation_stage=get_stage_state_fn(ctx=ctx, stage_name="validation"),
         )
         pending_action = controller.select_action(

@@ -10,6 +10,11 @@ from ace_lite.agent_loop.contracts import (
 from ace_lite.orchestrator_replay import (
     build_agent_loop_iteration_replay_fingerprint,
 )
+from ace_lite.validation.result import (
+    score_validation_branch_result_v1,
+    select_best_validation_branch_candidate_v1,
+)
+from ace_lite.agent_loop.contracts import build_agent_loop_branch_batch_v1
 
 AGENT_LOOP_SUMMARY_SCHEMA_VERSION = "agent_loop_summary_v1"
 AGENT_LOOP_STOP_REASONS = (
@@ -30,6 +35,7 @@ class AgentLoopIterationRecord:
     source_plan_step_count: int
     validation_status: str
     diagnostic_count: int
+    validation_branch_score: dict[str, Any]
     replay_fingerprint: str
 
     def as_dict(self) -> dict[str, Any]:
@@ -41,6 +47,7 @@ class AgentLoopIterationRecord:
             "source_plan_step_count": self.source_plan_step_count,
             "validation_status": self.validation_status,
             "diagnostic_count": self.diagnostic_count,
+            "validation_branch_score": dict(self.validation_branch_score),
             "replay_fingerprint": self.replay_fingerprint,
         }
 
@@ -55,6 +62,8 @@ class AgentLoopSummaryV1:
     actions_requested: int
     actions_executed: int
     iterations: tuple[AgentLoopIterationRecord, ...]
+    branch_batch: dict[str, Any]
+    branch_selection: dict[str, Any]
     last_action: dict[str, Any]
     final_query: str
     replay_safe: bool
@@ -70,6 +79,8 @@ class AgentLoopSummaryV1:
             "actions_requested": self.actions_requested,
             "actions_executed": self.actions_executed,
             "iterations": [item.as_dict() for item in self.iterations],
+            "branch_batch": dict(self.branch_batch),
+            "branch_selection": dict(self.branch_selection),
             "last_action": dict(self.last_action),
             "final_query": self.final_query,
             "replay_safe": self.replay_safe,
@@ -110,6 +121,8 @@ class BoundedLoopController:
             actions_requested=0,
             actions_executed=0,
             iterations=(),
+            branch_batch={},
+            branch_selection={},
             last_action={},
             final_query=str(final_query or ""),
             replay_safe=True,
@@ -272,13 +285,33 @@ class BoundedLoopController:
         query: str,
         rerun_stages: list[str] | tuple[str, ...],
         source_plan_stage: dict[str, Any],
+        previous_validation_stage: dict[str, Any] | None = None,
         validation_stage: dict[str, Any],
     ) -> None:
         normalized = self._normalize_action(action) or {}
         source_plan_steps = source_plan_stage.get("steps", [])
-        validation_summary = (
-            validation_stage.get("result", {}).get("summary", {})
+        previous_validation_result = (
+            previous_validation_stage.get("result", {})
+            if isinstance(previous_validation_stage, dict)
+            and isinstance(previous_validation_stage.get("result"), dict)
+            else {}
+        )
+        validation_result = (
+            validation_stage.get("result", {})
             if isinstance(validation_stage.get("result"), dict)
+            else {}
+        )
+        validation_summary = (
+            validation_result.get("summary", {})
+            if isinstance(validation_result.get("summary"), dict)
+            else {}
+        )
+        validation_branch_score = (
+            score_validation_branch_result_v1(
+                before=previous_validation_result,
+                after=validation_result,
+            )
+            if previous_validation_result and validation_result
             else {}
         )
         replay_fingerprint = build_agent_loop_iteration_replay_fingerprint(
@@ -299,6 +332,7 @@ class BoundedLoopController:
                 ),
                 validation_status=str(validation_summary.get("status") or ""),
                 diagnostic_count=int(validation_stage.get("diagnostic_count", 0) or 0),
+                validation_branch_score=validation_branch_score,
                 replay_fingerprint=replay_fingerprint,
             )
         )
@@ -315,6 +349,32 @@ class BoundedLoopController:
         )
         if normalized_stop_reason not in AGENT_LOOP_STOP_REASONS:
             normalized_stop_reason = "completed"
+        branch_candidates = [
+            {
+                "branch_id": f"iteration-{item.index}",
+                "validation_branch_score": dict(item.validation_branch_score),
+                "patch_scope_lines": 0,
+                "artifact_refs": [],
+            }
+            for item in self._iterations
+            if isinstance(item.validation_branch_score, dict) and item.validation_branch_score
+        ]
+        branch_batch = (
+            build_agent_loop_branch_batch_v1(
+                candidates=branch_candidates,
+                metadata={
+                    "source": "agent_loop_iterations",
+                    "candidate_origin": "report_only",
+                },
+            ).as_dict()
+            if branch_candidates
+            else {}
+        )
+        branch_selection = (
+            select_best_validation_branch_candidate_v1(candidates=branch_candidates)
+            if branch_candidates
+            else {}
+        )
         return AgentLoopSummaryV1(
             enabled=self.enabled,
             attempted=self.iteration_count > 0,
@@ -324,6 +384,8 @@ class BoundedLoopController:
             actions_requested=self._actions_requested,
             actions_executed=self.iteration_count,
             iterations=tuple(self._iterations),
+            branch_batch=branch_batch,
+            branch_selection=branch_selection,
             last_action=dict(last_action) if isinstance(last_action, dict) else {},
             final_query=str(final_query or ""),
             replay_safe=True,

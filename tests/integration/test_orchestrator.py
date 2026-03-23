@@ -1183,6 +1183,18 @@ def test_orchestrator_agent_loop_reruns_after_failed_validation_probe_without_di
     assert len(index_queries) == 2
     assert "Focus refinement" in index_queries[1]
     assert "compile probe failed" in index_queries[1]
+    assert loop_summary["iterations"][0]["validation_branch_score"]["issue_delta"] == 0
+    assert loop_summary["iterations"][0]["validation_branch_score"]["after_status"] == "failed"
+    assert loop_summary["branch_batch"]["schema_version"] == "agent_loop_branch_batch_v1"
+    assert loop_summary["branch_batch"]["candidate_count"] == 1
+    assert loop_summary["branch_batch"]["candidates"][0]["branch_id"] == "iteration-1"
+    assert loop_summary["branch_selection"]["winner_branch_id"] == "iteration-1"
+    assert (
+        loop_summary["branch_validation_archive"]["schema_version"]
+        == "branch_validation_archive_v1"
+    )
+    assert loop_summary["branch_validation_archive"]["winner_branch_id"] == "iteration-1"
+    assert loop_summary["branch_validation_archive"]["winner_artifact_refs"] == []
 
     rerun_index_metrics = [
         item

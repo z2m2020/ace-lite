@@ -8,6 +8,8 @@ from typing import Any
 VALIDATION_RESULT_SCHEMA_VERSION = "validation_result_v1"
 VALIDATION_RESULT_STATUS_VALUES = ("passed", "failed", "degraded", "skipped")
 VALIDATION_PROBE_STATUS_VALUES = ("disabled", "passed", "failed", "degraded", "skipped")
+VALIDATION_BRANCH_SCORE_SCHEMA_VERSION = "validation_branch_score_v1"
+VALIDATION_BRANCH_SELECTION_SCHEMA_VERSION = "validation_branch_selection_v1"
 
 
 def _normalize_issue_list(*, value: Any, context: str) -> tuple[dict[str, Any], ...]:
@@ -365,6 +367,160 @@ def compare_validation_results_v1(
     }
 
 
+def score_validation_branch_result_v1(
+    *,
+    before: ValidationResultV1 | dict[str, Any],
+    after: ValidationResultV1 | dict[str, Any],
+) -> dict[str, Any]:
+    diff = compare_validation_results_v1(before=before, after=after)
+    before_status = str(diff.get("before_status") or "").strip().lower()
+    after_status = str(diff.get("after_status") or "").strip().lower()
+    before_issue_count = int(diff.get("before_issue_count", 0) or 0)
+    after_issue_count = int(diff.get("after_issue_count", 0) or 0)
+    resolved_issue_codes = list(diff.get("resolved_issue_codes", []))
+    new_issue_codes = list(diff.get("new_issue_codes", []))
+
+    issue_delta = before_issue_count - after_issue_count
+    resolved_issue_count = len(resolved_issue_codes)
+    new_issue_count = len(new_issue_codes)
+    passed = after_status == "passed"
+    degraded = after_status == "degraded"
+    failed = after_status == "failed"
+    skipped = after_status == "skipped"
+    degraded_penalty = 10.0 if degraded else 0.0
+    new_issue_penalty = float(new_issue_count * 20)
+    status_bonus = {
+        "passed": 100.0,
+        "degraded": 25.0,
+        "failed": 0.0,
+        "skipped": -10.0,
+    }.get(after_status, 0.0)
+    score = (
+        status_bonus
+        + float(issue_delta * 10)
+        + float(resolved_issue_count * 2)
+        - new_issue_penalty
+        - degraded_penalty
+    )
+
+    return {
+        "schema_version": VALIDATION_BRANCH_SCORE_SCHEMA_VERSION,
+        "before_status": before_status,
+        "after_status": after_status,
+        "before_issue_count": before_issue_count,
+        "after_issue_count": after_issue_count,
+        "issue_delta": issue_delta,
+        "resolved_issue_count": resolved_issue_count,
+        "new_issue_count": new_issue_count,
+        "resolved_issue_codes": resolved_issue_codes,
+        "new_issue_codes": new_issue_codes,
+        "passed": passed,
+        "degraded": degraded,
+        "failed": failed,
+        "skipped": skipped,
+        "degraded_penalty": degraded_penalty,
+        "new_issue_penalty": new_issue_penalty,
+        "regressed": new_issue_count > 0 or after_issue_count > before_issue_count,
+        "score": score,
+    }
+
+
+def select_best_validation_branch_candidate_v1(
+    *,
+    candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not isinstance(candidates, list) or not candidates:
+        raise ValueError("candidates must be a non-empty list")
+
+    normalized_candidates: list[dict[str, Any]] = []
+    seen_branch_ids: set[str] = set()
+    for index, item in enumerate(candidates):
+        if not isinstance(item, dict):
+            raise ValueError(f"candidates[{index}] must be a mapping")
+        branch_id = str(item.get("branch_id") or "").strip()
+        if not branch_id:
+            raise ValueError(f"candidates[{index}].branch_id cannot be empty")
+        if branch_id in seen_branch_ids:
+            raise ValueError(f"candidates[{index}].branch_id must be unique")
+        seen_branch_ids.add(branch_id)
+
+        score_payload = item.get("validation_branch_score")
+        if not isinstance(score_payload, dict) or not score_payload:
+            before_payload = item.get("before")
+            after_payload = item.get("after")
+            if not isinstance(before_payload, dict) or not isinstance(after_payload, dict):
+                raise ValueError(
+                    f"candidates[{index}] requires validation_branch_score or before/after payloads"
+                )
+            score_payload = score_validation_branch_result_v1(
+                before=before_payload,
+                after=after_payload,
+            )
+        patch_scope_lines = max(0, int(item.get("patch_scope_lines", 0) or 0))
+        normalized_candidates.append(
+            {
+                "branch_id": branch_id,
+                "patch_scope_lines": patch_scope_lines,
+                "validation_branch_score": dict(score_payload),
+            }
+        )
+
+    ranked_candidates = sorted(
+        normalized_candidates,
+        key=lambda item: (
+            0
+            if bool(item["validation_branch_score"].get("passed", False))
+            else 1,
+            -float(item["validation_branch_score"].get("score", 0.0) or 0.0),
+            int(item["validation_branch_score"].get("after_issue_count", 0) or 0),
+            int(item.get("patch_scope_lines", 0) or 0),
+            str(item.get("branch_id") or ""),
+        ),
+    )
+    winner = ranked_candidates[0]
+    winner_score = winner["validation_branch_score"]
+
+    rejected: list[dict[str, Any]] = []
+    for item in ranked_candidates[1:]:
+        score_payload = item["validation_branch_score"]
+        rejected_reason = "stable_tiebreak"
+        if bool(score_payload.get("passed", False)) != bool(
+            winner_score.get("passed", False)
+        ):
+            rejected_reason = "lower_pass_status"
+        elif float(score_payload.get("score", 0.0) or 0.0) != float(
+            winner_score.get("score", 0.0) or 0.0
+        ):
+            rejected_reason = "lower_score"
+        elif int(score_payload.get("after_issue_count", 0) or 0) != int(
+            winner_score.get("after_issue_count", 0) or 0
+        ):
+            rejected_reason = "higher_after_issue_count"
+        elif int(item.get("patch_scope_lines", 0) or 0) != int(
+            winner.get("patch_scope_lines", 0) or 0
+        ):
+            rejected_reason = "larger_patch_scope"
+        rejected.append(
+            {
+                "branch_id": str(item.get("branch_id") or ""),
+                "rejected_reason": rejected_reason,
+                "validation_branch_score": dict(score_payload),
+                "patch_scope_lines": int(item.get("patch_scope_lines", 0) or 0),
+            }
+        )
+
+    return {
+        "schema_version": VALIDATION_BRANCH_SELECTION_SCHEMA_VERSION,
+        "winner_branch_id": str(winner.get("branch_id") or ""),
+        "winner_validation_branch_score": dict(winner_score),
+        "winner_patch_scope_lines": int(winner.get("patch_scope_lines", 0) or 0),
+        "ranked_branch_ids": [
+            str(item.get("branch_id") or "") for item in ranked_candidates
+        ],
+        "rejected": rejected,
+    }
+
+
 def validate_validation_result_v1(
     *,
     contract: ValidationResultV1 | dict[str, Any],
@@ -573,9 +729,13 @@ def validate_validation_result_v1(
 
 
 __all__ = [
+    "VALIDATION_BRANCH_SELECTION_SCHEMA_VERSION",
+    "VALIDATION_BRANCH_SCORE_SCHEMA_VERSION",
     "VALIDATION_RESULT_SCHEMA_VERSION",
     "ValidationResultV1",
     "build_validation_result_v1",
     "compare_validation_results_v1",
+    "select_best_validation_branch_candidate_v1",
+    "score_validation_branch_result_v1",
     "validate_validation_result_v1",
 ]

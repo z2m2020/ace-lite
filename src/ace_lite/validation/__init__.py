@@ -6,10 +6,14 @@ from ace_lite.validation.patch_artifact import (
     validate_patch_artifact_contract_v1,
 )
 from ace_lite.validation.result import (
+    VALIDATION_BRANCH_SELECTION_SCHEMA_VERSION,
+    VALIDATION_BRANCH_SCORE_SCHEMA_VERSION,
     VALIDATION_RESULT_SCHEMA_VERSION,
     ValidationResultV1,
     build_validation_result_v1,
     compare_validation_results_v1,
+    select_best_validation_branch_candidate_v1,
+    score_validation_branch_result_v1,
     validate_validation_result_v1,
 )
 from ace_lite.validation.sandbox import (
@@ -23,6 +27,8 @@ from ace_lite.validation.sandbox import (
 __all__ = [
     "PATCH_ARTIFACT_ALLOWED_OPERATIONS",
     "PATCH_ARTIFACT_SCHEMA_VERSION",
+    "VALIDATION_BRANCH_SELECTION_SCHEMA_VERSION",
+    "VALIDATION_BRANCH_SCORE_SCHEMA_VERSION",
     "PatchArtifactContractV1",
     "VALIDATION_RESULT_SCHEMA_VERSION",
     "ValidationResultV1",
@@ -34,6 +40,8 @@ __all__ = [
     "cleanup_patch_sandbox",
     "compare_validation_results_v1",
     "restore_patch_sandbox",
+    "select_best_validation_branch_candidate_v1",
+    "score_validation_branch_result_v1",
     "validate_patch_artifact_contract_v1",
     "validate_validation_result_v1",
 ]
