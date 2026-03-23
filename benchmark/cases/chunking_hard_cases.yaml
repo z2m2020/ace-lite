@@ -34,6 +34,7 @@ cases:
     expected_keys: [topological, shield, adjacency, shared_parent]
     top_k: 8
     comparison_lane: chunking_hard_cases
+    retrieval_surface: deep_symbol
     oracle_file_path: src/ace_lite/chunking/topological_shield.py
     oracle_chunk_ref:
       path: src/ace_lite/chunking/topological_shield.py
@@ -44,6 +45,7 @@ cases:
     expected_keys: [graph, prior, hub, penalty]
     top_k: 8
     comparison_lane: chunking_hard_cases
+    retrieval_surface: deep_symbol
     oracle_file_path: src/ace_lite/chunking/graph_prior.py
     oracle_chunk_ref:
       path: src/ace_lite/chunking/graph_prior.py

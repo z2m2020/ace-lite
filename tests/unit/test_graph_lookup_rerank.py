@@ -35,6 +35,10 @@ def test_apply_graph_lookup_rerank_boosts_with_scip_and_xref_signals() -> None:
 
     assert payload["enabled"] is True
     assert payload["boosted_count"] == 2
+    assert payload["normalization"] == "log1p"
+    assert payload["max_inbound"] == 4.0
+    assert payload["max_xref_count"] == 2.0
+    assert payload["max_query_hits"] == 1.0
     assert ranked[0]["path"] == "src/b.py"
     assert float(ranked[0]["score"]) > float(ranked[1]["score"])
     assert "graph_lookup" in ranked[0]["score_breakdown"]
@@ -95,6 +99,9 @@ def test_apply_graph_lookup_rerank_uses_symbol_import_and_coverage_signals() -> 
     assert payload["symbol_hit_paths"] == 1
     assert payload["import_hit_paths"] == 1
     assert payload["coverage_hit_paths"] == 1
+    assert payload["max_symbol_hits"] == 1.0
+    assert payload["max_import_hits"] == 1.0
+    assert payload["max_query_coverage"] == 1.0
     assert ranked[0]["path"] == "src/a.py"
     assert float(ranked[0]["score"]) > float(ranked[1]["score"])
     assert "graph_lookup" in ranked[0]["score_breakdown"]

@@ -52,6 +52,9 @@ def test_prepare_repomap_seed_runtime_filters_docs_hint_and_dedupes_paths() -> N
             {"path": "./src/b.py", "score": 2.0},
             {"path": "src/a.py", "score": 99.0, "retrieval_pass": "docs_hint"},
         ],
+        "subgraph_payload": {
+            "seed_paths": ["src/b.py", "./src/a.py", "src/b.py"],
+        },
         "worktree_prior": {
             "changed_paths": ["src/a.py", "src/b.py"],
             "state_hash": "wt-1",
@@ -73,6 +76,7 @@ def test_prepare_repomap_seed_runtime_filters_docs_hint_and_dedupes_paths() -> N
     )
 
     assert runtime.worktree_seed_count == 1
+    assert runtime.subgraph_seed_count == 2
     assert [item["path"] for item in runtime.seed_candidates] == ["src/a.py", "./src/b.py"]
     assert runtime.seed_paths_for_cache == ["src/a.py", "src/b.py"]
 
@@ -83,6 +87,7 @@ def test_prepare_repomap_stage_cache_runtime_builds_keys_and_meta(tmp_path: Path
         seed_paths_for_cache=["src/a.py"],
         worktree_prior={"state_hash": "wt-2"},
         worktree_seed_count=1,
+        subgraph_seed_count=2,
     )
     seen: dict[str, object] = {}
 
@@ -146,6 +151,7 @@ def test_build_repomap_stage_payload_from_cache_runtime_stores_missing_artifacts
         seed_paths_for_cache=["src/a.py"],
         worktree_prior={"state_hash": "wt-3"},
         worktree_seed_count=1,
+        subgraph_seed_count=2,
     )
     cache_runtime = prepare_repomap_stage_cache_runtime(
         ctx_root=str(tmp_path),
@@ -192,6 +198,7 @@ def test_build_repomap_stage_payload_from_cache_runtime_stores_missing_artifacts
     assert payload["cache"]["store_written"] is True
     assert payload["precompute"]["store_written"] is True
     assert payload["worktree_seed_count"] == 1
+    assert payload["subgraph_seed_count"] == 2
     assert payload["seed_candidates_count"] == 1
     assert [item["kind"] for item in calls["store"]] == ["precompute", "cache"]
     assert calls["store"][0]["meta"]["policy_name"] == "repomap_precompute"

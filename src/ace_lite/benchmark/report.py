@@ -158,6 +158,276 @@ def _append_index_fusion_granularity_summary(
     lines.append("")
 
 
+def _append_graph_lookup_summary(lines: list[str], metrics: dict[str, Any]) -> None:
+    enabled_ratio = float(metrics.get("graph_lookup_enabled_ratio", 0.0) or 0.0)
+    guarded_ratio = float(metrics.get("graph_lookup_guarded_ratio", 0.0) or 0.0)
+    log_norm_ratio = float(metrics.get("graph_lookup_log_norm_ratio", 0.0) or 0.0)
+    linear_norm_ratio = float(
+        metrics.get("graph_lookup_linear_norm_ratio", 0.0) or 0.0
+    )
+    boosted_count_mean = float(
+        metrics.get("graph_lookup_boosted_count_mean", 0.0) or 0.0
+    )
+    weight_scip_mean = float(metrics.get("graph_lookup_weight_scip_mean", 0.0) or 0.0)
+    weight_xref_mean = float(metrics.get("graph_lookup_weight_xref_mean", 0.0) or 0.0)
+    weight_query_xref_mean = float(
+        metrics.get("graph_lookup_weight_query_xref_mean", 0.0) or 0.0
+    )
+    weight_symbol_mean = float(
+        metrics.get("graph_lookup_weight_symbol_mean", 0.0) or 0.0
+    )
+    weight_import_mean = float(
+        metrics.get("graph_lookup_weight_import_mean", 0.0) or 0.0
+    )
+    weight_coverage_mean = float(
+        metrics.get("graph_lookup_weight_coverage_mean", 0.0) or 0.0
+    )
+    candidate_count_mean = float(
+        metrics.get("graph_lookup_candidate_count_mean", 0.0) or 0.0
+    )
+    pool_size_mean = float(metrics.get("graph_lookup_pool_size_mean", 0.0) or 0.0)
+    query_terms_mean = float(
+        metrics.get("graph_lookup_query_terms_count_mean", 0.0) or 0.0
+    )
+    guard_max_candidates_mean = float(
+        metrics.get("graph_lookup_guard_max_candidates_mean", 0.0) or 0.0
+    )
+    guard_min_query_terms_mean = float(
+        metrics.get("graph_lookup_guard_min_query_terms_mean", 0.0) or 0.0
+    )
+    guard_max_query_terms_mean = float(
+        metrics.get("graph_lookup_guard_max_query_terms_mean", 0.0) or 0.0
+    )
+    query_hit_mean = float(
+        metrics.get("graph_lookup_query_hit_paths_mean", 0.0) or 0.0
+    )
+    boosted_ratio = float(
+        metrics.get("graph_lookup_boosted_path_ratio", 0.0) or 0.0
+    )
+    query_hit_ratio = float(
+        metrics.get("graph_lookup_query_hit_path_ratio", 0.0) or 0.0
+    )
+    scip_signal_mean = float(
+        metrics.get("graph_lookup_scip_signal_paths_mean", 0.0) or 0.0
+    )
+    xref_signal_mean = float(
+        metrics.get("graph_lookup_xref_signal_paths_mean", 0.0) or 0.0
+    )
+    symbol_hit_mean = float(
+        metrics.get("graph_lookup_symbol_hit_paths_mean", 0.0) or 0.0
+    )
+    import_hit_mean = float(
+        metrics.get("graph_lookup_import_hit_paths_mean", 0.0) or 0.0
+    )
+    coverage_hit_mean = float(
+        metrics.get("graph_lookup_coverage_hit_paths_mean", 0.0) or 0.0
+    )
+    max_inbound_mean = float(metrics.get("graph_lookup_max_inbound_mean", 0.0) or 0.0)
+    max_xref_count_mean = float(
+        metrics.get("graph_lookup_max_xref_count_mean", 0.0) or 0.0
+    )
+    max_query_hits_mean = float(
+        metrics.get("graph_lookup_max_query_hits_mean", 0.0) or 0.0
+    )
+    max_symbol_hits_mean = float(
+        metrics.get("graph_lookup_max_symbol_hits_mean", 0.0) or 0.0
+    )
+    max_import_hits_mean = float(
+        metrics.get("graph_lookup_max_import_hits_mean", 0.0) or 0.0
+    )
+    max_query_coverage_mean = float(
+        metrics.get("graph_lookup_max_query_coverage_mean", 0.0) or 0.0
+    )
+    candidate_guard_ratio = float(
+        metrics.get("graph_lookup_candidate_count_guard_ratio", 0.0) or 0.0
+    )
+    query_terms_too_few_ratio = float(
+        metrics.get("graph_lookup_query_terms_too_few_ratio", 0.0) or 0.0
+    )
+    query_terms_too_many_ratio = float(
+        metrics.get("graph_lookup_query_terms_too_many_ratio", 0.0) or 0.0
+    )
+    if (
+        enabled_ratio <= 0.0
+        and guarded_ratio <= 0.0
+        and log_norm_ratio <= 0.0
+        and linear_norm_ratio <= 0.0
+        and boosted_count_mean <= 0.0
+        and weight_scip_mean <= 0.0
+        and weight_xref_mean <= 0.0
+        and weight_query_xref_mean <= 0.0
+        and weight_symbol_mean <= 0.0
+        and weight_import_mean <= 0.0
+        and weight_coverage_mean <= 0.0
+        and candidate_count_mean <= 0.0
+        and pool_size_mean <= 0.0
+        and query_terms_mean <= 0.0
+        and guard_max_candidates_mean <= 0.0
+        and guard_min_query_terms_mean <= 0.0
+        and guard_max_query_terms_mean <= 0.0
+        and query_hit_mean <= 0.0
+        and boosted_ratio <= 0.0
+        and query_hit_ratio <= 0.0
+        and scip_signal_mean <= 0.0
+        and xref_signal_mean <= 0.0
+        and symbol_hit_mean <= 0.0
+        and import_hit_mean <= 0.0
+        and coverage_hit_mean <= 0.0
+        and max_inbound_mean <= 0.0
+        and max_xref_count_mean <= 0.0
+        and max_query_hits_mean <= 0.0
+        and max_symbol_hits_mean <= 0.0
+        and max_import_hits_mean <= 0.0
+        and max_query_coverage_mean <= 0.0
+        and candidate_guard_ratio <= 0.0
+        and query_terms_too_few_ratio <= 0.0
+        and query_terms_too_many_ratio <= 0.0
+    ):
+        return
+
+    lines.append("## Graph Lookup Summary")
+    lines.append("")
+    lines.append(
+        "- Enabled ratio: {enabled}; boosted count mean: {boosted}; pool size mean: {pool}".format(
+            enabled=_format_metric("graph_lookup_enabled_ratio", enabled_ratio),
+            boosted=_format_metric(
+                "graph_lookup_boosted_count_mean", boosted_count_mean
+            ),
+            pool=_format_metric("graph_lookup_pool_size_mean", pool_size_mean),
+        )
+    )
+    lines.append(
+        "- Query terms mean: {terms}; query-hit mean: {hits}; boosted/pool ratio: {boosted_ratio}; query-hit/pool ratio: {hit_ratio}".format(
+            terms=_format_metric(
+                "graph_lookup_query_terms_count_mean", query_terms_mean
+            ),
+            hits=_format_metric("graph_lookup_query_hit_paths_mean", query_hit_mean),
+            boosted_ratio=_format_metric(
+                "graph_lookup_boosted_path_ratio", boosted_ratio
+            ),
+            hit_ratio=_format_metric(
+                "graph_lookup_query_hit_path_ratio", query_hit_ratio
+            ),
+        )
+    )
+    lines.append(
+        "- Normalization ratios: log1p={log1p}; linear={linear}".format(
+            log1p=_format_metric("graph_lookup_log_norm_ratio", log_norm_ratio),
+            linear=_format_metric("graph_lookup_linear_norm_ratio", linear_norm_ratio),
+        )
+    )
+    lines.append(
+        "- Weight means: scip={scip}; xref={xref}; query_xref={query}; symbol={symbol}; import={imports}; coverage={coverage}".format(
+            scip=_format_metric("graph_lookup_weight_scip_mean", weight_scip_mean),
+            xref=_format_metric("graph_lookup_weight_xref_mean", weight_xref_mean),
+            query=_format_metric(
+                "graph_lookup_weight_query_xref_mean", weight_query_xref_mean
+            ),
+            symbol=_format_metric(
+                "graph_lookup_weight_symbol_mean", weight_symbol_mean
+            ),
+            imports=_format_metric(
+                "graph_lookup_weight_import_mean", weight_import_mean
+            ),
+            coverage=_format_metric(
+                "graph_lookup_weight_coverage_mean", weight_coverage_mean
+            ),
+        )
+    )
+    lines.append(
+        "- Guard summary: guarded={guarded}; candidate_count_mean={candidate_count}; max_candidates_mean={max_candidates}; min_terms_mean={min_terms}; max_terms_mean={max_terms}".format(
+            guarded=_format_metric("graph_lookup_guarded_ratio", guarded_ratio),
+            candidate_count=_format_metric(
+                "graph_lookup_candidate_count_mean", candidate_count_mean
+            ),
+            max_candidates=_format_metric(
+                "graph_lookup_guard_max_candidates_mean",
+                guard_max_candidates_mean,
+            ),
+            min_terms=_format_metric(
+                "graph_lookup_guard_min_query_terms_mean",
+                guard_min_query_terms_mean,
+            ),
+            max_terms=_format_metric(
+                "graph_lookup_guard_max_query_terms_mean",
+                guard_max_query_terms_mean,
+            ),
+        )
+    )
+    lines.append(
+        "- Signal maxima mean: inbound={inbound}; xref={xref}; query={query}; symbol={symbol}; import={imports}; coverage={coverage}".format(
+            inbound=_format_metric("graph_lookup_max_inbound_mean", max_inbound_mean),
+            xref=_format_metric(
+                "graph_lookup_max_xref_count_mean", max_xref_count_mean
+            ),
+            query=_format_metric(
+                "graph_lookup_max_query_hits_mean", max_query_hits_mean
+            ),
+            symbol=_format_metric(
+                "graph_lookup_max_symbol_hits_mean", max_symbol_hits_mean
+            ),
+            imports=_format_metric(
+                "graph_lookup_max_import_hits_mean", max_import_hits_mean
+            ),
+            coverage=_format_metric(
+                "graph_lookup_max_query_coverage_mean", max_query_coverage_mean
+            ),
+        )
+    )
+    lines.append(
+        "- Guard reason ratios: candidate_count={candidate_count}; query_terms_too_few={too_few}; query_terms_too_many={too_many}".format(
+            candidate_count=_format_metric(
+                "graph_lookup_candidate_count_guard_ratio", candidate_guard_ratio
+            ),
+            too_few=_format_metric(
+                "graph_lookup_query_terms_too_few_ratio",
+                query_terms_too_few_ratio,
+            ),
+            too_many=_format_metric(
+                "graph_lookup_query_terms_too_many_ratio",
+                query_terms_too_many_ratio,
+            ),
+        )
+    )
+    lines.append(
+        "- Signal paths mean: scip={scip}, xref={xref}, symbol={symbol}, import={imports}, coverage={coverage}".format(
+            scip=_format_metric(
+                "graph_lookup_scip_signal_paths_mean", scip_signal_mean
+            ),
+            xref=_format_metric(
+                "graph_lookup_xref_signal_paths_mean", xref_signal_mean
+            ),
+            symbol=_format_metric(
+                "graph_lookup_symbol_hit_paths_mean", symbol_hit_mean
+            ),
+            imports=_format_metric(
+                "graph_lookup_import_hit_paths_mean", import_hit_mean
+            ),
+            coverage=_format_metric(
+                "graph_lookup_coverage_hit_paths_mean", coverage_hit_mean
+            ),
+        )
+    )
+    lines.append("")
+
+
+def _append_deep_symbol_summary(lines: list[str], metrics: dict[str, Any]) -> None:
+    case_count = float(metrics.get("deep_symbol_case_count", 0.0) or 0.0)
+    recall = float(metrics.get("deep_symbol_case_recall", 0.0) or 0.0)
+    if case_count <= 0.0 and recall <= 0.0:
+        return
+
+    lines.append("## Deep Symbol Summary")
+    lines.append("")
+    lines.append(
+        "- Deep symbol case count: {count}; recall: {recall}".format(
+            count=_format_metric("deep_symbol_case_count", case_count),
+            recall=_format_metric("deep_symbol_case_recall", recall),
+        )
+    )
+    lines.append("")
+
+
 def _append_native_scip_summary(lines: list[str], metrics: dict[str, Any]) -> None:
     loaded_rate = float(metrics.get("native_scip_loaded_rate", 0.0) or 0.0)
     document_count_mean = float(
@@ -200,6 +470,55 @@ def _append_native_scip_summary(lines: list[str], metrics: dict[str, Any]) -> No
         lines.append(
             f"| {metric} | {_format_metric(metric, metrics.get(metric, 0.0))} |"
         )
+    lines.append("")
+
+
+def _append_repomap_seed_summary(lines: list[str], metrics: dict[str, Any]) -> None:
+    worktree_seed_mean = float(
+        metrics.get("repomap_worktree_seed_count_mean", 0.0) or 0.0
+    )
+    subgraph_seed_mean = float(
+        metrics.get("repomap_subgraph_seed_count_mean", 0.0) or 0.0
+    )
+    seed_candidates_mean = float(
+        metrics.get("repomap_seed_candidates_count_mean", 0.0) or 0.0
+    )
+    cache_hit_ratio = float(metrics.get("repomap_cache_hit_ratio", 0.0) or 0.0)
+    precompute_hit_ratio = float(
+        metrics.get("repomap_precompute_hit_ratio", 0.0) or 0.0
+    )
+    if (
+        worktree_seed_mean <= 0.0
+        and subgraph_seed_mean <= 0.0
+        and seed_candidates_mean <= 0.0
+        and cache_hit_ratio <= 0.0
+        and precompute_hit_ratio <= 0.0
+    ):
+        return
+
+    lines.append("## Repomap Seed Summary")
+    lines.append("")
+    lines.append(
+        "- Seed count means: worktree={worktree}; subgraph={subgraph}; seed_candidates={candidates}".format(
+            worktree=_format_metric(
+                "repomap_worktree_seed_count_mean", worktree_seed_mean
+            ),
+            subgraph=_format_metric(
+                "repomap_subgraph_seed_count_mean", subgraph_seed_mean
+            ),
+            candidates=_format_metric(
+                "repomap_seed_candidates_count_mean", seed_candidates_mean
+            ),
+        )
+    )
+    lines.append(
+        "- Cache hit ratios: cache={cache}; precompute={precompute}".format(
+            cache=_format_metric("repomap_cache_hit_ratio", cache_hit_ratio),
+            precompute=_format_metric(
+                "repomap_precompute_hit_ratio", precompute_hit_ratio
+            ),
+        )
+    )
     lines.append("")
 
 
@@ -1586,6 +1905,74 @@ def _append_retrieval_control_plane_gate_summary(
     lines.append("")
 
 
+def _append_retrieval_frontier_gate_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("retrieval_frontier_gate_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    failed_checks_raw = summary.get("failed_checks", [])
+    failed_checks = (
+        [str(item) for item in failed_checks_raw if str(item).strip()]
+        if isinstance(failed_checks_raw, list)
+        else []
+    )
+
+    lines.append("## Retrieval Frontier Gate Summary")
+    lines.append("")
+    lines.append(
+        f"- Gate passed: {'yes' if bool(summary.get('gate_passed', False)) else 'no'}"
+    )
+    lines.append(
+        "- Deep-symbol recall: {value:.4f} (threshold >= {threshold:.4f}, {status})".format(
+            value=float(summary.get("deep_symbol_case_recall", 0.0) or 0.0),
+            threshold=float(
+                summary.get("deep_symbol_case_recall_threshold", 0.0) or 0.0
+            ),
+            status="pass"
+            if bool(summary.get("deep_symbol_case_recall_passed", False))
+            else "fail",
+        )
+    )
+    lines.append(
+        "- Native SCIP loaded rate: {value:.4f} (threshold >= {threshold:.4f}, {status})".format(
+            value=float(summary.get("native_scip_loaded_rate", 0.0) or 0.0),
+            threshold=float(
+                summary.get("native_scip_loaded_rate_threshold", 0.0) or 0.0
+            ),
+            status="pass"
+            if bool(summary.get("native_scip_loaded_rate_passed", False))
+            else "fail",
+        )
+    )
+    lines.append(
+        "- Precision@k: {value:.4f} (threshold >= {threshold:.4f}, {status})".format(
+            value=float(summary.get("precision_at_k", 0.0) or 0.0),
+            threshold=float(summary.get("precision_at_k_threshold", 0.0) or 0.0),
+            status="pass"
+            if bool(summary.get("precision_at_k_passed", False))
+            else "fail",
+        )
+    )
+    lines.append(
+        "- Noise rate: {value:.4f} (threshold <= {threshold:.4f}, {status})".format(
+            value=float(summary.get("noise_rate", 0.0) or 0.0),
+            threshold=float(summary.get("noise_rate_threshold", 0.0) or 0.0),
+            status="pass"
+            if bool(summary.get("noise_rate_passed", False))
+            else "fail",
+        )
+    )
+    lines.append(
+        "- Failed checks: {value}".format(
+            value=", ".join(failed_checks) if failed_checks else "(none)"
+        )
+    )
+    lines.append("")
+
+
 def _append_decision_observability_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
@@ -1970,8 +2357,12 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     _append_metrics_table(lines, "Metrics", metrics)
     _append_source_plan_granularity_summary(lines, metrics)
     _append_index_fusion_granularity_summary(lines, metrics)
+    _append_graph_lookup_summary(lines, metrics)
+    _append_repomap_seed_summary(lines, metrics)
+    _append_deep_symbol_summary(lines, metrics)
     _append_native_scip_summary(lines, metrics)
     _append_retrieval_control_plane_gate_summary(lines, results)
+    _append_retrieval_frontier_gate_summary(lines, results)
 
     if policy_profiles:
         lines.append("## Policy Profile Distribution")

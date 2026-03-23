@@ -33,6 +33,28 @@ from ace_lite.token_estimator import estimate_tokens
 SOURCE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".sol")
 
 
+def _extract_subgraph_seed_paths(
+    *,
+    files: dict[str, dict[str, Any]],
+    subgraph_payload: dict[str, Any] | None,
+    top_k: int,
+) -> list[str]:
+    if not isinstance(subgraph_payload, dict):
+        return []
+    raw_paths = subgraph_payload.get("seed_paths")
+    if not isinstance(raw_paths, list):
+        return []
+    seeds: list[str] = []
+    for item in raw_paths:
+        path = str(item or "").strip()
+        if not path or path not in files or path in seeds:
+            continue
+        seeds.append(path)
+        if len(seeds) >= max(0, int(top_k)):
+            break
+    return seeds
+
+
 def build_repo_map(
     *,
     index_payload: dict[str, Any],
@@ -107,11 +129,23 @@ def build_stage_repo_map(
         raise ValueError(f"unsupported ranking profile: {ranking_profile}")
 
     top_seed_k = max(1, int(top_k))
-    seed_hints = extract_seed_candidate_paths(
+    explicit_seed_hints = extract_seed_candidate_paths(
         files=files,
         seed_candidates=seed_candidates,
         top_k=top_seed_k,
     )
+    subgraph_seed_hints = _extract_subgraph_seed_paths(
+        files=files,
+        subgraph_payload=subgraph_payload,
+        top_k=top_seed_k,
+    )
+    seed_hints: list[str] = list(explicit_seed_hints)
+    for path in subgraph_seed_hints:
+        if path in seed_hints:
+            continue
+        seed_hints.append(path)
+        if len(seed_hints) >= top_seed_k:
+            break
     normalized_precomputed = _normalize_stage_precomputed_payload(
         payload=precomputed_payload,
         ranking_profile=normalized_profile,
@@ -130,12 +164,15 @@ def build_stage_repo_map(
             adjacency=normalized_precomputed.get("adjacency", {}),
             profile=normalized_profile,
         )
-    seed_paths = resolve_seed_paths(
-        files=files,
-        seed_candidates=seed_candidates,
-        ranked=ranked,
-        top_k=top_seed_k,
-    )
+    if seed_hints:
+        seed_paths = list(seed_hints[:top_seed_k])
+    else:
+        seed_paths = resolve_seed_paths(
+            files=files,
+            seed_candidates=seed_candidates,
+            ranked=ranked,
+            top_k=top_seed_k,
+        )
 
     if normalized_precomputed is None:
         module_to_path, path_style_to_paths, stem_to_paths = _build_resolution_maps(files)
@@ -256,7 +293,8 @@ def build_stage_repo_map(
     focused_count = max(1, len(files_payload))
     explainability = build_stage_repomap_explainability(
         seed_paths=seed_paths,
-        seed_hints=seed_hints,
+        seed_hints=explicit_seed_hints,
+        subgraph_seed_paths=subgraph_seed_hints,
         import_neighbors=import_neighbors,
         reference_neighbors=reference_neighbors,
         included_neighbors=included_neighbors,

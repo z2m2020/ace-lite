@@ -472,6 +472,69 @@ def test_auto_policy_definition_lookup_with_exception_prefers_general(
     assert repomap["ranking_profile"] == "graph_seeded"
 
 
+def test_repomap_seed_observability_survives_orchestrator_cache_reuse(
+    tmp_path: Path,
+    fake_skill_manifest,
+) -> None:
+    _seed_repo(tmp_path)
+
+    config = _base_config(
+        tmp_path=tmp_path,
+        fake_skill_manifest=fake_skill_manifest,
+        repomap={"enabled": True},
+        cochange={"enabled": False},
+        scip={"enabled": False},
+        retrieval={"retrieval_policy": "auto"},
+    )
+    orchestrator = AceOrchestrator(config=config)
+
+    first = orchestrator.plan(
+        query="where RequestException class is defined in requests",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+    )
+    second = orchestrator.plan(
+        query="where RequestException class is defined in requests",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+    )
+
+    first_repomap = first["repomap"]
+    second_repomap = second["repomap"]
+
+    assert first_repomap["enabled"] is True
+    assert first_repomap["ranking_profile"] == "graph_seeded"
+    assert first_repomap["worktree_seed_count"] == 0
+    assert first_repomap["subgraph_seed_count"] == 1
+    assert first_repomap["seed_candidates_count"] == 1
+    assert first_repomap["cache"]["hit"] is False
+    assert first_repomap["precompute"]["hit"] is False
+
+    assert second_repomap["enabled"] is True
+    assert second_repomap["seed_paths"] == first_repomap["seed_paths"]
+    assert second_repomap["worktree_seed_count"] == first_repomap["worktree_seed_count"]
+    assert second_repomap["subgraph_seed_count"] == first_repomap["subgraph_seed_count"]
+    assert second_repomap["seed_candidates_count"] == first_repomap["seed_candidates_count"]
+    assert second_repomap["cache"]["hit"] is True
+    assert second_repomap["precompute"]["hit"] is True
+
+    first_repromap_metric = next(
+        item for item in first["observability"]["stage_metrics"] if item["stage"] == "repomap"
+    )
+    second_repromap_metric = next(
+        item for item in second["observability"]["stage_metrics"] if item["stage"] == "repomap"
+    )
+
+    assert first_repromap_metric["tags"]["worktree_seed_count"] == 0
+    assert first_repromap_metric["tags"]["subgraph_seed_count"] == 1
+    assert first_repromap_metric["tags"]["seed_candidates_count"] == 1
+    assert first_repromap_metric["tags"]["cache_hit"] is False
+    assert second_repromap_metric["tags"]["worktree_seed_count"] == 0
+    assert second_repromap_metric["tags"]["subgraph_seed_count"] == 1
+    assert second_repromap_metric["tags"]["seed_candidates_count"] == 1
+    assert second_repromap_metric["tags"]["cache_hit"] is True
+
+
 def test_repomap_profile_explicit_override_kept_under_auto_policy(
     tmp_path: Path,
     fake_skill_manifest,

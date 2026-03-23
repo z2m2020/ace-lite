@@ -152,6 +152,7 @@ def run_repomap(
             cache_meta=cache_runtime.cache_meta,
             precompute_meta=cache_runtime.precompute_meta,
             worktree_seed_count=seed_runtime.worktree_seed_count,
+            subgraph_seed_count=seed_runtime.subgraph_seed_count,
             seed_candidates_count=len(seed_runtime.seed_candidates),
         )
 

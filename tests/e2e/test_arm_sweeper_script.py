@@ -27,6 +27,8 @@ def _write_results(
     cases: list[dict[str, float | str]],
     regressed: bool = False,
     failed_checks: list[str] | None = None,
+    retrieval_control_plane_gate_summary: dict[str, object] | None = None,
+    retrieval_frontier_gate_summary: dict[str, object] | None = None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "results.json").write_text(
@@ -43,6 +45,12 @@ def _write_results(
                     "task_success_rate": float(metrics.get("task_success_rate", 0.0) or 0.0)
                 },
                 "decision_observability_summary": {"decision_event_count": 1},
+                "retrieval_control_plane_gate_summary": dict(
+                    retrieval_control_plane_gate_summary or {}
+                ),
+                "retrieval_frontier_gate_summary": dict(
+                    retrieval_frontier_gate_summary or {}
+                ),
             },
             ensure_ascii=False,
             indent=2,
@@ -109,6 +117,8 @@ cases:
                     "noise_rate": 0.2,
                     "latency_p95_ms": 10.0,
                 },
+                retrieval_control_plane_gate_summary={"gate_passed": True},
+                retrieval_frontier_gate_summary={"gate_passed": False},
                 cases=[
                     {
                         "case_id": "c1",
@@ -139,6 +149,8 @@ cases:
                     "noise_rate": 0.1,
                     "latency_p95_ms": 12.0,
                 },
+                retrieval_control_plane_gate_summary={"gate_passed": True},
+                retrieval_frontier_gate_summary={"gate_passed": True},
                 cases=[
                     {
                         "case_id": "c1",
@@ -189,10 +201,20 @@ cases:
         "general_rrf",
         "auto_default",
     ]
+    assert summary["leaderboard"][0]["retrieval_frontier_gate_summary"] == {
+        "gate_passed": True
+    }
+    assert summary["leaderboard"][1]["retrieval_frontier_gate_summary"] == {
+        "gate_passed": False
+    }
     assert summary["oracle_relabel"]["case_count"] == 2
     assert summary["oracle_relabel"]["oracle_distribution"] == {
         "general_rrf": 2
     }
+    summary_md = Path(outputs["summary_md"]).read_text(encoding="utf-8")
+    assert "q3_gate" in summary_md
+    assert "| general_rrf | 1.0000 | 0.7000 | 0.1000 | 12.00 | yes | pass | pass |" in summary_md
+    assert "| auto_default | 0.5000 | 0.5000 | 0.2000 | 10.00 | no | pass | fail |" in summary_md
 
     oracle = json.loads(Path(outputs["oracle_relabel_json"]).read_text(encoding="utf-8"))
     assert oracle["case_count"] == 2

@@ -25,6 +25,7 @@ from ace_lite.benchmark.scoring import (
     build_ltm_explainability_summary,
     build_preference_observability_summary,
     build_retrieval_control_plane_gate_summary,
+    build_retrieval_frontier_gate_summary,
     build_retrieval_context_observability_summary,
     build_slo_budget_summary,
     build_stage_latency_summary,
@@ -611,6 +612,9 @@ class BenchmarkRunner:
                 metrics=metrics,
                 regression=output.get("regression"),
             )
+        )
+        output["retrieval_frontier_gate_summary"] = (
+            build_retrieval_frontier_gate_summary(metrics=metrics)
         )
 
         return output

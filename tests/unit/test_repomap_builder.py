@@ -496,6 +496,45 @@ def test_build_stage_repo_map_renders_graph_context_summary() -> None:
     assert "- edge_counts: graph_lookup=2, graph_prior=1" in payload["markdown"]
 
 
+def test_build_stage_repo_map_uses_subgraph_seed_paths_when_seed_candidates_missing() -> None:
+    files = {
+        "src/a.py": {
+            "module": "src.a",
+            "language": "python",
+            "symbols": [{"name": "A"}, {"name": "AnotherA"}],
+            "imports": [],
+        },
+        "src/b.py": {
+            "module": "src.b",
+            "language": "python",
+            "symbols": [{"name": "B"}],
+            "imports": [],
+        },
+    }
+
+    payload = build_stage_repo_map(
+        index_files=files,
+        seed_candidates=[],
+        subgraph_payload={
+            "enabled": True,
+            "reason": "ok",
+            "seed_paths": ["src/b.py"],
+            "edge_counts": {"graph_lookup": 1},
+        },
+        top_k=1,
+        neighbor_limit=0,
+        budget_tokens=128,
+    )
+
+    assert payload["seed_paths"] == ["src/b.py"]
+    assert payload["explainability"]["seed_strategy"] == "subgraph_payload"
+    assert payload["explainability"]["seed_sources"] == [
+        {"path": "src/b.py", "source": "subgraph_seed"}
+    ]
+    assert "seed_strategy:subgraph_payload" in payload["explainability"]["selection_notes"]
+    assert "subgraph_seed_paths_present" in payload["explainability"]["selection_notes"]
+
+
 def test_build_stage_repo_map_neighbor_depth_two_hops() -> None:
     files = {
         "src/a.py": {

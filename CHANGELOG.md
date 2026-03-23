@@ -8,6 +8,17 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.52] - 2026-03-23
+
+### Added
+
+- Added `benchmark_ops` readers for `retrieval_frontier_gate_summary` and `repomap_seed_summary` so scripts and CI can consume those summaries without hand-parsing benchmark result payloads.
+
+### Changed
+
+- Extended Q3 benchmark observability so graph-lookup weights, normalization traces, repomap seed/cache signals, and deep-symbol hard cases flow through benchmark summaries, reports, and arm-sweeper review surfaces.
+- Updated arm-sweeper and benchmark CLI support contracts to retain both Q2 and Q3 gate summaries through script, markdown, and writer paths.
+
 ## [0.3.40] - 2026-03-12
 
 ### Added

@@ -10,6 +10,74 @@ from ace_lite.index_stage.repo_paths import resolve_repo_relative_path
 from ace_lite.index_stage.scip_boost import apply_scip_boost
 from ace_lite.scip import load_scip_edges
 
+_GRAPH_LOOKUP_GUARD_REASONS = {
+    "candidate_count_guarded",
+    "query_terms_too_few",
+    "query_terms_too_many",
+}
+
+_GRAPH_LOOKUP_DEFAULT_WEIGHTS = {
+    "scip": 0.0,
+    "xref": 0.0,
+    "query_xref": 0.0,
+    "symbol": 0.0,
+    "import": 0.0,
+    "coverage": 0.0,
+}
+
+
+def _build_default_graph_lookup_payload(*, candidate_count: int) -> dict[str, Any]:
+    return {
+        "enabled": False,
+        "reason": "disabled",
+        "guarded": False,
+        "boosted_count": 0,
+        "weights": dict(_GRAPH_LOOKUP_DEFAULT_WEIGHTS),
+        "query_terms_count": 0,
+        "candidate_count": int(candidate_count),
+        "pool_size": 0,
+        "scip_signal_paths": 0,
+        "xref_signal_paths": 0,
+        "query_hit_paths": 0,
+        "symbol_hit_paths": 0,
+        "import_hit_paths": 0,
+        "coverage_hit_paths": 0,
+        "max_inbound": 0.0,
+        "max_xref_count": 0.0,
+        "max_query_hits": 0.0,
+        "max_symbol_hits": 0.0,
+        "max_import_hits": 0.0,
+        "max_query_coverage": 0.0,
+        "guard_max_candidates": 0,
+        "guard_min_query_terms": 0,
+        "guard_max_query_terms": 0,
+    }
+
+
+def _merge_graph_lookup_payload(
+    base_payload: dict[str, Any],
+    applied_payload: dict[str, Any],
+) -> dict[str, Any]:
+    merged = {
+        **base_payload,
+        **applied_payload,
+    }
+    applied_weights = (
+        applied_payload.get("weights")
+        if isinstance(applied_payload.get("weights"), dict)
+        else {}
+    )
+    merged["weights"] = {
+        **_GRAPH_LOOKUP_DEFAULT_WEIGHTS,
+        **(
+            base_payload.get("weights")
+            if isinstance(base_payload.get("weights"), dict)
+            else {}
+        ),
+        **applied_weights,
+    }
+    return merged
+
 
 @dataclass(frozen=True, slots=True)
 class StructuralRerankResult:
@@ -108,24 +176,9 @@ def apply_structural_rerank(
         )
     mark_timing("scip_boost", timing_started)
 
-    graph_lookup_payload: dict[str, Any] = {
-        "enabled": False,
-        "reason": "disabled",
-        "boosted_count": 0,
-        "weights": {"scip": 0.0, "xref": 0.0, "query_xref": 0.0},
-        "query_terms_count": 0,
-        "candidate_count": len(candidates),
-        "pool_size": 0,
-        "scip_signal_paths": 0,
-        "xref_signal_paths": 0,
-        "query_hit_paths": 0,
-        "max_inbound": 0.0,
-        "max_xref_count": 0.0,
-        "max_query_hits": 0.0,
-        "guard_max_candidates": 0,
-        "guard_min_query_terms": 0,
-        "guard_max_query_terms": 0,
-    }
+    graph_lookup_payload = _build_default_graph_lookup_payload(
+        candidate_count=len(candidates)
+    )
     scip_inbound_counts: dict[str, float] = {}
     timing_started = perf_counter_fn()
     graph_lookup_max_candidates = max(
@@ -169,13 +222,21 @@ def apply_structural_rerank(
                     for path, value in inbound_raw.items()
                     if str(path).strip()
                 }
-        candidates, graph_lookup_payload = graph_lookup_fn(
+        candidates, applied_graph_lookup_payload = graph_lookup_fn(
             candidates=candidates,
             files_map=files_map,
             terms=terms,
             scip_inbound_counts=scip_inbound_counts,
             policy=policy,
         )
+        graph_lookup_payload = _merge_graph_lookup_payload(
+            graph_lookup_payload,
+            applied_graph_lookup_payload,
+        )
+    graph_lookup_payload["guarded"] = (
+        str(graph_lookup_payload.get("reason", "") or "").strip()
+        in _GRAPH_LOOKUP_GUARD_REASONS
+    )
     mark_timing("graph_lookup", timing_started)
 
     return StructuralRerankResult(

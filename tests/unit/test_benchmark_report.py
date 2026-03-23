@@ -79,12 +79,53 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "multi_channel_rrf_pool_size_mean": 4.0,
                 "multi_channel_rrf_granularity_pool_ratio": 0.5,
                 "multi_channel_rrf_granularity_case_ratio": 1.0,
+                "graph_lookup_enabled_ratio": 1.0,
+                "graph_lookup_guarded_ratio": 0.5,
+                "graph_lookup_log_norm_ratio": 1.0,
+                "graph_lookup_linear_norm_ratio": 0.0,
+                "graph_lookup_boosted_count_mean": 2.0,
+                "graph_lookup_weight_scip_mean": 0.3,
+                "graph_lookup_weight_xref_mean": 0.2,
+                "graph_lookup_weight_query_xref_mean": 0.2,
+                "graph_lookup_weight_symbol_mean": 0.1,
+                "graph_lookup_weight_import_mean": 0.1,
+                "graph_lookup_weight_coverage_mean": 0.1,
+                "graph_lookup_candidate_count_mean": 6.0,
+                "graph_lookup_pool_size_mean": 4.0,
+                "graph_lookup_query_terms_count_mean": 3.0,
+                "graph_lookup_guard_max_candidates_mean": 4.0,
+                "graph_lookup_guard_min_query_terms_mean": 1.0,
+                "graph_lookup_guard_max_query_terms_mean": 5.0,
+                "graph_lookup_query_hit_paths_mean": 1.0,
+                "graph_lookup_scip_signal_paths_mean": 2.0,
+                "graph_lookup_xref_signal_paths_mean": 3.0,
+                "graph_lookup_symbol_hit_paths_mean": 1.0,
+                "graph_lookup_import_hit_paths_mean": 1.0,
+                "graph_lookup_coverage_hit_paths_mean": 2.0,
+                "graph_lookup_max_inbound_mean": 4.0,
+                "graph_lookup_max_xref_count_mean": 3.0,
+                "graph_lookup_max_query_hits_mean": 2.0,
+                "graph_lookup_max_symbol_hits_mean": 1.0,
+                "graph_lookup_max_import_hits_mean": 1.0,
+                "graph_lookup_max_query_coverage_mean": 0.6667,
+                "graph_lookup_candidate_count_guard_ratio": 0.5,
+                "graph_lookup_query_terms_too_few_ratio": 0.25,
+                "graph_lookup_query_terms_too_many_ratio": 0.0,
+                "graph_lookup_boosted_path_ratio": 0.5,
+                "graph_lookup_query_hit_path_ratio": 0.25,
+                "deep_symbol_case_count": 2.0,
+                "deep_symbol_case_recall": 1.0,
                 "native_scip_loaded_rate": 1.0,
                 "native_scip_document_count_mean": 5.0,
                 "native_scip_definition_occurrence_count_mean": 7.0,
                 "native_scip_reference_occurrence_count_mean": 11.0,
                 "native_scip_symbol_definition_count_mean": 3.0,
                 "evidence_insufficient_rate": 0.5,
+                "repomap_worktree_seed_count_mean": 1.0,
+                "repomap_subgraph_seed_count_mean": 2.0,
+                "repomap_seed_candidates_count_mean": 3.0,
+                "repomap_cache_hit_ratio": 0.5,
+                "repomap_precompute_hit_ratio": 1.0,
                 "no_candidate_rate": 0.0,
                 "low_support_chunk_rate": 0.5,
                 "missing_validation_rate": 0.5,
@@ -152,6 +193,20 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "multi_channel_rrf_pool_size_mean": 0.0,
                 "multi_channel_rrf_granularity_pool_ratio": 0.0,
                 "multi_channel_rrf_granularity_case_ratio": 0.0,
+                "graph_lookup_enabled_ratio": 0.0,
+                "graph_lookup_boosted_count_mean": 0.0,
+                "graph_lookup_pool_size_mean": 0.0,
+                "graph_lookup_query_terms_count_mean": 0.0,
+                "graph_lookup_query_hit_paths_mean": 0.0,
+                "graph_lookup_scip_signal_paths_mean": 0.0,
+                "graph_lookup_xref_signal_paths_mean": 0.0,
+                "graph_lookup_symbol_hit_paths_mean": 0.0,
+                "graph_lookup_import_hit_paths_mean": 0.0,
+                "graph_lookup_coverage_hit_paths_mean": 0.0,
+                "graph_lookup_boosted_path_ratio": 0.0,
+                "graph_lookup_query_hit_path_ratio": 0.0,
+                "deep_symbol_case_count": 0.0,
+                "deep_symbol_case_recall": 0.0,
                 "native_scip_loaded_rate": 0.0,
                 "native_scip_document_count_mean": 0.0,
                 "native_scip_definition_occurrence_count_mean": 0.0,
@@ -414,6 +469,8 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                     "case_id": "c1",
                     "query": "q",
                     "comparison_lane": "stale_majority",
+                    "retrieval_surface": "deep_symbol",
+                    "deep_symbol_case": 1.0,
                     "recall_hit": 1,
                     "task_success_hit": 0.0,
                     "task_success_mode": "negative_control",
@@ -465,6 +522,9 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                     "feedback_enabled": 1.0,
                     "feedback_matched_event_count": 2.0,
                     "feedback_boosted_count": 1.0,
+                    "graph_lookup_enabled": 1.0,
+                    "graph_lookup_boosted_count": 2.0,
+                    "graph_lookup_query_hit_paths": 1.0,
                     "source_plan_direct_evidence_ratio": 0.75,
                     "source_plan_neighbor_context_ratio": 0.25,
                     "source_plan_hint_only_ratio": 0.0,
@@ -500,6 +560,13 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                         "reason": "hit",
                         "stored": False,
                     },
+                    "repomap_seed": {
+                        "worktree_seed_count": 1,
+                        "subgraph_seed_count": 2,
+                        "seed_candidates_count": 3,
+                        "cache_hit": True,
+                        "precompute_hit": False,
+                    },
                     "chunk_stage_miss_details": {
                         "oracle_file_path": "src/ace_lite/benchmark/case_evaluation.py",
                         "file_present": True,
@@ -524,6 +591,41 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                         "granularity_count": 2,
                         "pool_size": 4,
                         "granularity_pool_ratio": 0.5,
+                    },
+                    "graph_lookup": {
+                        "enabled": True,
+                        "reason": "candidate_count_guarded",
+                        "guarded": True,
+                        "boosted_count": 2,
+                        "weights": {
+                            "scip": 0.3,
+                            "xref": 0.2,
+                            "query_xref": 0.2,
+                            "symbol": 0.1,
+                            "import": 0.1,
+                            "coverage": 0.1,
+                        },
+                        "candidate_count": 6,
+                        "pool_size": 4,
+                        "query_terms_count": 3,
+                        "normalization": "log1p",
+                        "guard_max_candidates": 4,
+                        "guard_min_query_terms": 1,
+                        "guard_max_query_terms": 5,
+                        "query_hit_paths": 1,
+                        "scip_signal_paths": 2,
+                        "xref_signal_paths": 3,
+                        "symbol_hit_paths": 1,
+                        "import_hit_paths": 1,
+                        "coverage_hit_paths": 2,
+                        "max_inbound": 4.0,
+                        "max_xref_count": 3.0,
+                        "max_query_hits": 2.0,
+                        "max_symbol_hits": 1.0,
+                        "max_import_hits": 1.0,
+                        "max_query_coverage": 0.6667,
+                        "boosted_path_ratio": 0.5,
+                        "query_hit_path_ratio": 0.25,
                     },
                     "source_plan_packing": {
                         "graph_closure_preference_enabled": True,
@@ -588,6 +690,16 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "## Comparison Lanes" in report
     assert "## Evidence Insufficiency Summary" in report
     assert "## Source Plan Granularity Summary" in report
+    assert "## Graph Lookup Summary" in report
+    assert "## Repomap Seed Summary" in report
+    assert "Seed count means: worktree=1.00; subgraph=2.00; seed_candidates=3.00" in report
+    assert "Cache hit ratios: cache=0.5000; precompute=1.0000" in report
+    assert "Normalization ratios: log1p=1.0000; linear=0.0000" in report
+    assert "Weight means: scip=0.30; xref=0.20; query_xref=0.20; symbol=0.10; import=0.10; coverage=0.10" in report
+    assert "Guard summary: guarded=0.5000; candidate_count_mean=6.00; max_candidates_mean=4.00; min_terms_mean=1.00; max_terms_mean=5.00" in report
+    assert "Signal maxima mean: inbound=4.00; xref=3.00; query=2.00; symbol=1.00; import=1.00; coverage=0.67" in report
+    assert "Guard reason ratios: candidate_count=0.5000; query_terms_too_few=0.2500; query_terms_too_many=0.0000" in report
+    assert "## Deep Symbol Summary" in report
     assert "## Chunk Stage Miss Summary" in report
     assert "## Decision Observability Summary" in report
     assert "## Long-Term Explainability Summary" in report
@@ -609,6 +721,8 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "task_success_rate" in report
     assert "task_success_mode: negative_control" in report
     assert "comparison_lane: stale_majority" in report
+    assert "retrieval_surface: deep_symbol" in report
+    assert "deep_symbol_case: 1.0000" in report
     assert "| stale_majority | 1 | 0.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.3333 | 1.0000 | 1.0000 | 2.0000 |" in report
     assert "task_success_failed_checks: validation_tests" in report
     assert "evidence_insufficiency_reason: missing_validation" in report
@@ -683,6 +797,10 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "Channel enabled ratio: 1.0000; applied ratio: 1.0000" in report
     assert "Granularity channel case ratio: 1.0000; count mean: 2.00" in report
     assert "Fusion pool size mean: 4.00; granularity/pool ratio: 0.5000" in report
+    assert "Enabled ratio: 1.0000; boosted count mean: 2.00; pool size mean: 4.00" in report
+    assert "Query terms mean: 3.00; query-hit mean: 1.00; boosted/pool ratio: 0.5000; query-hit/pool ratio: 0.2500" in report
+    assert "Signal paths mean: scip=2.00, xref=3.00, symbol=1.00, import=1.00, coverage=2.00" in report
+    assert "Deep symbol case count: 2.00; recall: 1.0000" in report
     assert "## Native SCIP Summary" in report
     assert "Native SCIP loaded rate: 1.0000" in report
     assert "native_scip_document_count_mean" in report
@@ -699,10 +817,12 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "validation_test_count: 0" in report
     assert "validation_test_count" in report
     assert "plan_replay_cache: stage=source_plan, reason=hit, stored=False" in report
+    assert "repomap_seed: worktree_seed_count=1, subgraph_seed_count=2, seed_candidates_count=3, cache_hit=True, precompute_hit=False" in report
     assert "chunk_guard_expectation: scenario=stale_majority, expected_retained_hit=True, expected_filtered_hit_count=1, expected_filtered_hit_rate=1.0000, report_only_improved=True" in report
     assert "robust_signature: count=1, coverage_ratio=0.5000" in report
     assert "graph_closure: enabled=True, boosted_chunk_count=2, coverage_ratio=0.5000, anchor_count=1, support_edge_count=3, total=0.1400" in report
     assert "index_fusion_granularity: enabled=True, applied=True, granularity_count=2, pool_size=4, granularity_pool_ratio=0.5000" in report
+    assert "graph_lookup: enabled=True, reason=candidate_count_guarded, guarded=True, boosted_count=2, weights=scip:0.3000|xref:0.2000|query_xref:0.2000|symbol:0.1000|import:0.1000|coverage:0.1000, candidate_count=6, pool_size=4, query_terms_count=3, normalization=log1p, guard_max_candidates=4, guard_min_query_terms=1, guard_max_query_terms=5, query_hit_paths=1, scip_signal_paths=2, xref_signal_paths=3, symbol_hit_paths=1, import_hit_paths=1, coverage_hit_paths=2, max_inbound=4.0000, max_xref_count=3.0000, max_query_hits=2.0000, max_symbol_hits=1.0000, max_import_hits=1.0000, max_query_coverage=0.6667, boosted_path_ratio=0.5000, query_hit_path_ratio=0.2500" in report
     assert "source_plan_packing: graph_closure_preference_enabled=True, graph_closure_bonus_candidate_count=2, graph_closure_preferred_count=1, granularity_preferred_count=1, focused_file_promoted_count=1, packed_path_count=2, reason=graph_closure_preferred" in report
     assert "preference_capture: notes_hit_ratio=0.5000, profile_selected_count=2, capture_triggered=True" in report
     assert "ltm_explainability: selected_count=2, attribution_count=1, graph_neighbor_count=1, plan_constraint_count=1" in report
@@ -994,6 +1114,35 @@ def test_build_results_summary_preserves_retrieval_control_plane_gate_summary() 
         ]
         == 0.9
     )
+
+
+def test_build_results_summary_preserves_retrieval_frontier_gate_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "retrieval_frontier_gate_summary": {
+                "failed_checks": ["precision_at_k"],
+                "deep_symbol_case_recall": 0.95,
+                "deep_symbol_case_recall_threshold": 0.9,
+                "deep_symbol_case_recall_passed": True,
+                "native_scip_loaded_rate": 0.8,
+                "native_scip_loaded_rate_threshold": 0.7,
+                "native_scip_loaded_rate_passed": True,
+                "precision_at_k": 0.61,
+                "precision_at_k_threshold": 0.64,
+                "precision_at_k_passed": False,
+                "noise_rate": 0.31,
+                "noise_rate_threshold": 0.36,
+                "noise_rate_passed": True,
+                "gate_passed": False,
+            },
+        }
+    )
+
+    assert summary["retrieval_frontier_gate_summary"]["gate_passed"] is False
+    assert summary["retrieval_frontier_gate_summary"]["failed_checks"] == [
+        "precision_at_k"
+    ]
 
 
 def test_build_results_summary_preserves_reward_log_summary() -> None:
@@ -1391,6 +1540,41 @@ def test_build_report_markdown_includes_retrieval_control_plane_gate_failure_sta
         "- Failed checks: benchmark_regression_detected, adaptive_router_shadow_coverage"
         in report
     )
+
+
+def test_build_report_markdown_includes_retrieval_frontier_gate_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-22T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {},
+            "retrieval_frontier_gate_summary": {
+                "failed_checks": ["precision_at_k"],
+                "deep_symbol_case_recall": 0.95,
+                "deep_symbol_case_recall_threshold": 0.9,
+                "deep_symbol_case_recall_passed": True,
+                "native_scip_loaded_rate": 0.8,
+                "native_scip_loaded_rate_threshold": 0.7,
+                "native_scip_loaded_rate_passed": True,
+                "precision_at_k": 0.61,
+                "precision_at_k_threshold": 0.64,
+                "precision_at_k_passed": False,
+                "noise_rate": 0.31,
+                "noise_rate_threshold": 0.36,
+                "noise_rate_passed": True,
+                "gate_passed": False,
+            },
+        }
+    )
+
+    assert "## Retrieval Frontier Gate Summary" in report
+    assert "- Gate passed: no" in report
+    assert "- Deep-symbol recall: 0.9500 (threshold >= 0.9000, pass)" in report
+    assert "- Native SCIP loaded rate: 0.8000 (threshold >= 0.7000, pass)" in report
+    assert "- Precision@k: 0.6100 (threshold >= 0.6400, fail)" in report
+    assert "- Noise rate: 0.3100 (threshold <= 0.3600, pass)" in report
+    assert "- Failed checks: precision_at_k" in report
 
 
 def test_build_report_markdown_includes_preference_observability_summary() -> None:

@@ -789,6 +789,25 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
         "latency_p95_ms_passed": True,
         "gate_passed": False,
     }
+    assert results["retrieval_frontier_gate_summary"] == {
+        "failed_checks": [
+            "deep_symbol_case_recall",
+            "native_scip_loaded_rate",
+        ],
+        "deep_symbol_case_recall": 0.0,
+        "deep_symbol_case_recall_threshold": 0.9,
+        "deep_symbol_case_recall_passed": False,
+        "native_scip_loaded_rate": 0.0,
+        "native_scip_loaded_rate_threshold": 0.7,
+        "native_scip_loaded_rate_passed": False,
+        "precision_at_k": 1.0,
+        "precision_at_k_threshold": 0.64,
+        "precision_at_k_passed": True,
+        "noise_rate": 0.0,
+        "noise_rate_threshold": 0.36,
+        "noise_rate_passed": True,
+        "gate_passed": False,
+    }
 
 
 def test_benchmark_runner_submits_router_reward_events_when_writer_is_present() -> None:

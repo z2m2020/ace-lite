@@ -150,6 +150,11 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             if isinstance(output.get("graph_lookup"), dict)
             else {}
         )
+        graph_lookup_weights = (
+            graph_lookup.get("weights", {})
+            if isinstance(graph_lookup.get("weights"), dict)
+            else {}
+        )
         parallel = (
             output.get("parallel", {})
             if isinstance(output.get("parallel"), dict)
@@ -285,7 +290,72 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "prior_boosted_count": int(prior.get("boosted_candidate_count", 0) or 0),
             "prior_added_count": int(prior.get("added_candidate_count", 0) or 0),
             "graph_lookup_enabled": bool(graph_lookup.get("enabled", False)),
+            "graph_lookup_reason": str(graph_lookup.get("reason", "")),
+            "graph_lookup_guarded": bool(graph_lookup.get("guarded", False)),
             "graph_lookup_boosted_count": int(graph_lookup.get("boosted_count", 0) or 0),
+            "graph_lookup_weight_scip": float(graph_lookup_weights.get("scip", 0.0) or 0.0),
+            "graph_lookup_weight_xref": float(graph_lookup_weights.get("xref", 0.0) or 0.0),
+            "graph_lookup_weight_query_xref": float(
+                graph_lookup_weights.get("query_xref", 0.0) or 0.0
+            ),
+            "graph_lookup_weight_symbol": float(
+                graph_lookup_weights.get("symbol", 0.0) or 0.0
+            ),
+            "graph_lookup_weight_import": float(
+                graph_lookup_weights.get("import", 0.0) or 0.0
+            ),
+            "graph_lookup_weight_coverage": float(
+                graph_lookup_weights.get("coverage", 0.0) or 0.0
+            ),
+            "graph_lookup_candidate_count": int(graph_lookup.get("candidate_count", 0) or 0),
+            "graph_lookup_pool_size": int(graph_lookup.get("pool_size", 0) or 0),
+            "graph_lookup_query_terms_count": int(
+                graph_lookup.get("query_terms_count", 0) or 0
+            ),
+            "graph_lookup_normalization": str(graph_lookup.get("normalization", "")),
+            "graph_lookup_guard_max_candidates": int(
+                graph_lookup.get("guard_max_candidates", 0) or 0
+            ),
+            "graph_lookup_guard_min_query_terms": int(
+                graph_lookup.get("guard_min_query_terms", 0) or 0
+            ),
+            "graph_lookup_guard_max_query_terms": int(
+                graph_lookup.get("guard_max_query_terms", 0) or 0
+            ),
+            "graph_lookup_query_hit_paths": int(
+                graph_lookup.get("query_hit_paths", 0) or 0
+            ),
+            "graph_lookup_scip_signal_paths": int(
+                graph_lookup.get("scip_signal_paths", 0) or 0
+            ),
+            "graph_lookup_xref_signal_paths": int(
+                graph_lookup.get("xref_signal_paths", 0) or 0
+            ),
+            "graph_lookup_symbol_hit_paths": int(
+                graph_lookup.get("symbol_hit_paths", 0) or 0
+            ),
+            "graph_lookup_import_hit_paths": int(
+                graph_lookup.get("import_hit_paths", 0) or 0
+            ),
+            "graph_lookup_coverage_hit_paths": int(
+                graph_lookup.get("coverage_hit_paths", 0) or 0
+            ),
+            "graph_lookup_max_inbound": float(graph_lookup.get("max_inbound", 0.0) or 0.0),
+            "graph_lookup_max_xref_count": float(
+                graph_lookup.get("max_xref_count", 0.0) or 0.0
+            ),
+            "graph_lookup_max_query_hits": float(
+                graph_lookup.get("max_query_hits", 0.0) or 0.0
+            ),
+            "graph_lookup_max_symbol_hits": float(
+                graph_lookup.get("max_symbol_hits", 0.0) or 0.0
+            ),
+            "graph_lookup_max_import_hits": float(
+                graph_lookup.get("max_import_hits", 0.0) or 0.0
+            ),
+            "graph_lookup_max_query_coverage": float(
+                graph_lookup.get("max_query_coverage", 0.0) or 0.0
+            ),
             "embedding_enabled": bool(embeddings.get("enabled", False)),
             "embedding_reranked_count": int(embeddings.get("reranked_count", 0) or 0),
             "embedding_fallback": bool(embeddings.get("fallback", False)),
@@ -413,6 +483,9 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "enabled": bool(output.get("enabled", True)),
             "seed_count": int(output.get("seed_count", 0) or 0),
             "neighbor_count": int(output.get("neighbor_count", 0) or 0),
+            "worktree_seed_count": int(output.get("worktree_seed_count", 0) or 0),
+            "subgraph_seed_count": int(output.get("subgraph_seed_count", 0) or 0),
+            "seed_candidates_count": int(output.get("seed_candidates_count", 0) or 0),
             "neighbor_limit": int(output.get("neighbor_limit", 0) or 0),
             "neighbor_depth": int(output.get("neighbor_depth", 1) or 1),
             "budget_tokens": int(output.get("budget_tokens", 0) or 0),

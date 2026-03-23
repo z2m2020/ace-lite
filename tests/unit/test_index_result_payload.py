@@ -90,7 +90,39 @@ def _base_inputs() -> dict:
             "worktree_guard_filtered_changed_count": 0,
             "worktree_guard_filtered_seed_count": 0,
         },
-        "graph_lookup_payload": {"enabled": False, "boosted_count": 0, "query_hit_paths": 0},
+        "graph_lookup_payload": {
+            "enabled": False,
+            "reason": "disabled",
+            "guarded": False,
+            "boosted_count": 0,
+            "weights": {
+                "scip": 0.0,
+                "xref": 0.0,
+                "query_xref": 0.0,
+                "symbol": 0.0,
+                "import": 0.0,
+                "coverage": 0.0,
+            },
+            "candidate_count": 1,
+            "pool_size": 0,
+            "query_terms_count": 0,
+            "normalization": "linear",
+            "guard_max_candidates": 64,
+            "guard_min_query_terms": 0,
+            "guard_max_query_terms": 64,
+            "query_hit_paths": 0,
+            "scip_signal_paths": 0,
+            "xref_signal_paths": 0,
+            "symbol_hit_paths": 0,
+            "import_hit_paths": 0,
+            "coverage_hit_paths": 0,
+            "max_inbound": 0.0,
+            "max_xref_count": 0.0,
+            "max_query_hits": 0.0,
+            "max_symbol_hits": 0.0,
+            "max_import_hits": 0.0,
+            "max_query_coverage": 0.0,
+        },
         "cochange_payload": {"neighbors_added": 0},
         "scip_payload": {"enabled": False},
         "embeddings_payload": {
@@ -236,12 +268,34 @@ def test_build_index_stage_result_limits_files_and_attaches_why() -> None:
     assert payload["candidate_ranking"]["multi_channel_rrf_granularity_count"] == 2
     assert payload["candidate_ranking"]["multi_channel_rrf_pool_size"] == 4
     assert payload["candidate_ranking"]["multi_channel_rrf_granularity_pool_ratio"] == 0.5
+    assert payload["candidate_ranking"]["graph_lookup_pool_size"] == 0
+    assert payload["candidate_ranking"]["graph_lookup_query_terms_count"] == 0
+    assert payload["candidate_ranking"]["graph_lookup_scip_signal_paths"] == 0
+    assert payload["candidate_ranking"]["graph_lookup_reason"] == "disabled"
+    assert payload["candidate_ranking"]["graph_lookup_guarded"] is False
+    assert payload["candidate_ranking"]["graph_lookup_weight_scip"] == 0.0
+    assert payload["candidate_ranking"]["graph_lookup_candidate_count"] == 1
+    assert payload["candidate_ranking"]["graph_lookup_guard_max_candidates"] == 64
+    assert payload["candidate_ranking"]["graph_lookup_normalization"] == "linear"
+    assert payload["candidate_ranking"]["graph_lookup_max_inbound"] == 0.0
+    assert payload["candidate_ranking"]["graph_lookup_max_query_coverage"] == 0.0
     assert payload["candidate_ranking"]["topological_shield"]["mode"] == "report_only"
     assert payload["chunk_guard"]["mode"] == "report_only"
     assert payload["metadata"]["selection_fingerprint"]
     assert payload["metadata"]["multi_channel_rrf_granularity_count"] == 2
     assert payload["metadata"]["multi_channel_rrf_pool_size"] == 4
     assert payload["metadata"]["multi_channel_rrf_granularity_pool_ratio"] == 0.5
+    assert payload["metadata"]["graph_lookup_pool_size"] == 0
+    assert payload["metadata"]["graph_lookup_query_terms_count"] == 0
+    assert payload["metadata"]["graph_lookup_scip_signal_paths"] == 0
+    assert payload["metadata"]["graph_lookup_reason"] == "disabled"
+    assert payload["metadata"]["graph_lookup_guarded"] is False
+    assert payload["metadata"]["graph_lookup_weight_scip"] == 0.0
+    assert payload["metadata"]["graph_lookup_candidate_count"] == 1
+    assert payload["metadata"]["graph_lookup_guard_max_candidates"] == 64
+    assert payload["metadata"]["graph_lookup_normalization"] == "linear"
+    assert payload["metadata"]["graph_lookup_max_inbound"] == 0.0
+    assert payload["metadata"]["graph_lookup_max_query_coverage"] == 0.0
     assert payload["metadata"]["robust_signature_count"] == 1
     assert payload["metadata"]["robust_signature_coverage_ratio"] == 1.0
     assert payload["metadata"]["topological_shield_enabled"] is True
@@ -379,8 +433,36 @@ def test_build_index_stage_result_preserves_payload_contract() -> None:
     assert payload["prior_applied"]["docs_hint_paths"] == 1
     assert payload["graph_lookup"] == {
         "enabled": False,
+        "reason": "disabled",
+        "guarded": False,
         "boosted_count": 0,
+        "weights": {
+            "scip": 0.0,
+            "xref": 0.0,
+            "query_xref": 0.0,
+            "symbol": 0.0,
+            "import": 0.0,
+            "coverage": 0.0,
+        },
+        "candidate_count": 1,
+        "pool_size": 0,
+        "query_terms_count": 0,
+        "normalization": "linear",
+        "guard_max_candidates": 64,
+        "guard_min_query_terms": 0,
+        "guard_max_query_terms": 64,
         "query_hit_paths": 0,
+        "scip_signal_paths": 0,
+        "xref_signal_paths": 0,
+        "symbol_hit_paths": 0,
+        "import_hit_paths": 0,
+        "coverage_hit_paths": 0,
+        "max_inbound": 0.0,
+        "max_xref_count": 0.0,
+        "max_query_hits": 0.0,
+        "max_symbol_hits": 0.0,
+        "max_import_hits": 0.0,
+        "max_query_coverage": 0.0,
     }
     assert payload["subgraph_payload"]["payload_version"] == "subgraph_payload_v1"
     assert payload["cochange"] == {"neighbors_added": 0}
@@ -588,8 +670,35 @@ def test_build_index_stage_result_builds_consumer_facing_subgraph_payload() -> N
     inputs["graph_lookup_payload"] = {
         "enabled": True,
         "reason": "ok",
+        "guarded": False,
         "boosted_count": 2,
+        "weights": {
+            "scip": 0.3,
+            "xref": 0.2,
+            "query_xref": 0.2,
+            "symbol": 0.1,
+            "import": 0.1,
+            "coverage": 0.1,
+        },
+        "candidate_count": 4,
+        "pool_size": 4,
+        "query_terms_count": 3,
+        "normalization": "log1p",
+        "guard_max_candidates": 8,
+        "guard_min_query_terms": 1,
+        "guard_max_query_terms": 6,
         "query_hit_paths": 1,
+        "scip_signal_paths": 2,
+        "xref_signal_paths": 3,
+        "symbol_hit_paths": 1,
+        "import_hit_paths": 1,
+        "coverage_hit_paths": 2,
+        "max_inbound": 4.0,
+        "max_xref_count": 3.0,
+        "max_query_hits": 2.0,
+        "max_symbol_hits": 1.0,
+        "max_import_hits": 1.0,
+        "max_query_coverage": 0.666667,
     }
     inputs["candidates"][0]["score_breakdown"]["graph_lookup"] = 0.3
     inputs["candidate_chunks"][0]["score_breakdown"]["graph_lookup"] = 0.25
@@ -606,6 +715,52 @@ def test_build_index_stage_result_builds_consumer_facing_subgraph_payload() -> N
         "graph_prior": 1,
         "graph_closure_bonus": 1,
     }
+    assert payload["candidate_ranking"]["graph_lookup_pool_size"] == 4
+    assert payload["candidate_ranking"]["graph_lookup_query_terms_count"] == 3
+    assert payload["candidate_ranking"]["graph_lookup_reason"] == "ok"
+    assert payload["candidate_ranking"]["graph_lookup_guarded"] is False
+    assert payload["candidate_ranking"]["graph_lookup_weight_scip"] == 0.3
+    assert payload["candidate_ranking"]["graph_lookup_weight_xref"] == 0.2
+    assert payload["candidate_ranking"]["graph_lookup_weight_query_xref"] == 0.2
+    assert payload["candidate_ranking"]["graph_lookup_candidate_count"] == 4
+    assert payload["candidate_ranking"]["graph_lookup_guard_max_candidates"] == 8
+    assert payload["candidate_ranking"]["graph_lookup_guard_min_query_terms"] == 1
+    assert payload["candidate_ranking"]["graph_lookup_guard_max_query_terms"] == 6
+    assert payload["candidate_ranking"]["graph_lookup_normalization"] == "log1p"
+    assert payload["candidate_ranking"]["graph_lookup_scip_signal_paths"] == 2
+    assert payload["candidate_ranking"]["graph_lookup_xref_signal_paths"] == 3
+    assert payload["candidate_ranking"]["graph_lookup_symbol_hit_paths"] == 1
+    assert payload["candidate_ranking"]["graph_lookup_import_hit_paths"] == 1
+    assert payload["candidate_ranking"]["graph_lookup_coverage_hit_paths"] == 2
+    assert payload["candidate_ranking"]["graph_lookup_max_inbound"] == 4.0
+    assert payload["candidate_ranking"]["graph_lookup_max_xref_count"] == 3.0
+    assert payload["candidate_ranking"]["graph_lookup_max_query_hits"] == 2.0
+    assert payload["candidate_ranking"]["graph_lookup_max_symbol_hits"] == 1.0
+    assert payload["candidate_ranking"]["graph_lookup_max_import_hits"] == 1.0
+    assert payload["candidate_ranking"]["graph_lookup_max_query_coverage"] == 0.666667
+    assert payload["metadata"]["graph_lookup_pool_size"] == 4
+    assert payload["metadata"]["graph_lookup_query_terms_count"] == 3
+    assert payload["metadata"]["graph_lookup_reason"] == "ok"
+    assert payload["metadata"]["graph_lookup_guarded"] is False
+    assert payload["metadata"]["graph_lookup_weight_scip"] == 0.3
+    assert payload["metadata"]["graph_lookup_weight_xref"] == 0.2
+    assert payload["metadata"]["graph_lookup_weight_query_xref"] == 0.2
+    assert payload["metadata"]["graph_lookup_candidate_count"] == 4
+    assert payload["metadata"]["graph_lookup_guard_max_candidates"] == 8
+    assert payload["metadata"]["graph_lookup_guard_min_query_terms"] == 1
+    assert payload["metadata"]["graph_lookup_guard_max_query_terms"] == 6
+    assert payload["metadata"]["graph_lookup_normalization"] == "log1p"
+    assert payload["metadata"]["graph_lookup_scip_signal_paths"] == 2
+    assert payload["metadata"]["graph_lookup_xref_signal_paths"] == 3
+    assert payload["metadata"]["graph_lookup_symbol_hit_paths"] == 1
+    assert payload["metadata"]["graph_lookup_import_hit_paths"] == 1
+    assert payload["metadata"]["graph_lookup_coverage_hit_paths"] == 2
+    assert payload["metadata"]["graph_lookup_max_inbound"] == 4.0
+    assert payload["metadata"]["graph_lookup_max_xref_count"] == 3.0
+    assert payload["metadata"]["graph_lookup_max_query_hits"] == 2.0
+    assert payload["metadata"]["graph_lookup_max_symbol_hits"] == 1.0
+    assert payload["metadata"]["graph_lookup_max_import_hits"] == 1.0
+    assert payload["metadata"]["graph_lookup_max_query_coverage"] == 0.666667
 
 
 def test_index_stage_package_exports_result_builder() -> None:

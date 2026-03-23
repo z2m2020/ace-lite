@@ -69,6 +69,7 @@ def test_apply_structural_rerank_loads_scip_graph_for_graph_lookup() -> None:
             "reason": "ok",
             "boosted_count": 1,
             "weights": {"scip": 0.1, "xref": 0.0, "query_xref": 0.0},
+            "normalization": "log1p",
             "query_terms_count": len(kwargs["terms"]),
             "candidate_count": len(kwargs["candidates"]),
             "pool_size": len(kwargs["candidates"]),
@@ -78,6 +79,9 @@ def test_apply_structural_rerank_loads_scip_graph_for_graph_lookup() -> None:
             "max_inbound": 3.0,
             "max_xref_count": 0.0,
             "max_query_hits": 1.0,
+            "max_symbol_hits": 0.0,
+            "max_import_hits": 0.0,
+            "max_query_coverage": 0.5,
             "guard_max_candidates": 64,
             "guard_min_query_terms": 0,
             "guard_max_query_terms": 64,
@@ -118,7 +122,27 @@ def test_apply_structural_rerank_loads_scip_graph_for_graph_lookup() -> None:
     assert captured["scip_inbound_counts"] == {"src/a.py": 3.0, "src/b.py": 1.0}
     assert result.scip_payload["loaded"] is True
     assert result.graph_lookup_payload["reason"] == "ok"
+    assert result.graph_lookup_payload["guarded"] is False
+    assert result.graph_lookup_payload["weights"] == {
+        "scip": 0.1,
+        "xref": 0.0,
+        "query_xref": 0.0,
+        "symbol": 0.0,
+        "import": 0.0,
+        "coverage": 0.0,
+    }
+    assert result.graph_lookup_payload["normalization"] == "log1p"
+    assert result.graph_lookup_payload["guard_max_candidates"] == 64
+    assert result.graph_lookup_payload["guard_min_query_terms"] == 0
+    assert result.graph_lookup_payload["guard_max_query_terms"] == 64
     assert result.graph_lookup_payload["query_hit_paths"] == 1
+    assert result.graph_lookup_payload["symbol_hit_paths"] == 0
+    assert result.graph_lookup_payload["import_hit_paths"] == 0
+    assert result.graph_lookup_payload["coverage_hit_paths"] == 0
+    assert result.graph_lookup_payload["max_inbound"] == 3.0
+    assert result.graph_lookup_payload["max_symbol_hits"] == 0.0
+    assert result.graph_lookup_payload["max_import_hits"] == 0.0
+    assert result.graph_lookup_payload["max_query_coverage"] == 0.5
 
 
 def test_apply_structural_rerank_skips_graph_lookup_when_candidate_guard_triggers() -> None:
@@ -161,4 +185,19 @@ def test_apply_structural_rerank_skips_graph_lookup_when_candidate_guard_trigger
 
     assert called["graph"] is False
     assert result.graph_lookup_payload["reason"] == "candidate_count_guarded"
+    assert result.graph_lookup_payload["guarded"] is True
     assert result.graph_lookup_payload["guard_max_candidates"] == 1
+    assert result.graph_lookup_payload["weights"] == {
+        "scip": 0.0,
+        "xref": 0.0,
+        "query_xref": 0.0,
+        "symbol": 0.0,
+        "import": 0.0,
+        "coverage": 0.0,
+    }
+    assert result.graph_lookup_payload["symbol_hit_paths"] == 0
+    assert result.graph_lookup_payload["import_hit_paths"] == 0
+    assert result.graph_lookup_payload["coverage_hit_paths"] == 0
+    assert result.graph_lookup_payload["max_symbol_hits"] == 0.0
+    assert result.graph_lookup_payload["max_import_hits"] == 0.0
+    assert result.graph_lookup_payload["max_query_coverage"] == 0.0

@@ -9,12 +9,16 @@ from ace_lite.cli_app.commands.benchmark_support import (
 )
 
 
-def test_attach_benchmark_runtime_stats_summary_preserves_retrieval_control_plane_gate_summary(
+def test_attach_benchmark_runtime_stats_summary_preserves_gate_summaries(
     monkeypatch: Any,
 ) -> None:
-    gate_summary = {
+    control_plane_gate_summary = {
         "gate_passed": False,
         "failed_checks": ["latency_p95_ms"],
+    }
+    frontier_gate_summary = {
+        "gate_passed": True,
+        "failed_checks": [],
     }
 
     monkeypatch.setattr(
@@ -41,7 +45,8 @@ def test_attach_benchmark_runtime_stats_summary_preserves_retrieval_control_plan
     orchestrator = type("FakeOrchestrator", (), {"_durable_stats_session_id": "sess-1"})()
     results = {
         "metrics": {"task_success_rate": 1.0},
-        "retrieval_control_plane_gate_summary": gate_summary,
+        "retrieval_control_plane_gate_summary": control_plane_gate_summary,
+        "retrieval_frontier_gate_summary": frontier_gate_summary,
     }
 
     updated = attach_benchmark_runtime_stats_summary(
@@ -56,15 +61,20 @@ def test_attach_benchmark_runtime_stats_summary_preserves_retrieval_control_plan
         profile_key=None,
     )
 
-    assert updated["retrieval_control_plane_gate_summary"] == gate_summary
+    assert updated["retrieval_control_plane_gate_summary"] == control_plane_gate_summary
+    assert updated["retrieval_frontier_gate_summary"] == frontier_gate_summary
     assert updated["runtime_stats_summary"] == {"enabled": True, "session_count": 1}
     assert "runtime_stats_summary" not in results
 
 
-def test_run_benchmark_and_write_outputs_preserves_gate_summary_for_writer() -> None:
-    gate_summary = {
+def test_run_benchmark_and_write_outputs_preserves_gate_summaries_for_writer() -> None:
+    control_plane_gate_summary = {
         "gate_passed": False,
         "failed_checks": ["adaptive_router_shadow_coverage"],
+    }
+    frontier_gate_summary = {
+        "gate_passed": True,
+        "failed_checks": [],
     }
     captured: dict[str, Any] = {}
 
@@ -90,7 +100,8 @@ def test_run_benchmark_and_write_outputs_preserves_gate_summary_for_writer() -> 
             captured["runner_kwargs"] = kwargs
             return {
                 "metrics": {"task_success_rate": 0.5},
-                "retrieval_control_plane_gate_summary": gate_summary,
+                "retrieval_control_plane_gate_summary": control_plane_gate_summary,
+                "retrieval_frontier_gate_summary": frontier_gate_summary,
             }
 
     def fake_attach_runtime_stats_summary(**kwargs: Any) -> dict[str, Any]:
@@ -142,8 +153,23 @@ def test_run_benchmark_and_write_outputs_preserves_gate_summary_for_writer() -> 
     )
 
     assert captured["runner_kwargs"]["cases"] == [{"case_id": "case-1"}]
-    assert captured["attached_results"]["retrieval_control_plane_gate_summary"] == gate_summary
-    assert captured["written_results"]["retrieval_control_plane_gate_summary"] == gate_summary
+    assert (
+        captured["attached_results"]["retrieval_control_plane_gate_summary"]
+        == control_plane_gate_summary
+    )
+    assert (
+        captured["attached_results"]["retrieval_frontier_gate_summary"]
+        == frontier_gate_summary
+    )
+    assert (
+        captured["written_results"]["retrieval_control_plane_gate_summary"]
+        == control_plane_gate_summary
+    )
+    assert (
+        captured["written_results"]["retrieval_frontier_gate_summary"]
+        == frontier_gate_summary
+    )
     assert captured["written_results"]["runtime_stats_summary"] == {"enabled": True}
     assert captured["echoed_outputs"]["summary_json"].endswith("summary.json")
-    assert results["retrieval_control_plane_gate_summary"] == gate_summary
+    assert results["retrieval_control_plane_gate_summary"] == control_plane_gate_summary
+    assert results["retrieval_frontier_gate_summary"] == frontier_gate_summary

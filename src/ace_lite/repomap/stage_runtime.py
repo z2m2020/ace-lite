@@ -115,6 +115,7 @@ def build_repomap_error_payload(
     cache_meta: dict[str, Any],
     precompute_meta: dict[str, Any],
     worktree_seed_count: int,
+    subgraph_seed_count: int,
     seed_candidates_count: int,
 ) -> dict[str, Any]:
     return {
@@ -139,6 +140,7 @@ def build_repomap_error_payload(
         "cache": cache_meta,
         "precompute": precompute_meta,
         "worktree_seed_count": int(worktree_seed_count),
+        "subgraph_seed_count": int(subgraph_seed_count),
         "seed_candidates_count": int(seed_candidates_count),
     }
 

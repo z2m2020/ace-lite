@@ -55,6 +55,22 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     memory_latencies = [float(item.get("memory_latency_ms", 0.0)) for item in case_results]
     index_latencies = [float(item.get("index_latency_ms", 0.0)) for item in case_results]
     repomap_latencies = [float(item.get("repomap_latency_ms", 0.0)) for item in case_results]
+    repomap_worktree_seed_counts = [
+        float(item.get("repomap_worktree_seed_count", 0.0)) for item in case_results
+    ]
+    repomap_subgraph_seed_counts = [
+        float(item.get("repomap_subgraph_seed_count", 0.0)) for item in case_results
+    ]
+    repomap_seed_candidates_counts = [
+        float(item.get("repomap_seed_candidates_count", 0.0))
+        for item in case_results
+    ]
+    repomap_cache_hits = [
+        float(item.get("repomap_cache_hit", 0.0)) for item in case_results
+    ]
+    repomap_precompute_hits = [
+        float(item.get("repomap_precompute_hit", 0.0)) for item in case_results
+    ]
     augment_latencies = [float(item.get("augment_latency_ms", 0.0)) for item in case_results]
     skills_latencies = [float(item.get("skills_latency_ms", 0.0)) for item in case_results]
     skills_route_latencies = [
@@ -496,6 +512,128 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         float(item.get("multi_channel_rrf_granularity_pool_ratio", 0.0) or 0.0)
         for item in case_results
     ]
+    graph_lookup_enabled = [
+        float(item.get("graph_lookup_enabled", 0.0) or 0.0) for item in case_results
+    ]
+    graph_lookup_guarded = [
+        float(item.get("graph_lookup_guarded", 0.0) or 0.0) for item in case_results
+    ]
+    graph_lookup_boosted_counts = [
+        float(item.get("graph_lookup_boosted_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_weight_scip = [
+        float(item.get("graph_lookup_weight_scip", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_weight_xref = [
+        float(item.get("graph_lookup_weight_xref", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_weight_query_xref = [
+        float(item.get("graph_lookup_weight_query_xref", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_weight_symbol = [
+        float(item.get("graph_lookup_weight_symbol", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_weight_import = [
+        float(item.get("graph_lookup_weight_import", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_weight_coverage = [
+        float(item.get("graph_lookup_weight_coverage", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_candidate_counts = [
+        float(item.get("graph_lookup_candidate_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_normalizations = [
+        str(item.get("graph_lookup_normalization", "") or "").strip()
+        for item in case_results
+    ]
+    graph_lookup_pool_sizes = [
+        float(item.get("graph_lookup_pool_size", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_query_terms_counts = [
+        float(item.get("graph_lookup_query_terms_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_guard_max_candidates = [
+        float(item.get("graph_lookup_guard_max_candidates", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_guard_min_query_terms = [
+        float(item.get("graph_lookup_guard_min_query_terms", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_guard_max_query_terms = [
+        float(item.get("graph_lookup_guard_max_query_terms", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_query_hit_paths = [
+        float(item.get("graph_lookup_query_hit_paths", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_scip_signal_paths = [
+        float(item.get("graph_lookup_scip_signal_paths", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_xref_signal_paths = [
+        float(item.get("graph_lookup_xref_signal_paths", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_symbol_hit_paths = [
+        float(item.get("graph_lookup_symbol_hit_paths", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_import_hit_paths = [
+        float(item.get("graph_lookup_import_hit_paths", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_coverage_hit_paths = [
+        float(item.get("graph_lookup_coverage_hit_paths", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_max_inbound = [
+        float(item.get("graph_lookup_max_inbound", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_max_xref_count = [
+        float(item.get("graph_lookup_max_xref_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_max_query_hits = [
+        float(item.get("graph_lookup_max_query_hits", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_max_symbol_hits = [
+        float(item.get("graph_lookup_max_symbol_hits", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_max_import_hits = [
+        float(item.get("graph_lookup_max_import_hits", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_max_query_coverage = [
+        float(item.get("graph_lookup_max_query_coverage", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_boosted_path_ratios = [
+        float(item.get("graph_lookup_boosted_path_ratio", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_query_hit_path_ratios = [
+        float(item.get("graph_lookup_query_hit_path_ratio", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_lookup_reasons = [
+        str(item.get("graph_lookup_reason", "") or "").strip()
+        for item in case_results
+    ]
     native_scip_loaded = [
         float(item.get("native_scip_loaded", 0.0) or 0.0) for item in case_results
     ]
@@ -514,6 +652,21 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     native_scip_symbol_definition_counts = [
         float(item.get("native_scip_symbol_definition_count", 0.0) or 0.0)
         for item in case_results
+    ]
+    deep_symbol_cases = [
+        item
+        for item in case_results
+        if float(item.get("deep_symbol_case", 0.0) or 0.0) > 0.0
+    ]
+    deep_symbol_recalls = [
+        (
+            1.0
+            if not str(item.get("chunk_stage_miss") or "").strip()
+            else 0.0
+        )
+        if float(item.get("chunk_stage_miss_applicable", 0.0) or 0.0) > 0.0
+        else float(item.get("recall_hit", 0.0) or 0.0)
+        for item in deep_symbol_cases
     ]
     embedding_similarity_means = [
         float(item.get("embedding_similarity_mean", 0.0)) for item in case_results
@@ -607,6 +760,64 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
                 for value in multi_channel_rrf_granularity_counts
             ]
         ),
+        "graph_lookup_enabled_ratio": mean(graph_lookup_enabled),
+        "graph_lookup_guarded_ratio": mean(graph_lookup_guarded),
+        "graph_lookup_log_norm_ratio": mean(
+            [1.0 if value == "log1p" else 0.0 for value in graph_lookup_normalizations]
+        ),
+        "graph_lookup_linear_norm_ratio": mean(
+            [1.0 if value == "linear" else 0.0 for value in graph_lookup_normalizations]
+        ),
+        "graph_lookup_boosted_count_mean": mean(graph_lookup_boosted_counts),
+        "graph_lookup_weight_scip_mean": mean(graph_lookup_weight_scip),
+        "graph_lookup_weight_xref_mean": mean(graph_lookup_weight_xref),
+        "graph_lookup_weight_query_xref_mean": mean(graph_lookup_weight_query_xref),
+        "graph_lookup_weight_symbol_mean": mean(graph_lookup_weight_symbol),
+        "graph_lookup_weight_import_mean": mean(graph_lookup_weight_import),
+        "graph_lookup_weight_coverage_mean": mean(graph_lookup_weight_coverage),
+        "graph_lookup_candidate_count_mean": mean(graph_lookup_candidate_counts),
+        "graph_lookup_pool_size_mean": mean(graph_lookup_pool_sizes),
+        "graph_lookup_query_terms_count_mean": mean(graph_lookup_query_terms_counts),
+        "graph_lookup_guard_max_candidates_mean": mean(
+            graph_lookup_guard_max_candidates
+        ),
+        "graph_lookup_guard_min_query_terms_mean": mean(
+            graph_lookup_guard_min_query_terms
+        ),
+        "graph_lookup_guard_max_query_terms_mean": mean(
+            graph_lookup_guard_max_query_terms
+        ),
+        "graph_lookup_query_hit_paths_mean": mean(graph_lookup_query_hit_paths),
+        "graph_lookup_scip_signal_paths_mean": mean(graph_lookup_scip_signal_paths),
+        "graph_lookup_xref_signal_paths_mean": mean(graph_lookup_xref_signal_paths),
+        "graph_lookup_symbol_hit_paths_mean": mean(graph_lookup_symbol_hit_paths),
+        "graph_lookup_import_hit_paths_mean": mean(graph_lookup_import_hit_paths),
+        "graph_lookup_coverage_hit_paths_mean": mean(
+            graph_lookup_coverage_hit_paths
+        ),
+        "graph_lookup_max_inbound_mean": mean(graph_lookup_max_inbound),
+        "graph_lookup_max_xref_count_mean": mean(graph_lookup_max_xref_count),
+        "graph_lookup_max_query_hits_mean": mean(graph_lookup_max_query_hits),
+        "graph_lookup_max_symbol_hits_mean": mean(graph_lookup_max_symbol_hits),
+        "graph_lookup_max_import_hits_mean": mean(graph_lookup_max_import_hits),
+        "graph_lookup_max_query_coverage_mean": mean(
+            graph_lookup_max_query_coverage
+        ),
+        "graph_lookup_candidate_count_guard_ratio": mean(
+            [1.0 if reason == "candidate_count_guarded" else 0.0 for reason in graph_lookup_reasons]
+        ),
+        "graph_lookup_query_terms_too_few_ratio": mean(
+            [1.0 if reason == "query_terms_too_few" else 0.0 for reason in graph_lookup_reasons]
+        ),
+        "graph_lookup_query_terms_too_many_ratio": mean(
+            [1.0 if reason == "query_terms_too_many" else 0.0 for reason in graph_lookup_reasons]
+        ),
+        "graph_lookup_boosted_path_ratio": mean(graph_lookup_boosted_path_ratios),
+        "graph_lookup_query_hit_path_ratio": mean(graph_lookup_query_hit_path_ratios),
+        "deep_symbol_case_count": float(len(deep_symbol_cases)),
+        "deep_symbol_case_recall": (
+            mean(deep_symbol_recalls) if deep_symbol_recalls else 0.0
+        ),
         "native_scip_loaded_rate": mean(native_scip_loaded),
         "native_scip_document_count_mean": mean(native_scip_document_counts),
         "native_scip_definition_occurrence_count_mean": mean(
@@ -619,6 +830,13 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
             native_scip_symbol_definition_counts
         ),
         "dependency_recall": mean(dependencies),
+        "repomap_worktree_seed_count_mean": mean(repomap_worktree_seed_counts),
+        "repomap_subgraph_seed_count_mean": mean(repomap_subgraph_seed_counts),
+        "repomap_seed_candidates_count_mean": mean(
+            repomap_seed_candidates_counts
+        ),
+        "repomap_cache_hit_ratio": mean(repomap_cache_hits),
+        "repomap_precompute_hit_ratio": mean(repomap_precompute_hits),
         "memory_latency_p95_ms": _p95(memory_latencies),
         "index_latency_p95_ms": _p95(index_latencies),
         "repomap_latency_p95_ms": repomap_p95,
@@ -940,6 +1158,67 @@ def build_retrieval_control_plane_gate_summary(
     }
 
 
+def build_retrieval_frontier_gate_summary(
+    *,
+    metrics: dict[str, Any],
+) -> dict[str, Any]:
+    normalized_metrics = normalize_metrics(metrics)
+    deep_symbol_case_recall = float(
+        normalized_metrics.get("deep_symbol_case_recall", 0.0) or 0.0
+    )
+    native_scip_loaded_rate = float(
+        normalized_metrics.get("native_scip_loaded_rate", 0.0) or 0.0
+    )
+    precision_at_k = float(normalized_metrics.get("precision_at_k", 0.0) or 0.0)
+    noise_rate = float(normalized_metrics.get("noise_rate", 0.0) or 0.0)
+
+    deep_symbol_case_recall_threshold = 0.9
+    native_scip_loaded_rate_threshold = 0.7
+    precision_at_k_threshold = 0.64
+    noise_rate_threshold = 0.36
+
+    deep_symbol_case_recall_passed = (
+        deep_symbol_case_recall >= deep_symbol_case_recall_threshold
+    )
+    native_scip_loaded_rate_passed = (
+        native_scip_loaded_rate >= native_scip_loaded_rate_threshold
+    )
+    precision_at_k_passed = precision_at_k >= precision_at_k_threshold
+    noise_rate_passed = noise_rate <= noise_rate_threshold
+
+    failed_checks: list[str] = []
+    if not deep_symbol_case_recall_passed:
+        failed_checks.append("deep_symbol_case_recall")
+    if not native_scip_loaded_rate_passed:
+        failed_checks.append("native_scip_loaded_rate")
+    if not precision_at_k_passed:
+        failed_checks.append("precision_at_k")
+    if not noise_rate_passed:
+        failed_checks.append("noise_rate")
+
+    return {
+        "failed_checks": failed_checks,
+        "deep_symbol_case_recall": round(deep_symbol_case_recall, 6),
+        "deep_symbol_case_recall_threshold": deep_symbol_case_recall_threshold,
+        "deep_symbol_case_recall_passed": deep_symbol_case_recall_passed,
+        "native_scip_loaded_rate": round(native_scip_loaded_rate, 6),
+        "native_scip_loaded_rate_threshold": native_scip_loaded_rate_threshold,
+        "native_scip_loaded_rate_passed": native_scip_loaded_rate_passed,
+        "precision_at_k": round(precision_at_k, 6),
+        "precision_at_k_threshold": precision_at_k_threshold,
+        "precision_at_k_passed": precision_at_k_passed,
+        "noise_rate": round(noise_rate, 6),
+        "noise_rate_threshold": noise_rate_threshold,
+        "noise_rate_passed": noise_rate_passed,
+        "gate_passed": (
+            deep_symbol_case_recall_passed
+            and native_scip_loaded_rate_passed
+            and precision_at_k_passed
+            and noise_rate_passed
+        ),
+    }
+
+
 def build_evidence_insufficiency_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -1094,6 +1373,7 @@ __all__ = [
     "build_ltm_explainability_summary",
     "build_preference_observability_summary",
     "build_retrieval_control_plane_gate_summary",
+    "build_retrieval_frontier_gate_summary",
     "build_retrieval_context_observability_summary",
     "build_slo_budget_summary",
     "build_stage_latency_summary",

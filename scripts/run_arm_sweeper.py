@@ -13,6 +13,7 @@ import yaml
 
 from ace_lite.benchmark_ops import (
     read_benchmark_retrieval_control_plane_gate_summary,
+    read_benchmark_retrieval_frontier_gate_summary,
 )
 from ace_lite.config_pack import CONFIG_PACK_SCHEMA_VERSION
 
@@ -336,6 +337,9 @@ def build_summary(
                 "retrieval_control_plane_gate_summary": dict(
                     item.get("retrieval_control_plane_gate_summary", {})
                 ),
+                "retrieval_frontier_gate_summary": dict(
+                    item.get("retrieval_frontier_gate_summary", {})
+                ),
                 "results_json": str(item.get("results_json") or ""),
                 "summary_json": str(item.get("summary_json") or ""),
                 "report_md": str(item.get("report_md") or ""),
@@ -372,8 +376,8 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
         "",
         "## Leaderboard",
         "",
-        "| Arm | task_success_rate | precision_at_k | noise_rate | latency_p95_ms | regressed | q2_gate |",
-        "| --- | ---: | ---: | ---: | ---: | --- | --- |",
+        "| Arm | task_success_rate | precision_at_k | noise_rate | latency_p95_ms | regressed | q2_gate | q3_gate |",
+        "| --- | ---: | ---: | ---: | ---: | --- | --- | --- |",
     ]
     for item in summary.get("leaderboard", []):
         if not isinstance(item, dict):
@@ -381,14 +385,23 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
         metrics = item.get("metrics")
         task_success_summary = item.get("task_success_summary")
         gate_summary = item.get("retrieval_control_plane_gate_summary")
+        frontier_gate_summary = item.get("retrieval_frontier_gate_summary")
         metrics_map = metrics if isinstance(metrics, dict) else {}
         task_success_map = task_success_summary if isinstance(task_success_summary, dict) else {}
         gate_map = gate_summary if isinstance(gate_summary, dict) else {}
+        frontier_gate_map = (
+            frontier_gate_summary if isinstance(frontier_gate_summary, dict) else {}
+        )
         gate_label = "n/a"
         if gate_map:
             gate_label = "pass" if bool(gate_map.get("gate_passed", False)) else "fail"
+        frontier_gate_label = "n/a"
+        if frontier_gate_map:
+            frontier_gate_label = (
+                "pass" if bool(frontier_gate_map.get("gate_passed", False)) else "fail"
+            )
         lines.append(
-            "| {arm} | {task_success:.4f} | {precision:.4f} | {noise:.4f} | {latency:.2f} | {regressed} | {gate} |".format(
+            "| {arm} | {task_success:.4f} | {precision:.4f} | {noise:.4f} | {latency:.2f} | {regressed} | {gate} | {frontier_gate} |".format(
                 arm=str(item.get("arm_id") or ""),
                 task_success=float(
                     task_success_map.get(
@@ -402,6 +415,7 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
                 latency=float(metrics_map.get("latency_p95_ms", 0.0) or 0.0),
                 regressed="yes" if bool(item.get("regressed", False)) else "no",
                 gate=gate_label,
+                frontier_gate=frontier_gate_label,
             )
         )
     lines.extend(
@@ -485,6 +499,9 @@ def run_arm_sweeper(
                 ),
                 "retrieval_control_plane_gate_summary": (
                     read_benchmark_retrieval_control_plane_gate_summary(summary_json)
+                ),
+                "retrieval_frontier_gate_summary": (
+                    read_benchmark_retrieval_frontier_gate_summary(summary_json)
                 ),
                 "regressed": bool(summary_payload.get("regressed", False)),
                 "failed_checks": list(summary_payload.get("failed_checks", [])),

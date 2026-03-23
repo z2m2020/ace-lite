@@ -8,6 +8,7 @@ from ace_lite.benchmark.scoring import (
     build_feedback_loop_summary,
     build_ltm_explainability_summary,
     build_missing_context_risk_summary,
+    build_retrieval_frontier_gate_summary,
     build_retrieval_control_plane_gate_summary,
     compare_metrics,
     detect_regression,
@@ -23,6 +24,7 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "expected_keys": ["validate_token", "auth"],
         "top_k": 4,
         "comparison_lane": "stale_majority",
+        "retrieval_surface": "deep_symbol",
     }
     payload = {
         "index": {
@@ -144,6 +146,11 @@ def test_evaluate_case_result_and_aggregate() -> None:
             },
         },
         "repomap": {
+            "worktree_seed_count": 1,
+            "subgraph_seed_count": 2,
+            "seed_candidates_count": 3,
+            "cache": {"hit": True},
+            "precompute": {"hit": False},
             "dependency_recall": {
                 "hit_rate": 1.0,
             }
@@ -175,6 +182,11 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert row["reciprocal_rank"] == 1.0
     assert row["dependency_recall"] == 1.0
     assert row["repomap_latency_ms"] == 4.5
+    assert row["repomap_worktree_seed_count"] == 1.0
+    assert row["repomap_subgraph_seed_count"] == 2.0
+    assert row["repomap_seed_candidates_count"] == 3.0
+    assert row["repomap_cache_hit"] == 1.0
+    assert row["repomap_precompute_hit"] == 0.0
     assert row["validation_test_count"] == 1
     assert row["task_success_hit"] == 1.0
     assert row["task_success_mode"] == "positive"
@@ -380,164 +392,21 @@ def test_evaluate_case_result_and_aggregate() -> None:
     }
 
     metrics = aggregate_metrics([row])
-    assert set(metrics.keys()) == {
-        "recall_at_k",
-        "hit_at_1",
-        "mrr",
-        "precision_at_k",
-        "task_success_rate",
-        "utility_rate",
-        "noise_rate",
-        "memory_helpful_task_success_rate",
-            "docs_enabled_ratio",
-            "docs_hit_ratio",
-            "hint_inject_ratio",
-            "multi_channel_rrf_enabled_ratio",
-            "multi_channel_rrf_applied_ratio",
-            "multi_channel_rrf_granularity_count_mean",
-            "multi_channel_rrf_pool_size_mean",
-            "multi_channel_rrf_granularity_pool_ratio",
-            "multi_channel_rrf_granularity_case_ratio",
-            "native_scip_loaded_rate",
-            "native_scip_document_count_mean",
-            "native_scip_definition_occurrence_count_mean",
-            "native_scip_reference_occurrence_count_mean",
-            "native_scip_symbol_definition_count_mean",
-            "dependency_recall",
-        "memory_latency_p95_ms",
-        "index_latency_p95_ms",
-        "repomap_latency_p95_ms",
-        "augment_latency_p95_ms",
-        "skills_latency_p95_ms",
-        "skills_route_latency_p95_ms",
-        "skills_hydration_latency_p95_ms",
-        "source_plan_latency_p95_ms",
-        "repomap_latency_median_ms",
-        "latency_p95_ms",
-        "latency_median_ms",
-        "chunk_hit_at_k",
-        "chunks_per_file_mean",
-        "chunk_budget_used",
-        "retrieval_context_chunk_count_mean",
-        "retrieval_context_coverage_ratio",
-        "retrieval_context_char_count_mean",
-        "contextual_sidecar_parent_symbol_chunk_count_mean",
-        "contextual_sidecar_parent_symbol_coverage_ratio",
-        "contextual_sidecar_reference_hint_chunk_count_mean",
-        "contextual_sidecar_reference_hint_coverage_ratio",
-        "chunk_contract_fallback_count_mean",
-        "chunk_contract_skeleton_chunk_count_mean",
-        "chunk_contract_fallback_ratio",
-        "chunk_contract_skeleton_ratio",
-        "unsupported_language_fallback_count_mean",
-        "unsupported_language_fallback_ratio",
-        "subgraph_payload_enabled_ratio",
-        "subgraph_seed_path_count_mean",
-        "subgraph_edge_type_count_mean",
-        "subgraph_edge_total_count_mean",
-        "robust_signature_count_mean",
-        "robust_signature_coverage_ratio",
-        "graph_prior_chunk_count_mean",
-        "graph_prior_coverage_ratio",
-        "graph_prior_total_mean",
-        "graph_seeded_chunk_count_mean",
-        "graph_transfer_count_mean",
-        "graph_hub_suppressed_chunk_count_mean",
-        "graph_hub_penalty_total_mean",
-        "graph_closure_enabled_ratio",
-        "graph_closure_boosted_chunk_count_mean",
-        "graph_closure_coverage_ratio",
-        "graph_closure_anchor_count_mean",
-        "graph_closure_support_edge_count_mean",
-        "graph_closure_total_mean",
-        "topological_shield_enabled_ratio",
-        "topological_shield_report_only_ratio",
-        "topological_shield_attenuated_chunk_count_mean",
-        "topological_shield_coverage_ratio",
-        "topological_shield_attenuation_total_mean",
-        "chunk_guard_enabled_ratio",
-        "chunk_guard_report_only_ratio",
-        "chunk_guard_filtered_count_mean",
-        "chunk_guard_filter_ratio",
-        "chunk_guard_pairwise_conflict_count_mean",
-        "chunk_guard_fallback_ratio",
-        "skills_selected_count_mean",
-        "skills_token_budget_mean",
-        "skills_token_budget_used_mean",
-        "skills_budget_exhausted_ratio",
-        "skills_skipped_for_budget_mean",
-        "skills_metadata_only_routing_ratio",
-        "skills_precomputed_route_ratio",
-        "plan_replay_cache_enabled_ratio",
-        "plan_replay_cache_hit_ratio",
-        "plan_replay_cache_stale_hit_safe_ratio",
-        "validation_test_count",
-        "source_plan_direct_evidence_ratio",
-        "source_plan_symbol_count_mean",
-        "source_plan_signature_count_mean",
-        "source_plan_skeleton_count_mean",
-        "source_plan_robust_signature_count_mean",
-        "source_plan_symbol_ratio",
-        "source_plan_signature_ratio",
-        "source_plan_skeleton_ratio",
-        "source_plan_robust_signature_ratio",
-        "source_plan_neighbor_context_ratio",
-        "source_plan_hint_only_ratio",
-        "source_plan_graph_closure_preference_enabled_ratio",
-        "source_plan_graph_closure_bonus_candidate_count_mean",
-        "source_plan_graph_closure_preferred_count_mean",
-        "source_plan_granularity_preferred_count_mean",
-        "source_plan_focused_file_promoted_count_mean",
-        "source_plan_packed_path_count_mean",
-        "adaptive_router_shadow_coverage",
-        "risk_upgrade_precision_gain",
-        "evidence_insufficient_rate",
-        "no_candidate_rate",
-        "low_support_chunk_rate",
-        "missing_validation_rate",
-        "budget_limited_recovery_rate",
-        "noisy_hit_rate",
-        "notes_hit_ratio",
-        "profile_selected_mean",
-        "capture_trigger_ratio",
-        "ltm_hit_ratio",
-        "ltm_effective_hit_rate",
-        "ltm_false_help_rate",
-        "ltm_stale_hit_rate",
-        "ltm_replay_drift_rate",
-        "ltm_latency_overhead_ms",
-        "issue_report_linked_plan_rate",
-        "issue_to_benchmark_case_conversion_rate",
-        "issue_report_time_to_fix_hours_mean",
-        "dev_issue_capture_rate",
-        "dev_feedback_resolution_rate",
-        "dev_issue_to_fix_rate",
-        "embedding_enabled_ratio",
-        "embedding_similarity_mean",
-        "embedding_similarity_max",
-        "embedding_rerank_ratio",
-        "embedding_cache_hit_ratio",
-        "embedding_fallback_ratio",
-        "parallel_time_budget_ms_mean",
-        "embedding_time_budget_ms_mean",
-        "chunk_semantic_time_budget_ms_mean",
-        "xref_time_budget_ms_mean",
-        "parallel_docs_timeout_ratio",
-        "parallel_worktree_timeout_ratio",
-        "embedding_time_budget_exceeded_ratio",
-        "embedding_adaptive_budget_ratio",
-        "chunk_semantic_time_budget_exceeded_ratio",
-        "chunk_semantic_fallback_ratio",
-        "xref_budget_exhausted_ratio",
-        "slo_downgrade_case_rate",
-    }
+    assert set(metrics.keys()) == set(ALL_METRIC_ORDER)
     assert metrics["adaptive_router_shadow_coverage"] == 0.0
     assert metrics["risk_upgrade_precision_gain"] == 0.0
+    assert metrics["deep_symbol_case_count"] == 1.0
+    assert metrics["deep_symbol_case_recall"] == 1.0
     assert metrics["native_scip_loaded_rate"] == 1.0
     assert metrics["native_scip_document_count_mean"] == 5.0
     assert metrics["native_scip_definition_occurrence_count_mean"] == 7.0
     assert metrics["native_scip_reference_occurrence_count_mean"] == 11.0
     assert metrics["native_scip_symbol_definition_count_mean"] == 3.0
+    assert metrics["repomap_worktree_seed_count_mean"] == 1.0
+    assert metrics["repomap_subgraph_seed_count_mean"] == 2.0
+    assert metrics["repomap_seed_candidates_count_mean"] == 3.0
+    assert metrics["repomap_cache_hit_ratio"] == 1.0
+    assert metrics["repomap_precompute_hit_ratio"] == 0.0
 
     assert metrics["latency_p95_ms"] == 12.5
     assert metrics["latency_median_ms"] == 12.5
@@ -545,6 +414,215 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["repomap_latency_median_ms"] == 4.5
     assert metrics["memory_latency_p95_ms"] == 0.0
     assert metrics["index_latency_p95_ms"] == 0.0
+
+
+def test_aggregate_metrics_uses_chunk_stage_success_for_deep_symbol_recall() -> None:
+    metrics = aggregate_metrics(
+        [
+            {
+                "deep_symbol_case": 1.0,
+                "recall_hit": 1.0,
+                "chunk_stage_miss_applicable": 1.0,
+                "chunk_stage_miss": "source_plan_pack_miss",
+            },
+            {
+                "deep_symbol_case": 1.0,
+                "recall_hit": 1.0,
+                "chunk_stage_miss_applicable": 1.0,
+                "chunk_stage_miss": "",
+            },
+        ]
+    )
+
+    assert metrics["deep_symbol_case_count"] == 2.0
+    assert metrics["deep_symbol_case_recall"] == 0.5
+
+
+def test_evaluate_case_result_and_aggregate_preserves_extended_metric_contract() -> None:
+    case = {
+        "case_id": "c1",
+        "query": "where validate token",
+        "expected_keys": ["validate_token", "auth"],
+        "top_k": 4,
+        "comparison_lane": "stale_majority",
+        "retrieval_surface": "deep_symbol",
+    }
+    payload = {
+        "index": {
+            "candidate_files": [
+                {"path": "src/auth.py", "module": "src.auth"},
+                {"path": "src/token.py", "module": "src.token"},
+            ],
+            "chunk_semantic_rerank": {
+                "reason": "ok",
+                "retrieval_context_pool_chunk_count": 1.0,
+                "retrieval_context_pool_coverage_ratio": 0.5,
+            },
+            "chunk_metrics": {
+                "retrieval_context_chunk_count": 2.0,
+                "retrieval_context_coverage_ratio": 1.0,
+                "retrieval_context_char_count_mean": 84.0,
+                "contextual_sidecar_parent_symbol_chunk_count": 2.0,
+                "contextual_sidecar_parent_symbol_coverage_ratio": 1.0,
+                "contextual_sidecar_reference_hint_chunk_count": 1.0,
+                "contextual_sidecar_reference_hint_coverage_ratio": 0.5,
+                "robust_signature_count": 1.0,
+                "robust_signature_coverage_ratio": 0.5,
+                "graph_prior_chunk_count": 1.0,
+                "graph_prior_coverage_ratio": 0.5,
+                "graph_prior_total": 0.18,
+                "graph_seeded_chunk_count": 1.0,
+                "graph_transfer_count": 2.0,
+                "graph_hub_suppressed_chunk_count": 1.0,
+                "graph_hub_penalty_total": 0.08,
+                "graph_closure_enabled": 1.0,
+                "graph_closure_boosted_chunk_count": 2.0,
+                "graph_closure_coverage_ratio": 0.5,
+                "graph_closure_anchor_count": 1.0,
+                "graph_closure_support_edge_count": 3.0,
+                "graph_closure_total": 0.14,
+                "topological_shield_enabled": 1.0,
+                "topological_shield_report_only": 1.0,
+                "topological_shield_attenuated_chunk_count": 1.0,
+                "topological_shield_coverage_ratio": 0.5,
+                "topological_shield_attenuation_total": 0.22,
+            },
+            "policy_name": "doc_intent",
+            "metadata": {
+                "docs_enabled": True,
+                "docs_section_count": 2,
+                "docs_injected_count": 1,
+            },
+            "docs": {"enabled": True, "section_count": 2},
+            "candidate_ranking": {
+                "multi_channel_rrf_enabled": True,
+                "multi_channel_rrf_applied": True,
+                "multi_channel_rrf_granularity_count": 2,
+                "multi_channel_rrf_pool_size": 5,
+                "multi_channel_rrf_granularity_pool_ratio": 0.4,
+                "graph_lookup_weight_scip": 0.3,
+                "graph_lookup_weight_xref": 0.2,
+                "graph_lookup_weight_query_xref": 0.2,
+                "graph_lookup_weight_symbol": 0.1,
+                "graph_lookup_weight_import": 0.1,
+                "graph_lookup_weight_coverage": 0.1,
+            },
+            "graph_lookup": {
+                "enabled": True,
+                "reason": "candidate_count_guarded",
+                "guarded": True,
+                "boosted_count": 2,
+                "weights": {
+                    "scip": 0.3,
+                    "xref": 0.2,
+                    "query_xref": 0.2,
+                    "symbol": 0.1,
+                    "import": 0.1,
+                    "coverage": 0.1,
+                },
+                "candidate_count": 6,
+                "pool_size": 4,
+                "query_terms_count": 3,
+                "normalization": "log1p",
+                "guard_max_candidates": 4,
+                "guard_min_query_terms": 1,
+                "guard_max_query_terms": 5,
+                "query_hit_paths": 1,
+                "scip_signal_paths": 2,
+                "xref_signal_paths": 3,
+                "symbol_hit_paths": 1,
+                "import_hit_paths": 1,
+                "coverage_hit_paths": 2,
+                "max_inbound": 4.0,
+                "max_xref_count": 3.0,
+                "max_query_hits": 2.0,
+                "max_symbol_hits": 1.0,
+                "max_import_hits": 1.0,
+                "max_query_coverage": 0.666667,
+            },
+            "scip": {
+                "enabled": True,
+                "loaded": True,
+                "provider": "scip",
+                "document_count": 5,
+                "definition_occurrence_count": 7,
+                "reference_occurrence_count": 11,
+                "symbol_definition_count": 3,
+            },
+            "embeddings": {
+                "enabled": True,
+                "cache_hit": True,
+                "similarity_mean": 0.42,
+                "similarity_max": 0.88,
+                "rerank_pool": 4,
+                "reranked_count": 2,
+                "fallback": False,
+            },
+        },
+        "skills": {
+            "selected": [{"name": "skill-a"}],
+            "routing_source": "precomputed",
+            "routing_mode": "metadata_only",
+            "metadata_only_routing": True,
+            "route_latency_ms": 0.3,
+            "hydration_latency_ms": 0.7,
+            "token_budget": 600,
+            "token_budget_used": 250,
+            "budget_exhausted": True,
+            "skipped_for_budget": [{"name": "skill-b"}],
+        },
+        "source_plan": {
+            "validation_tests": ["tests.test_auth::test_token"],
+            "ltm_constraint_summary": {
+                "selected_count": 1,
+                "constraint_count": 0,
+                "graph_neighbor_count": 0,
+                "handles": [],
+            },
+            "evidence_summary": {
+                "direct_count": 1.0,
+                "neighbor_context_count": 0.0,
+                "hint_only_count": 0.0,
+                "direct_ratio": 1.0,
+                "neighbor_context_ratio": 0.0,
+                "hint_only_ratio": 0.0,
+                "symbol_count": 1.0,
+                "signature_count": 1.0,
+                "skeleton_count": 1.0,
+                "robust_signature_count": 1.0,
+                "symbol_ratio": 1.0,
+                "signature_ratio": 1.0,
+                "skeleton_ratio": 1.0,
+                "robust_signature_ratio": 1.0,
+            },
+            "packing": {
+                "graph_closure_preference_enabled": True,
+                "graph_closure_bonus_candidate_count": 2,
+                "graph_closure_preferred_count": 1,
+                "granularity_preferred_count": 1,
+                "focused_file_promoted_count": 1,
+                "packed_path_count": 2,
+                "reason": "graph_closure_preferred",
+            },
+        },
+        "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+        "observability": {
+            "plan_replay_cache": {
+                "enabled": True,
+                "hit": True,
+                "stale_hit_safe": True,
+                "stage": "source_plan",
+                "reason": "hit",
+                "stored": False,
+            },
+            "stage_metrics": [{"stage": "repomap", "elapsed_ms": 4.5}],
+        },
+    }
+
+    metrics = aggregate_metrics(
+        [evaluate_case_result(case=case, plan_payload=payload, latency_ms=12.5)]
+    )
+
     assert metrics["chunk_contract_fallback_count_mean"] == 0.0
     assert metrics["chunk_contract_skeleton_chunk_count_mean"] == 0.0
     assert metrics["chunk_contract_fallback_ratio"] == 0.0
@@ -2358,6 +2436,165 @@ def test_evaluate_case_result_reports_subgraph_payload_kpis() -> None:
     assert metrics["subgraph_edge_total_count_mean"] == 4.0
 
 
+def test_evaluate_case_result_reports_graph_lookup_kpis() -> None:
+    case = {
+        "case_id": "c-graph-lookup",
+        "query": "trace auth graph lookup",
+        "expected_keys": ["auth", "token"],
+        "top_k": 4,
+    }
+    payload = {
+        "index": {
+            "candidate_files": [{"path": "src/auth.py", "module": "src.auth"}],
+            "candidate_ranking": {
+                "graph_lookup_weight_scip": 0.3,
+                "graph_lookup_weight_xref": 0.2,
+                "graph_lookup_weight_query_xref": 0.2,
+                "graph_lookup_weight_symbol": 0.1,
+                "graph_lookup_weight_import": 0.1,
+                "graph_lookup_weight_coverage": 0.1,
+            },
+            "graph_lookup": {
+                "enabled": True,
+                "reason": "candidate_count_guarded",
+                "guarded": True,
+                "boosted_count": 2,
+                "weights": {
+                    "scip": 0.3,
+                    "xref": 0.2,
+                    "query_xref": 0.2,
+                    "symbol": 0.1,
+                    "import": 0.1,
+                    "coverage": 0.1,
+                },
+                "candidate_count": 6,
+                "pool_size": 4,
+                "query_terms_count": 3,
+                "normalization": "log1p",
+                "guard_max_candidates": 4,
+                "guard_min_query_terms": 1,
+                "guard_max_query_terms": 5,
+                "query_hit_paths": 1,
+                "scip_signal_paths": 2,
+                "xref_signal_paths": 3,
+                "symbol_hit_paths": 1,
+                "import_hit_paths": 1,
+                "coverage_hit_paths": 2,
+                "max_inbound": 4.0,
+                "max_xref_count": 3.0,
+                "max_query_hits": 2.0,
+                "max_symbol_hits": 1.0,
+                "max_import_hits": 1.0,
+                "max_query_coverage": 0.666667,
+            },
+        },
+        "source_plan": {"validation_tests": []},
+        "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+    }
+
+    row = evaluate_case_result(case=case, plan_payload=payload, latency_ms=6.0)
+
+    assert row["graph_lookup_enabled"] == 1.0
+    assert row["graph_lookup_reason"] == "candidate_count_guarded"
+    assert row["graph_lookup_guarded"] == 1.0
+    assert row["graph_lookup_boosted_count"] == 2.0
+    assert row["graph_lookup_weight_scip"] == 0.3
+    assert row["graph_lookup_weight_xref"] == 0.2
+    assert row["graph_lookup_weight_query_xref"] == 0.2
+    assert row["graph_lookup_candidate_count"] == 6.0
+    assert row["graph_lookup_pool_size"] == 4.0
+    assert row["graph_lookup_query_terms_count"] == 3.0
+    assert row["graph_lookup_normalization"] == "log1p"
+    assert row["graph_lookup_guard_max_candidates"] == 4.0
+    assert row["graph_lookup_guard_min_query_terms"] == 1.0
+    assert row["graph_lookup_guard_max_query_terms"] == 5.0
+    assert row["graph_lookup_query_hit_paths"] == 1.0
+    assert row["graph_lookup_scip_signal_paths"] == 2.0
+    assert row["graph_lookup_xref_signal_paths"] == 3.0
+    assert row["graph_lookup_symbol_hit_paths"] == 1.0
+    assert row["graph_lookup_import_hit_paths"] == 1.0
+    assert row["graph_lookup_coverage_hit_paths"] == 2.0
+    assert row["graph_lookup_max_inbound"] == 4.0
+    assert row["graph_lookup_max_xref_count"] == 3.0
+    assert row["graph_lookup_max_query_hits"] == 2.0
+    assert row["graph_lookup_max_symbol_hits"] == 1.0
+    assert row["graph_lookup_max_import_hits"] == 1.0
+    assert row["graph_lookup_max_query_coverage"] == 0.666667
+    assert row["graph_lookup_boosted_path_ratio"] == 0.5
+    assert row["graph_lookup_query_hit_path_ratio"] == 0.25
+    assert row["graph_lookup"] == {
+        "enabled": True,
+        "reason": "candidate_count_guarded",
+        "guarded": True,
+        "boosted_count": 2,
+        "weights": {
+            "scip": 0.3,
+            "xref": 0.2,
+            "query_xref": 0.2,
+            "symbol": 0.1,
+            "import": 0.1,
+            "coverage": 0.1,
+        },
+        "candidate_count": 6,
+        "pool_size": 4,
+        "query_terms_count": 3,
+        "normalization": "log1p",
+        "guard_max_candidates": 4,
+        "guard_min_query_terms": 1,
+        "guard_max_query_terms": 5,
+        "query_hit_paths": 1,
+        "scip_signal_paths": 2,
+        "xref_signal_paths": 3,
+        "symbol_hit_paths": 1,
+        "import_hit_paths": 1,
+        "coverage_hit_paths": 2,
+        "max_inbound": 4.0,
+        "max_xref_count": 3.0,
+        "max_query_hits": 2.0,
+        "max_symbol_hits": 1.0,
+        "max_import_hits": 1.0,
+        "max_query_coverage": 0.666667,
+        "boosted_path_ratio": 0.5,
+        "query_hit_path_ratio": 0.25,
+    }
+
+    metrics = aggregate_metrics([row])
+    assert metrics["graph_lookup_enabled_ratio"] == 1.0
+    assert metrics["graph_lookup_guarded_ratio"] == 1.0
+    assert metrics["graph_lookup_log_norm_ratio"] == 1.0
+    assert metrics["graph_lookup_linear_norm_ratio"] == 0.0
+    assert metrics["graph_lookup_boosted_count_mean"] == 2.0
+    assert metrics["graph_lookup_weight_scip_mean"] == 0.3
+    assert metrics["graph_lookup_weight_xref_mean"] == 0.2
+    assert metrics["graph_lookup_weight_query_xref_mean"] == 0.2
+    assert metrics["graph_lookup_weight_symbol_mean"] == 0.1
+    assert metrics["graph_lookup_weight_import_mean"] == 0.1
+    assert metrics["graph_lookup_weight_coverage_mean"] == 0.1
+    assert metrics["graph_lookup_candidate_count_mean"] == 6.0
+    assert metrics["graph_lookup_pool_size_mean"] == 4.0
+    assert metrics["graph_lookup_query_terms_count_mean"] == 3.0
+    assert metrics["graph_lookup_guard_max_candidates_mean"] == 4.0
+    assert metrics["graph_lookup_guard_min_query_terms_mean"] == 1.0
+    assert metrics["graph_lookup_guard_max_query_terms_mean"] == 5.0
+    assert metrics["graph_lookup_query_hit_paths_mean"] == 1.0
+    assert metrics["graph_lookup_scip_signal_paths_mean"] == 2.0
+    assert metrics["graph_lookup_xref_signal_paths_mean"] == 3.0
+    assert metrics["graph_lookup_symbol_hit_paths_mean"] == 1.0
+    assert metrics["graph_lookup_import_hit_paths_mean"] == 1.0
+    assert metrics["graph_lookup_coverage_hit_paths_mean"] == 2.0
+    assert metrics["graph_lookup_max_inbound_mean"] == 4.0
+    assert metrics["graph_lookup_max_xref_count_mean"] == 3.0
+    assert metrics["graph_lookup_max_query_hits_mean"] == 2.0
+    assert metrics["graph_lookup_max_symbol_hits_mean"] == 1.0
+    assert metrics["graph_lookup_max_import_hits_mean"] == 1.0
+    assert metrics["graph_lookup_max_query_coverage_mean"] == 0.666667
+    assert metrics["graph_lookup_candidate_count_guard_ratio"] == 1.0
+    assert metrics["graph_lookup_query_terms_too_few_ratio"] == 0.0
+    assert metrics["graph_lookup_query_terms_too_many_ratio"] == 0.0
+    assert metrics["graph_lookup_boosted_path_ratio"] == 0.5
+    assert metrics["graph_lookup_query_hit_path_ratio"] == 0.25
+
+
 def test_build_retrieval_control_plane_gate_summary_requires_regression_evidence() -> None:
     summary = build_retrieval_control_plane_gate_summary(
         metrics={
@@ -2409,4 +2646,55 @@ def test_build_retrieval_control_plane_gate_summary_reports_multi_check_failures
     assert summary["risk_upgrade_precision_gain_passed"] is False
     assert summary["latency_p95_ms_passed"] is False
     assert summary["failed_checks"] == ["precision_at_k", "latency_p95_ms"]
+    assert summary["gate_passed"] is False
+
+
+def test_build_retrieval_frontier_gate_summary_passes_all_q3_checks() -> None:
+    summary = build_retrieval_frontier_gate_summary(
+        metrics={
+            "deep_symbol_case_recall": 0.95,
+            "native_scip_loaded_rate": 0.8,
+            "precision_at_k": 0.66,
+            "noise_rate": 0.31,
+        }
+    )
+
+    assert summary == {
+        "failed_checks": [],
+        "deep_symbol_case_recall": 0.95,
+        "deep_symbol_case_recall_threshold": 0.9,
+        "deep_symbol_case_recall_passed": True,
+        "native_scip_loaded_rate": 0.8,
+        "native_scip_loaded_rate_threshold": 0.7,
+        "native_scip_loaded_rate_passed": True,
+        "precision_at_k": 0.66,
+        "precision_at_k_threshold": 0.64,
+        "precision_at_k_passed": True,
+        "noise_rate": 0.31,
+        "noise_rate_threshold": 0.36,
+        "noise_rate_passed": True,
+        "gate_passed": True,
+    }
+
+
+def test_build_retrieval_frontier_gate_summary_reports_multi_check_failures() -> None:
+    summary = build_retrieval_frontier_gate_summary(
+        metrics={
+            "deep_symbol_case_recall": 0.82,
+            "native_scip_loaded_rate": 0.55,
+            "precision_at_k": 0.61,
+            "noise_rate": 0.41,
+        }
+    )
+
+    assert summary["failed_checks"] == [
+        "deep_symbol_case_recall",
+        "native_scip_loaded_rate",
+        "precision_at_k",
+        "noise_rate",
+    ]
+    assert summary["deep_symbol_case_recall_passed"] is False
+    assert summary["native_scip_loaded_rate_passed"] is False
+    assert summary["precision_at_k_passed"] is False
+    assert summary["noise_rate_passed"] is False
     assert summary["gate_passed"] is False

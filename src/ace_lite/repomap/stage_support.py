@@ -51,6 +51,7 @@ def build_stage_repomap_explainability(
     *,
     seed_paths: list[str],
     seed_hints: list[str],
+    subgraph_seed_paths: list[str] | None = None,
     import_neighbors: list[str],
     reference_neighbors: list[str],
     included_neighbors: list[str],
@@ -60,11 +61,29 @@ def build_stage_repomap_explainability(
     symbol_to_paths: dict[str, set[str]],
 ) -> dict[str, Any]:
     seed_hint_set = {str(path).strip() for path in seed_hints if str(path).strip()}
-    seed_strategy = "seed_candidates" if seed_hint_set else "ranked_fallback"
+    subgraph_seed_set = {
+        str(path).strip()
+        for path in (subgraph_seed_paths or [])
+        if str(path).strip()
+    }
+    if seed_hint_set:
+        seed_strategy = "seed_candidates"
+    elif subgraph_seed_set:
+        seed_strategy = "subgraph_payload"
+    else:
+        seed_strategy = "ranked_fallback"
     seed_sources = [
         {
             "path": str(path),
-            "source": "seed_candidate" if str(path).strip() in seed_hint_set else "ranked_fallback",
+            "source": (
+                "seed_candidate"
+                if str(path).strip() in seed_hint_set
+                else (
+                    "subgraph_seed"
+                    if str(path).strip() in subgraph_seed_set
+                    else "ranked_fallback"
+                )
+            ),
         }
         for path in seed_paths
         if str(path).strip()
@@ -92,6 +111,7 @@ def build_stage_repomap_explainability(
     notes: list[str] = []
     for note in (
         f"seed_strategy:{seed_strategy}",
+        "subgraph_seed_paths_present" if subgraph_seed_set else "",
         "import_neighbors_present" if import_neighbors else "",
         "reference_neighbors_present" if reference_neighbors else "",
         (

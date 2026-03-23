@@ -23,6 +23,15 @@ def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def _graph_lookup_is_guarded(reason: Any) -> bool:
+    normalized = str(reason or "").strip()
+    return normalized in {
+        "candidate_count_guarded",
+        "query_terms_too_few",
+        "query_terms_too_many",
+    }
+
+
 def _build_ltm_attribution_preview(attribution: list[Any], *, limit: int = 2) -> list[str]:
     preview: list[str] = []
     resolved_limit = max(1, int(limit or 2))
@@ -77,6 +86,11 @@ class CaseEvaluationMetrics:
     neighbor_paths: list[str]
     dependency_recall: float
     repomap_latency_ms: float
+    repomap_worktree_seed_count: int
+    repomap_subgraph_seed_count: int
+    repomap_seed_candidates_count: int
+    repomap_cache_hit: bool
+    repomap_precompute_hit: bool
     memory_latency_ms: float
     index_latency_ms: float
     augment_latency_ms: float
@@ -101,6 +115,37 @@ class CaseEvaluationMetrics:
     multi_channel_rrf_granularity_count: int
     multi_channel_rrf_pool_size: int
     multi_channel_rrf_granularity_pool_ratio: float
+    graph_lookup_enabled: bool
+    graph_lookup_reason: str
+    graph_lookup_guarded: bool
+    graph_lookup_boosted_count: int
+    graph_lookup_weight_scip: float
+    graph_lookup_weight_xref: float
+    graph_lookup_weight_query_xref: float
+    graph_lookup_weight_symbol: float
+    graph_lookup_weight_import: float
+    graph_lookup_weight_coverage: float
+    graph_lookup_candidate_count: int
+    graph_lookup_pool_size: int
+    graph_lookup_query_terms_count: int
+    graph_lookup_normalization: str
+    graph_lookup_guard_max_candidates: int
+    graph_lookup_guard_min_query_terms: int
+    graph_lookup_guard_max_query_terms: int
+    graph_lookup_query_hit_paths: int
+    graph_lookup_scip_signal_paths: int
+    graph_lookup_xref_signal_paths: int
+    graph_lookup_symbol_hit_paths: int
+    graph_lookup_import_hit_paths: int
+    graph_lookup_coverage_hit_paths: int
+    graph_lookup_max_inbound: float
+    graph_lookup_max_xref_count: float
+    graph_lookup_max_query_hits: float
+    graph_lookup_max_symbol_hits: float
+    graph_lookup_max_import_hits: float
+    graph_lookup_max_query_coverage: float
+    graph_lookup_boosted_path_ratio: float
+    graph_lookup_query_hit_path_ratio: float
     native_scip_loaded: bool
     native_scip_document_count: int
     native_scip_definition_occurrence_count: int
@@ -253,6 +298,7 @@ def build_case_evaluation_metrics(
     parallel_worktree_payload = _as_dict(parallel_payload.get("worktree"))
     candidate_ranking_payload = _as_dict(index_payload.get("candidate_ranking"))
     adaptive_router_payload = _as_dict(index_payload.get("adaptive_router"))
+    graph_lookup_payload = _as_dict(index_payload.get("graph_lookup"))
     exact_search_payload = _as_dict(candidate_ranking_payload.get("exact_search"))
     second_pass_payload = _as_dict(candidate_ranking_payload.get("second_pass"))
     refine_pass_payload = _as_dict(candidate_ranking_payload.get("refine_pass"))
@@ -302,6 +348,53 @@ def build_case_evaluation_metrics(
     dependency_recall = float(dependency.get("hit_rate", 0.0) or 0.0)
     neighbor_paths = _as_list(repomap_payload.get("neighbor_paths"))
     repomap_latency_ms = extract_stage_latency_ms(plan_payload=plan_payload, stage="repomap")
+    repomap_cache_payload = _as_dict(repomap_payload.get("cache"))
+    repomap_precompute_payload = _as_dict(repomap_payload.get("precompute"))
+    repomap_worktree_seed_count = max(
+        0,
+        int(
+            repomap_payload.get(
+                "worktree_seed_count",
+                _as_dict(stage_observability.get("repomap")).get("tags", {}).get(
+                    "worktree_seed_count", 0
+                ),
+            )
+            or 0
+        ),
+    )
+    repomap_subgraph_seed_count = max(
+        0,
+        int(
+            repomap_payload.get(
+                "subgraph_seed_count",
+                _as_dict(stage_observability.get("repomap")).get("tags", {}).get(
+                    "subgraph_seed_count", 0
+                ),
+            )
+            or 0
+        ),
+    )
+    repomap_seed_candidates_count = max(
+        0,
+        int(
+            repomap_payload.get(
+                "seed_candidates_count",
+                _as_dict(stage_observability.get("repomap")).get("tags", {}).get(
+                    "seed_candidates_count", 0
+                ),
+            )
+            or 0
+        ),
+    )
+    repomap_cache_hit = bool(
+        repomap_cache_payload.get(
+            "hit",
+            _as_dict(stage_observability.get("repomap")).get("tags", {}).get(
+                "cache_hit", False
+            ),
+        )
+    )
+    repomap_precompute_hit = bool(repomap_precompute_payload.get("hit", False))
     memory_latency_ms = extract_stage_latency_ms(plan_payload=plan_payload, stage="memory")
     index_latency_ms = extract_stage_latency_ms(plan_payload=plan_payload, stage="index")
     augment_latency_ms = extract_stage_latency_ms(plan_payload=plan_payload, stage="augment")
@@ -416,6 +509,326 @@ def build_case_evaluation_metrics(
             ),
         )
         or 0.0
+    )
+    graph_lookup_enabled = bool(
+        graph_lookup_payload.get(
+            "enabled",
+            candidate_ranking_payload.get(
+                "graph_lookup_enabled",
+                index_metadata.get("graph_lookup_enabled", False),
+            ),
+        )
+    )
+    graph_lookup_reason = str(
+        graph_lookup_payload.get(
+            "reason",
+            candidate_ranking_payload.get(
+                "graph_lookup_reason",
+                index_metadata.get("graph_lookup_reason", ""),
+            ),
+        )
+        or ""
+    ).strip()
+    graph_lookup_guarded = bool(
+        graph_lookup_payload.get(
+            "guarded",
+            candidate_ranking_payload.get(
+                "graph_lookup_guarded",
+                index_metadata.get(
+                    "graph_lookup_guarded",
+                    _graph_lookup_is_guarded(graph_lookup_reason),
+                ),
+            ),
+        )
+    )
+    graph_lookup_boosted_count = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "boosted_count",
+                candidate_ranking_payload.get(
+                    "graph_lookup_boosted_count",
+                    index_metadata.get("graph_lookup_boosted_count", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_weight_scip = float(
+        candidate_ranking_payload.get(
+            "graph_lookup_weight_scip",
+            index_metadata.get("graph_lookup_weight_scip", 0.0),
+        )
+        or 0.0
+    )
+    graph_lookup_weight_xref = float(
+        candidate_ranking_payload.get(
+            "graph_lookup_weight_xref",
+            index_metadata.get("graph_lookup_weight_xref", 0.0),
+        )
+        or 0.0
+    )
+    graph_lookup_weight_query_xref = float(
+        candidate_ranking_payload.get(
+            "graph_lookup_weight_query_xref",
+            index_metadata.get("graph_lookup_weight_query_xref", 0.0),
+        )
+        or 0.0
+    )
+    graph_lookup_weight_symbol = float(
+        candidate_ranking_payload.get(
+            "graph_lookup_weight_symbol",
+            index_metadata.get("graph_lookup_weight_symbol", 0.0),
+        )
+        or 0.0
+    )
+    graph_lookup_weight_import = float(
+        candidate_ranking_payload.get(
+            "graph_lookup_weight_import",
+            index_metadata.get("graph_lookup_weight_import", 0.0),
+        )
+        or 0.0
+    )
+    graph_lookup_weight_coverage = float(
+        candidate_ranking_payload.get(
+            "graph_lookup_weight_coverage",
+            index_metadata.get("graph_lookup_weight_coverage", 0.0),
+        )
+        or 0.0
+    )
+    graph_lookup_candidate_count = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "candidate_count",
+                candidate_ranking_payload.get(
+                    "graph_lookup_candidate_count",
+                    index_metadata.get("graph_lookup_candidate_count", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_pool_size = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "pool_size",
+                candidate_ranking_payload.get(
+                    "graph_lookup_pool_size",
+                    index_metadata.get("graph_lookup_pool_size", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_query_terms_count = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "query_terms_count",
+                candidate_ranking_payload.get(
+                    "graph_lookup_query_terms_count",
+                    index_metadata.get("graph_lookup_query_terms_count", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_normalization = str(
+        graph_lookup_payload.get(
+            "normalization",
+            candidate_ranking_payload.get(
+                "graph_lookup_normalization",
+                index_metadata.get("graph_lookup_normalization", ""),
+            ),
+        )
+        or ""
+    ).strip()
+    graph_lookup_guard_max_candidates = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "guard_max_candidates",
+                candidate_ranking_payload.get(
+                    "graph_lookup_guard_max_candidates",
+                    index_metadata.get("graph_lookup_guard_max_candidates", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_guard_min_query_terms = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "guard_min_query_terms",
+                candidate_ranking_payload.get(
+                    "graph_lookup_guard_min_query_terms",
+                    index_metadata.get("graph_lookup_guard_min_query_terms", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_guard_max_query_terms = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "guard_max_query_terms",
+                candidate_ranking_payload.get(
+                    "graph_lookup_guard_max_query_terms",
+                    index_metadata.get("graph_lookup_guard_max_query_terms", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_query_hit_paths = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "query_hit_paths",
+                candidate_ranking_payload.get(
+                    "graph_lookup_query_hit_paths",
+                    index_metadata.get("graph_lookup_query_hit_paths", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_scip_signal_paths = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "scip_signal_paths",
+                candidate_ranking_payload.get(
+                    "graph_lookup_scip_signal_paths",
+                    index_metadata.get("graph_lookup_scip_signal_paths", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_xref_signal_paths = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "xref_signal_paths",
+                candidate_ranking_payload.get(
+                    "graph_lookup_xref_signal_paths",
+                    index_metadata.get("graph_lookup_xref_signal_paths", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_symbol_hit_paths = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "symbol_hit_paths",
+                candidate_ranking_payload.get(
+                    "graph_lookup_symbol_hit_paths",
+                    index_metadata.get("graph_lookup_symbol_hit_paths", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_import_hit_paths = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "import_hit_paths",
+                candidate_ranking_payload.get(
+                    "graph_lookup_import_hit_paths",
+                    index_metadata.get("graph_lookup_import_hit_paths", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_coverage_hit_paths = max(
+        0,
+        int(
+            graph_lookup_payload.get(
+                "coverage_hit_paths",
+                candidate_ranking_payload.get(
+                    "graph_lookup_coverage_hit_paths",
+                    index_metadata.get("graph_lookup_coverage_hit_paths", 0),
+                ),
+            )
+            or 0
+        ),
+    )
+    graph_lookup_max_inbound = float(
+        graph_lookup_payload.get(
+            "max_inbound",
+            candidate_ranking_payload.get(
+                "graph_lookup_max_inbound",
+                index_metadata.get("graph_lookup_max_inbound", 0.0),
+            ),
+        )
+        or 0.0
+    )
+    graph_lookup_max_xref_count = float(
+        graph_lookup_payload.get(
+            "max_xref_count",
+            candidate_ranking_payload.get(
+                "graph_lookup_max_xref_count",
+                index_metadata.get("graph_lookup_max_xref_count", 0.0),
+            ),
+        )
+        or 0.0
+    )
+    graph_lookup_max_query_hits = float(
+        graph_lookup_payload.get(
+            "max_query_hits",
+            candidate_ranking_payload.get(
+                "graph_lookup_max_query_hits",
+                index_metadata.get("graph_lookup_max_query_hits", 0.0),
+            ),
+        )
+        or 0.0
+    )
+    graph_lookup_max_symbol_hits = float(
+        graph_lookup_payload.get(
+            "max_symbol_hits",
+            candidate_ranking_payload.get(
+                "graph_lookup_max_symbol_hits",
+                index_metadata.get("graph_lookup_max_symbol_hits", 0.0),
+            ),
+        )
+        or 0.0
+    )
+    graph_lookup_max_import_hits = float(
+        graph_lookup_payload.get(
+            "max_import_hits",
+            candidate_ranking_payload.get(
+                "graph_lookup_max_import_hits",
+                index_metadata.get("graph_lookup_max_import_hits", 0.0),
+            ),
+        )
+        or 0.0
+    )
+    graph_lookup_max_query_coverage = float(
+        graph_lookup_payload.get(
+            "max_query_coverage",
+            candidate_ranking_payload.get(
+                "graph_lookup_max_query_coverage",
+                index_metadata.get("graph_lookup_max_query_coverage", 0.0),
+            ),
+        )
+        or 0.0
+    )
+    graph_lookup_boosted_path_ratio = safe_ratio(
+        graph_lookup_boosted_count,
+        graph_lookup_pool_size,
+    )
+    graph_lookup_query_hit_path_ratio = safe_ratio(
+        graph_lookup_query_hit_paths,
+        graph_lookup_pool_size,
     )
     native_scip_provider = str(scip_payload.get("provider", "") or "").strip().lower()
     native_scip_loaded = bool(scip_payload.get("loaded", False)) and native_scip_provider == "scip"
@@ -1187,6 +1600,11 @@ def build_case_evaluation_metrics(
         neighbor_paths=[str(item).strip() for item in neighbor_paths if str(item).strip()],
         dependency_recall=dependency_recall,
         repomap_latency_ms=repomap_latency_ms,
+        repomap_worktree_seed_count=repomap_worktree_seed_count,
+        repomap_subgraph_seed_count=repomap_subgraph_seed_count,
+        repomap_seed_candidates_count=repomap_seed_candidates_count,
+        repomap_cache_hit=repomap_cache_hit,
+        repomap_precompute_hit=repomap_precompute_hit,
         memory_latency_ms=memory_latency_ms,
         index_latency_ms=index_latency_ms,
         augment_latency_ms=augment_latency_ms,
@@ -1213,6 +1631,37 @@ def build_case_evaluation_metrics(
         multi_channel_rrf_granularity_pool_ratio=(
             multi_channel_rrf_granularity_pool_ratio
         ),
+        graph_lookup_enabled=graph_lookup_enabled,
+        graph_lookup_reason=graph_lookup_reason,
+        graph_lookup_guarded=graph_lookup_guarded,
+        graph_lookup_boosted_count=graph_lookup_boosted_count,
+        graph_lookup_weight_scip=graph_lookup_weight_scip,
+        graph_lookup_weight_xref=graph_lookup_weight_xref,
+        graph_lookup_weight_query_xref=graph_lookup_weight_query_xref,
+        graph_lookup_weight_symbol=graph_lookup_weight_symbol,
+        graph_lookup_weight_import=graph_lookup_weight_import,
+        graph_lookup_weight_coverage=graph_lookup_weight_coverage,
+        graph_lookup_candidate_count=graph_lookup_candidate_count,
+        graph_lookup_pool_size=graph_lookup_pool_size,
+        graph_lookup_query_terms_count=graph_lookup_query_terms_count,
+        graph_lookup_normalization=graph_lookup_normalization,
+        graph_lookup_guard_max_candidates=graph_lookup_guard_max_candidates,
+        graph_lookup_guard_min_query_terms=graph_lookup_guard_min_query_terms,
+        graph_lookup_guard_max_query_terms=graph_lookup_guard_max_query_terms,
+        graph_lookup_query_hit_paths=graph_lookup_query_hit_paths,
+        graph_lookup_scip_signal_paths=graph_lookup_scip_signal_paths,
+        graph_lookup_xref_signal_paths=graph_lookup_xref_signal_paths,
+        graph_lookup_symbol_hit_paths=graph_lookup_symbol_hit_paths,
+        graph_lookup_import_hit_paths=graph_lookup_import_hit_paths,
+        graph_lookup_coverage_hit_paths=graph_lookup_coverage_hit_paths,
+        graph_lookup_max_inbound=graph_lookup_max_inbound,
+        graph_lookup_max_xref_count=graph_lookup_max_xref_count,
+        graph_lookup_max_query_hits=graph_lookup_max_query_hits,
+        graph_lookup_max_symbol_hits=graph_lookup_max_symbol_hits,
+        graph_lookup_max_import_hits=graph_lookup_max_import_hits,
+        graph_lookup_max_query_coverage=graph_lookup_max_query_coverage,
+        graph_lookup_boosted_path_ratio=graph_lookup_boosted_path_ratio,
+        graph_lookup_query_hit_path_ratio=graph_lookup_query_hit_path_ratio,
         native_scip_loaded=native_scip_loaded,
         native_scip_document_count=native_scip_document_count,
         native_scip_definition_occurrence_count=(

@@ -43,6 +43,7 @@ Common metrics include:
 
 For chunk-oriented metrics, benchmark scoring prefers the final `source_plan.candidate_chunks` and `source_plan.chunk_budget_used` payload when present, and falls back to raw `index` chunk outputs otherwise. That keeps chunk-packing experiments visible in the same benchmark and freeze artifacts that already track task success, latency, and noise.
 When `source_plan.evidence_summary` is present, benchmark artifacts also surface additive grounding ratios so maintainers can distinguish directly retrieved support from neighboring context and hint-only support without parsing `why` strings or other free-text explanations.
+When `index.graph_lookup` is present, benchmark artifacts also surface additive graph-lookup observability such as `graph_lookup_enabled_ratio`, `graph_lookup_guarded_ratio`, `graph_lookup_candidate_count_mean`, `graph_lookup_query_hit_paths_mean`, the stable path-mix means for `scip`, `xref`, `symbol`, `import`, and `coverage`, the stable guard contract (`graph_lookup_reason`, `graph_lookup_guard_max_candidates`, `graph_lookup_guard_min_query_terms`, `graph_lookup_guard_max_query_terms`) copied from `candidate_ranking` / `metadata` when raw payload access is unavailable, and the stable signal-shape trace (`graph_lookup_normalization`, `graph_lookup_max_inbound`, `graph_lookup_max_xref_count`, `graph_lookup_max_query_hits`, `graph_lookup_max_symbol_hits`, `graph_lookup_max_import_hits`, `graph_lookup_max_query_coverage`) for tuning graph weights without reopening raw payload JSON.
 
 `task_success` schema v1:
 - `mode`: `positive` (default) or `negative_control`
@@ -56,6 +57,7 @@ Benchmark reports also emit:
 - `SLO Budget Summary` so explicit downgrade boundaries and budget-trigger signals are visible in both current artifacts and baseline deltas
 - `Evidence Insufficiency Summary` so failing positive cases are classified into additive `no_hit`, `low_support`, `missing_validation`, `budget_limited`, and `noisy_hit` surfaces without changing stable benchmark report contracts
 - `Decision Observability Summary` so retry, skip, fallback, downgrade, and exact-search boost events are aggregated without changing stage behavior
+- `Graph Lookup Summary` so maintainers can inspect `graph_lookup` enablement, guard-hit rate, candidate-count pressure, query-term guard thresholds, normalization mix, signal maxima, and the per-signal path mix without opening raw payload JSON
 
 Evidence-insufficiency reporting is intentionally report-only in the current lane:
 - it applies only to failing `positive` task-success cases
@@ -521,6 +523,9 @@ Each case carries an oracle file path plus an oracle chunk reference. Benchmark
 case evaluation then classifies the miss without changing runtime retrieval
 behavior. The resulting label is reported in per-case output and aggregated in
 the `Chunk Stage Miss Summary` section.
+The two Phase 3 structural probes also carry `retrieval_surface: deep_symbol`,
+and `deep_symbol_case_recall` is derived from avoiding a chunk-stage miss rather
+than from file-only recall.
 
 The lane now also includes two Phase 3 structural probes so later graph-aware
 chunking changes can be judged against fixed hard cases instead of anecdotes:

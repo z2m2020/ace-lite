@@ -47,7 +47,39 @@ def test_index_stage_tags_include_adaptive_router_metadata() -> None:
             "docs": {"enabled": False},
             "parallel": {"enabled": False, "docs": {}, "worktree": {}},
             "prior_applied": {},
-            "graph_lookup": {},
+            "graph_lookup": {
+                "enabled": True,
+                "reason": "candidate_count_guarded",
+                "guarded": True,
+                "boosted_count": 2,
+                "weights": {
+                    "scip": 0.3,
+                    "xref": 0.2,
+                    "query_xref": 0.2,
+                    "symbol": 0.1,
+                    "import": 0.1,
+                    "coverage": 0.1,
+                },
+                "candidate_count": 6,
+                "pool_size": 4,
+                "query_terms_count": 3,
+                "normalization": "log1p",
+                "guard_max_candidates": 4,
+                "guard_min_query_terms": 1,
+                "guard_max_query_terms": 5,
+                "query_hit_paths": 1,
+                "scip_signal_paths": 2,
+                "xref_signal_paths": 3,
+                "symbol_hit_paths": 1,
+                "import_hit_paths": 1,
+                "coverage_hit_paths": 2,
+                "max_inbound": 4.0,
+                "max_xref_count": 3.0,
+                "max_query_hits": 2.0,
+                "max_symbol_hits": 1.0,
+                "max_import_hits": 1.0,
+                "max_query_coverage": 0.666667,
+            },
             "embeddings": {},
             "feedback": {},
             "worktree_prior": {},
@@ -128,6 +160,35 @@ def test_index_stage_tags_include_adaptive_router_metadata() -> None:
     assert tags["multi_channel_rrf_granularity_count"] == 2
     assert tags["multi_channel_rrf_pool_size"] == 4
     assert tags["multi_channel_rrf_granularity_pool_ratio"] == 0.5
+    assert tags["graph_lookup_enabled"] is True
+    assert tags["graph_lookup_reason"] == "candidate_count_guarded"
+    assert tags["graph_lookup_guarded"] is True
+    assert tags["graph_lookup_boosted_count"] == 2
+    assert tags["graph_lookup_weight_scip"] == 0.3
+    assert tags["graph_lookup_weight_xref"] == 0.2
+    assert tags["graph_lookup_weight_query_xref"] == 0.2
+    assert tags["graph_lookup_weight_symbol"] == 0.1
+    assert tags["graph_lookup_weight_import"] == 0.1
+    assert tags["graph_lookup_weight_coverage"] == 0.1
+    assert tags["graph_lookup_candidate_count"] == 6
+    assert tags["graph_lookup_pool_size"] == 4
+    assert tags["graph_lookup_query_terms_count"] == 3
+    assert tags["graph_lookup_normalization"] == "log1p"
+    assert tags["graph_lookup_guard_max_candidates"] == 4
+    assert tags["graph_lookup_guard_min_query_terms"] == 1
+    assert tags["graph_lookup_guard_max_query_terms"] == 5
+    assert tags["graph_lookup_query_hit_paths"] == 1
+    assert tags["graph_lookup_scip_signal_paths"] == 2
+    assert tags["graph_lookup_xref_signal_paths"] == 3
+    assert tags["graph_lookup_symbol_hit_paths"] == 1
+    assert tags["graph_lookup_import_hit_paths"] == 1
+    assert tags["graph_lookup_coverage_hit_paths"] == 2
+    assert tags["graph_lookup_max_inbound"] == 4.0
+    assert tags["graph_lookup_max_xref_count"] == 3.0
+    assert tags["graph_lookup_max_query_hits"] == 2.0
+    assert tags["graph_lookup_max_symbol_hits"] == 1.0
+    assert tags["graph_lookup_max_import_hits"] == 1.0
+    assert tags["graph_lookup_max_query_coverage"] == 0.666667
 
 
 def test_source_plan_stage_tags_include_packing_observability() -> None:
@@ -176,6 +237,46 @@ def test_source_plan_stage_tags_include_packing_observability() -> None:
     assert tags["packing_focused_file_promoted_count"] == 3
     assert tags["packing_packed_path_count"] == 3
     assert tags["packing_reason"] == "ok"
+
+
+def test_repomap_stage_tags_include_seed_observability() -> None:
+    tags = build_stage_tags(
+        stage_name="repomap",
+        output={
+            "enabled": True,
+            "seed_count": 2,
+            "neighbor_count": 3,
+            "worktree_seed_count": 1,
+            "subgraph_seed_count": 2,
+            "seed_candidates_count": 4,
+            "neighbor_limit": 8,
+            "neighbor_depth": 2,
+            "budget_tokens": 256,
+            "ranking_profile_effective": "graph_seeded",
+            "repomap_enabled_effective": True,
+            "cache": {"hit": True, "store_written": False},
+            "dependency_recall": {"hit_rate": 1.0},
+            "tag_summary": {"total_tags": 5},
+            "policy_name": "feature",
+            "policy_version": "v2",
+        },
+    )
+
+    assert tags["enabled"] is True
+    assert tags["seed_count"] == 2
+    assert tags["neighbor_count"] == 3
+    assert tags["worktree_seed_count"] == 1
+    assert tags["subgraph_seed_count"] == 2
+    assert tags["seed_candidates_count"] == 4
+    assert tags["neighbor_limit"] == 8
+    assert tags["neighbor_depth"] == 2
+    assert tags["budget_tokens"] == 256
+    assert tags["ranking_profile"] == "graph_seeded"
+    assert tags["repomap_enabled_effective"] is True
+    assert tags["cache_hit"] is True
+    assert tags["cache_store_written"] is False
+    assert tags["dependency_recall"] == 1.0
+    assert tags["tag_total"] == 5
 
 
 def test_skills_stage_tags_include_budget_observability() -> None:

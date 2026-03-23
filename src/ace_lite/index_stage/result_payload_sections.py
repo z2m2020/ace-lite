@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
+_GRAPH_LOOKUP_GUARD_REASONS = {
+    "candidate_count_guarded",
+    "query_terms_too_few",
+    "query_terms_too_many",
+}
+
 
 def _build_multi_channel_granularity_observability(
     multi_channel_fusion_payload: dict[str, Any],
@@ -119,11 +125,87 @@ def build_candidate_ranking_payload(
             prior_payload.get("docs_injected_candidate_count", 0) or 0
         ),
         "graph_lookup_enabled": bool(graph_lookup_payload.get("enabled", False)),
+        "graph_lookup_reason": str(graph_lookup_payload.get("reason", "")),
+        "graph_lookup_guarded": str(
+            graph_lookup_payload.get("reason", "")
+        ) in _GRAPH_LOOKUP_GUARD_REASONS,
         "graph_lookup_boosted_count": int(
             graph_lookup_payload.get("boosted_count", 0) or 0
         ),
+        "graph_lookup_weight_scip": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("scip", 0.0) or 0.0
+        ),
+        "graph_lookup_weight_xref": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("xref", 0.0) or 0.0
+        ),
+        "graph_lookup_weight_query_xref": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("query_xref", 0.0)
+            or 0.0
+        ),
+        "graph_lookup_weight_symbol": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("symbol", 0.0) or 0.0
+        ),
+        "graph_lookup_weight_import": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("import", 0.0) or 0.0
+        ),
+        "graph_lookup_weight_coverage": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("coverage", 0.0)
+            or 0.0
+        ),
+        "graph_lookup_candidate_count": int(
+            graph_lookup_payload.get("candidate_count", 0) or 0
+        ),
+        "graph_lookup_pool_size": int(graph_lookup_payload.get("pool_size", 0) or 0),
+        "graph_lookup_query_terms_count": int(
+            graph_lookup_payload.get("query_terms_count", 0) or 0
+        ),
+        "graph_lookup_normalization": str(
+            graph_lookup_payload.get("normalization", "")
+        ),
+        "graph_lookup_guard_max_candidates": int(
+            graph_lookup_payload.get("guard_max_candidates", 0) or 0
+        ),
+        "graph_lookup_guard_min_query_terms": int(
+            graph_lookup_payload.get("guard_min_query_terms", 0) or 0
+        ),
+        "graph_lookup_guard_max_query_terms": int(
+            graph_lookup_payload.get("guard_max_query_terms", 0) or 0
+        ),
         "graph_lookup_query_hit_paths": int(
             graph_lookup_payload.get("query_hit_paths", 0) or 0
+        ),
+        "graph_lookup_scip_signal_paths": int(
+            graph_lookup_payload.get("scip_signal_paths", 0) or 0
+        ),
+        "graph_lookup_xref_signal_paths": int(
+            graph_lookup_payload.get("xref_signal_paths", 0) or 0
+        ),
+        "graph_lookup_symbol_hit_paths": int(
+            graph_lookup_payload.get("symbol_hit_paths", 0) or 0
+        ),
+        "graph_lookup_import_hit_paths": int(
+            graph_lookup_payload.get("import_hit_paths", 0) or 0
+        ),
+        "graph_lookup_coverage_hit_paths": int(
+            graph_lookup_payload.get("coverage_hit_paths", 0) or 0
+        ),
+        "graph_lookup_max_inbound": float(
+            graph_lookup_payload.get("max_inbound", 0.0) or 0.0
+        ),
+        "graph_lookup_max_xref_count": float(
+            graph_lookup_payload.get("max_xref_count", 0.0) or 0.0
+        ),
+        "graph_lookup_max_query_hits": float(
+            graph_lookup_payload.get("max_query_hits", 0.0) or 0.0
+        ),
+        "graph_lookup_max_symbol_hits": float(
+            graph_lookup_payload.get("max_symbol_hits", 0.0) or 0.0
+        ),
+        "graph_lookup_max_import_hits": float(
+            graph_lookup_payload.get("max_import_hits", 0.0) or 0.0
+        ),
+        "graph_lookup_max_query_coverage": float(
+            graph_lookup_payload.get("max_query_coverage", 0.0) or 0.0
         ),
         "semantic_time_budget_ms": int(embeddings_payload.get("time_budget_ms", 0) or 0),
         "semantic_time_budget_base_ms": int(
@@ -375,11 +457,87 @@ def build_result_metadata(
             prior_payload.get("docs_injected_candidate_count", 0) or 0
         ),
         "graph_lookup_enabled": bool(graph_lookup_payload.get("enabled", False)),
+        "graph_lookup_reason": str(graph_lookup_payload.get("reason", "")),
+        "graph_lookup_guarded": str(
+            graph_lookup_payload.get("reason", "")
+        ) in _GRAPH_LOOKUP_GUARD_REASONS,
         "graph_lookup_boosted_count": int(
             graph_lookup_payload.get("boosted_count", 0) or 0
         ),
+        "graph_lookup_weight_scip": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("scip", 0.0) or 0.0
+        ),
+        "graph_lookup_weight_xref": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("xref", 0.0) or 0.0
+        ),
+        "graph_lookup_weight_query_xref": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("query_xref", 0.0)
+            or 0.0
+        ),
+        "graph_lookup_weight_symbol": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("symbol", 0.0) or 0.0
+        ),
+        "graph_lookup_weight_import": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("import", 0.0) or 0.0
+        ),
+        "graph_lookup_weight_coverage": float(
+            (graph_lookup_payload.get("weights", {}) or {}).get("coverage", 0.0)
+            or 0.0
+        ),
+        "graph_lookup_candidate_count": int(
+            graph_lookup_payload.get("candidate_count", 0) or 0
+        ),
+        "graph_lookup_pool_size": int(graph_lookup_payload.get("pool_size", 0) or 0),
+        "graph_lookup_query_terms_count": int(
+            graph_lookup_payload.get("query_terms_count", 0) or 0
+        ),
+        "graph_lookup_normalization": str(
+            graph_lookup_payload.get("normalization", "")
+        ),
+        "graph_lookup_guard_max_candidates": int(
+            graph_lookup_payload.get("guard_max_candidates", 0) or 0
+        ),
+        "graph_lookup_guard_min_query_terms": int(
+            graph_lookup_payload.get("guard_min_query_terms", 0) or 0
+        ),
+        "graph_lookup_guard_max_query_terms": int(
+            graph_lookup_payload.get("guard_max_query_terms", 0) or 0
+        ),
         "graph_lookup_query_hit_paths": int(
             graph_lookup_payload.get("query_hit_paths", 0) or 0
+        ),
+        "graph_lookup_scip_signal_paths": int(
+            graph_lookup_payload.get("scip_signal_paths", 0) or 0
+        ),
+        "graph_lookup_xref_signal_paths": int(
+            graph_lookup_payload.get("xref_signal_paths", 0) or 0
+        ),
+        "graph_lookup_symbol_hit_paths": int(
+            graph_lookup_payload.get("symbol_hit_paths", 0) or 0
+        ),
+        "graph_lookup_import_hit_paths": int(
+            graph_lookup_payload.get("import_hit_paths", 0) or 0
+        ),
+        "graph_lookup_coverage_hit_paths": int(
+            graph_lookup_payload.get("coverage_hit_paths", 0) or 0
+        ),
+        "graph_lookup_max_inbound": float(
+            graph_lookup_payload.get("max_inbound", 0.0) or 0.0
+        ),
+        "graph_lookup_max_xref_count": float(
+            graph_lookup_payload.get("max_xref_count", 0.0) or 0.0
+        ),
+        "graph_lookup_max_query_hits": float(
+            graph_lookup_payload.get("max_query_hits", 0.0) or 0.0
+        ),
+        "graph_lookup_max_symbol_hits": float(
+            graph_lookup_payload.get("max_symbol_hits", 0.0) or 0.0
+        ),
+        "graph_lookup_max_import_hits": float(
+            graph_lookup_payload.get("max_import_hits", 0.0) or 0.0
+        ),
+        "graph_lookup_max_query_coverage": float(
+            graph_lookup_payload.get("max_query_coverage", 0.0) or 0.0
         ),
         "embedding_enabled": bool(embeddings_payload.get("enabled", False)),
         "embedding_fallback": bool(embeddings_payload.get("fallback", False)),

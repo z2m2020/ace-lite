@@ -8,6 +8,7 @@ def _base_row_kwargs() -> dict[str, object]:
         "case": {
             "case_id": "c1",
             "query": "where validate token",
+            "retrieval_surface": "deep_symbol",
             "issue_report": {
                 "issue_id": "iss_demo1234",
                 "status": "resolved",
@@ -47,6 +48,11 @@ def _base_row_kwargs() -> dict[str, object]:
         "memory_latency_ms": 1.0,
         "index_latency_ms": 2.0,
         "repomap_latency_ms": 3.0,
+        "repomap_worktree_seed_count": 1,
+        "repomap_subgraph_seed_count": 2,
+        "repomap_seed_candidates_count": 3,
+        "repomap_cache_hit": True,
+        "repomap_precompute_hit": False,
         "augment_latency_ms": 4.0,
         "skills_latency_ms": 5.0,
         "source_plan_latency_ms": 6.0,
@@ -143,6 +149,37 @@ def _base_row_kwargs() -> dict[str, object]:
         "multi_channel_rrf_granularity_count": 2,
         "multi_channel_rrf_pool_size": 4,
         "multi_channel_rrf_granularity_pool_ratio": 0.5,
+        "graph_lookup_enabled": True,
+        "graph_lookup_reason": "candidate_count_guarded",
+        "graph_lookup_guarded": True,
+        "graph_lookup_boosted_count": 2,
+        "graph_lookup_weight_scip": 0.3,
+        "graph_lookup_weight_xref": 0.2,
+        "graph_lookup_weight_query_xref": 0.2,
+        "graph_lookup_weight_symbol": 0.1,
+        "graph_lookup_weight_import": 0.1,
+        "graph_lookup_weight_coverage": 0.1,
+        "graph_lookup_candidate_count": 6,
+        "graph_lookup_pool_size": 4,
+        "graph_lookup_query_terms_count": 3,
+        "graph_lookup_normalization": "log1p",
+        "graph_lookup_guard_max_candidates": 4,
+        "graph_lookup_guard_min_query_terms": 1,
+        "graph_lookup_guard_max_query_terms": 5,
+        "graph_lookup_query_hit_paths": 1,
+        "graph_lookup_scip_signal_paths": 2,
+        "graph_lookup_xref_signal_paths": 3,
+        "graph_lookup_symbol_hit_paths": 1,
+        "graph_lookup_import_hit_paths": 1,
+        "graph_lookup_coverage_hit_paths": 2,
+        "graph_lookup_max_inbound": 4.0,
+        "graph_lookup_max_xref_count": 3.0,
+        "graph_lookup_max_query_hits": 2.0,
+        "graph_lookup_max_symbol_hits": 1.0,
+        "graph_lookup_max_import_hits": 1.0,
+        "graph_lookup_max_query_coverage": 0.666667,
+        "graph_lookup_boosted_path_ratio": 0.5,
+        "graph_lookup_query_hit_path_ratio": 0.25,
         "native_scip_loaded": True,
         "native_scip_document_count": 5,
         "native_scip_definition_occurrence_count": 7,
@@ -217,6 +254,8 @@ def test_build_case_evaluation_row_contract() -> None:
     row = build_case_evaluation_row(**_base_row_kwargs())
 
     assert row["case_id"] == "c1"
+    assert row["retrieval_surface"] == "deep_symbol"
+    assert row["deep_symbol_case"] == 1.0
     assert row["task_success_mode"] == "positive"
     assert row["chunk_contract_fallback_count"] == 1.0
     assert row["skills_budget_exhausted"] == 1.0
@@ -226,6 +265,16 @@ def test_build_case_evaluation_row_contract() -> None:
     assert row["multi_channel_rrf_enabled"] == 1.0
     assert row["multi_channel_rrf_granularity_count"] == 2.0
     assert row["multi_channel_rrf_granularity_pool_ratio"] == 0.5
+    assert row["repomap_worktree_seed_count"] == 1.0
+    assert row["repomap_subgraph_seed_count"] == 2.0
+    assert row["repomap_seed_candidates_count"] == 3.0
+    assert row["repomap_cache_hit"] == 1.0
+    assert row["repomap_precompute_hit"] == 0.0
+    assert row["graph_lookup_reason"] == "candidate_count_guarded"
+    assert row["graph_lookup_guarded"] == 1.0
+    assert row["graph_lookup_candidate_count"] == 6.0
+    assert row["graph_lookup_normalization"] == "log1p"
+    assert row["graph_lookup_max_inbound"] == 4.0
     assert row["contextual_sidecar_parent_symbol_chunk_count"] == 2.0
     assert row["contextual_sidecar_reference_hint_coverage_ratio"] == 0.5
     assert row["router_fallback_reason"] == "low_confidence"
@@ -268,12 +317,59 @@ def test_build_case_evaluation_row_contract() -> None:
     assert row["multi_channel_rrf_granularity_count"] == 2.0
     assert row["multi_channel_rrf_pool_size"] == 4.0
     assert row["multi_channel_rrf_granularity_pool_ratio"] == 0.5
+    assert row["graph_lookup_enabled"] == 1.0
+    assert row["graph_lookup_weight_scip"] == 0.3
+    assert row["graph_lookup_boosted_count"] == 2.0
+    assert row["graph_lookup_query_hit_paths"] == 1.0
+    assert row["graph_lookup_boosted_path_ratio"] == 0.5
     assert row["multi_channel_fusion"] == {
         "enabled": True,
         "applied": True,
         "granularity_count": 2,
         "pool_size": 4,
         "granularity_pool_ratio": 0.5,
+    }
+    assert row["repomap_seed"] == {
+        "worktree_seed_count": 1,
+        "subgraph_seed_count": 2,
+        "seed_candidates_count": 3,
+        "cache_hit": True,
+        "precompute_hit": False,
+    }
+    assert row["graph_lookup"] == {
+        "enabled": True,
+        "boosted_count": 2,
+        "reason": "candidate_count_guarded",
+        "guarded": True,
+        "weights": {
+            "scip": 0.3,
+            "xref": 0.2,
+            "query_xref": 0.2,
+            "symbol": 0.1,
+            "import": 0.1,
+            "coverage": 0.1,
+        },
+        "candidate_count": 6,
+        "pool_size": 4,
+        "query_terms_count": 3,
+        "normalization": "log1p",
+        "guard_max_candidates": 4,
+        "guard_min_query_terms": 1,
+        "guard_max_query_terms": 5,
+        "query_hit_paths": 1,
+        "scip_signal_paths": 2,
+        "xref_signal_paths": 3,
+        "symbol_hit_paths": 1,
+        "import_hit_paths": 1,
+        "coverage_hit_paths": 2,
+        "max_inbound": 4.0,
+        "max_xref_count": 3.0,
+        "max_query_hits": 2.0,
+        "max_symbol_hits": 1.0,
+        "max_import_hits": 1.0,
+        "max_query_coverage": 0.666667,
+        "boosted_path_ratio": 0.5,
+        "query_hit_path_ratio": 0.25,
     }
     assert row["native_scip_loaded"] == 1.0
     assert row["native_scip_document_count"] == 5.0

@@ -28,6 +28,11 @@ def _append_case_section(
     comparison_lane = str(case.get("comparison_lane") or "").strip()
     if comparison_lane:
         lines.append(f"- comparison_lane: {comparison_lane}")
+    retrieval_surface = str(case.get("retrieval_surface") or "").strip()
+    if retrieval_surface:
+        lines.append(f"- retrieval_surface: {retrieval_surface}")
+    if float(case.get("deep_symbol_case", 0.0) or 0.0) > 0.0:
+        lines.append("- deep_symbol_case: 1.0000")
     lines.append(f"- policy_profile: {case.get('policy_profile', '')}")
     lines.append(f"- docs_hit: {float(case.get('docs_hit', 0.0)):.4f}")
     lines.append(f"- hint_inject: {float(case.get('hint_inject', 0.0)):.4f}")
@@ -83,6 +88,17 @@ def _append_case_section(
     lines.append(
         "- multi_channel_rrf_granularity_pool_ratio: "
         f"{float(case.get('multi_channel_rrf_granularity_pool_ratio', 0.0)):.4f}"
+    )
+    lines.append(
+        f"- graph_lookup_enabled: {float(case.get('graph_lookup_enabled', 0.0)):.4f}"
+    )
+    lines.append(
+        "- graph_lookup_boosted_count: "
+        f"{float(case.get('graph_lookup_boosted_count', 0.0)):.4f}"
+    )
+    lines.append(
+        "- graph_lookup_query_hit_paths: "
+        f"{float(case.get('graph_lookup_query_hit_paths', 0.0)):.4f}"
     )
     lines.append(
         f"- native_scip_loaded: {float(case.get('native_scip_loaded', 0.0)):.4f}"
@@ -228,9 +244,11 @@ def _append_case_section(
     _append_chunk_guard_expectation(lines, case=case)
     _append_robust_signature_details(lines, case=case)
     _append_subgraph_payload_details(lines, case=case)
+    _append_repomap_seed_details(lines, case=case)
     _append_graph_prior_details(lines, case=case)
     _append_graph_closure_details(lines, case=case)
     _append_index_fusion_granularity_details(lines, case=case)
+    _append_graph_lookup_details(lines, case=case)
     _append_source_plan_packing_details(lines, case=case)
     _append_preference_capture_details(lines, case=case)
     _append_ltm_explainability_details(lines, case=case)
@@ -370,6 +388,34 @@ def _append_subgraph_payload_details(lines: list[str], *, case: dict[str, Any]) 
     )
 
 
+def _append_repomap_seed_details(lines: list[str], *, case: dict[str, Any]) -> None:
+    repomap_seed = case.get("repomap_seed")
+    if not isinstance(repomap_seed, dict) or not repomap_seed:
+        return
+    lines.append(
+        "- repomap_seed: "
+        + ", ".join(
+            [
+                "worktree_seed_count={value}".format(
+                    value=int(repomap_seed.get("worktree_seed_count", 0) or 0)
+                ),
+                "subgraph_seed_count={value}".format(
+                    value=int(repomap_seed.get("subgraph_seed_count", 0) or 0)
+                ),
+                "seed_candidates_count={value}".format(
+                    value=int(repomap_seed.get("seed_candidates_count", 0) or 0)
+                ),
+                "cache_hit={value}".format(
+                    value=bool(repomap_seed.get("cache_hit", False))
+                ),
+                "precompute_hit={value}".format(
+                    value=bool(repomap_seed.get("precompute_hit", False))
+                ),
+            ]
+        )
+    )
+
+
 def _append_graph_prior_details(lines: list[str], *, case: dict[str, Any]) -> None:
     graph_prior = case.get("graph_prior")
     if isinstance(graph_prior, dict) and graph_prior:
@@ -440,6 +486,102 @@ def _append_index_fusion_granularity_details(
                             or 0.0
                         )
                     )
+                ),
+            ]
+        )
+    )
+
+
+def _append_graph_lookup_details(lines: list[str], *, case: dict[str, Any]) -> None:
+    graph_lookup = case.get("graph_lookup")
+    if not isinstance(graph_lookup, dict) or not graph_lookup:
+        return
+    lines.append(
+        "- graph_lookup: "
+        + ", ".join(
+            [
+                "enabled={value}".format(
+                    value=bool(graph_lookup.get("enabled", False))
+                ),
+                "reason={value}".format(
+                    value=str(graph_lookup.get("reason", "") or "")
+                ),
+                "guarded={value}".format(
+                    value=bool(graph_lookup.get("guarded", False))
+                ),
+                "boosted_count={value}".format(
+                    value=int(graph_lookup.get("boosted_count", 0) or 0)
+                ),
+                "weights=scip:{scip}|xref:{xref}|query_xref:{query}|symbol:{symbol}|import:{imports}|coverage:{coverage}".format(
+                    scip=f"{float(((graph_lookup.get('weights', {}) or {}).get('scip', 0.0) or 0.0)):.4f}",
+                    xref=f"{float(((graph_lookup.get('weights', {}) or {}).get('xref', 0.0) or 0.0)):.4f}",
+                    query=f"{float(((graph_lookup.get('weights', {}) or {}).get('query_xref', 0.0) or 0.0)):.4f}",
+                    symbol=f"{float(((graph_lookup.get('weights', {}) or {}).get('symbol', 0.0) or 0.0)):.4f}",
+                    imports=f"{float(((graph_lookup.get('weights', {}) or {}).get('import', 0.0) or 0.0)):.4f}",
+                    coverage=f"{float(((graph_lookup.get('weights', {}) or {}).get('coverage', 0.0) or 0.0)):.4f}",
+                ),
+                "candidate_count={value}".format(
+                    value=int(graph_lookup.get("candidate_count", 0) or 0)
+                ),
+                "pool_size={value}".format(
+                    value=int(graph_lookup.get("pool_size", 0) or 0)
+                ),
+                "query_terms_count={value}".format(
+                    value=int(graph_lookup.get("query_terms_count", 0) or 0)
+                ),
+                "normalization={value}".format(
+                    value=str(graph_lookup.get("normalization", "") or "")
+                ),
+                "guard_max_candidates={value}".format(
+                    value=int(graph_lookup.get("guard_max_candidates", 0) or 0)
+                ),
+                "guard_min_query_terms={value}".format(
+                    value=int(graph_lookup.get("guard_min_query_terms", 0) or 0)
+                ),
+                "guard_max_query_terms={value}".format(
+                    value=int(graph_lookup.get("guard_max_query_terms", 0) or 0)
+                ),
+                "query_hit_paths={value}".format(
+                    value=int(graph_lookup.get("query_hit_paths", 0) or 0)
+                ),
+                "scip_signal_paths={value}".format(
+                    value=int(graph_lookup.get("scip_signal_paths", 0) or 0)
+                ),
+                "xref_signal_paths={value}".format(
+                    value=int(graph_lookup.get("xref_signal_paths", 0) or 0)
+                ),
+                "symbol_hit_paths={value}".format(
+                    value=int(graph_lookup.get("symbol_hit_paths", 0) or 0)
+                ),
+                "import_hit_paths={value}".format(
+                    value=int(graph_lookup.get("import_hit_paths", 0) or 0)
+                ),
+                "coverage_hit_paths={value}".format(
+                    value=int(graph_lookup.get("coverage_hit_paths", 0) or 0)
+                ),
+                "max_inbound={value}".format(
+                    value=f"{float(graph_lookup.get('max_inbound', 0.0) or 0.0):.4f}"
+                ),
+                "max_xref_count={value}".format(
+                    value=f"{float(graph_lookup.get('max_xref_count', 0.0) or 0.0):.4f}"
+                ),
+                "max_query_hits={value}".format(
+                    value=f"{float(graph_lookup.get('max_query_hits', 0.0) or 0.0):.4f}"
+                ),
+                "max_symbol_hits={value}".format(
+                    value=f"{float(graph_lookup.get('max_symbol_hits', 0.0) or 0.0):.4f}"
+                ),
+                "max_import_hits={value}".format(
+                    value=f"{float(graph_lookup.get('max_import_hits', 0.0) or 0.0):.4f}"
+                ),
+                "max_query_coverage={value}".format(
+                    value=f"{float(graph_lookup.get('max_query_coverage', 0.0) or 0.0):.4f}"
+                ),
+                "boosted_path_ratio={value}".format(
+                    value=f"{float(graph_lookup.get('boosted_path_ratio', 0.0) or 0.0):.4f}"
+                ),
+                "query_hit_path_ratio={value}".format(
+                    value=f"{float(graph_lookup.get('query_hit_path_ratio', 0.0) or 0.0):.4f}"
                 ),
             ]
         )

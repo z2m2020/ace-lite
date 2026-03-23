@@ -14,6 +14,8 @@ from ace_lite.benchmark_ops import (
     read_benchmark_case_rows,
     read_benchmark_comparison_lane_metrics,
     read_benchmark_retrieval_control_plane_gate_summary,
+    read_benchmark_retrieval_frontier_gate_summary,
+    read_benchmark_repomap_seed_summary,
     read_benchmark_metrics,
     read_benchmark_results,
     require_success,
@@ -34,6 +36,11 @@ def test_benchmark_ops_facade_exports_match_support_module() -> None:
         read_benchmark_retrieval_control_plane_gate_summary
         is module.read_benchmark_retrieval_control_plane_gate_summary
     )
+    assert (
+        read_benchmark_retrieval_frontier_gate_summary
+        is module.read_benchmark_retrieval_frontier_gate_summary
+    )
+    assert read_benchmark_repomap_seed_summary is module.read_benchmark_repomap_seed_summary
     assert read_benchmark_metrics is module.read_benchmark_metrics
     assert read_benchmark_results is module.read_benchmark_results
     assert require_success is module.require_success
@@ -97,6 +104,8 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
     assert read_benchmark_case_routing_source(missing_path) == ""
     assert read_benchmark_comparison_lane_metrics(missing_path, lane="x") == {}
     assert read_benchmark_retrieval_control_plane_gate_summary(missing_path) == {}
+    assert read_benchmark_retrieval_frontier_gate_summary(missing_path) == {}
+    assert read_benchmark_repomap_seed_summary(missing_path) == {}
 
     invalid_path = tmp_path / "invalid.json"
     invalid_path.write_text("{", encoding="utf-8")
@@ -166,6 +175,29 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
     "latency_p95_ms_threshold": 850.0,
     "latency_p95_ms_passed": true,
     "gate_passed": true
+  },
+  "retrieval_frontier_gate_summary": {
+    "failed_checks": ["precision_at_k"],
+    "deep_symbol_case_recall": 0.95,
+    "deep_symbol_case_recall_threshold": 0.9,
+    "deep_symbol_case_recall_passed": true,
+    "native_scip_loaded_rate": 0.8,
+    "native_scip_loaded_rate_threshold": 0.7,
+    "native_scip_loaded_rate_passed": true,
+    "precision_at_k": 0.61,
+    "precision_at_k_threshold": 0.64,
+    "precision_at_k_passed": false,
+    "noise_rate": 0.31,
+    "noise_rate_threshold": 0.36,
+    "noise_rate_passed": true,
+    "gate_passed": false
+  },
+  "repomap_seed_summary": {
+    "worktree_seed_count_mean": 4,
+    "repomap_subgraph_seed_count_mean": 3.5,
+    "seed_candidates_count_mean": 6,
+    "cache_hit_ratio": 0.5,
+    "repomap_precompute_hit_ratio": 0.25
   }
 }
 """.strip(),
@@ -232,4 +264,27 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
         "latency_p95_ms_threshold": 850.0,
         "latency_p95_ms_passed": True,
         "gate_passed": True,
+    }
+    assert read_benchmark_retrieval_frontier_gate_summary(payload_path) == {
+        "failed_checks": ["precision_at_k"],
+        "deep_symbol_case_recall": 0.95,
+        "deep_symbol_case_recall_threshold": 0.9,
+        "deep_symbol_case_recall_passed": True,
+        "native_scip_loaded_rate": 0.8,
+        "native_scip_loaded_rate_threshold": 0.7,
+        "native_scip_loaded_rate_passed": True,
+        "precision_at_k": 0.61,
+        "precision_at_k_threshold": 0.64,
+        "precision_at_k_passed": False,
+        "noise_rate": 0.31,
+        "noise_rate_threshold": 0.36,
+        "noise_rate_passed": True,
+        "gate_passed": False,
+    }
+    assert read_benchmark_repomap_seed_summary(payload_path) == {
+        "worktree_seed_count_mean": 4.0,
+        "subgraph_seed_count_mean": 3.5,
+        "seed_candidates_count_mean": 6.0,
+        "cache_hit_ratio": 0.5,
+        "precompute_hit_ratio": 0.25,
     }

@@ -167,6 +167,7 @@ def test_build_summary_orders_leaderboard_by_contract() -> None:
                 "task_success_summary": {"task_success_rate": 1.0},
                 "decision_observability_summary": {},
                 "retrieval_control_plane_gate_summary": {"gate_passed": True},
+                "retrieval_frontier_gate_summary": {"gate_passed": True},
                 "results_json": "a",
                 "summary_json": "b",
                 "report_md": "c",
@@ -185,6 +186,7 @@ def test_build_summary_orders_leaderboard_by_contract() -> None:
                 "task_success_summary": {"task_success_rate": 0.5},
                 "decision_observability_summary": {},
                 "retrieval_control_plane_gate_summary": {"gate_passed": False},
+                "retrieval_frontier_gate_summary": {"gate_passed": False},
                 "results_json": "d",
                 "summary_json": "e",
                 "report_md": "f",
@@ -204,9 +206,12 @@ def test_build_summary_orders_leaderboard_by_contract() -> None:
     assert summary["leaderboard"][0]["retrieval_control_plane_gate_summary"] == {
         "gate_passed": True
     }
+    assert summary["leaderboard"][0]["retrieval_frontier_gate_summary"] == {
+        "gate_passed": True
+    }
 
 
-def test_render_summary_markdown_includes_q2_gate_column() -> None:
+def test_render_summary_markdown_includes_q2_and_q3_gate_columns() -> None:
     module = _load_script()
     report = module.render_summary_markdown(
         {
@@ -226,6 +231,7 @@ def test_render_summary_markdown_includes_q2_gate_column() -> None:
                     },
                     "task_success_summary": {"task_success_rate": 1.0},
                     "retrieval_control_plane_gate_summary": {"gate_passed": True},
+                    "retrieval_frontier_gate_summary": {"gate_passed": True},
                 },
                 {
                     "arm_id": "faster_worse",
@@ -238,12 +244,13 @@ def test_render_summary_markdown_includes_q2_gate_column() -> None:
                     },
                     "task_success_summary": {"task_success_rate": 0.5},
                     "retrieval_control_plane_gate_summary": {"gate_passed": False},
+                    "retrieval_frontier_gate_summary": {"gate_passed": False},
                 },
             ],
             "oracle_relabel": {"case_count": 0, "oracle_distribution": {}},
         }
     )
 
-    assert "| Arm | task_success_rate | precision_at_k | noise_rate | latency_p95_ms | regressed | q2_gate |" in report
-    assert "| slower_better | 1.0000 | 0.6000 | 0.2000 | 20.00 | no | pass |" in report
-    assert "| faster_worse | 0.5000 | 0.9000 | 0.1000 | 5.00 | no | fail |" in report
+    assert "| Arm | task_success_rate | precision_at_k | noise_rate | latency_p95_ms | regressed | q2_gate | q3_gate |" in report
+    assert "| slower_better | 1.0000 | 0.6000 | 0.2000 | 20.00 | no | pass | pass |" in report
+    assert "| faster_worse | 0.5000 | 0.9000 | 0.1000 | 5.00 | no | fail | fail |" in report

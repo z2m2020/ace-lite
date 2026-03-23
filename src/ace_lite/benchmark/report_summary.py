@@ -19,6 +19,7 @@ OPTIONAL_SUMMARY_MAPPING_KEYS = (
     "adaptive_router_pair_summary",
     "comparison_lane_summary",
     "retrieval_control_plane_gate_summary",
+    "retrieval_frontier_gate_summary",
     "stage_latency_summary",
     "slo_budget_summary",
     "reward_log_summary",

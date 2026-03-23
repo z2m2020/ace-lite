@@ -95,6 +95,7 @@ class RepomapSeedRuntime:
     seed_paths_for_cache: list[str]
     worktree_prior: dict[str, Any]
     worktree_seed_count: int
+    subgraph_seed_count: int
 
 
 @dataclass(slots=True)
@@ -139,6 +140,21 @@ def prepare_repomap_seed_runtime(
         seed_candidates=seed_candidates_source,
         worktree_prior=worktree_prior,
     )
+    subgraph_payload = (
+        index_stage.get("subgraph_payload", {})
+        if isinstance(index_stage.get("subgraph_payload"), dict)
+        else {}
+    )
+    subgraph_seed_paths_raw = subgraph_payload.get("seed_paths")
+    subgraph_seed_count = len(
+        {
+            normalize_path(str(item or ""))
+            for item in (
+                subgraph_seed_paths_raw if isinstance(subgraph_seed_paths_raw, list) else []
+            )
+            if normalize_path(str(item or ""))
+        }
+    )
     seed_paths_for_cache: list[str] = []
     for item in seed_candidates[: max(1, int(repomap_top_k) * 2)]:
         if not isinstance(item, dict):
@@ -152,6 +168,7 @@ def prepare_repomap_seed_runtime(
         seed_paths_for_cache=seed_paths_for_cache,
         worktree_prior=worktree_prior,
         worktree_seed_count=worktree_seed_count,
+        subgraph_seed_count=subgraph_seed_count,
     )
 
 
@@ -357,6 +374,7 @@ def build_repomap_stage_payload_from_cache_runtime(
     payload["cache"] = cache_runtime.cache_meta
     payload["precompute"] = cache_runtime.precompute_meta
     payload["worktree_seed_count"] = int(cache_runtime.seed_runtime.worktree_seed_count)
+    payload["subgraph_seed_count"] = int(cache_runtime.seed_runtime.subgraph_seed_count)
     payload["seed_candidates_count"] = len(cache_runtime.seed_runtime.seed_candidates)
     return payload
 

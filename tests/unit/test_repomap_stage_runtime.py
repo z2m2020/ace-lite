@@ -96,6 +96,7 @@ def test_build_repomap_error_payload_reuses_runtime_and_cache_metadata() -> None
         cache_meta={"hit": False, "path": "cache.json"},
         precompute_meta={"hit": True, "path": "precompute_cache.json"},
         worktree_seed_count=2,
+        subgraph_seed_count=3,
         seed_candidates_count=5,
     )
 
@@ -105,4 +106,5 @@ def test_build_repomap_error_payload_reuses_runtime_and_cache_metadata() -> None
     assert payload["cache"]["path"] == "cache.json"
     assert payload["precompute"]["hit"] is True
     assert payload["worktree_seed_count"] == 2
+    assert payload["subgraph_seed_count"] == 3
     assert payload["seed_candidates_count"] == 5

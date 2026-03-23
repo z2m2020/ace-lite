@@ -93,6 +93,10 @@ def test_chunking_hard_cases_define_stage_aware_oracles() -> None:
             "apply_query_aware_graph_prior",
         ),
     }
+    deep_symbol_case_ids = {
+        "ace-chunking-sibling-shield-04",
+        "ace-chunking-hub-heavy-05",
+    }
 
     for item in cases:
         case_id = str(item["case_id"])
@@ -103,6 +107,10 @@ def test_chunking_hard_cases_define_stage_aware_oracles() -> None:
             item["oracle_file_path"],
             item["oracle_chunk_ref"]["qualified_name"],
         ) == expected_oracles[case_id]
+        if case_id in deep_symbol_case_ids:
+            assert item["retrieval_surface"] == "deep_symbol"
+        else:
+            assert "retrieval_surface" not in item
 
 
 def test_validation_rich_cases_cover_validation_and_agent_loop_surfaces() -> None:

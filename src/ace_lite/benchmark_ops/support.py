@@ -226,6 +226,79 @@ def read_benchmark_retrieval_control_plane_gate_summary(
     return normalized
 
 
+def read_benchmark_retrieval_frontier_gate_summary(
+    results_path: Path,
+) -> dict[str, Any]:
+    payload = read_benchmark_results(results_path)
+    summary_raw = payload.get("retrieval_frontier_gate_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return {}
+
+    normalized: dict[str, Any] = {}
+    for key, value in summary.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(value, bool):
+            normalized[key] = bool(value)
+            continue
+        if isinstance(value, (int, float)):
+            normalized[key] = float(value)
+            continue
+        if isinstance(value, list):
+            normalized[key] = [str(item) for item in value if str(item).strip()]
+            continue
+        normalized[key] = value
+    return normalized
+
+
+def read_benchmark_repomap_seed_summary(results_path: Path) -> dict[str, float]:
+    payload = read_benchmark_results(results_path)
+    summary_raw = payload.get("repomap_seed_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    metrics_raw = payload.get("metrics")
+    metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
+
+    metric_aliases = {
+        "worktree_seed_count_mean": (
+            "worktree_seed_count_mean",
+            "repomap_worktree_seed_count_mean",
+        ),
+        "subgraph_seed_count_mean": (
+            "subgraph_seed_count_mean",
+            "repomap_subgraph_seed_count_mean",
+        ),
+        "seed_candidates_count_mean": (
+            "seed_candidates_count_mean",
+            "repomap_seed_candidates_count_mean",
+        ),
+        "cache_hit_ratio": ("cache_hit_ratio", "repomap_cache_hit_ratio"),
+        "precompute_hit_ratio": (
+            "precompute_hit_ratio",
+            "repomap_precompute_hit_ratio",
+        ),
+    }
+    normalized: dict[str, float] = {}
+    for key, aliases in metric_aliases.items():
+        raw_value: Any = None
+        for alias in aliases:
+            if alias in summary:
+                raw_value = summary.get(alias)
+                break
+        if raw_value is None:
+            for alias in aliases:
+                if alias in metrics:
+                    raw_value = metrics.get(alias)
+                    break
+        if raw_value is None:
+            continue
+        try:
+            normalized[key] = float(raw_value or 0.0)
+        except Exception:
+            continue
+    return normalized
+
+
 __all__ = [
     "CommandResult",
     "load_yaml",
@@ -234,6 +307,8 @@ __all__ = [
     "read_benchmark_case_rows",
     "read_benchmark_comparison_lane_metrics",
     "read_benchmark_retrieval_control_plane_gate_summary",
+    "read_benchmark_retrieval_frontier_gate_summary",
+    "read_benchmark_repomap_seed_summary",
     "read_benchmark_metrics",
     "read_benchmark_results",
     "require_success",
