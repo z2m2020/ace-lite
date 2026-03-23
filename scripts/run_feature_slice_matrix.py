@@ -18,6 +18,7 @@ from ace_lite.benchmark_ops import (
     read_benchmark_case_rows,
     read_benchmark_comparison_lane_metrics,
     read_benchmark_metrics,
+    read_benchmark_repomap_seed_summary,
     read_benchmark_results,
     require_success,
     run_command,
@@ -71,6 +72,25 @@ _read_benchmark_case_rows = read_benchmark_case_rows
 _read_benchmark_case_fingerprints = read_benchmark_case_fingerprints
 _read_benchmark_case_routing_source = read_benchmark_case_routing_source
 _read_benchmark_comparison_lane_metrics = read_benchmark_comparison_lane_metrics
+_read_benchmark_repomap_seed_summary = read_benchmark_repomap_seed_summary
+
+
+def _format_repomap_seed_summary(summary: dict[str, Any]) -> str:
+    if not isinstance(summary, dict) or not summary:
+        return ""
+    return (
+        "worktree_seed_count_mean={worktree:.4f}, "
+        "subgraph_seed_count_mean={subgraph:.4f}, "
+        "seed_candidates_count_mean={candidates:.4f}, "
+        "cache_hit_ratio={cache:.4f}, "
+        "precompute_hit_ratio={precompute:.4f}"
+    ).format(
+        worktree=float(summary.get("worktree_seed_count_mean", 0.0) or 0.0),
+        subgraph=float(summary.get("subgraph_seed_count_mean", 0.0) or 0.0),
+        candidates=float(summary.get("seed_candidates_count_mean", 0.0) or 0.0),
+        cache=float(summary.get("cache_hit_ratio", 0.0) or 0.0),
+        precompute=float(summary.get("precompute_hit_ratio", 0.0) or 0.0),
+    )
 
 
 def _evaluate_delta_thresholds(
@@ -2065,6 +2085,9 @@ def _run_dependency_recall_slice(
         label="dependency recall slice off",
     )
     off_metrics = _read_benchmark_metrics(off_dir / "results.json")
+    off_repomap_seed_summary = _read_benchmark_repomap_seed_summary(
+        off_dir / "results.json"
+    )
 
     _require_success(
         _run_command(
@@ -2080,6 +2103,9 @@ def _run_dependency_recall_slice(
         label="dependency recall slice on",
     )
     on_metrics = _read_benchmark_metrics(on_dir / "results.json")
+    on_repomap_seed_summary = _read_benchmark_repomap_seed_summary(
+        on_dir / "results.json"
+    )
 
     off_dependency = float(off_metrics.get("dependency_recall", 0.0) or 0.0)
     on_dependency = float(on_metrics.get("dependency_recall", 0.0) or 0.0)
@@ -2171,8 +2197,16 @@ def _run_dependency_recall_slice(
         "passed": len(failures) == 0,
         "thresholds": thresholds,
         "profiles": {"off": off_profile, "on": on_profile},
-        "off": {"output_dir": str(off_dir), "metrics": off_metrics},
-        "on": {"output_dir": str(on_dir), "metrics": on_metrics},
+        "off": {
+            "output_dir": str(off_dir),
+            "metrics": off_metrics,
+            "repomap_seed_summary": off_repomap_seed_summary,
+        },
+        "on": {
+            "output_dir": str(on_dir),
+            "metrics": on_metrics,
+            "repomap_seed_summary": on_repomap_seed_summary,
+        },
         "deltas": deltas,
         "failures": failures,
     }
@@ -2505,6 +2539,12 @@ def _run_perturbation_slice(
 
     baseline_metrics = _read_benchmark_metrics(baseline_output / "results.json")
     perturbed_metrics = _read_benchmark_metrics(perturbed_output / "results.json")
+    baseline_repomap_seed_summary = _read_benchmark_repomap_seed_summary(
+        baseline_output / "results.json"
+    )
+    perturbed_repomap_seed_summary = _read_benchmark_repomap_seed_summary(
+        perturbed_output / "results.json"
+    )
     baseline_rows = _read_benchmark_case_rows(baseline_output / "results.json")
     perturbed_rows = _read_benchmark_case_rows(perturbed_output / "results.json")
 
@@ -2788,6 +2828,12 @@ def _run_repomap_perturbation_slice(
 
     baseline_metrics = _read_benchmark_metrics(baseline_output / "results.json")
     perturbed_metrics = _read_benchmark_metrics(perturbed_output / "results.json")
+    baseline_repomap_seed_summary = _read_benchmark_repomap_seed_summary(
+        baseline_output / "results.json"
+    )
+    perturbed_repomap_seed_summary = _read_benchmark_repomap_seed_summary(
+        perturbed_output / "results.json"
+    )
     baseline_rows = _read_benchmark_case_rows(baseline_output / "results.json")
     perturbed_rows = _read_benchmark_case_rows(perturbed_output / "results.json")
 
@@ -2843,10 +2889,15 @@ def _run_repomap_perturbation_slice(
         "passed": len(failures) == 0,
         "thresholds": thresholds,
         "profiles": {"repomap": ranking_profile},
-        "baseline": {"output_dir": str(baseline_output), "metrics": baseline_metrics},
+        "baseline": {
+            "output_dir": str(baseline_output),
+            "metrics": baseline_metrics,
+            "repomap_seed_summary": baseline_repomap_seed_summary,
+        },
         "perturbed": {
             "output_dir": str(perturbed_output),
             "metrics": perturbed_metrics,
+            "repomap_seed_summary": perturbed_repomap_seed_summary,
         },
         "deltas": aggregate_deltas,
         "perturbations": perturbations,
@@ -3104,6 +3155,32 @@ def _render_markdown(summary: dict[str, Any]) -> str:
             profiles = profiles_raw if isinstance(profiles_raw, dict) else {}
             off_metrics = off.get("metrics") if isinstance(off.get("metrics"), dict) else {}
             on_metrics = on.get("metrics") if isinstance(on.get("metrics"), dict) else {}
+            off_repomap_seed_summary = (
+                off.get("repomap_seed_summary")
+                if isinstance(off.get("repomap_seed_summary"), dict)
+                else {}
+            )
+            on_repomap_seed_summary = (
+                on.get("repomap_seed_summary")
+                if isinstance(on.get("repomap_seed_summary"), dict)
+                else {}
+            )
+            if off_repomap_seed_summary:
+                lines.append(
+                    "- Repomap seed summary ({profile}): {summary}".format(
+                        profile=str(profiles.get("off") or "off"),
+                        summary=_format_repomap_seed_summary(off_repomap_seed_summary),
+                    )
+                )
+            if on_repomap_seed_summary:
+                lines.append(
+                    "- Repomap seed summary ({profile}): {summary}".format(
+                        profile=str(profiles.get("on") or "on"),
+                        summary=_format_repomap_seed_summary(on_repomap_seed_summary),
+                    )
+                )
+            if off_repomap_seed_summary or on_repomap_seed_summary:
+                lines.append("")
             lines.append(
                 "| {profile} | {dependency:.4f} | {precision:.4f} | {noise:.4f} | {latency:.2f} |".format(
                     profile=str(profiles.get("off") or "off"),
@@ -3373,6 +3450,39 @@ def _render_markdown(summary: dict[str, Any]) -> str:
                 )
             )
             lines.append("")
+        if name == "repomap_perturbation":
+            baseline_raw = item.get("baseline")
+            perturbed_raw = item.get("perturbed")
+            baseline = baseline_raw if isinstance(baseline_raw, dict) else {}
+            perturbed = perturbed_raw if isinstance(perturbed_raw, dict) else {}
+            baseline_repomap_seed_summary = (
+                baseline.get("repomap_seed_summary")
+                if isinstance(baseline.get("repomap_seed_summary"), dict)
+                else {}
+            )
+            perturbed_repomap_seed_summary = (
+                perturbed.get("repomap_seed_summary")
+                if isinstance(perturbed.get("repomap_seed_summary"), dict)
+                else {}
+            )
+            if baseline_repomap_seed_summary:
+                lines.append(
+                    "- Repomap seed summary (baseline): {summary}".format(
+                        summary=_format_repomap_seed_summary(
+                            baseline_repomap_seed_summary
+                        )
+                    )
+                )
+            if perturbed_repomap_seed_summary:
+                lines.append(
+                    "- Repomap seed summary (perturbed): {summary}".format(
+                        summary=_format_repomap_seed_summary(
+                            perturbed_repomap_seed_summary
+                        )
+                    )
+                )
+            if baseline_repomap_seed_summary or perturbed_repomap_seed_summary:
+                lines.append("")
         if include_dependency_delta:
             lines.append(
                 "| Perturbation | Passed | Task Success Delta | Precision Delta | Noise Increase | Dependency Recall Delta |"

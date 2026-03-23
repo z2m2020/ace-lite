@@ -79,6 +79,18 @@ class CaseEvaluationMetrics:
     subgraph_seed_paths: list[str]
     chunk_guard_payload: dict[str, Any]
     validation_tests: list[Any]
+    validation_probe_enabled: bool
+    validation_probe_status: str
+    validation_probe_executed_count: int
+    validation_probe_issue_count: int
+    source_plan_validation_feedback_present: bool
+    source_plan_validation_feedback_status: str
+    source_plan_validation_feedback_issue_count: int
+    source_plan_validation_feedback_probe_status: str
+    source_plan_validation_feedback_probe_issue_count: int
+    source_plan_validation_feedback_probe_executed_count: int
+    source_plan_validation_feedback_selected_test_count: int
+    source_plan_validation_feedback_executed_test_count: int
     exact_search_payload: dict[str, Any]
     second_pass_payload: dict[str, Any]
     refine_pass_payload: dict[str, Any]
@@ -313,11 +325,31 @@ def build_case_evaluation_metrics(
     augment_tags = _as_dict(augment_stage.get("tags"))
     source_plan_stage = _as_dict(stage_observability.get("source_plan"))
     source_plan_tags = _as_dict(source_plan_stage.get("tags"))
+    validation_stage = _as_dict(stage_observability.get("validation"))
+    validation_tags = _as_dict(validation_stage.get("tags"))
+    validation_payload = _as_dict(plan_payload.get("validation"))
+    validation_probe_payload = _as_dict(
+        validation_payload.get("probes")
+        or _as_dict(_as_dict(validation_payload.get("result")).get("probes"))
+    )
 
     source_plan_packing_payload = _as_dict(source_plan_payload.get("packing"))
     source_plan_subgraph_payload = _as_dict(source_plan_payload.get("subgraph_payload"))
     source_plan_evidence_summary = normalize_source_plan_evidence_summary(
         source_plan_payload.get("evidence_summary", {})
+    )
+    source_plan_steps = _as_list(source_plan_payload.get("steps"))
+    validate_step = next(
+        (
+            item
+            for item in source_plan_steps
+            if isinstance(item, dict)
+            and str(item.get("stage") or "").strip() == "validate"
+        ),
+        {},
+    )
+    source_plan_validation_feedback = _as_dict(
+        _as_dict(validate_step).get("validation_feedback_summary")
     )
     skills_payload = _as_dict(plan_payload.get("skills"))
     repomap_payload = _as_dict(plan_payload.get("repomap"))
@@ -343,6 +375,66 @@ def build_case_evaluation_metrics(
         max(0, int(value or 0)) for value in subgraph_edge_counts.values()
     )
     subgraph_payload_enabled = bool(subgraph_payload.get("enabled", False))
+    validation_probe_enabled = bool(
+        validation_tags.get(
+            "validation_probe_enabled",
+            validation_probe_payload.get("enabled", False),
+        )
+    )
+    validation_probe_status = str(
+        validation_tags.get(
+            "validation_probe_status",
+            validation_probe_payload.get("status", ""),
+        )
+        or ""
+    )
+    validation_probe_executed_count = max(
+        0,
+        int(
+            validation_tags.get(
+                "validation_probe_executed_count",
+                validation_probe_payload.get("executed_count", 0),
+            )
+            or 0
+        ),
+    )
+    validation_probe_issue_count = max(
+        0,
+        int(
+            validation_tags.get(
+                "validation_probe_issue_count",
+                validation_probe_payload.get("issue_count", 0),
+            )
+            or 0
+        ),
+    )
+    source_plan_validation_feedback_present = bool(source_plan_validation_feedback)
+    source_plan_validation_feedback_status = str(
+        source_plan_validation_feedback.get("status", "") or ""
+    )
+    source_plan_validation_feedback_issue_count = max(
+        0,
+        int(source_plan_validation_feedback.get("issue_count", 0) or 0),
+    )
+    source_plan_validation_feedback_probe_status = str(
+        source_plan_validation_feedback.get("probe_status", "") or ""
+    )
+    source_plan_validation_feedback_probe_issue_count = max(
+        0,
+        int(source_plan_validation_feedback.get("probe_issue_count", 0) or 0),
+    )
+    source_plan_validation_feedback_probe_executed_count = max(
+        0,
+        int(source_plan_validation_feedback.get("probe_executed_count", 0) or 0),
+    )
+    source_plan_validation_feedback_selected_test_count = max(
+        0,
+        int(source_plan_validation_feedback.get("selected_test_count", 0) or 0),
+    )
+    source_plan_validation_feedback_executed_test_count = max(
+        0,
+        int(source_plan_validation_feedback.get("executed_test_count", 0) or 0),
+    )
 
     dependency = _as_dict(repomap_payload.get("dependency_recall"))
     dependency_recall = float(dependency.get("hit_rate", 0.0) or 0.0)
@@ -1591,6 +1683,34 @@ def build_case_evaluation_metrics(
         subgraph_seed_paths=subgraph_seed_paths,
         chunk_guard_payload=chunk_guard_payload,
         validation_tests=validation_tests,
+        validation_probe_enabled=validation_probe_enabled,
+        validation_probe_status=validation_probe_status,
+        validation_probe_executed_count=validation_probe_executed_count,
+        validation_probe_issue_count=validation_probe_issue_count,
+        source_plan_validation_feedback_present=(
+            source_plan_validation_feedback_present
+        ),
+        source_plan_validation_feedback_status=(
+            source_plan_validation_feedback_status
+        ),
+        source_plan_validation_feedback_issue_count=(
+            source_plan_validation_feedback_issue_count
+        ),
+        source_plan_validation_feedback_probe_status=(
+            source_plan_validation_feedback_probe_status
+        ),
+        source_plan_validation_feedback_probe_issue_count=(
+            source_plan_validation_feedback_probe_issue_count
+        ),
+        source_plan_validation_feedback_probe_executed_count=(
+            source_plan_validation_feedback_probe_executed_count
+        ),
+        source_plan_validation_feedback_selected_test_count=(
+            source_plan_validation_feedback_selected_test_count
+        ),
+        source_plan_validation_feedback_executed_test_count=(
+            source_plan_validation_feedback_executed_test_count
+        ),
         exact_search_payload=exact_search_payload,
         second_pass_payload=second_pass_payload,
         refine_pass_payload=refine_pass_payload,

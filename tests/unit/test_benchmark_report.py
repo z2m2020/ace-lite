@@ -774,6 +774,9 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "plan_replay_cache_enabled_ratio" in report
     assert "plan_replay_cache_hit_ratio" in report
     assert "plan_replay_cache_stale_hit_safe_ratio" in report
+    assert "validation_probe_enabled_ratio" in report
+    assert "validation_probe_executed_count_mean" in report
+    assert "validation_probe_failure_rate" in report
     assert "| source_plan_pack_miss | 1 | 1.0000 |" in report
     assert "source_plan_direct_evidence_ratio" in report
     assert "source_plan_symbol_count_mean" in report
@@ -1143,6 +1146,295 @@ def test_build_results_summary_preserves_retrieval_frontier_gate_summary() -> No
     assert summary["retrieval_frontier_gate_summary"]["failed_checks"] == [
         "precision_at_k"
     ]
+
+
+def test_build_results_summary_preserves_repomap_seed_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "repomap_seed_summary": {
+                "worktree_seed_count_mean": 1.5,
+                "subgraph_seed_count_mean": 2.5,
+                "seed_candidates_count_mean": 3.5,
+                "cache_hit_ratio": 0.75,
+                "precompute_hit_ratio": 0.25,
+            },
+        }
+    )
+
+    assert summary["repomap_seed_summary"] == {
+        "worktree_seed_count_mean": 1.5,
+        "subgraph_seed_count_mean": 2.5,
+        "seed_candidates_count_mean": 3.5,
+        "cache_hit_ratio": 0.75,
+        "precompute_hit_ratio": 0.25,
+    }
+
+
+def test_build_results_summary_preserves_validation_probe_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "validation_probe_summary": {
+                "validation_test_count": 1.5,
+                "probe_enabled_ratio": 1.0,
+                "probe_executed_count_mean": 2.0,
+                "probe_failure_rate": 0.5,
+            },
+        }
+    )
+
+    assert summary["validation_probe_summary"] == {
+        "validation_test_count": 1.5,
+        "probe_enabled_ratio": 1.0,
+        "probe_executed_count_mean": 2.0,
+        "probe_failure_rate": 0.5,
+    }
+
+
+def test_build_results_summary_preserves_source_plan_validation_feedback_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "source_plan_validation_feedback_summary": {
+                "present_ratio": 1.0,
+                "issue_count_mean": 2.0,
+                "failure_rate": 1.0,
+                "probe_issue_count_mean": 1.0,
+                "probe_executed_count_mean": 1.0,
+                "probe_failure_rate": 1.0,
+                "selected_test_count_mean": 1.0,
+                "executed_test_count_mean": 1.0,
+            },
+        }
+    )
+
+    assert summary["source_plan_validation_feedback_summary"] == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 2.0,
+        "failure_rate": 1.0,
+        "probe_issue_count_mean": 1.0,
+        "probe_executed_count_mean": 1.0,
+        "probe_failure_rate": 1.0,
+        "selected_test_count_mean": 1.0,
+        "executed_test_count_mean": 1.0,
+    }
+
+
+def test_build_results_summary_preserves_deep_symbol_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "deep_symbol_summary": {
+                "case_count": 3.0,
+                "recall": 0.95,
+            },
+        }
+    )
+
+    assert summary["deep_symbol_summary"] == {
+        "case_count": 3.0,
+        "recall": 0.95,
+    }
+
+
+def test_build_results_summary_preserves_native_scip_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "native_scip_summary": {
+                "loaded_rate": 0.8,
+                "document_count_mean": 5.0,
+                "definition_occurrence_count_mean": 7.0,
+                "reference_occurrence_count_mean": 11.0,
+                "symbol_definition_count_mean": 3.0,
+            },
+        }
+    )
+
+    assert summary["native_scip_summary"] == {
+        "loaded_rate": 0.8,
+        "document_count_mean": 5.0,
+        "definition_occurrence_count_mean": 7.0,
+        "reference_occurrence_count_mean": 11.0,
+        "symbol_definition_count_mean": 3.0,
+    }
+
+
+def test_build_report_markdown_prefers_top_level_repomap_seed_summary() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {
+                "task_success_rate": 1.0,
+                "repomap_worktree_seed_count_mean": 0.0,
+                "repomap_subgraph_seed_count_mean": 0.0,
+                "repomap_seed_candidates_count_mean": 0.0,
+                "repomap_cache_hit_ratio": 0.0,
+                "repomap_precompute_hit_ratio": 0.0,
+            },
+            "repomap_seed_summary": {
+                "worktree_seed_count_mean": 4.0,
+                "subgraph_seed_count_mean": 5.0,
+                "seed_candidates_count_mean": 6.0,
+                "cache_hit_ratio": 0.75,
+                "precompute_hit_ratio": 0.25,
+            },
+        }
+    )
+
+    assert "## Repomap Seed Summary" in report
+    assert "Seed count means: worktree=4.00; subgraph=5.00; seed_candidates=6.00" in report
+    assert "Cache hit ratios: cache=0.7500; precompute=0.2500" in report
+
+
+def test_build_report_markdown_prefers_top_level_validation_probe_summary() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {
+                "task_success_rate": 1.0,
+                "validation_test_count": 0.0,
+                "validation_probe_enabled_ratio": 0.0,
+                "validation_probe_executed_count_mean": 0.0,
+                "validation_probe_failure_rate": 0.0,
+            },
+            "validation_probe_summary": {
+                "validation_test_count": 1.5,
+                "probe_enabled_ratio": 1.0,
+                "probe_executed_count_mean": 2.0,
+                "probe_failure_rate": 0.5,
+            },
+        }
+    )
+
+    assert "## Validation Probe Summary" in report
+    assert "Validation tests mean: 1.5000; probe enabled ratio: 1.0000" in report
+    assert "Probe executed count mean: 2.0000; failure rate: 0.5000" in report
+
+
+def test_build_report_markdown_includes_source_plan_validation_feedback_summary() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {
+                "task_success_rate": 1.0,
+                "source_plan_validation_feedback_present_ratio": 1.0,
+                "source_plan_validation_feedback_issue_count_mean": 2.0,
+                "source_plan_validation_feedback_failure_rate": 1.0,
+                "source_plan_validation_feedback_probe_issue_count_mean": 1.0,
+                "source_plan_validation_feedback_probe_executed_count_mean": 1.0,
+                "source_plan_validation_feedback_probe_failure_rate": 1.0,
+                "source_plan_validation_feedback_selected_test_count_mean": 1.0,
+                "source_plan_validation_feedback_executed_test_count_mean": 1.0,
+            },
+        }
+    )
+
+    assert "## Source Plan Validation Feedback Summary" in report
+    assert "Present ratio: 1.0000; issue count mean: 2.0000; failure rate: 1.0000" in report
+    assert "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000" in report
+    assert "Selected test count mean: 1.0000; executed test count mean: 1.0000" in report
+
+
+def test_build_report_markdown_prefers_top_level_source_plan_validation_feedback_summary() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {
+                "task_success_rate": 1.0,
+                "source_plan_validation_feedback_present_ratio": 0.0,
+                "source_plan_validation_feedback_issue_count_mean": 0.0,
+                "source_plan_validation_feedback_failure_rate": 0.0,
+                "source_plan_validation_feedback_probe_issue_count_mean": 0.0,
+                "source_plan_validation_feedback_probe_executed_count_mean": 0.0,
+                "source_plan_validation_feedback_probe_failure_rate": 0.0,
+                "source_plan_validation_feedback_selected_test_count_mean": 0.0,
+                "source_plan_validation_feedback_executed_test_count_mean": 0.0,
+            },
+            "source_plan_validation_feedback_summary": {
+                "present_ratio": 1.0,
+                "issue_count_mean": 2.0,
+                "failure_rate": 1.0,
+                "probe_issue_count_mean": 1.0,
+                "probe_executed_count_mean": 1.0,
+                "probe_failure_rate": 1.0,
+                "selected_test_count_mean": 1.0,
+                "executed_test_count_mean": 1.0,
+            },
+        }
+    )
+
+    assert "## Source Plan Validation Feedback Summary" in report
+    assert "Present ratio: 1.0000; issue count mean: 2.0000; failure rate: 1.0000" in report
+    assert "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000" in report
+    assert "Selected test count mean: 1.0000; executed test count mean: 1.0000" in report
+
+
+def test_build_report_markdown_prefers_frontier_gate_summary_for_deep_symbol_and_native_scip() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {
+                "deep_symbol_case_count": 2.0,
+                "deep_symbol_case_recall": 0.0,
+                "native_scip_loaded_rate": 0.0,
+                "native_scip_document_count_mean": 5.0,
+                "native_scip_definition_occurrence_count_mean": 7.0,
+                "native_scip_reference_occurrence_count_mean": 11.0,
+                "native_scip_symbol_definition_count_mean": 3.0,
+            },
+            "retrieval_frontier_gate_summary": {
+                "deep_symbol_case_recall": 0.95,
+                "native_scip_loaded_rate": 0.8,
+            },
+        }
+    )
+
+    assert "## Deep Symbol Summary" in report
+    assert "Deep symbol case count: 2.00; recall: 0.9500" in report
+    assert "## Native SCIP Summary" in report
+    assert "Native SCIP loaded rate: 0.8000" in report
+    assert "| native_scip_document_count_mean | 5.00 |" in report
+
+
+def test_build_report_markdown_prefers_top_level_deep_symbol_and_native_scip_summaries() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {
+                "deep_symbol_case_count": 0.0,
+                "deep_symbol_case_recall": 0.0,
+                "native_scip_loaded_rate": 0.0,
+                "native_scip_document_count_mean": 0.0,
+                "native_scip_definition_occurrence_count_mean": 0.0,
+                "native_scip_reference_occurrence_count_mean": 0.0,
+                "native_scip_symbol_definition_count_mean": 0.0,
+            },
+            "retrieval_frontier_gate_summary": {
+                "deep_symbol_case_recall": 0.4,
+                "native_scip_loaded_rate": 0.5,
+            },
+            "deep_symbol_summary": {
+                "case_count": 2.0,
+                "recall": 0.95,
+            },
+            "native_scip_summary": {
+                "loaded_rate": 0.8,
+                "document_count_mean": 5.0,
+                "definition_occurrence_count_mean": 7.0,
+                "reference_occurrence_count_mean": 11.0,
+                "symbol_definition_count_mean": 3.0,
+            },
+        }
+    )
+
+    assert "## Deep Symbol Summary" in report
+    assert "Deep symbol case count: 2.00; recall: 0.9500" in report
+    assert "## Native SCIP Summary" in report
+    assert "Native SCIP loaded rate: 0.8000" in report
+    assert "| native_scip_document_count_mean | 5.00 |" in report
+    assert "| native_scip_definition_occurrence_count_mean | 7.00 |" in report
 
 
 def test_build_results_summary_preserves_reward_log_summary() -> None:
@@ -1971,6 +2263,26 @@ def test_build_report_markdown_includes_dev_issue_capture_feedback_summary() -> 
     assert "| dev_issue_capture_rate | 1.0000 |" in report
     assert "| runtime_issue_capture_cli | 1 |" in report
     assert "| runtime_issue_capture_mcp | 1 |" in report
+
+
+def test_build_report_markdown_includes_validation_probe_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-23T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {
+                "validation_test_count": 1.5,
+                "validation_probe_enabled_ratio": 1.0,
+                "validation_probe_executed_count_mean": 2.0,
+                "validation_probe_failure_rate": 0.5,
+            },
+        }
+    )
+
+    assert "## Validation Probe Summary" in report
+    assert "Validation tests mean: 1.5000; probe enabled ratio: 1.0000" in report
+    assert "Probe executed count mean: 2.0000; failure rate: 0.5000" in report
 
 
 def test_build_results_summary_backfills_task_success_alias() -> None:

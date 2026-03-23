@@ -34,6 +34,9 @@ def _write_report(
     embedding_ratio: float,
     failures: list[dict[str, object]],
     validation_rich_q2_gate_summary: dict[str, object] | None = None,
+    validation_rich_q3_gate_summary: dict[str, object] | None = None,
+    deep_symbol_summary: dict[str, object] | None = None,
+    native_scip_summary: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -72,10 +75,24 @@ def _write_report(
             "failures": [],
         },
     }
-    if validation_rich_q2_gate_summary is not None:
-        payload["validation_rich_benchmark"] = {
-            "retrieval_control_plane_gate_summary": validation_rich_q2_gate_summary
-        }
+    if (
+        validation_rich_q2_gate_summary is not None
+        or validation_rich_q3_gate_summary is not None
+    ):
+        benchmark_payload: dict[str, object] = {}
+        if validation_rich_q2_gate_summary is not None:
+            benchmark_payload["retrieval_control_plane_gate_summary"] = (
+                validation_rich_q2_gate_summary
+            )
+        if validation_rich_q3_gate_summary is not None:
+            benchmark_payload["retrieval_frontier_gate_summary"] = (
+                validation_rich_q3_gate_summary
+            )
+        if deep_symbol_summary is not None:
+            benchmark_payload["deep_symbol_summary"] = deep_symbol_summary
+        if native_scip_summary is not None:
+            benchmark_payload["native_scip_summary"] = native_scip_summary
+        payload["validation_rich_benchmark"] = benchmark_payload
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
@@ -106,6 +123,16 @@ def test_freeze_trend_report_main_writes_summary(
             "latency_p95_ms": 640.0,
             "failed_checks": [],
         },
+        validation_rich_q3_gate_summary={
+            "gate_passed": True,
+            "deep_symbol_case_recall": 0.93,
+            "native_scip_loaded_rate": 0.78,
+            "precision_at_k": 0.62,
+            "noise_rate": 0.34,
+            "failed_checks": [],
+        },
+        deep_symbol_summary={"case_count": 3.0, "recall": 0.93},
+        native_scip_summary={"loaded_rate": 0.78, "document_count_mean": 5.0},
     )
     _write_report(
         report_b,
@@ -132,6 +159,16 @@ def test_freeze_trend_report_main_writes_summary(
             "latency_p95_ms": 880.0,
             "failed_checks": ["adaptive_router_shadow_coverage"],
         },
+        validation_rich_q3_gate_summary={
+            "gate_passed": False,
+            "deep_symbol_case_recall": 0.84,
+            "native_scip_loaded_rate": 0.65,
+            "precision_at_k": 0.58,
+            "noise_rate": 0.39,
+            "failed_checks": ["native_scip_loaded_rate", "noise_rate"],
+        },
+        deep_symbol_summary={"case_count": 2.0, "recall": 0.84},
+        native_scip_summary={"loaded_rate": 0.65, "document_count_mean": 4.0},
     )
 
     def fake_git_diff(cmd, cwd, check, capture_output, text):
@@ -169,6 +206,11 @@ def test_freeze_trend_report_main_writes_summary(
     assert output["latest"]["validation_rich_q2_gate_passed"] is False
     assert output["latest"]["validation_rich_q2_shadow_coverage"] == pytest.approx(0.74)
     assert "validation_rich_q2_gate:adaptive_router_shadow_coverage" in output["latest"]["failure_signatures"]
+    assert output["latest"]["validation_rich_q3_gate_passed"] is False
+    assert output["latest"]["validation_rich_q3_native_scip_loaded_rate"] == pytest.approx(0.65)
+    assert output["latest"]["validation_rich_q3_deep_symbol_case_count"] == pytest.approx(2.0)
+    assert output["latest"]["validation_rich_q3_native_scip_document_count_mean"] == pytest.approx(4.0)
+    assert "validation_rich_q3_gate:native_scip_loaded_rate" in output["latest"]["failure_signatures"]
     assert output["failure_top3"][0]["signature"] == "concept_gate:noise_rate"
     assert output["suspect_files"] == [
         "src/ace_lite/index_stage/graph_lookup.py",
@@ -177,8 +219,17 @@ def test_freeze_trend_report_main_writes_summary(
 
     markdown = (tmp_path / "trend" / "freeze_trend_report.md").read_text(encoding="utf-8")
     assert "Validation-rich Q2 gate: passed=False, shadow_coverage=0.7400, risk_upgrade_gain=-0.0300, latency_p95_ms=880.00" in markdown
+    assert "Validation-rich Q3 gate: passed=False, deep_symbol_case_recall=0.8400, native_scip_loaded_rate=0.6500, precision_at_k=0.5800, noise_rate=0.3900" in markdown
+    assert "Validation-rich Q3 evidence: deep_symbol_case_count=2.0000, native_scip_document_count_mean=4.0000" in markdown
     assert "validation_q2_shadow=-0.1200" in markdown
+    assert "validation_q3_native_scip=-0.1300" in markdown
+    assert "validation_q3_case_count=-1.0000" in markdown
+    assert "validation_q3_document_count=-1.0000" in markdown
     assert "validation_rich_q2_gate:adaptive_router_shadow_coverage" in markdown or output["failure_top3"][1]["signature"] == "validation_rich_q2_gate:adaptive_router_shadow_coverage"
+    assert "validation_rich_q3_gate:native_scip_loaded_rate" in markdown or any(
+        item["signature"] == "validation_rich_q3_gate:native_scip_loaded_rate"
+        for item in output["failure_top3"]
+    )
 
 
 def test_freeze_trend_report_extract_failure_signatures() -> None:
@@ -199,3 +250,19 @@ def test_freeze_trend_report_extract_failure_signatures() -> None:
     signatures = module._extract_failure_signatures(payload)
     assert "concept_gate:precision_at_k" in signatures
     assert "embedding_gate:gate_failed" in signatures
+
+
+def test_freeze_trend_report_extract_failure_signatures_includes_q3_gate() -> None:
+    module = _load_script("build_freeze_trend_report.py")
+    payload = {
+        "validation_rich_benchmark": {
+            "retrieval_frontier_gate_summary": {
+                "gate_passed": False,
+                "failed_checks": ["native_scip_loaded_rate", "noise_rate"],
+            }
+        }
+    }
+
+    signatures = module._extract_failure_signatures(payload)
+    assert "validation_rich_q3_gate:native_scip_loaded_rate" in signatures
+    assert "validation_rich_q3_gate:noise_rate" in signatures

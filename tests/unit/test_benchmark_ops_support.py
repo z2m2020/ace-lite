@@ -13,9 +13,13 @@ from ace_lite.benchmark_ops import (
     read_benchmark_case_routing_source,
     read_benchmark_case_rows,
     read_benchmark_comparison_lane_metrics,
+    read_benchmark_deep_symbol_summary,
+    read_benchmark_native_scip_summary,
     read_benchmark_retrieval_control_plane_gate_summary,
     read_benchmark_retrieval_frontier_gate_summary,
     read_benchmark_repomap_seed_summary,
+    read_benchmark_source_plan_validation_feedback_summary,
+    read_benchmark_validation_probe_summary,
     read_benchmark_metrics,
     read_benchmark_results,
     require_success,
@@ -32,6 +36,8 @@ def test_benchmark_ops_facade_exports_match_support_module() -> None:
     assert read_benchmark_case_routing_source is module.read_benchmark_case_routing_source
     assert read_benchmark_case_rows is module.read_benchmark_case_rows
     assert read_benchmark_comparison_lane_metrics is module.read_benchmark_comparison_lane_metrics
+    assert read_benchmark_deep_symbol_summary is module.read_benchmark_deep_symbol_summary
+    assert read_benchmark_native_scip_summary is module.read_benchmark_native_scip_summary
     assert (
         read_benchmark_retrieval_control_plane_gate_summary
         is module.read_benchmark_retrieval_control_plane_gate_summary
@@ -41,6 +47,14 @@ def test_benchmark_ops_facade_exports_match_support_module() -> None:
         is module.read_benchmark_retrieval_frontier_gate_summary
     )
     assert read_benchmark_repomap_seed_summary is module.read_benchmark_repomap_seed_summary
+    assert (
+        read_benchmark_source_plan_validation_feedback_summary
+        is module.read_benchmark_source_plan_validation_feedback_summary
+    )
+    assert (
+        read_benchmark_validation_probe_summary
+        is module.read_benchmark_validation_probe_summary
+    )
     assert read_benchmark_metrics is module.read_benchmark_metrics
     assert read_benchmark_results is module.read_benchmark_results
     assert require_success is module.require_success
@@ -103,9 +117,13 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
     assert read_benchmark_case_fingerprints(missing_path) == {}
     assert read_benchmark_case_routing_source(missing_path) == ""
     assert read_benchmark_comparison_lane_metrics(missing_path, lane="x") == {}
+    assert read_benchmark_deep_symbol_summary(missing_path) == {}
+    assert read_benchmark_native_scip_summary(missing_path) == {}
     assert read_benchmark_retrieval_control_plane_gate_summary(missing_path) == {}
     assert read_benchmark_retrieval_frontier_gate_summary(missing_path) == {}
     assert read_benchmark_repomap_seed_summary(missing_path) == {}
+    assert read_benchmark_source_plan_validation_feedback_summary(missing_path) == {}
+    assert read_benchmark_validation_probe_summary(missing_path) == {}
 
     invalid_path = tmp_path / "invalid.json"
     invalid_path.write_text("{", encoding="utf-8")
@@ -192,12 +210,39 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
     "noise_rate_passed": true,
     "gate_passed": false
   },
+  "deep_symbol_summary": {
+    "case_count": 2,
+    "recall": 0.95
+  },
+  "native_scip_summary": {
+    "loaded_rate": 0.8,
+    "document_count_mean": 5,
+    "definition_occurrence_count_mean": 7,
+    "reference_occurrence_count_mean": 11,
+    "symbol_definition_count_mean": 3
+  },
   "repomap_seed_summary": {
     "worktree_seed_count_mean": 4,
     "repomap_subgraph_seed_count_mean": 3.5,
     "seed_candidates_count_mean": 6,
     "cache_hit_ratio": 0.5,
     "repomap_precompute_hit_ratio": 0.25
+  },
+  "validation_probe_summary": {
+    "validation_test_count": 1.5,
+    "probe_enabled_ratio": 1,
+    "probe_executed_count_mean": 2,
+    "probe_failure_rate": 0.5
+  },
+  "source_plan_validation_feedback_summary": {
+    "present_ratio": 1,
+    "issue_count_mean": 2,
+    "failure_rate": 1,
+    "probe_issue_count_mean": 1,
+    "probe_executed_count_mean": 1,
+    "probe_failure_rate": 1,
+    "selected_test_count_mean": 1,
+    "executed_test_count_mean": 1
   }
 }
 """.strip(),
@@ -281,10 +326,209 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
         "noise_rate_passed": True,
         "gate_passed": False,
     }
+    assert read_benchmark_deep_symbol_summary(payload_path) == {
+        "case_count": 2.0,
+        "recall": 0.95,
+    }
+    assert read_benchmark_native_scip_summary(payload_path) == {
+        "loaded_rate": 0.8,
+        "document_count_mean": 5.0,
+        "definition_occurrence_count_mean": 7.0,
+        "reference_occurrence_count_mean": 11.0,
+        "symbol_definition_count_mean": 3.0,
+    }
     assert read_benchmark_repomap_seed_summary(payload_path) == {
         "worktree_seed_count_mean": 4.0,
         "subgraph_seed_count_mean": 3.5,
         "seed_candidates_count_mean": 6.0,
         "cache_hit_ratio": 0.5,
         "precompute_hit_ratio": 0.25,
+    }
+    assert read_benchmark_validation_probe_summary(payload_path) == {
+        "validation_test_count": 1.5,
+        "probe_enabled_ratio": 1.0,
+        "probe_executed_count_mean": 2.0,
+        "probe_failure_rate": 0.5,
+    }
+    assert read_benchmark_source_plan_validation_feedback_summary(payload_path) == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 2.0,
+        "failure_rate": 1.0,
+        "probe_issue_count_mean": 1.0,
+        "probe_executed_count_mean": 1.0,
+        "probe_failure_rate": 1.0,
+        "selected_test_count_mean": 1.0,
+        "executed_test_count_mean": 1.0,
+    }
+
+
+def test_read_benchmark_repomap_seed_summary_prefers_top_level_summary_over_metrics(
+    tmp_path: Path,
+) -> None:
+    payload_path = tmp_path / "results.json"
+    payload_path.write_text(
+        """
+{
+  "metrics": {
+    "repomap_worktree_seed_count_mean": 1,
+    "repomap_subgraph_seed_count_mean": 2,
+    "repomap_seed_candidates_count_mean": 3,
+    "repomap_cache_hit_ratio": 0.1,
+    "repomap_precompute_hit_ratio": 0.2
+  },
+  "repomap_seed_summary": {
+    "worktree_seed_count_mean": 4,
+    "subgraph_seed_count_mean": 5,
+    "seed_candidates_count_mean": 6,
+    "cache_hit_ratio": 0.7,
+    "precompute_hit_ratio": 0.8
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert read_benchmark_repomap_seed_summary(payload_path) == {
+        "worktree_seed_count_mean": 4.0,
+        "subgraph_seed_count_mean": 5.0,
+        "seed_candidates_count_mean": 6.0,
+        "cache_hit_ratio": 0.7,
+        "precompute_hit_ratio": 0.8,
+    }
+
+
+def test_read_benchmark_deep_symbol_summary_prefers_top_level_summary_over_metrics(
+    tmp_path: Path,
+) -> None:
+    payload_path = tmp_path / "results.json"
+    payload_path.write_text(
+        """
+{
+  "metrics": {
+    "deep_symbol_case_count": 1,
+    "deep_symbol_case_recall": 0.4
+  },
+  "deep_symbol_summary": {
+    "case_count": 2,
+    "recall": 0.95
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert read_benchmark_deep_symbol_summary(payload_path) == {
+        "case_count": 2.0,
+        "recall": 0.95,
+    }
+
+
+def test_read_benchmark_validation_probe_summary_prefers_top_level_summary_over_metrics(
+    tmp_path: Path,
+) -> None:
+    payload_path = tmp_path / "results.json"
+    payload_path.write_text(
+        """
+{
+  "metrics": {
+    "validation_test_count": 0.25,
+    "validation_probe_enabled_ratio": 0.1,
+    "validation_probe_executed_count_mean": 1,
+    "validation_probe_failure_rate": 0.9
+  },
+  "validation_probe_summary": {
+    "validation_test_count": 1.5,
+    "probe_enabled_ratio": 1,
+    "probe_executed_count_mean": 2,
+    "probe_failure_rate": 0.5
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert read_benchmark_validation_probe_summary(payload_path) == {
+        "validation_test_count": 1.5,
+        "probe_enabled_ratio": 1.0,
+        "probe_executed_count_mean": 2.0,
+        "probe_failure_rate": 0.5,
+    }
+
+
+def test_read_benchmark_source_plan_validation_feedback_summary_prefers_top_level_summary_over_metrics(
+    tmp_path: Path,
+) -> None:
+    payload_path = tmp_path / "results.json"
+    payload_path.write_text(
+        """
+{
+  "metrics": {
+    "source_plan_validation_feedback_present_ratio": 0.0,
+    "source_plan_validation_feedback_issue_count_mean": 0.5,
+    "source_plan_validation_feedback_failure_rate": 0.5,
+    "source_plan_validation_feedback_probe_issue_count_mean": 0.25,
+    "source_plan_validation_feedback_probe_executed_count_mean": 0.25,
+    "source_plan_validation_feedback_probe_failure_rate": 0.5,
+    "source_plan_validation_feedback_selected_test_count_mean": 0.25,
+    "source_plan_validation_feedback_executed_test_count_mean": 0.25
+  },
+  "source_plan_validation_feedback_summary": {
+    "present_ratio": 1,
+    "issue_count_mean": 2,
+    "failure_rate": 1,
+    "probe_issue_count_mean": 1,
+    "probe_executed_count_mean": 1,
+    "probe_failure_rate": 1,
+    "selected_test_count_mean": 1,
+    "executed_test_count_mean": 1
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert read_benchmark_source_plan_validation_feedback_summary(payload_path) == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 2.0,
+        "failure_rate": 1.0,
+        "probe_issue_count_mean": 1.0,
+        "probe_executed_count_mean": 1.0,
+        "probe_failure_rate": 1.0,
+        "selected_test_count_mean": 1.0,
+        "executed_test_count_mean": 1.0,
+    }
+
+
+def test_read_benchmark_native_scip_summary_prefers_top_level_summary_over_metrics(
+    tmp_path: Path,
+) -> None:
+    payload_path = tmp_path / "results.json"
+    payload_path.write_text(
+        """
+{
+  "metrics": {
+    "native_scip_loaded_rate": 0.1,
+    "native_scip_document_count_mean": 1,
+    "native_scip_definition_occurrence_count_mean": 2,
+    "native_scip_reference_occurrence_count_mean": 3,
+    "native_scip_symbol_definition_count_mean": 4
+  },
+  "native_scip_summary": {
+    "loaded_rate": 0.8,
+    "document_count_mean": 5,
+    "definition_occurrence_count_mean": 7,
+    "reference_occurrence_count_mean": 11,
+    "symbol_definition_count_mean": 3
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert read_benchmark_native_scip_summary(payload_path) == {
+        "loaded_rate": 0.8,
+        "document_count_mean": 5.0,
+        "definition_occurrence_count_mean": 7.0,
+        "reference_occurrence_count_mean": 11.0,
+        "symbol_definition_count_mean": 3.0,
     }

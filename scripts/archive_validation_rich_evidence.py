@@ -65,6 +65,44 @@ def _extract_retrieval_control_plane_gate_summary(
     return normalized
 
 
+def _extract_retrieval_frontier_gate_summary(
+    *, payload: dict[str, Any]
+) -> dict[str, Any]:
+    summary_raw = payload.get("retrieval_frontier_gate_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    normalized: dict[str, Any] = {}
+    for key, value in summary.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(value, bool):
+            normalized[key] = bool(value)
+        elif isinstance(value, (int, float)):
+            normalized[key] = float(value)
+        elif isinstance(value, list):
+            normalized[key] = [str(item) for item in value if str(item).strip()]
+        else:
+            normalized[key] = value
+    return normalized
+
+
+def _extract_numeric_summary(
+    *,
+    payload: dict[str, Any],
+    key: str,
+) -> dict[str, float]:
+    summary_raw = payload.get(key)
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    normalized: dict[str, float] = {}
+    for item_key, value in summary.items():
+        if not isinstance(item_key, str):
+            continue
+        try:
+            normalized[item_key] = float(value or 0.0)
+        except Exception:
+            continue
+    return normalized
+
+
 def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
     archived_raw = payload.get("archived_files")
     archived_files = archived_raw if isinstance(archived_raw, list) else []
@@ -74,6 +112,22 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
     reasons = reasons_raw if isinstance(reasons_raw, list) else []
     gate_raw = payload.get("retrieval_control_plane_gate_summary")
     gate = gate_raw if isinstance(gate_raw, dict) else {}
+    frontier_gate_raw = payload.get("retrieval_frontier_gate_summary")
+    frontier_gate = frontier_gate_raw if isinstance(frontier_gate_raw, dict) else {}
+    deep_symbol_raw = payload.get("deep_symbol_summary")
+    deep_symbol = deep_symbol_raw if isinstance(deep_symbol_raw, dict) else {}
+    native_scip_raw = payload.get("native_scip_summary")
+    native_scip = native_scip_raw if isinstance(native_scip_raw, dict) else {}
+    validation_probe_raw = payload.get("validation_probe_summary")
+    validation_probe = (
+        validation_probe_raw if isinstance(validation_probe_raw, dict) else {}
+    )
+    source_plan_feedback_raw = payload.get("source_plan_validation_feedback_summary")
+    source_plan_feedback = (
+        source_plan_feedback_raw
+        if isinstance(source_plan_feedback_raw, dict)
+        else {}
+    )
 
     lines = [
         "# Validation-Rich Next Cycle Todo",
@@ -124,6 +178,129 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
             ]
         )
 
+    if frontier_gate:
+        frontier_failed_checks_raw = frontier_gate.get("failed_checks")
+        frontier_failed_checks = (
+            frontier_failed_checks_raw
+            if isinstance(frontier_failed_checks_raw, list)
+            else []
+        )
+        lines.extend(
+            [
+                "",
+                "## Q3 Retrieval Frontier Gate",
+                "",
+                f"- Gate passed: {bool(frontier_gate.get('gate_passed', False))}",
+                "- Deep symbol case recall: {recall:.4f}".format(
+                    recall=float(frontier_gate.get("deep_symbol_case_recall", 0.0) or 0.0)
+                ),
+                "- Native SCIP loaded rate: {rate:.4f}".format(
+                    rate=float(frontier_gate.get("native_scip_loaded_rate", 0.0) or 0.0)
+                ),
+                "- Precision at k: {precision:.4f}".format(
+                    precision=float(frontier_gate.get("precision_at_k", 0.0) or 0.0)
+                ),
+                "- Noise rate: {noise:.4f}".format(
+                    noise=float(frontier_gate.get("noise_rate", 0.0) or 0.0)
+                ),
+                "- Failed checks: {checks}".format(
+                    checks=",".join(str(item) for item in frontier_failed_checks)
+                    if frontier_failed_checks
+                    else "(none)"
+                ),
+            ]
+        )
+
+    if deep_symbol or native_scip:
+        lines.extend(
+            [
+                "",
+                "## Q3 Frontier Evidence",
+                "",
+                "- Deep symbol case count: {count:.4f}; recall: {recall:.4f}".format(
+                    count=float(deep_symbol.get("case_count", 0.0) or 0.0),
+                    recall=float(deep_symbol.get("recall", 0.0) or 0.0),
+                ),
+                "- Native SCIP loaded rate: {loaded:.4f}; document_count_mean={document:.4f}; definition_occurrence_count_mean={definition:.4f}; reference_occurrence_count_mean={reference:.4f}; symbol_definition_count_mean={symbol:.4f}".format(
+                    loaded=float(native_scip.get("loaded_rate", 0.0) or 0.0),
+                    document=float(native_scip.get("document_count_mean", 0.0) or 0.0),
+                    definition=float(
+                        native_scip.get("definition_occurrence_count_mean", 0.0) or 0.0
+                    ),
+                    reference=float(
+                        native_scip.get("reference_occurrence_count_mean", 0.0) or 0.0
+                    ),
+                    symbol=float(
+                        native_scip.get("symbol_definition_count_mean", 0.0) or 0.0
+                    ),
+                ),
+            ]
+        )
+
+    if validation_probe:
+        lines.extend(
+            [
+                "",
+                "## Q4 Validation Probe Summary",
+                "",
+                "- Validation test count: {count:.4f}".format(
+                    count=float(validation_probe.get("validation_test_count", 0.0) or 0.0)
+                ),
+                "- Probe enabled ratio: {ratio:.4f}".format(
+                    ratio=float(validation_probe.get("probe_enabled_ratio", 0.0) or 0.0)
+                ),
+                "- Probe executed count mean: {count:.4f}".format(
+                    count=float(
+                        validation_probe.get("probe_executed_count_mean", 0.0) or 0.0
+                    )
+                ),
+                "- Probe failure rate: {rate:.4f}".format(
+                    rate=float(validation_probe.get("probe_failure_rate", 0.0) or 0.0)
+                ),
+            ]
+        )
+
+    if source_plan_feedback:
+        lines.extend(
+            [
+                "",
+                "## Q4 Source Plan Validation Feedback",
+                "",
+                "- Present ratio: {ratio:.4f}".format(
+                    ratio=float(source_plan_feedback.get("present_ratio", 0.0) or 0.0)
+                ),
+                "- Failure rate: {rate:.4f}".format(
+                    rate=float(source_plan_feedback.get("failure_rate", 0.0) or 0.0)
+                ),
+                "- Issue count mean: {count:.4f}".format(
+                    count=float(source_plan_feedback.get("issue_count_mean", 0.0) or 0.0)
+                ),
+                "- Probe issue count mean: {count:.4f}".format(
+                    count=float(
+                        source_plan_feedback.get("probe_issue_count_mean", 0.0) or 0.0
+                    )
+                ),
+                "- Probe executed count mean: {count:.4f}".format(
+                    count=float(
+                        source_plan_feedback.get("probe_executed_count_mean", 0.0)
+                        or 0.0
+                    )
+                ),
+                "- Selected test count mean: {count:.4f}".format(
+                    count=float(
+                        source_plan_feedback.get("selected_test_count_mean", 0.0)
+                        or 0.0
+                    )
+                ),
+                "- Executed test count mean: {count:.4f}".format(
+                    count=float(
+                        source_plan_feedback.get("executed_test_count_mean", 0.0)
+                        or 0.0
+                    )
+                ),
+            ]
+        )
+
     lines.extend(["", "## Follow-ups", ""])
     if reasons:
         for reason in reasons:
@@ -131,6 +308,13 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
     elif gate and isinstance(gate.get("failed_checks"), list) and gate.get("failed_checks"):
         for item in gate.get("failed_checks", []):
             lines.append(f"- Resolve Q2 gate: {item}")
+    elif (
+        frontier_gate
+        and isinstance(frontier_gate.get("failed_checks"), list)
+        and frontier_gate.get("failed_checks")
+    ):
+        for item in frontier_gate.get("failed_checks", []):
+            lines.append(f"- Resolve Q3 gate: {item}")
     else:
         lines.append("- Review whether `validation_rich_gate.mode` can move beyond `report_only`.")
     return "\n".join(lines).strip() + "\n"
@@ -217,6 +401,25 @@ def main() -> int:
         "promotion_decision": promotion_decision,
         "retrieval_control_plane_gate_summary": _extract_retrieval_control_plane_gate_summary(
             payload=summary_payload
+        ),
+        "retrieval_frontier_gate_summary": _extract_retrieval_frontier_gate_summary(
+            payload=summary_payload
+        ),
+        "deep_symbol_summary": _extract_numeric_summary(
+            payload=summary_payload,
+            key="deep_symbol_summary",
+        ),
+        "native_scip_summary": _extract_numeric_summary(
+            payload=summary_payload,
+            key="native_scip_summary",
+        ),
+        "validation_probe_summary": _extract_numeric_summary(
+            payload=summary_payload,
+            key="validation_probe_summary",
+        ),
+        "source_plan_validation_feedback_summary": _extract_numeric_summary(
+            payload=summary_payload,
+            key="source_plan_validation_feedback_summary",
         ),
     }
     manifest_path = dated_root / "archive_manifest.json"

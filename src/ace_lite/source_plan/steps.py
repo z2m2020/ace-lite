@@ -8,6 +8,41 @@ from ace_lite.chunking import build_chunk_step_reason
 from ace_lite.prompt_rendering.renderer import build_prompt_rendering_boundary
 
 
+def _build_validation_feedback_summary(
+    validation_result: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(validation_result, dict) or not validation_result:
+        return {}
+
+    summary = (
+        validation_result.get("summary")
+        if isinstance(validation_result.get("summary"), dict)
+        else {}
+    )
+    probes = (
+        validation_result.get("probes")
+        if isinstance(validation_result.get("probes"), dict)
+        else {}
+    )
+    tests = (
+        validation_result.get("tests")
+        if isinstance(validation_result.get("tests"), dict)
+        else {}
+    )
+    selected_tests = tests.get("selected", [])
+    executed_tests = tests.get("executed", [])
+
+    return {
+        "status": str(summary.get("status") or "").strip() or "skipped",
+        "issue_count": int(summary.get("issue_count", 0) or 0),
+        "probe_status": str(probes.get("status") or "").strip() or "disabled",
+        "probe_issue_count": int(probes.get("issue_count", 0) or 0),
+        "probe_executed_count": int(probes.get("executed_count", 0) or 0),
+        "selected_test_count": len(selected_tests) if isinstance(selected_tests, list) else 0,
+        "executed_test_count": len(executed_tests) if isinstance(executed_tests, list) else 0,
+    }
+
+
 def build_chunk_steps(
     prioritized_chunks: list[dict[str, Any]],
     *,
@@ -61,6 +96,7 @@ def build_source_plan_steps(
     tests: dict[str, Any],
     validation_tests: list[str],
     subgraph_payload: dict[str, Any],
+    validation_result: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Build the high-level stage plan steps list for source_plan output."""
     vcs_history = (
@@ -92,6 +128,16 @@ def build_source_plan_steps(
             path = str(item.get("path") or "").strip()
             if path:
                 changed_files.append(path)
+    validation_feedback_summary = _build_validation_feedback_summary(validation_result)
+
+    validate_step: dict[str, Any] = {
+        "id": 7,
+        "stage": "validate",
+        "action": "Run the minimal suggested test set to verify the change.",
+        "suggested_tests": validation_tests,
+    }
+    if validation_feedback_summary:
+        validate_step["validation_feedback_summary"] = validation_feedback_summary
 
     return [
         {
@@ -151,12 +197,7 @@ def build_source_plan_steps(
             "subgraph_payload": subgraph_payload,
             "prompt_rendering_boundary": build_prompt_rendering_boundary(),
         },
-        {
-            "id": 7,
-            "stage": "validate",
-            "action": "Run the minimal suggested test set to verify the change.",
-            "suggested_tests": validation_tests,
-        },
+        validate_step,
     ]
 
 

@@ -10,7 +10,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ace_lite.benchmark_ops import read_benchmark_retrieval_control_plane_gate_summary
+from ace_lite.benchmark_ops import (
+    read_benchmark_deep_symbol_summary,
+    read_benchmark_native_scip_summary,
+    read_benchmark_retrieval_control_plane_gate_summary,
+    read_benchmark_retrieval_frontier_gate_summary,
+    read_benchmark_source_plan_validation_feedback_summary,
+    read_benchmark_validation_probe_summary,
+)
 
 METRIC_NAMES = (
     "task_success_rate",
@@ -124,6 +131,15 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "retrieval_control_plane_gate_summary": (
             read_benchmark_retrieval_control_plane_gate_summary(path)
         ),
+        "retrieval_frontier_gate_summary": (
+            read_benchmark_retrieval_frontier_gate_summary(path)
+        ),
+        "deep_symbol_summary": read_benchmark_deep_symbol_summary(path),
+        "native_scip_summary": read_benchmark_native_scip_summary(path),
+        "validation_probe_summary": read_benchmark_validation_probe_summary(path),
+        "source_plan_validation_feedback_summary": (
+            read_benchmark_source_plan_validation_feedback_summary(path)
+        ),
     }
 
 
@@ -192,6 +208,34 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         latest_metrics = latest_metrics_raw if isinstance(latest_metrics_raw, dict) else {}
         latest_gate_raw = latest.get("retrieval_control_plane_gate_summary")
         latest_gate = latest_gate_raw if isinstance(latest_gate_raw, dict) else {}
+        latest_frontier_gate_raw = latest.get("retrieval_frontier_gate_summary")
+        latest_frontier_gate = (
+            latest_frontier_gate_raw
+            if isinstance(latest_frontier_gate_raw, dict)
+            else {}
+        )
+        latest_deep_symbol_raw = latest.get("deep_symbol_summary")
+        latest_deep_symbol = (
+            latest_deep_symbol_raw if isinstance(latest_deep_symbol_raw, dict) else {}
+        )
+        latest_native_scip_raw = latest.get("native_scip_summary")
+        latest_native_scip = (
+            latest_native_scip_raw if isinstance(latest_native_scip_raw, dict) else {}
+        )
+        latest_validation_probe_raw = latest.get("validation_probe_summary")
+        latest_validation_probe = (
+            latest_validation_probe_raw
+            if isinstance(latest_validation_probe_raw, dict)
+            else {}
+        )
+        latest_source_plan_feedback_raw = latest.get(
+            "source_plan_validation_feedback_summary"
+        )
+        latest_source_plan_feedback = (
+            latest_source_plan_feedback_raw
+            if isinstance(latest_source_plan_feedback_raw, dict)
+            else {}
+        )
         lines.extend(
             [
                 "## Latest",
@@ -247,6 +291,172 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         latency=_safe_float(latest_gate.get("latency_p95_ms", 0.0), 0.0)
                     ),
                     f"- Failed checks: {failed_checks or '(none)'}",
+                    "",
+                ]
+            )
+        if latest_frontier_gate:
+            frontier_failed_checks_raw = latest_frontier_gate.get("failed_checks", [])
+            frontier_failed_checks = (
+                ", ".join(
+                    str(item) for item in frontier_failed_checks_raw if str(item).strip()
+                )
+                if isinstance(frontier_failed_checks_raw, list)
+                else ""
+            )
+            lines.extend(
+                [
+                    "## Latest Q3 Retrieval Frontier Gate",
+                    "",
+                    f"- Gate passed: {bool(latest_frontier_gate.get('gate_passed', False))}",
+                    "- Deep symbol case recall: {recall:.4f}".format(
+                        recall=_safe_float(
+                            latest_frontier_gate.get("deep_symbol_case_recall", 0.0),
+                            0.0,
+                        )
+                    ),
+                    "- Native SCIP loaded rate: {rate:.4f}".format(
+                        rate=_safe_float(
+                            latest_frontier_gate.get("native_scip_loaded_rate", 0.0),
+                            0.0,
+                        )
+                    ),
+                    "- Precision at k: {precision:.4f}".format(
+                        precision=_safe_float(
+                            latest_frontier_gate.get("precision_at_k", 0.0), 0.0
+                        )
+                    ),
+                    "- Noise rate: {noise:.4f}".format(
+                        noise=_safe_float(
+                            latest_frontier_gate.get("noise_rate", 0.0), 0.0
+                        )
+                    ),
+                    f"- Failed checks: {frontier_failed_checks or '(none)'}",
+                    "",
+                ]
+            )
+        if latest_deep_symbol or latest_native_scip:
+            lines.extend(
+                [
+                    "## Latest Q3 Frontier Evidence",
+                    "",
+                    "- Deep symbol case count: {count:.4f}; recall: {recall:.4f}".format(
+                        count=_safe_float(latest_deep_symbol.get("case_count", 0.0), 0.0),
+                        recall=_safe_float(latest_deep_symbol.get("recall", 0.0), 0.0),
+                    ),
+                    "- Native SCIP loaded rate: {loaded:.4f}; document_count_mean={document:.4f}; definition_occurrence_count_mean={definition:.4f}; reference_occurrence_count_mean={reference:.4f}; symbol_definition_count_mean={symbol:.4f}".format(
+                        loaded=_safe_float(latest_native_scip.get("loaded_rate", 0.0), 0.0),
+                        document=_safe_float(
+                            latest_native_scip.get("document_count_mean", 0.0), 0.0
+                        ),
+                        definition=_safe_float(
+                            latest_native_scip.get(
+                                "definition_occurrence_count_mean", 0.0
+                            ),
+                            0.0,
+                        ),
+                        reference=_safe_float(
+                            latest_native_scip.get(
+                                "reference_occurrence_count_mean", 0.0
+                            ),
+                            0.0,
+                        ),
+                        symbol=_safe_float(
+                            latest_native_scip.get(
+                                "symbol_definition_count_mean", 0.0
+                            ),
+                            0.0,
+                        ),
+                    ),
+                    "",
+                ]
+            )
+        if latest_validation_probe:
+            lines.extend(
+                [
+                    "## Latest Q4 Validation Probe Summary",
+                    "",
+                    "- Validation test count: {count:.4f}".format(
+                        count=_safe_float(
+                            latest_validation_probe.get("validation_test_count", 0.0),
+                            0.0,
+                        )
+                    ),
+                    "- Probe enabled ratio: {ratio:.4f}".format(
+                        ratio=_safe_float(
+                            latest_validation_probe.get("probe_enabled_ratio", 0.0),
+                            0.0,
+                        )
+                    ),
+                    "- Probe executed count mean: {count:.4f}".format(
+                        count=_safe_float(
+                            latest_validation_probe.get(
+                                "probe_executed_count_mean", 0.0
+                            ),
+                            0.0,
+                        )
+                    ),
+                    "- Probe failure rate: {rate:.4f}".format(
+                        rate=_safe_float(
+                            latest_validation_probe.get("probe_failure_rate", 0.0),
+                            0.0,
+                        )
+                    ),
+                    "",
+                ]
+            )
+        if latest_source_plan_feedback:
+            lines.extend(
+                [
+                    "## Latest Q4 Source Plan Validation Feedback Summary",
+                    "",
+                    "- Present ratio: {ratio:.4f}".format(
+                        ratio=_safe_float(
+                            latest_source_plan_feedback.get("present_ratio", 0.0), 0.0
+                        )
+                    ),
+                    "- Failure rate: {rate:.4f}".format(
+                        rate=_safe_float(
+                            latest_source_plan_feedback.get("failure_rate", 0.0), 0.0
+                        )
+                    ),
+                    "- Issue count mean: {count:.4f}".format(
+                        count=_safe_float(
+                            latest_source_plan_feedback.get("issue_count_mean", 0.0),
+                            0.0,
+                        )
+                    ),
+                    "- Probe issue count mean: {count:.4f}".format(
+                        count=_safe_float(
+                            latest_source_plan_feedback.get(
+                                "probe_issue_count_mean", 0.0
+                            ),
+                            0.0,
+                        )
+                    ),
+                    "- Probe executed count mean: {count:.4f}".format(
+                        count=_safe_float(
+                            latest_source_plan_feedback.get(
+                                "probe_executed_count_mean", 0.0
+                            ),
+                            0.0,
+                        )
+                    ),
+                    "- Selected test count mean: {count:.4f}".format(
+                        count=_safe_float(
+                            latest_source_plan_feedback.get(
+                                "selected_test_count_mean", 0.0
+                            ),
+                            0.0,
+                        )
+                    ),
+                    "- Executed test count mean: {count:.4f}".format(
+                        count=_safe_float(
+                            latest_source_plan_feedback.get(
+                                "executed_test_count_mean", 0.0
+                            ),
+                            0.0,
+                        )
+                    ),
                     "",
                 ]
             )

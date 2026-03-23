@@ -15,6 +15,7 @@ def test_build_validation_result_v1_emits_required_sections() -> None:
         test_issues=[{"code": "tests.failed", "message": "assertion failed", "path": "tests/test_app.py"}],
         selected_tests=["tests/test_app.py::test_main"],
         executed_tests=["tests/test_app.py::test_main"],
+        available_probes=["compile", "import", "tests"],
         sandboxed=True,
         runner="temp-tree",
         artifacts=["artifacts/junit.xml"],
@@ -27,11 +28,38 @@ def test_build_validation_result_v1_emits_required_sections() -> None:
         "syntax",
         "type",
         "tests",
+        "probes",
         "environment",
         "summary",
     }
     assert payload["summary"]["issue_count"] == 2
     assert payload["summary"]["comparison_key"]
+    assert payload["probes"]["status"] == "disabled"
+    assert payload["probes"]["available"] == ["compile", "import", "tests"]
+
+
+def test_build_validation_result_v1_supports_probe_results() -> None:
+    payload = build_validation_result_v1(
+        available_probes=["compile", "import", "tests"],
+        probes=[
+            {
+                "name": "compile",
+                "status": "failed",
+                "selected": True,
+                "executed": True,
+                "issues": [{"code": "probe.compile", "message": "compile failed"}],
+            }
+        ],
+        replay_key="validation-run-002",
+        status="failed",
+    ).as_dict()
+
+    assert payload["probes"]["enabled"] is True
+    assert payload["probes"]["selected_count"] == 1
+    assert payload["probes"]["executed_count"] == 1
+    assert payload["probes"]["issue_count"] == 1
+    assert payload["probes"]["status"] == "failed"
+    assert payload["summary"]["issue_count"] == 1
 
 
 def test_compare_validation_results_v1_detects_new_and_resolved_issue_codes() -> None:

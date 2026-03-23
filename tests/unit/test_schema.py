@@ -17,6 +17,14 @@ from ace_lite.validation.result import build_validation_result_v1
 
 
 def _valid_payload() -> dict[str, Any]:
+    validation_result = build_validation_result_v1(
+        replay_key="validation-run-001",
+        selected_tests=[],
+        available_probes=["compile", "import", "tests"],
+        sandboxed=False,
+        runner="disabled",
+        status="skipped",
+    ).as_dict()
     payload = {
         "schema_version": "3.3",
         "query": "q",
@@ -72,13 +80,8 @@ def _valid_payload() -> dict[str, Any]:
                 "elapsed_ms": 0.0,
                 "time_budget_ms": 0,
             },
-            "result": build_validation_result_v1(
-                replay_key="validation-run-001",
-                selected_tests=[],
-                sandboxed=False,
-                runner="disabled",
-                status="skipped",
-            ).as_dict(),
+            "probes": dict(validation_result.get("probes", {})),
+            "result": validation_result,
             "patch_artifact_present": False,
             "policy_name": "general",
             "policy_version": "v1",

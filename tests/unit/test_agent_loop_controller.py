@@ -72,3 +72,37 @@ def test_controller_synthesizes_and_records_validation_driven_iteration() -> Non
     assert summary["actions_executed"] == 1
     assert summary["iterations"][0]["validation_status"] == "failed"
     assert summary["iterations"][0]["diagnostic_count"] == 1
+
+
+def test_controller_synthesizes_action_from_failed_validation_probes() -> None:
+    controller = BoundedLoopController(enabled=True, max_iterations=1)
+
+    selected = controller.select_action(
+        source_plan_stage={},
+        validation_stage={
+            "diagnostics": [],
+            "probes": {
+                "status": "failed",
+                "results": [
+                    {
+                        "name": "compile",
+                        "status": "failed",
+                        "issue_count": 1,
+                        "issues": [
+                            {
+                                "path": "src/app.py",
+                                "message": "compile probe failed",
+                            }
+                        ],
+                    }
+                ],
+            },
+        },
+    )
+
+    assert selected is not None
+    assert selected["action_type"] == "request_more_context"
+    assert selected["reason"] == "validation_probes"
+    assert selected["focus_paths"] == ["src/app.py"]
+    assert selected["metadata"]["probe_issue_count"] == 1
+    assert selected["metadata"]["probe_names"] == ["compile"]

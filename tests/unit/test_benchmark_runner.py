@@ -808,6 +808,40 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
         "noise_rate_passed": True,
         "gate_passed": False,
     }
+    assert results["repomap_seed_summary"] == {
+        "worktree_seed_count_mean": 0.0,
+        "subgraph_seed_count_mean": 0.0,
+        "seed_candidates_count_mean": 0.0,
+        "cache_hit_ratio": 0.0,
+        "precompute_hit_ratio": 0.0,
+    }
+    assert results["validation_probe_summary"] == {
+        "validation_test_count": 1.0,
+        "probe_enabled_ratio": 0.0,
+        "probe_executed_count_mean": 0.0,
+        "probe_failure_rate": 0.0,
+    }
+    assert results["source_plan_validation_feedback_summary"] == {
+        "present_ratio": 0.0,
+        "issue_count_mean": 0.0,
+        "failure_rate": 0.0,
+        "probe_issue_count_mean": 0.0,
+        "probe_executed_count_mean": 0.0,
+        "probe_failure_rate": 0.0,
+        "selected_test_count_mean": 0.0,
+        "executed_test_count_mean": 0.0,
+    }
+    assert results["deep_symbol_summary"] == {
+        "case_count": 0.0,
+        "recall": 0.0,
+    }
+    assert results["native_scip_summary"] == {
+        "loaded_rate": 0.0,
+        "document_count_mean": 0.0,
+        "definition_occurrence_count_mean": 0.0,
+        "reference_occurrence_count_mean": 0.0,
+        "symbol_definition_count_mean": 0.0,
+    }
 
 
 def test_benchmark_runner_submits_router_reward_events_when_writer_is_present() -> None:

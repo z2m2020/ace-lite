@@ -239,6 +239,7 @@ def _validate_validation_stage_payload(payload: Any, *, prefix: str) -> None:
         "diagnostic_count",
         "xref_enabled",
         "xref",
+        "probes",
         "result",
         "patch_artifact_present",
         "policy_name",

@@ -934,6 +934,22 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
         if isinstance(retrieval_control_plane_gate_summary_raw, dict)
         else {}
     )
+    retrieval_frontier_gate_summary_raw = payload.get(
+        "retrieval_frontier_gate_summary"
+    )
+    retrieval_frontier_gate_summary = (
+        retrieval_frontier_gate_summary_raw
+        if isinstance(retrieval_frontier_gate_summary_raw, dict)
+        else {}
+    )
+    deep_symbol_summary_raw = payload.get("deep_symbol_summary")
+    deep_symbol_summary = (
+        deep_symbol_summary_raw if isinstance(deep_symbol_summary_raw, dict) else {}
+    )
+    native_scip_summary_raw = payload.get("native_scip_summary")
+    native_scip_summary = (
+        native_scip_summary_raw if isinstance(native_scip_summary_raw, dict) else {}
+    )
     summary = {
         "path": str(summary_path),
         "repo": str(payload.get("repo", "") or ""),
@@ -969,6 +985,39 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
     }
     if gate_summary:
         summary["retrieval_control_plane_gate_summary"] = gate_summary
+    frontier_gate_summary = {
+            str(key): (
+                bool(value)
+                if isinstance(value, bool)
+                else (
+                    float(value)
+                    if isinstance(value, (int, float))
+                    else (
+                        [str(item) for item in value if str(item).strip()]
+                        if isinstance(value, list)
+                        else value
+                    )
+                )
+            )
+            for key, value in retrieval_frontier_gate_summary.items()
+            if isinstance(key, str)
+    }
+    if frontier_gate_summary:
+        summary["retrieval_frontier_gate_summary"] = frontier_gate_summary
+    deep_symbol_snapshot = {
+        str(key): float(value or 0.0)
+        for key, value in deep_symbol_summary.items()
+        if isinstance(key, str) and isinstance(value, (int, float))
+    }
+    if deep_symbol_snapshot:
+        summary["deep_symbol_summary"] = deep_symbol_snapshot
+    native_scip_snapshot = {
+        str(key): float(value or 0.0)
+        for key, value in native_scip_summary.items()
+        if isinstance(key, str) and isinstance(value, (int, float))
+    }
+    if native_scip_snapshot:
+        summary["native_scip_summary"] = native_scip_snapshot
     return summary
 
 
@@ -2367,6 +2416,53 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         or "(none)",
                     )
                 )
+            frontier_gate_summary_raw = validation_rich.get(
+                "retrieval_frontier_gate_summary"
+            )
+            frontier_gate_summary = (
+                frontier_gate_summary_raw
+                if isinstance(frontier_gate_summary_raw, dict)
+                else {}
+            )
+            if frontier_gate_summary:
+                frontier_gate_failed_checks_raw = frontier_gate_summary.get(
+                    "failed_checks"
+                )
+                frontier_gate_failed_checks = (
+                    frontier_gate_failed_checks_raw
+                    if isinstance(frontier_gate_failed_checks_raw, list)
+                    else []
+                )
+                lines.append(
+                    "- Q3 retrieval frontier gate: passed={passed}, deep_symbol_case_recall={recall:.4f}, native_scip_loaded_rate={native_scip:.4f}, precision_at_k={precision:.4f}, noise_rate={noise:.4f}, failed_checks={failed_checks}".format(
+                        passed=bool(frontier_gate_summary.get("gate_passed", False)),
+                        recall=float(
+                            frontier_gate_summary.get(
+                                "deep_symbol_case_recall", 0.0
+                            )
+                            or 0.0
+                        ),
+                        native_scip=float(
+                            frontier_gate_summary.get(
+                                "native_scip_loaded_rate", 0.0
+                            )
+                            or 0.0
+                        ),
+                        precision=float(
+                            frontier_gate_summary.get("precision_at_k", 0.0)
+                            or 0.0
+                        ),
+                        noise=float(
+                            frontier_gate_summary.get("noise_rate", 0.0) or 0.0
+                        ),
+                        failed_checks=",".join(
+                            str(item)
+                            for item in frontier_gate_failed_checks
+                            if str(item).strip()
+                        )
+                        or "(none)",
+                    )
+                )
             previous_gate_summary_raw = validation_rich.get(
                 "previous_retrieval_control_plane_gate_summary"
             )
@@ -2413,6 +2509,60 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         failed_checks=",".join(
                             str(item)
                             for item in previous_gate_failed_checks
+                            if str(item).strip()
+                        )
+                        or "(none)",
+                    )
+                )
+            previous_frontier_gate_summary_raw = validation_rich.get(
+                "previous_retrieval_frontier_gate_summary"
+            )
+            previous_frontier_gate_summary = (
+                previous_frontier_gate_summary_raw
+                if isinstance(previous_frontier_gate_summary_raw, dict)
+                else {}
+            )
+            if previous_frontier_gate_summary:
+                previous_frontier_failed_checks_raw = (
+                    previous_frontier_gate_summary.get("failed_checks")
+                )
+                previous_frontier_failed_checks = (
+                    previous_frontier_failed_checks_raw
+                    if isinstance(previous_frontier_failed_checks_raw, list)
+                    else []
+                )
+                lines.append(
+                    "- Previous Q3 retrieval frontier gate: passed={passed}, deep_symbol_case_recall={recall:.4f}, native_scip_loaded_rate={native_scip:.4f}, precision_at_k={precision:.4f}, noise_rate={noise:.4f}, failed_checks={failed_checks}".format(
+                        passed=bool(
+                            previous_frontier_gate_summary.get(
+                                "gate_passed", False
+                            )
+                        ),
+                        recall=float(
+                            previous_frontier_gate_summary.get(
+                                "deep_symbol_case_recall", 0.0
+                            )
+                            or 0.0
+                        ),
+                        native_scip=float(
+                            previous_frontier_gate_summary.get(
+                                "native_scip_loaded_rate", 0.0
+                            )
+                            or 0.0
+                        ),
+                        precision=float(
+                            previous_frontier_gate_summary.get(
+                                "precision_at_k", 0.0
+                            )
+                            or 0.0
+                        ),
+                        noise=float(
+                            previous_frontier_gate_summary.get("noise_rate", 0.0)
+                            or 0.0
+                        ),
+                        failed_checks=",".join(
+                            str(item)
+                            for item in previous_frontier_failed_checks
                             if str(item).strip()
                         )
                         or "(none)",
@@ -4487,6 +4637,24 @@ def main() -> int:
                 )
                 else {}
             ),
+            "retrieval_frontier_gate_summary": (
+                validation_rich_summary.get("retrieval_frontier_gate_summary", {})
+                if isinstance(
+                    validation_rich_summary.get("retrieval_frontier_gate_summary", {}),
+                    dict,
+                )
+                else {}
+            ),
+            "deep_symbol_summary": (
+                validation_rich_summary.get("deep_symbol_summary", {})
+                if isinstance(validation_rich_summary.get("deep_symbol_summary", {}), dict)
+                else {}
+            ),
+            "native_scip_summary": (
+                validation_rich_summary.get("native_scip_summary", {})
+                if isinstance(validation_rich_summary.get("native_scip_summary", {}), dict)
+                else {}
+            ),
             "previous_metrics": (
                 validation_rich_previous_summary.get("metrics", {})
                 if isinstance(validation_rich_previous_summary.get("metrics"), dict)
@@ -4500,6 +4668,34 @@ def main() -> int:
                     validation_rich_previous_summary.get(
                         "retrieval_control_plane_gate_summary", {}
                     ),
+                    dict,
+                )
+                else {}
+            ),
+            "previous_retrieval_frontier_gate_summary": (
+                validation_rich_previous_summary.get(
+                    "retrieval_frontier_gate_summary", {}
+                )
+                if isinstance(
+                    validation_rich_previous_summary.get(
+                        "retrieval_frontier_gate_summary", {}
+                    ),
+                    dict,
+                )
+                else {}
+            ),
+            "previous_deep_symbol_summary": (
+                validation_rich_previous_summary.get("deep_symbol_summary", {})
+                if isinstance(
+                    validation_rich_previous_summary.get("deep_symbol_summary", {}),
+                    dict,
+                )
+                else {}
+            ),
+            "previous_native_scip_summary": (
+                validation_rich_previous_summary.get("native_scip_summary", {})
+                if isinstance(
+                    validation_rich_previous_summary.get("native_scip_summary", {}),
                     dict,
                 )
                 else {}

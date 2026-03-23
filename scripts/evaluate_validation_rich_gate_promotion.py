@@ -105,6 +105,20 @@ def evaluate_promotion(
         if isinstance(retrieval_control_plane_gate_raw, dict)
         else {}
     )
+    retrieval_frontier_gate_raw = trend_latest.get("retrieval_frontier_gate_summary")
+    retrieval_frontier_gate = (
+        retrieval_frontier_gate_raw
+        if isinstance(retrieval_frontier_gate_raw, dict)
+        else {}
+    )
+    deep_symbol_summary_raw = trend_latest.get("deep_symbol_summary")
+    deep_symbol_summary = (
+        deep_symbol_summary_raw if isinstance(deep_symbol_summary_raw, dict) else {}
+    )
+    native_scip_summary_raw = trend_latest.get("native_scip_summary")
+    native_scip_summary = (
+        native_scip_summary_raw if isinstance(native_scip_summary_raw, dict) else {}
+    )
 
     trend_ok = history_count >= max(1, int(min_history_count))
     if not trend_ok:
@@ -156,6 +170,50 @@ def evaluate_promotion(
             else [],
         }
     gates.append({"name": "retrieval_control_plane", **retrieval_control_plane_summary})
+
+    retrieval_frontier_ok = True
+    retrieval_frontier_summary: dict[str, Any] = {"present": False, "passed": True}
+    if retrieval_frontier_gate:
+        retrieval_frontier_ok = bool(retrieval_frontier_gate.get("gate_passed", False))
+        if not retrieval_frontier_ok:
+            reasons.append("retrieval frontier gate is not passed")
+        retrieval_frontier_summary = {
+            "present": True,
+            "passed": retrieval_frontier_ok,
+            "failed_checks": [
+                str(item)
+                for item in retrieval_frontier_gate.get("failed_checks", [])
+                if str(item).strip()
+            ]
+            if isinstance(retrieval_frontier_gate.get("failed_checks"), list)
+            else [],
+            "deep_symbol_case_recall": _safe_float(
+                retrieval_frontier_gate.get("deep_symbol_case_recall"), 0.0
+            ),
+            "native_scip_loaded_rate": _safe_float(
+                retrieval_frontier_gate.get("native_scip_loaded_rate"), 0.0
+            ),
+            "deep_symbol_summary": {
+                "case_count": _safe_float(deep_symbol_summary.get("case_count"), 0.0),
+                "recall": _safe_float(deep_symbol_summary.get("recall"), 0.0),
+            },
+            "native_scip_summary": {
+                "loaded_rate": _safe_float(native_scip_summary.get("loaded_rate"), 0.0),
+                "document_count_mean": _safe_float(
+                    native_scip_summary.get("document_count_mean"), 0.0
+                ),
+                "definition_occurrence_count_mean": _safe_float(
+                    native_scip_summary.get("definition_occurrence_count_mean"), 0.0
+                ),
+                "reference_occurrence_count_mean": _safe_float(
+                    native_scip_summary.get("reference_occurrence_count_mean"), 0.0
+                ),
+                "symbol_definition_count_mean": _safe_float(
+                    native_scip_summary.get("symbol_definition_count_mean"), 0.0
+                ),
+            },
+        }
+    gates.append({"name": "retrieval_frontier", **retrieval_frontier_summary})
 
     classification = str(stability_payload.get("classification", "no_data") or "no_data")
     stability_ok = bool(stability_payload.get("passed", False)) and classification == "stable_pass"
@@ -213,6 +271,7 @@ def evaluate_promotion(
     eligible = (
         trend_ok
         and retrieval_control_plane_ok
+        and retrieval_frontier_ok
         and stability_ok
         and comparison_ok
         and not threshold_failures

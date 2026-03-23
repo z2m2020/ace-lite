@@ -407,6 +407,14 @@ class AceOrchestrator:
         return payload
 
     def _default_validation_payload(self) -> dict[str, Any]:
+        result_payload = build_validation_result_v1(
+            selected_tests=[],
+            available_probes=["compile", "import", "tests"],
+            sandboxed=False,
+            runner="disabled",
+            replay_key="",
+            status="skipped",
+        ).as_dict()
         return {
             "enabled": False,
             "reason": "disabled",
@@ -429,13 +437,8 @@ class AceOrchestrator:
                 "elapsed_ms": 0.0,
                 "time_budget_ms": 0,
             },
-            "result": build_validation_result_v1(
-                selected_tests=[],
-                sandboxed=False,
-                runner="disabled",
-                replay_key="",
-                status="skipped",
-            ).as_dict(),
+            "probes": dict(result_payload.get("probes", {})),
+            "result": result_payload,
             "patch_artifact_present": False,
             "policy_name": "general",
             "policy_version": str(self._config.retrieval.policy_version),

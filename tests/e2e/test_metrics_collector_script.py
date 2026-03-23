@@ -57,6 +57,11 @@ def _validation_rich_summary(
     noise: float,
     validation_tests: float,
     retrieval_control_plane_gate_summary: dict[str, object] | None = None,
+    retrieval_frontier_gate_summary: dict[str, object] | None = None,
+    deep_symbol_summary: dict[str, object] | None = None,
+    native_scip_summary: dict[str, object] | None = None,
+    validation_probe_summary: dict[str, object] | None = None,
+    source_plan_validation_feedback_summary: dict[str, object] | None = None,
 ) -> None:
     payload = {
         "metrics": {
@@ -72,6 +77,18 @@ def _validation_rich_summary(
     if retrieval_control_plane_gate_summary is not None:
         payload["retrieval_control_plane_gate_summary"] = (
             retrieval_control_plane_gate_summary
+        )
+    if retrieval_frontier_gate_summary is not None:
+        payload["retrieval_frontier_gate_summary"] = retrieval_frontier_gate_summary
+    if deep_symbol_summary is not None:
+        payload["deep_symbol_summary"] = deep_symbol_summary
+    if native_scip_summary is not None:
+        payload["native_scip_summary"] = native_scip_summary
+    if validation_probe_summary is not None:
+        payload["validation_probe_summary"] = validation_probe_summary
+    if source_plan_validation_feedback_summary is not None:
+        payload["source_plan_validation_feedback_summary"] = (
+            source_plan_validation_feedback_summary
         )
     payload_path.write_text(
         json.dumps(payload),
@@ -177,6 +194,22 @@ def test_metrics_collector_main_writes_validation_rich_section(
         precision=0.425,
         noise=0.575,
         validation_tests=5.0,
+        validation_probe_summary={
+            "validation_test_count": 5.0,
+            "probe_enabled_ratio": 0.5,
+            "probe_executed_count_mean": 1.0,
+            "probe_failure_rate": 0.0,
+        },
+        source_plan_validation_feedback_summary={
+            "present_ratio": 1.0,
+            "issue_count_mean": 0.0,
+            "failure_rate": 0.0,
+            "probe_issue_count_mean": 0.0,
+            "probe_executed_count_mean": 1.0,
+            "probe_failure_rate": 0.0,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 1.0,
+        },
     )
     _validation_rich_summary(
         validation_current,
@@ -199,6 +232,41 @@ def test_metrics_collector_main_writes_validation_rich_section(
             "latency_p95_ms_threshold": 850.0,
             "latency_p95_ms_passed": True,
             "gate_passed": True,
+        },
+        retrieval_frontier_gate_summary={
+            "deep_symbol_case_recall": 0.92,
+            "native_scip_loaded_rate": 0.76,
+            "precision_at_k": 0.43,
+            "noise_rate": 0.57,
+            "failed_checks": ["precision_at_k", "noise_rate"],
+            "gate_passed": False,
+        },
+        deep_symbol_summary={
+            "case_count": 2.0,
+            "recall": 0.92,
+        },
+        native_scip_summary={
+            "loaded_rate": 0.76,
+            "document_count_mean": 5.0,
+            "definition_occurrence_count_mean": 7.0,
+            "reference_occurrence_count_mean": 11.0,
+            "symbol_definition_count_mean": 3.0,
+        },
+        validation_probe_summary={
+            "validation_test_count": 5.0,
+            "probe_enabled_ratio": 0.67,
+            "probe_executed_count_mean": 1.5,
+            "probe_failure_rate": 0.1,
+        },
+        source_plan_validation_feedback_summary={
+            "present_ratio": 1.0,
+            "issue_count_mean": 0.25,
+            "failure_rate": 0.2,
+            "probe_issue_count_mean": 0.25,
+            "probe_executed_count_mean": 1.5,
+            "probe_failure_rate": 0.1,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 0.75,
         },
     )
     output_path = tmp_path / "report.json"
@@ -241,6 +309,53 @@ def test_metrics_collector_main_writes_validation_rich_section(
     assert payload["validation_rich_gate_summary"][
         "adaptive_router_shadow_coverage"
     ] == 0.85
+    assert payload["validation_rich_frontier_gate_summary"]["gate_passed"] is False
+    assert payload["validation_rich_frontier_gate_summary"][
+        "native_scip_loaded_rate"
+    ] == 0.76
+    assert payload["validation_rich_deep_symbol_summary"] == {
+        "case_count": 2.0,
+        "recall": 0.92,
+    }
+    assert payload["validation_rich_native_scip_summary"] == {
+        "loaded_rate": 0.76,
+        "document_count_mean": 5.0,
+        "definition_occurrence_count_mean": 7.0,
+        "reference_occurrence_count_mean": 11.0,
+        "symbol_definition_count_mean": 3.0,
+    }
+    assert payload["validation_rich_validation_probe_summary"] == {
+        "validation_test_count": 5.0,
+        "probe_enabled_ratio": 0.67,
+        "probe_executed_count_mean": 1.5,
+        "probe_failure_rate": 0.1,
+    }
+    assert payload["validation_rich_source_plan_validation_feedback_summary"] == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 0.25,
+        "failure_rate": 0.2,
+        "probe_issue_count_mean": 0.25,
+        "probe_executed_count_mean": 1.5,
+        "probe_failure_rate": 0.1,
+        "selected_test_count_mean": 1.0,
+        "executed_test_count_mean": 0.75,
+    }
+    assert payload["validation_rich_previous_validation_probe_summary"] == {
+        "validation_test_count": 5.0,
+        "probe_enabled_ratio": 0.5,
+        "probe_executed_count_mean": 1.0,
+        "probe_failure_rate": 0.0,
+    }
+    assert payload["validation_rich_previous_source_plan_validation_feedback_summary"] == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 0.0,
+        "failure_rate": 0.0,
+        "probe_issue_count_mean": 0.0,
+        "probe_executed_count_mean": 1.0,
+        "probe_failure_rate": 0.0,
+        "selected_test_count_mean": 1.0,
+        "executed_test_count_mean": 1.0,
+    }
     assert payload["validation_rich_regressions"] == []
 
 

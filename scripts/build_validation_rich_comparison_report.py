@@ -7,7 +7,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ace_lite.benchmark_ops import read_benchmark_retrieval_control_plane_gate_summary
+from ace_lite.benchmark_ops import (
+    read_benchmark_deep_symbol_summary,
+    read_benchmark_native_scip_summary,
+    read_benchmark_retrieval_control_plane_gate_summary,
+    read_benchmark_retrieval_frontier_gate_summary,
+    read_benchmark_source_plan_validation_feedback_summary,
+    read_benchmark_validation_probe_summary,
+)
 
 METRIC_NAMES = (
     "task_success_rate",
@@ -68,6 +75,15 @@ def _extract_summary(*, label: str, path: Path, payload: dict[str, Any]) -> dict
         },
         "retrieval_control_plane_gate_summary": (
             read_benchmark_retrieval_control_plane_gate_summary(path)
+        ),
+        "retrieval_frontier_gate_summary": (
+            read_benchmark_retrieval_frontier_gate_summary(path)
+        ),
+        "deep_symbol_summary": read_benchmark_deep_symbol_summary(path),
+        "native_scip_summary": read_benchmark_native_scip_summary(path),
+        "validation_probe_summary": read_benchmark_validation_probe_summary(path),
+        "source_plan_validation_feedback_summary": (
+            read_benchmark_source_plan_validation_feedback_summary(path)
         ),
     }
 
@@ -194,6 +210,148 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 gain=_safe_float(gate.get("risk_upgrade_precision_gain", 0.0), 0.0),
                 latency=_safe_float(gate.get("latency_p95_ms", 0.0), 0.0),
                 failed_checks=failed_checks or "(none)",
+            )
+        )
+
+    lines.extend(["", "## Q3 Retrieval Frontier Gate", ""])
+    lines.append(
+        "| Label | Gate Passed | Deep Symbol Recall | Native SCIP Loaded | Precision at k | Noise Rate | Failed Checks |"
+    )
+    lines.append("| --- | :---: | ---: | ---: | ---: | ---: | --- |")
+    for row in (baseline, current, tuned):
+        if not isinstance(row, dict):
+            continue
+        frontier_gate_raw = row.get("retrieval_frontier_gate_summary")
+        frontier_gate = (
+            frontier_gate_raw if isinstance(frontier_gate_raw, dict) else {}
+        )
+        frontier_failed_checks_raw = frontier_gate.get("failed_checks", [])
+        frontier_failed_checks = (
+            ", ".join(
+                str(item) for item in frontier_failed_checks_raw if str(item).strip()
+            )
+            if isinstance(frontier_failed_checks_raw, list)
+            else ""
+        )
+        lines.append(
+            "| {label} | {gate_passed} | {recall:.4f} | {native_scip:.4f} | {precision:.4f} | {noise:.4f} | {failed_checks} |".format(
+                label=str(row.get("label", "")),
+                gate_passed=(
+                    "yes" if bool(frontier_gate.get("gate_passed", False)) else "no"
+                ),
+                recall=_safe_float(
+                    frontier_gate.get("deep_symbol_case_recall", 0.0), 0.0
+                ),
+                native_scip=_safe_float(
+                    frontier_gate.get("native_scip_loaded_rate", 0.0), 0.0
+                ),
+                precision=_safe_float(frontier_gate.get("precision_at_k", 0.0), 0.0),
+                noise=_safe_float(frontier_gate.get("noise_rate", 0.0), 0.0),
+                failed_checks=frontier_failed_checks or "(none)",
+            )
+        )
+
+    lines.extend(["", "## Q3 Frontier Evidence", ""])
+    lines.append(
+        "| Label | Deep Symbol Cases | Deep Symbol Recall | Native SCIP Loaded | Document Mean | Definition Mean | Reference Mean | Symbol Definition Mean |"
+    )
+    lines.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    for row in (baseline, current, tuned):
+        if not isinstance(row, dict):
+            continue
+        deep_symbol_raw = row.get("deep_symbol_summary")
+        deep_symbol = deep_symbol_raw if isinstance(deep_symbol_raw, dict) else {}
+        native_scip_raw = row.get("native_scip_summary")
+        native_scip = native_scip_raw if isinstance(native_scip_raw, dict) else {}
+        lines.append(
+            "| {label} | {case_count:.4f} | {recall:.4f} | {loaded:.4f} | {document:.4f} | {definition:.4f} | {reference:.4f} | {symbol:.4f} |".format(
+                label=str(row.get("label", "")),
+                case_count=_safe_float(deep_symbol.get("case_count", 0.0), 0.0),
+                recall=_safe_float(deep_symbol.get("recall", 0.0), 0.0),
+                loaded=_safe_float(native_scip.get("loaded_rate", 0.0), 0.0),
+                document=_safe_float(
+                    native_scip.get("document_count_mean", 0.0), 0.0
+                ),
+                definition=_safe_float(
+                    native_scip.get("definition_occurrence_count_mean", 0.0), 0.0
+                ),
+                reference=_safe_float(
+                    native_scip.get("reference_occurrence_count_mean", 0.0), 0.0
+                ),
+                symbol=_safe_float(
+                    native_scip.get("symbol_definition_count_mean", 0.0), 0.0
+                ),
+            )
+        )
+
+    lines.extend(["", "## Q4 Validation Probe Summary", ""])
+    lines.append(
+        "| Label | Validation Test Count | Probe Enabled Ratio | Probe Executed Count Mean | Probe Failure Rate |"
+    )
+    lines.append("| --- | ---: | ---: | ---: | ---: |")
+    for row in (baseline, current, tuned):
+        if not isinstance(row, dict):
+            continue
+        validation_probe_raw = row.get("validation_probe_summary")
+        validation_probe = (
+            validation_probe_raw if isinstance(validation_probe_raw, dict) else {}
+        )
+        lines.append(
+            "| {label} | {validation_test_count:.4f} | {probe_enabled_ratio:.4f} | {probe_executed_count_mean:.4f} | {probe_failure_rate:.4f} |".format(
+                label=str(row.get("label", "")),
+                validation_test_count=_safe_float(
+                    validation_probe.get("validation_test_count", 0.0), 0.0
+                ),
+                probe_enabled_ratio=_safe_float(
+                    validation_probe.get("probe_enabled_ratio", 0.0), 0.0
+                ),
+                probe_executed_count_mean=_safe_float(
+                    validation_probe.get("probe_executed_count_mean", 0.0), 0.0
+                ),
+                probe_failure_rate=_safe_float(
+                    validation_probe.get("probe_failure_rate", 0.0), 0.0
+                ),
+            )
+        )
+
+    lines.extend(["", "## Q4 Source Plan Validation Feedback Summary", ""])
+    lines.append(
+        "| Label | Present Ratio | Failure Rate | Issue Count Mean | Probe Issue Count Mean | Probe Executed Count Mean | Selected Test Count Mean | Executed Test Count Mean |"
+    )
+    lines.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    for row in (baseline, current, tuned):
+        if not isinstance(row, dict):
+            continue
+        source_plan_feedback_raw = row.get("source_plan_validation_feedback_summary")
+        source_plan_feedback = (
+            source_plan_feedback_raw
+            if isinstance(source_plan_feedback_raw, dict)
+            else {}
+        )
+        lines.append(
+            "| {label} | {present_ratio:.4f} | {failure_rate:.4f} | {issue_count_mean:.4f} | {probe_issue_count_mean:.4f} | {probe_executed_count_mean:.4f} | {selected_test_count_mean:.4f} | {executed_test_count_mean:.4f} |".format(
+                label=str(row.get("label", "")),
+                present_ratio=_safe_float(
+                    source_plan_feedback.get("present_ratio", 0.0), 0.0
+                ),
+                failure_rate=_safe_float(
+                    source_plan_feedback.get("failure_rate", 0.0), 0.0
+                ),
+                issue_count_mean=_safe_float(
+                    source_plan_feedback.get("issue_count_mean", 0.0), 0.0
+                ),
+                probe_issue_count_mean=_safe_float(
+                    source_plan_feedback.get("probe_issue_count_mean", 0.0), 0.0
+                ),
+                probe_executed_count_mean=_safe_float(
+                    source_plan_feedback.get("probe_executed_count_mean", 0.0), 0.0
+                ),
+                selected_test_count_mean=_safe_float(
+                    source_plan_feedback.get("selected_test_count_mean", 0.0), 0.0
+                ),
+                executed_test_count_mean=_safe_float(
+                    source_plan_feedback.get("executed_test_count_mean", 0.0), 0.0
+                ),
             )
         )
 

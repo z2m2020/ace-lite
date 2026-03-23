@@ -322,6 +322,14 @@ def build_plan_timeout_fallback_payload(
         },
     }
 
+    validation_result = build_validation_result_v1(
+        selected_tests=[],
+        available_probes=["compile", "import", "tests"],
+        sandboxed=False,
+        runner="timeout-fallback",
+        replay_key="",
+        status="skipped",
+    ).as_dict()
     validation_payload: dict[str, Any] = {
         "enabled": False,
         "reason": "disabled",
@@ -344,13 +352,8 @@ def build_plan_timeout_fallback_payload(
             "elapsed_ms": 0.0,
             "time_budget_ms": 0,
         },
-        "result": build_validation_result_v1(
-            selected_tests=[],
-            sandboxed=False,
-            runner="timeout-fallback",
-            replay_key="",
-            status="skipped",
-        ).as_dict(),
+        "probes": dict(validation_result.get("probes", {})),
+        "result": validation_result,
         "patch_artifact_present": False,
         "policy_name": str(policy_name),
         "policy_version": str(policy_version),

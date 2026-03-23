@@ -5,11 +5,15 @@ from ace_lite.benchmark.report_metrics import ALL_METRIC_ORDER, COMPARABLE_METRI
 from ace_lite.benchmark.scoring import (
     aggregate_metrics,
     build_comparison_lane_summary,
+    build_deep_symbol_summary,
     build_feedback_loop_summary,
     build_ltm_explainability_summary,
     build_missing_context_risk_summary,
+    build_native_scip_summary,
     build_retrieval_frontier_gate_summary,
     build_retrieval_control_plane_gate_summary,
+    build_validation_probe_summary,
+    build_source_plan_validation_feedback_summary,
     compare_metrics,
     detect_regression,
     evaluate_case_result,
@@ -113,6 +117,20 @@ def test_evaluate_case_result_and_aggregate() -> None:
         },
         "source_plan": {
             "validation_tests": ["tests.test_auth::test_token"],
+            "steps": [
+                {
+                    "stage": "validate",
+                    "validation_feedback_summary": {
+                        "status": "failed",
+                        "issue_count": 2,
+                        "probe_status": "failed",
+                        "probe_issue_count": 1,
+                        "probe_executed_count": 1,
+                        "selected_test_count": 1,
+                        "executed_test_count": 1,
+                    },
+                }
+            ],
             "ltm_constraint_summary": {
                 "selected_count": 1,
                 "constraint_count": 0,
@@ -166,6 +184,16 @@ def test_evaluate_case_result_and_aggregate() -> None:
             },
             "stage_metrics": [
                 {"stage": "repomap", "elapsed_ms": 4.5},
+                {
+                    "stage": "validation",
+                    "elapsed_ms": 1.2,
+                    "tags": {
+                        "validation_probe_enabled": True,
+                        "validation_probe_status": "failed",
+                        "validation_probe_executed_count": 2,
+                        "validation_probe_issue_count": 1,
+                    },
+                },
             ]
         },
     }
@@ -188,6 +216,21 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert row["repomap_cache_hit"] == 1.0
     assert row["repomap_precompute_hit"] == 0.0
     assert row["validation_test_count"] == 1
+    assert row["validation_probe_enabled"] == 1.0
+    assert row["validation_probe_status"] == "failed"
+    assert row["validation_probe_executed_count"] == 2.0
+    assert row["validation_probe_issue_count"] == 1.0
+    assert row["validation_probe_failed"] == 1.0
+    assert row["source_plan_validation_feedback_present"] == 1.0
+    assert row["source_plan_validation_feedback_status"] == "failed"
+    assert row["source_plan_validation_feedback_issue_count"] == 2.0
+    assert row["source_plan_validation_feedback_failed"] == 1.0
+    assert row["source_plan_validation_feedback_probe_status"] == "failed"
+    assert row["source_plan_validation_feedback_probe_issue_count"] == 1.0
+    assert row["source_plan_validation_feedback_probe_executed_count"] == 1.0
+    assert row["source_plan_validation_feedback_probe_failed"] == 1.0
+    assert row["source_plan_validation_feedback_selected_test_count"] == 1.0
+    assert row["source_plan_validation_feedback_executed_test_count"] == 1.0
     assert row["task_success_hit"] == 1.0
     assert row["task_success_mode"] == "positive"
     assert row["evidence_insufficient"] == 0.0
@@ -573,6 +616,20 @@ def test_evaluate_case_result_and_aggregate_preserves_extended_metric_contract()
         },
         "source_plan": {
             "validation_tests": ["tests.test_auth::test_token"],
+            "steps": [
+                {
+                    "stage": "validate",
+                    "validation_feedback_summary": {
+                        "status": "failed",
+                        "issue_count": 2,
+                        "probe_status": "failed",
+                        "probe_issue_count": 1,
+                        "probe_executed_count": 1,
+                        "selected_test_count": 1,
+                        "executed_test_count": 1,
+                    },
+                }
+            ],
             "ltm_constraint_summary": {
                 "selected_count": 1,
                 "constraint_count": 0,
@@ -615,7 +672,19 @@ def test_evaluate_case_result_and_aggregate_preserves_extended_metric_contract()
                 "reason": "hit",
                 "stored": False,
             },
-            "stage_metrics": [{"stage": "repomap", "elapsed_ms": 4.5}],
+            "stage_metrics": [
+                {"stage": "repomap", "elapsed_ms": 4.5},
+                {
+                    "stage": "validation",
+                    "elapsed_ms": 1.2,
+                    "tags": {
+                        "validation_probe_enabled": True,
+                        "validation_probe_status": "failed",
+                        "validation_probe_executed_count": 2,
+                        "validation_probe_issue_count": 1,
+                    },
+                },
+            ],
         },
     }
 
@@ -675,6 +744,19 @@ def test_evaluate_case_result_and_aggregate_preserves_extended_metric_contract()
     assert metrics["plan_replay_cache_enabled_ratio"] == 1.0
     assert metrics["plan_replay_cache_hit_ratio"] == 1.0
     assert metrics["plan_replay_cache_stale_hit_safe_ratio"] == 1.0
+    assert metrics["validation_probe_enabled_ratio"] == 1.0
+    assert metrics["validation_probe_executed_count_mean"] == 2.0
+    assert metrics["validation_probe_failure_rate"] == 1.0
+    assert metrics["source_plan_validation_feedback_present_ratio"] == 1.0
+    assert metrics["source_plan_validation_feedback_issue_count_mean"] == 2.0
+    assert metrics["source_plan_validation_feedback_failure_rate"] == 1.0
+    assert metrics["source_plan_validation_feedback_probe_issue_count_mean"] == 1.0
+    assert (
+        metrics["source_plan_validation_feedback_probe_executed_count_mean"] == 1.0
+    )
+    assert metrics["source_plan_validation_feedback_probe_failure_rate"] == 1.0
+    assert metrics["source_plan_validation_feedback_selected_test_count_mean"] == 1.0
+    assert metrics["source_plan_validation_feedback_executed_test_count_mean"] == 1.0
     assert metrics["source_plan_direct_evidence_ratio"] == 1.0
     assert metrics["source_plan_graph_closure_preference_enabled_ratio"] == 1.0
     assert metrics["source_plan_graph_closure_bonus_candidate_count_mean"] == 2.0
@@ -1488,6 +1570,9 @@ def test_aggregate_metrics_reports_latency_median() -> None:
         "chunks_per_file_mean": 1.0,
         "chunk_budget_used": 10.0,
         "validation_test_count": 2.0,
+        "validation_probe_enabled": 1.0,
+        "validation_probe_executed_count": 2.0,
+        "validation_probe_failed": 0.0,
     }
     metrics = aggregate_metrics(
         [
@@ -1501,6 +1586,9 @@ def test_aggregate_metrics_reports_latency_median() -> None:
     assert metrics["latency_p95_ms"] == 40.0
     assert metrics["repomap_latency_median_ms"] == 3.0
     assert metrics["repomap_latency_p95_ms"] == 3.0
+    assert metrics["validation_probe_enabled_ratio"] == 1.0
+    assert metrics["validation_probe_executed_count_mean"] == 2.0
+    assert metrics["validation_probe_failure_rate"] == 0.0
 
 
 def test_aggregate_metrics_empty_uses_registry_order() -> None:
@@ -2698,3 +2786,81 @@ def test_build_retrieval_frontier_gate_summary_reports_multi_check_failures() ->
     assert summary["precision_at_k_passed"] is False
     assert summary["noise_rate_passed"] is False
     assert summary["gate_passed"] is False
+
+
+def test_build_deep_symbol_summary_rounds_case_count_and_recall() -> None:
+    summary = build_deep_symbol_summary(
+        metrics={
+            "deep_symbol_case_count": 3.1234567,
+            "deep_symbol_case_recall": 0.9876543,
+        }
+    )
+
+    assert summary == {
+        "case_count": 3.123457,
+        "recall": 0.987654,
+    }
+
+
+def test_build_native_scip_summary_rounds_core_metrics() -> None:
+    summary = build_native_scip_summary(
+        metrics={
+            "native_scip_loaded_rate": 0.8123456,
+            "native_scip_document_count_mean": 5.1234567,
+            "native_scip_definition_occurrence_count_mean": 7.1234567,
+            "native_scip_reference_occurrence_count_mean": 11.1234567,
+            "native_scip_symbol_definition_count_mean": 3.1234567,
+        }
+    )
+
+    assert summary == {
+        "loaded_rate": 0.812346,
+        "document_count_mean": 5.123457,
+        "definition_occurrence_count_mean": 7.123457,
+        "reference_occurrence_count_mean": 11.123457,
+        "symbol_definition_count_mean": 3.123457,
+    }
+
+
+def test_build_validation_probe_summary_rounds_core_metrics() -> None:
+    summary = build_validation_probe_summary(
+        metrics={
+            "validation_test_count": 1.2345678,
+            "validation_probe_enabled_ratio": 0.8765432,
+            "validation_probe_executed_count_mean": 2.3456789,
+            "validation_probe_failure_rate": 0.4567891,
+        }
+    )
+
+    assert summary == {
+        "validation_test_count": 1.234568,
+        "probe_enabled_ratio": 0.876543,
+        "probe_executed_count_mean": 2.345679,
+        "probe_failure_rate": 0.456789,
+    }
+
+
+def test_build_source_plan_validation_feedback_summary_rounds_core_metrics() -> None:
+    summary = build_source_plan_validation_feedback_summary(
+        metrics={
+            "source_plan_validation_feedback_present_ratio": 1.0,
+            "source_plan_validation_feedback_issue_count_mean": 2.3456789,
+            "source_plan_validation_feedback_failure_rate": 0.5,
+            "source_plan_validation_feedback_probe_issue_count_mean": 1.2345678,
+            "source_plan_validation_feedback_probe_executed_count_mean": 1.9876543,
+            "source_plan_validation_feedback_probe_failure_rate": 0.4567891,
+            "source_plan_validation_feedback_selected_test_count_mean": 1.2345678,
+            "source_plan_validation_feedback_executed_test_count_mean": 1.1234567,
+        }
+    )
+
+    assert summary == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 2.345679,
+        "failure_rate": 0.5,
+        "probe_issue_count_mean": 1.234568,
+        "probe_executed_count_mean": 1.987654,
+        "probe_failure_rate": 0.456789,
+        "selected_test_count_mean": 1.234568,
+        "executed_test_count_mean": 1.123457,
+    }

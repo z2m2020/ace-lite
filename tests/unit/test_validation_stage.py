@@ -62,6 +62,22 @@ class _FakeBroker:
         }
 
 
+class _CleanBroker(_FakeBroker):
+    def collect(self, *, root: str | Path, candidate_files: list[dict[str, object]], top_n: int) -> dict[str, object]:
+        self.collect_calls.append(
+            {
+                "root": str(root),
+                "candidate_files": list(candidate_files),
+                "top_n": top_n,
+            }
+        )
+        return {
+            "count": 0,
+            "diagnostics": [],
+            "errors": [],
+        }
+
+
 def test_run_validation_stage_fail_open_when_disabled(tmp_path: Path) -> None:
     payload = run_validation_stage(
         root=str(tmp_path),
@@ -79,6 +95,8 @@ def test_run_validation_stage_fail_open_when_disabled(tmp_path: Path) -> None:
     assert payload["enabled"] is False
     assert payload["reason"] == "disabled"
     assert payload["patch_artifact_present"] is False
+    assert payload["probes"]["status"] == "disabled"
+    assert payload["probes"]["available"] == ["compile", "import", "tests"]
     assert payload["result"]["summary"]["status"] == "skipped"
 
 
@@ -101,6 +119,8 @@ def test_run_validation_stage_fail_open_when_patch_artifact_missing(tmp_path: Pa
     assert payload["enabled"] is True
     assert payload["reason"] == "patch_artifact_missing"
     assert payload["patch_artifact_present"] is False
+    assert payload["probes"]["status"] == "disabled"
+    assert payload["probes"]["available"] == ["compile", "import", "tests"]
     assert payload["result"]["summary"]["status"] == "skipped"
     assert broker.collect_calls == []
     assert broker.collect_xref_calls == []
@@ -162,6 +182,10 @@ def test_run_validation_stage_collects_diagnostics_in_sandbox(tmp_path: Path) ->
     assert payload["sandbox"]["patch_applied"] is True
     assert payload["sandbox"]["cleanup_ok"] is True
     assert payload["diagnostic_count"] == 1
+    assert payload["probes"]["status"] == "passed"
+    assert payload["probes"]["available"] == ["compile", "import", "tests"]
+    assert payload["probes"]["executed_count"] == 1
+    assert payload["probes"]["issue_count"] == 0
     assert payload["result"]["summary"]["status"] == "failed"
     assert payload["result"]["syntax"]["issue_count"] == 1
     assert payload["xref"]["count"] == 1
@@ -169,3 +193,139 @@ def test_run_validation_stage_collects_diagnostics_in_sandbox(tmp_path: Path) ->
     assert len(broker.collect_xref_calls) == 1
     sandbox_root = Path(str(broker.collect_calls[0]["root"]))
     assert sandbox_root.exists() is False
+
+
+def test_run_validation_stage_reports_compile_probe_failure(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    source_path = repo_root / "src" / "app.py"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_text("print('old')\n", encoding="utf-8")
+
+    patch_artifact = build_patch_artifact_contract_v1(
+        operations=[
+            {
+                "op": "update",
+                "path": "src/app.py",
+                "before_sha256": "before",
+                "after_sha256": "after",
+                "hunk_count": 1,
+            }
+        ],
+        rollback_anchors=[
+            {"path": "src/app.py", "strategy": "git_restore", "anchor": "HEAD"}
+        ],
+        patch_text="\n".join(
+            [
+                "diff --git a/src/app.py b/src/app.py",
+                "--- a/src/app.py",
+                "+++ b/src/app.py",
+                "@@ -1 +1 @@",
+                "-print('old')",
+                "+print(",
+                "",
+            ]
+        ),
+    ).as_dict()
+    broker = _CleanBroker()
+
+    payload = run_validation_stage(
+        root=str(repo_root),
+        query="validate patch",
+        source_plan_stage={
+            "candidate_files": [{"path": "src/app.py", "language": "python"}],
+            "validation_tests": ["pytest -q tests/unit/test_validation_stage.py"],
+        },
+        index_stage={},
+        enabled=True,
+        include_xref=False,
+        top_n=3,
+        xref_top_n=2,
+        sandbox_timeout_seconds=5.0,
+        broker=broker,
+        patch_artifact=patch_artifact,
+    )
+
+    assert payload["reason"] == "ok"
+    assert payload["diagnostic_count"] == 0
+    assert payload["probes"]["status"] == "failed"
+    assert payload["probes"]["executed_count"] == 1
+    assert payload["probes"]["issue_count"] == 1
+    assert payload["result"]["summary"]["status"] == "failed"
+    assert payload["result"]["summary"]["issue_count"] == 1
+    assert payload["result"]["probes"]["results"][0]["name"] == "compile"
+    assert payload["result"]["probes"]["results"][0]["status"] == "failed"
+
+
+def test_run_validation_stage_executes_pytest_probe_when_test_path_exists(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    source_path = repo_root / "src" / "app.py"
+    test_path = repo_root / "tests" / "test_sample.py"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    test_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_text("print('old')\n", encoding="utf-8")
+    test_path.write_text(
+        "\n".join(
+            [
+                "def test_smoke() -> None:",
+                "    assert 1 + 1 == 2",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    patch_artifact = build_patch_artifact_contract_v1(
+        operations=[
+            {
+                "op": "update",
+                "path": "src/app.py",
+                "before_sha256": "before",
+                "after_sha256": "after",
+                "hunk_count": 1,
+            }
+        ],
+        rollback_anchors=[
+            {"path": "src/app.py", "strategy": "git_restore", "anchor": "HEAD"}
+        ],
+        patch_text="\n".join(
+            [
+                "diff --git a/src/app.py b/src/app.py",
+                "--- a/src/app.py",
+                "+++ b/src/app.py",
+                "@@ -1 +1 @@",
+                "-print('old')",
+                "+print('new')",
+                "",
+            ]
+        ),
+    ).as_dict()
+    broker = _CleanBroker()
+
+    payload = run_validation_stage(
+        root=str(repo_root),
+        query="validate patch",
+        source_plan_stage={
+            "candidate_files": [{"path": "src/app.py", "language": "python"}],
+            "validation_tests": ["pytest -q tests/test_sample.py"],
+        },
+        index_stage={},
+        enabled=True,
+        include_xref=False,
+        top_n=3,
+        xref_top_n=2,
+        sandbox_timeout_seconds=5.0,
+        broker=broker,
+        patch_artifact=patch_artifact,
+    )
+
+    assert payload["reason"] == "ok"
+    assert payload["diagnostic_count"] == 0
+    assert payload["probes"]["status"] == "passed"
+    assert payload["probes"]["executed_count"] == 2
+    assert payload["probes"]["issue_count"] == 0
+    assert {item["name"] for item in payload["result"]["probes"]["results"]} == {
+        "compile",
+        "tests",
+    }
+    assert payload["result"]["tests"]["executed"] == ["pytest -q tests/test_sample.py"]
+    assert payload["result"]["summary"]["status"] == "passed"

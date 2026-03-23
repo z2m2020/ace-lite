@@ -411,9 +411,224 @@ def _append_graph_lookup_summary(lines: list[str], metrics: dict[str, Any]) -> N
     lines.append("")
 
 
-def _append_deep_symbol_summary(lines: list[str], metrics: dict[str, Any]) -> None:
-    case_count = float(metrics.get("deep_symbol_case_count", 0.0) or 0.0)
-    recall = float(metrics.get("deep_symbol_case_recall", 0.0) or 0.0)
+def _append_validation_probe_summary(lines: list[str], results: dict[str, Any]) -> None:
+    summary_raw = results.get("validation_probe_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    metrics = _normalize_metrics(results.get("metrics"))
+
+    validation_test_count = float(
+        summary.get("validation_test_count", metrics.get("validation_test_count", 0.0))
+        or 0.0
+    )
+    probe_enabled_ratio = float(
+        summary.get(
+            "probe_enabled_ratio",
+            metrics.get("validation_probe_enabled_ratio", 0.0),
+        )
+        or 0.0
+    )
+    probe_executed_count_mean = float(
+        summary.get(
+            "probe_executed_count_mean",
+            metrics.get("validation_probe_executed_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    probe_failure_rate = float(
+        summary.get(
+            "probe_failure_rate",
+            metrics.get("validation_probe_failure_rate", 0.0),
+        )
+        or 0.0
+    )
+    if (
+        validation_test_count <= 0.0
+        and probe_enabled_ratio <= 0.0
+        and probe_executed_count_mean <= 0.0
+        and probe_failure_rate <= 0.0
+    ):
+        return
+
+    lines.append("## Validation Probe Summary")
+    lines.append("")
+    lines.append(
+        "- Validation tests mean: {tests}; probe enabled ratio: {enabled}".format(
+            tests=_format_metric("validation_test_count", validation_test_count),
+            enabled=_format_metric(
+                "validation_probe_enabled_ratio",
+                probe_enabled_ratio,
+            ),
+        )
+    )
+    lines.append(
+        "- Probe executed count mean: {executed}; failure rate: {failure}".format(
+            executed=_format_metric(
+                "validation_probe_executed_count_mean",
+                probe_executed_count_mean,
+            ),
+            failure=_format_metric(
+                "validation_probe_failure_rate",
+                probe_failure_rate,
+            ),
+        )
+    )
+    lines.append("")
+
+
+def _append_source_plan_validation_feedback_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("source_plan_validation_feedback_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    metrics = _normalize_metrics(results.get("metrics"))
+    present_ratio = float(
+        summary.get(
+            "present_ratio",
+            metrics.get("source_plan_validation_feedback_present_ratio", 0.0),
+        )
+        or 0.0
+    )
+    issue_count_mean = float(
+        summary.get(
+            "issue_count_mean",
+            metrics.get("source_plan_validation_feedback_issue_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    failure_rate = float(
+        summary.get(
+            "failure_rate",
+            metrics.get("source_plan_validation_feedback_failure_rate", 0.0),
+        )
+        or 0.0
+    )
+    probe_issue_count_mean = float(
+        summary.get(
+            "probe_issue_count_mean",
+            metrics.get(
+                "source_plan_validation_feedback_probe_issue_count_mean", 0.0
+            ),
+        )
+        or 0.0
+    )
+    probe_executed_count_mean = float(
+        summary.get(
+            "probe_executed_count_mean",
+            metrics.get(
+                "source_plan_validation_feedback_probe_executed_count_mean", 0.0
+            ),
+        )
+        or 0.0
+    )
+    probe_failure_rate = float(
+        summary.get(
+            "probe_failure_rate",
+            metrics.get(
+                "source_plan_validation_feedback_probe_failure_rate", 0.0
+            ),
+        )
+        or 0.0
+    )
+    selected_test_count_mean = float(
+        summary.get(
+            "selected_test_count_mean",
+            metrics.get(
+                "source_plan_validation_feedback_selected_test_count_mean", 0.0
+            ),
+        )
+        or 0.0
+    )
+    executed_test_count_mean = float(
+        summary.get(
+            "executed_test_count_mean",
+            metrics.get(
+                "source_plan_validation_feedback_executed_test_count_mean", 0.0
+            ),
+        )
+        or 0.0
+    )
+    if (
+        present_ratio <= 0.0
+        and issue_count_mean <= 0.0
+        and failure_rate <= 0.0
+        and probe_issue_count_mean <= 0.0
+        and probe_executed_count_mean <= 0.0
+        and probe_failure_rate <= 0.0
+        and selected_test_count_mean <= 0.0
+        and executed_test_count_mean <= 0.0
+    ):
+        return
+
+    lines.append("## Source Plan Validation Feedback Summary")
+    lines.append("")
+    lines.append(
+        "- Present ratio: {present}; issue count mean: {issues}; failure rate: {failure}".format(
+            present=_format_metric(
+                "source_plan_validation_feedback_present_ratio",
+                present_ratio,
+            ),
+            issues=_format_metric(
+                "source_plan_validation_feedback_issue_count_mean",
+                issue_count_mean,
+            ),
+            failure=_format_metric(
+                "source_plan_validation_feedback_failure_rate",
+                failure_rate,
+            ),
+        )
+    )
+    lines.append(
+        "- Probe issue count mean: {issues}; probe executed count mean: {executed}; probe failure rate: {failure}".format(
+            issues=_format_metric(
+                "source_plan_validation_feedback_probe_issue_count_mean",
+                probe_issue_count_mean,
+            ),
+            executed=_format_metric(
+                "source_plan_validation_feedback_probe_executed_count_mean",
+                probe_executed_count_mean,
+            ),
+            failure=_format_metric(
+                "source_plan_validation_feedback_probe_failure_rate",
+                probe_failure_rate,
+            ),
+        )
+    )
+    lines.append(
+        "- Selected test count mean: {selected}; executed test count mean: {executed}".format(
+            selected=_format_metric(
+                "source_plan_validation_feedback_selected_test_count_mean",
+                selected_test_count_mean,
+            ),
+            executed=_format_metric(
+                "source_plan_validation_feedback_executed_test_count_mean",
+                executed_test_count_mean,
+            ),
+        )
+    )
+    lines.append("")
+
+
+def _append_deep_symbol_summary(lines: list[str], results: dict[str, Any]) -> None:
+    metrics = _normalize_metrics(results.get("metrics"))
+    summary_raw = results.get("deep_symbol_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    frontier_gate_raw = results.get("retrieval_frontier_gate_summary")
+    frontier_gate: dict[str, Any] = (
+        frontier_gate_raw if isinstance(frontier_gate_raw, dict) else {}
+    )
+    case_count = float(
+        summary.get("case_count", metrics.get("deep_symbol_case_count", 0.0)) or 0.0
+    )
+    recall = float(
+        summary.get(
+            "recall",
+            frontier_gate.get(
+                "deep_symbol_case_recall",
+                metrics.get("deep_symbol_case_recall", 0.0),
+            ),
+        )
+        or 0.0
+    )
     if case_count <= 0.0 and recall <= 0.0:
         return
 
@@ -428,19 +643,51 @@ def _append_deep_symbol_summary(lines: list[str], metrics: dict[str, Any]) -> No
     lines.append("")
 
 
-def _append_native_scip_summary(lines: list[str], metrics: dict[str, Any]) -> None:
-    loaded_rate = float(metrics.get("native_scip_loaded_rate", 0.0) or 0.0)
+def _append_native_scip_summary(lines: list[str], results: dict[str, Any]) -> None:
+    metrics = _normalize_metrics(results.get("metrics"))
+    summary_raw = results.get("native_scip_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    frontier_gate_raw = results.get("retrieval_frontier_gate_summary")
+    frontier_gate: dict[str, Any] = (
+        frontier_gate_raw if isinstance(frontier_gate_raw, dict) else {}
+    )
+    loaded_rate = float(
+        summary.get(
+            "loaded_rate",
+            frontier_gate.get(
+                "native_scip_loaded_rate",
+                metrics.get("native_scip_loaded_rate", 0.0),
+            ),
+        )
+        or 0.0
+    )
     document_count_mean = float(
-        metrics.get("native_scip_document_count_mean", 0.0) or 0.0
+        summary.get(
+            "document_count_mean",
+            metrics.get("native_scip_document_count_mean", 0.0),
+        )
+        or 0.0
     )
     definition_occurrence_count_mean = float(
-        metrics.get("native_scip_definition_occurrence_count_mean", 0.0) or 0.0
+        summary.get(
+            "definition_occurrence_count_mean",
+            metrics.get("native_scip_definition_occurrence_count_mean", 0.0),
+        )
+        or 0.0
     )
     reference_occurrence_count_mean = float(
-        metrics.get("native_scip_reference_occurrence_count_mean", 0.0) or 0.0
+        summary.get(
+            "reference_occurrence_count_mean",
+            metrics.get("native_scip_reference_occurrence_count_mean", 0.0),
+        )
+        or 0.0
     )
     symbol_definition_count_mean = float(
-        metrics.get("native_scip_symbol_definition_count_mean", 0.0) or 0.0
+        summary.get(
+            "symbol_definition_count_mean",
+            metrics.get("native_scip_symbol_definition_count_mean", 0.0),
+        )
+        or 0.0
     )
     if (
         loaded_rate <= 0.0
@@ -461,31 +708,61 @@ def _append_native_scip_summary(lines: list[str], metrics: dict[str, Any]) -> No
     lines.append("")
     lines.append("| Metric | Value |")
     lines.append("| --- | ---: |")
-    for metric in (
-        "native_scip_document_count_mean",
-        "native_scip_definition_occurrence_count_mean",
-        "native_scip_reference_occurrence_count_mean",
-        "native_scip_symbol_definition_count_mean",
-    ):
+    metric_rows = (
+        ("native_scip_document_count_mean", document_count_mean),
+        (
+            "native_scip_definition_occurrence_count_mean",
+            definition_occurrence_count_mean,
+        ),
+        (
+            "native_scip_reference_occurrence_count_mean",
+            reference_occurrence_count_mean,
+        ),
+        ("native_scip_symbol_definition_count_mean", symbol_definition_count_mean),
+    )
+    for metric, value in metric_rows:
         lines.append(
-            f"| {metric} | {_format_metric(metric, metrics.get(metric, 0.0))} |"
+            f"| {metric} | {_format_metric(metric, value)} |"
         )
     lines.append("")
 
 
-def _append_repomap_seed_summary(lines: list[str], metrics: dict[str, Any]) -> None:
+def _append_repomap_seed_summary(lines: list[str], results: dict[str, Any]) -> None:
+    metrics = _normalize_metrics(results.get("metrics"))
+    summary_raw = results.get("repomap_seed_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+
     worktree_seed_mean = float(
-        metrics.get("repomap_worktree_seed_count_mean", 0.0) or 0.0
+        summary.get(
+            "worktree_seed_count_mean",
+            metrics.get("repomap_worktree_seed_count_mean", 0.0),
+        )
+        or 0.0
     )
     subgraph_seed_mean = float(
-        metrics.get("repomap_subgraph_seed_count_mean", 0.0) or 0.0
+        summary.get(
+            "subgraph_seed_count_mean",
+            metrics.get("repomap_subgraph_seed_count_mean", 0.0),
+        )
+        or 0.0
     )
     seed_candidates_mean = float(
-        metrics.get("repomap_seed_candidates_count_mean", 0.0) or 0.0
+        summary.get(
+            "seed_candidates_count_mean",
+            metrics.get("repomap_seed_candidates_count_mean", 0.0),
+        )
+        or 0.0
     )
-    cache_hit_ratio = float(metrics.get("repomap_cache_hit_ratio", 0.0) or 0.0)
+    cache_hit_ratio = float(
+        summary.get("cache_hit_ratio", metrics.get("repomap_cache_hit_ratio", 0.0))
+        or 0.0
+    )
     precompute_hit_ratio = float(
-        metrics.get("repomap_precompute_hit_ratio", 0.0) or 0.0
+        summary.get(
+            "precompute_hit_ratio",
+            metrics.get("repomap_precompute_hit_ratio", 0.0),
+        )
+        or 0.0
     )
     if (
         worktree_seed_mean <= 0.0
@@ -2358,9 +2635,11 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     _append_source_plan_granularity_summary(lines, metrics)
     _append_index_fusion_granularity_summary(lines, metrics)
     _append_graph_lookup_summary(lines, metrics)
-    _append_repomap_seed_summary(lines, metrics)
-    _append_deep_symbol_summary(lines, metrics)
-    _append_native_scip_summary(lines, metrics)
+    _append_validation_probe_summary(lines, results)
+    _append_source_plan_validation_feedback_summary(lines, results)
+    _append_repomap_seed_summary(lines, results)
+    _append_deep_symbol_summary(lines, results)
+    _append_native_scip_summary(lines, results)
     _append_retrieval_control_plane_gate_summary(lines, results)
     _append_retrieval_frontier_gate_summary(lines, results)
 

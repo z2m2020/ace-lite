@@ -5,7 +5,7 @@ import json
 import statistics
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
@@ -35,6 +35,13 @@ class IterationResult:
     gate_failures: list[dict[str, Any]]
     metrics: dict[str, float]
     retrieval_control_plane_gate_summary: dict[str, Any]
+    retrieval_frontier_gate_summary: dict[str, Any]
+    deep_symbol_summary: dict[str, float]
+    native_scip_summary: dict[str, float]
+    validation_probe_summary: dict[str, float] = field(default_factory=dict)
+    source_plan_validation_feedback_summary: dict[str, float] = field(
+        default_factory=dict
+    )
 
 
 def _resolve_path(*, root: Path, value: str) -> Path:
@@ -90,6 +97,40 @@ def _normalize_retrieval_control_plane_gate_summary(
             normalized[key] = [str(item) for item in value if str(item).strip()]
         else:
             normalized[key] = value
+    return normalized
+
+
+def _normalize_retrieval_frontier_gate_summary(
+    *, summary: dict[str, Any]
+) -> dict[str, Any]:
+    gate_raw = summary.get("retrieval_frontier_gate_summary")
+    gate = gate_raw if isinstance(gate_raw, dict) else {}
+    normalized: dict[str, Any] = {}
+    for key, value in gate.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(value, bool):
+            normalized[key] = bool(value)
+        elif isinstance(value, (int, float)):
+            normalized[key] = float(value)
+        elif isinstance(value, list):
+            normalized[key] = [str(item) for item in value if str(item).strip()]
+        else:
+            normalized[key] = value
+    return normalized
+
+
+def _normalize_numeric_summary(*, summary: dict[str, Any], key: str) -> dict[str, float]:
+    summary_raw = summary.get(key)
+    values = summary_raw if isinstance(summary_raw, dict) else {}
+    normalized: dict[str, float] = {}
+    for item_key, value in values.items():
+        if not isinstance(item_key, str):
+            continue
+        try:
+            normalized[item_key] = float(value or 0.0)
+        except Exception:
+            continue
     return normalized
 
 
@@ -236,6 +277,25 @@ def _run_validation_rich_iteration(
         retrieval_control_plane_gate_summary=_normalize_retrieval_control_plane_gate_summary(
             summary=summary
         ),
+        retrieval_frontier_gate_summary=_normalize_retrieval_frontier_gate_summary(
+            summary=summary
+        ),
+        deep_symbol_summary=_normalize_numeric_summary(
+            summary=summary,
+            key="deep_symbol_summary",
+        ),
+        native_scip_summary=_normalize_numeric_summary(
+            summary=summary,
+            key="native_scip_summary",
+        ),
+        validation_probe_summary=_normalize_numeric_summary(
+            summary=summary,
+            key="validation_probe_summary",
+        ),
+        source_plan_validation_feedback_summary=_normalize_numeric_summary(
+            summary=summary,
+            key="source_plan_validation_feedback_summary",
+        ),
     )
 
 
@@ -300,6 +360,37 @@ def evaluate_stability(
         if iterations and iterations[-1].retrieval_control_plane_gate_summary
         else {}
     )
+    q3_gate_failed_count = sum(
+        1
+        for item in iterations
+        if item.retrieval_frontier_gate_summary
+        and not bool(item.retrieval_frontier_gate_summary.get("gate_passed", False))
+    )
+    latest_q3_gate_summary = (
+        dict(iterations[-1].retrieval_frontier_gate_summary)
+        if iterations and iterations[-1].retrieval_frontier_gate_summary
+        else {}
+    )
+    latest_deep_symbol_summary = (
+        dict(iterations[-1].deep_symbol_summary)
+        if iterations and iterations[-1].deep_symbol_summary
+        else {}
+    )
+    latest_native_scip_summary = (
+        dict(iterations[-1].native_scip_summary)
+        if iterations and iterations[-1].native_scip_summary
+        else {}
+    )
+    latest_validation_probe_summary = (
+        dict(iterations[-1].validation_probe_summary)
+        if iterations and iterations[-1].validation_probe_summary
+        else {}
+    )
+    latest_source_plan_validation_feedback_summary = (
+        dict(iterations[-1].source_plan_validation_feedback_summary)
+        if iterations and iterations[-1].source_plan_validation_feedback_summary
+        else {}
+    )
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -312,7 +403,15 @@ def evaluate_stability(
         "max_failure_rate": max_failure_rate,
         "passed": failure_rate <= max(0.0, float(max_failure_rate)),
         "q2_gate_failed_count": q2_gate_failed_count,
+        "q3_gate_failed_count": q3_gate_failed_count,
         "latest_retrieval_control_plane_gate_summary": latest_q2_gate_summary,
+        "latest_retrieval_frontier_gate_summary": latest_q3_gate_summary,
+        "latest_deep_symbol_summary": latest_deep_symbol_summary,
+        "latest_native_scip_summary": latest_native_scip_summary,
+        "latest_validation_probe_summary": latest_validation_probe_summary,
+        "latest_source_plan_validation_feedback_summary": (
+            latest_source_plan_validation_feedback_summary
+        ),
         "failed_runs": failed_runs,
         "metric_ranges": metric_ranges,
         "iterations": [
@@ -332,6 +431,15 @@ def evaluate_stability(
                 "retrieval_control_plane_gate_summary": dict(
                     item.retrieval_control_plane_gate_summary
                 ),
+                "retrieval_frontier_gate_summary": dict(
+                    item.retrieval_frontier_gate_summary
+                ),
+                "deep_symbol_summary": dict(item.deep_symbol_summary),
+                "native_scip_summary": dict(item.native_scip_summary),
+                "validation_probe_summary": dict(item.validation_probe_summary),
+                "source_plan_validation_feedback_summary": dict(
+                    item.source_plan_validation_feedback_summary
+                ),
             }
             for item in iterations
         ],
@@ -347,6 +455,32 @@ def _render_markdown(*, payload: dict[str, Any], thresholds: dict[str, float]) -
     latest_q2_gate = (
         latest_q2_gate_raw if isinstance(latest_q2_gate_raw, dict) else {}
     )
+    latest_q3_gate_raw = payload.get("latest_retrieval_frontier_gate_summary")
+    latest_q3_gate = (
+        latest_q3_gate_raw if isinstance(latest_q3_gate_raw, dict) else {}
+    )
+    latest_deep_symbol_raw = payload.get("latest_deep_symbol_summary")
+    latest_deep_symbol = (
+        latest_deep_symbol_raw if isinstance(latest_deep_symbol_raw, dict) else {}
+    )
+    latest_native_scip_raw = payload.get("latest_native_scip_summary")
+    latest_native_scip = (
+        latest_native_scip_raw if isinstance(latest_native_scip_raw, dict) else {}
+    )
+    latest_validation_probe_raw = payload.get("latest_validation_probe_summary")
+    latest_validation_probe = (
+        latest_validation_probe_raw
+        if isinstance(latest_validation_probe_raw, dict)
+        else {}
+    )
+    latest_source_plan_feedback_raw = payload.get(
+        "latest_source_plan_validation_feedback_summary"
+    )
+    latest_source_plan_feedback = (
+        latest_source_plan_feedback_raw
+        if isinstance(latest_source_plan_feedback_raw, dict)
+        else {}
+    )
 
     lines = [
         "# Validation-Rich Stability Summary",
@@ -358,6 +492,7 @@ def _render_markdown(*, payload: dict[str, Any], thresholds: dict[str, float]) -
         f"- Classification: {str(payload.get('classification', 'no_data') or 'no_data')}",
         f"- Passed: {bool(payload.get('passed', False))}",
         f"- Q2 gate failed count: {int(payload.get('q2_gate_failed_count', 0) or 0)}",
+        f"- Q3 gate failed count: {int(payload.get('q3_gate_failed_count', 0) or 0)}",
         "",
         "## Thresholds",
         "",
@@ -397,6 +532,140 @@ def _render_markdown(*, payload: dict[str, Any], thresholds: dict[str, float]) -
                 ),
                 "- Latency P95 ms: {latency:.2f}".format(
                     latency=_safe_float(latest_q2_gate.get("latency_p95_ms"), 0.0)
+                ),
+                "",
+            ]
+        )
+
+    if latest_q3_gate:
+        lines.extend(
+            [
+                "## Latest Q3 Retrieval Frontier Gate",
+                "",
+                f"- Gate passed: {bool(latest_q3_gate.get('gate_passed', False))}",
+                "- Deep symbol case recall: {recall:.4f}".format(
+                    recall=_safe_float(latest_q3_gate.get("deep_symbol_case_recall"), 0.0)
+                ),
+                "- Native SCIP loaded rate: {rate:.4f}".format(
+                    rate=_safe_float(latest_q3_gate.get("native_scip_loaded_rate"), 0.0)
+                ),
+                "- Precision at k: {precision:.4f}".format(
+                    precision=_safe_float(latest_q3_gate.get("precision_at_k"), 0.0)
+                ),
+                "- Noise rate: {noise:.4f}".format(
+                    noise=_safe_float(latest_q3_gate.get("noise_rate"), 0.0)
+                ),
+                "",
+            ]
+        )
+
+    if latest_validation_probe:
+        lines.extend(
+            [
+                "## Latest Q4 Validation Probe Summary",
+                "",
+                "- Validation test count: {count:.4f}".format(
+                    count=_safe_float(
+                        latest_validation_probe.get("validation_test_count", 0.0), 0.0
+                    )
+                ),
+                "- Probe enabled ratio: {ratio:.4f}".format(
+                    ratio=_safe_float(
+                        latest_validation_probe.get("probe_enabled_ratio", 0.0), 0.0
+                    )
+                ),
+                "- Probe executed count mean: {count:.4f}".format(
+                    count=_safe_float(
+                        latest_validation_probe.get("probe_executed_count_mean", 0.0),
+                        0.0,
+                    )
+                ),
+                "- Probe failure rate: {rate:.4f}".format(
+                    rate=_safe_float(
+                        latest_validation_probe.get("probe_failure_rate", 0.0), 0.0
+                    )
+                ),
+                "",
+            ]
+        )
+
+    if latest_source_plan_feedback:
+        lines.extend(
+            [
+                "## Latest Q4 Source Plan Validation Feedback Summary",
+                "",
+                "- Present ratio: {ratio:.4f}".format(
+                    ratio=_safe_float(
+                        latest_source_plan_feedback.get("present_ratio", 0.0), 0.0
+                    )
+                ),
+                "- Failure rate: {rate:.4f}".format(
+                    rate=_safe_float(
+                        latest_source_plan_feedback.get("failure_rate", 0.0), 0.0
+                    )
+                ),
+                "- Issue count mean: {count:.4f}".format(
+                    count=_safe_float(
+                        latest_source_plan_feedback.get("issue_count_mean", 0.0), 0.0
+                    )
+                ),
+                "- Probe issue count mean: {count:.4f}".format(
+                    count=_safe_float(
+                        latest_source_plan_feedback.get("probe_issue_count_mean", 0.0),
+                        0.0,
+                    )
+                ),
+                "- Probe executed count mean: {count:.4f}".format(
+                    count=_safe_float(
+                        latest_source_plan_feedback.get(
+                            "probe_executed_count_mean", 0.0
+                        ),
+                        0.0,
+                    )
+                ),
+                "- Selected test count mean: {count:.4f}".format(
+                    count=_safe_float(
+                        latest_source_plan_feedback.get(
+                            "selected_test_count_mean", 0.0
+                        ),
+                        0.0,
+                    )
+                ),
+                "- Executed test count mean: {count:.4f}".format(
+                    count=_safe_float(
+                        latest_source_plan_feedback.get(
+                            "executed_test_count_mean", 0.0
+                        ),
+                        0.0,
+                    )
+                ),
+                "",
+            ]
+        )
+
+    if latest_deep_symbol or latest_native_scip:
+        lines.extend(
+            [
+                "## Latest Q3 Frontier Evidence",
+                "",
+                "- Deep symbol case count: {count:.4f}; recall: {recall:.4f}".format(
+                    count=_safe_float(latest_deep_symbol.get("case_count"), 0.0),
+                    recall=_safe_float(latest_deep_symbol.get("recall"), 0.0),
+                ),
+                "- Native SCIP loaded rate: {loaded:.4f}; document_count_mean={document:.4f}; definition_occurrence_count_mean={definition:.4f}; reference_occurrence_count_mean={reference:.4f}; symbol_definition_count_mean={symbol:.4f}".format(
+                    loaded=_safe_float(latest_native_scip.get("loaded_rate"), 0.0),
+                    document=_safe_float(
+                        latest_native_scip.get("document_count_mean"), 0.0
+                    ),
+                    definition=_safe_float(
+                        latest_native_scip.get("definition_occurrence_count_mean"), 0.0
+                    ),
+                    reference=_safe_float(
+                        latest_native_scip.get("reference_occurrence_count_mean"), 0.0
+                    ),
+                    symbol=_safe_float(
+                        latest_native_scip.get("symbol_definition_count_mean"), 0.0
+                    ),
                 ),
                 "",
             ]
@@ -462,6 +731,48 @@ def _render_markdown(*, payload: dict[str, Any], thresholds: dict[str, float]) -
                     ),
                     gain=_safe_float(gate.get("risk_upgrade_precision_gain"), 0.0),
                     latency=_safe_float(gate.get("latency_p95_ms"), 0.0),
+                )
+            )
+        frontier_gate_raw = row.get("retrieval_frontier_gate_summary")
+        frontier_gate = (
+            frontier_gate_raw if isinstance(frontier_gate_raw, dict) else {}
+        )
+        if frontier_gate:
+            lines.append(
+                "  q3_gate: passed={passed}, deep_symbol_case_recall={recall:.4f}, native_scip_loaded_rate={native_scip:.4f}, precision_at_k={precision:.4f}, noise_rate={noise:.4f}".format(
+                    passed=bool(frontier_gate.get("gate_passed", False)),
+                    recall=_safe_float(
+                        frontier_gate.get("deep_symbol_case_recall"), 0.0
+                    ),
+                    native_scip=_safe_float(
+                        frontier_gate.get("native_scip_loaded_rate"), 0.0
+                    ),
+                    precision=_safe_float(
+                        frontier_gate.get("precision_at_k"), 0.0
+                    ),
+                    noise=_safe_float(frontier_gate.get("noise_rate"), 0.0),
+                )
+            )
+        deep_symbol_raw = row.get("deep_symbol_summary")
+        deep_symbol = deep_symbol_raw if isinstance(deep_symbol_raw, dict) else {}
+        native_scip_raw = row.get("native_scip_summary")
+        native_scip = native_scip_raw if isinstance(native_scip_raw, dict) else {}
+        if deep_symbol or native_scip:
+            lines.append(
+                "  q3_frontier_evidence: case_count={count:.4f}, recall={recall:.4f}, loaded_rate={loaded:.4f}, document_count_mean={document:.4f}, definition_occurrence_count_mean={definition:.4f}, reference_occurrence_count_mean={reference:.4f}, symbol_definition_count_mean={symbol:.4f}".format(
+                    count=_safe_float(deep_symbol.get("case_count"), 0.0),
+                    recall=_safe_float(deep_symbol.get("recall"), 0.0),
+                    loaded=_safe_float(native_scip.get("loaded_rate"), 0.0),
+                    document=_safe_float(native_scip.get("document_count_mean"), 0.0),
+                    definition=_safe_float(
+                        native_scip.get("definition_occurrence_count_mean"), 0.0
+                    ),
+                    reference=_safe_float(
+                        native_scip.get("reference_occurrence_count_mean"), 0.0
+                    ),
+                    symbol=_safe_float(
+                        native_scip.get("symbol_definition_count_mean"), 0.0
+                    ),
                 )
             )
 

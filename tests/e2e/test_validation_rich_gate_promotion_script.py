@@ -46,6 +46,23 @@ def test_validation_rich_gate_promotion_reports_stay_report_only(tmp_path: Path)
                         "benchmark_regression_detected": True,
                         "failed_checks": ["benchmark_regression_detected"],
                     },
+                    "retrieval_frontier_gate_summary": {
+                        "gate_passed": False,
+                        "failed_checks": ["native_scip_loaded_rate", "noise_rate"],
+                        "deep_symbol_case_recall": 0.81,
+                        "native_scip_loaded_rate": 0.68,
+                    },
+                    "deep_symbol_summary": {
+                        "case_count": 2.0,
+                        "recall": 0.81,
+                    },
+                    "native_scip_summary": {
+                        "loaded_rate": 0.68,
+                        "document_count_mean": 4.0,
+                        "definition_occurrence_count_mean": 6.0,
+                        "reference_occurrence_count_mean": 10.0,
+                        "symbol_definition_count_mean": 2.0,
+                    },
                 },
                 "failed_check_top3": [{"check": "precision_at_k", "count": 1}],
             }
@@ -80,11 +97,24 @@ def test_validation_rich_gate_promotion_reports_stay_report_only(tmp_path: Path)
         "retrieval control plane gate is not passed" in reason
         for reason in payload["reasons"]
     )
+    assert any(
+        "retrieval frontier gate is not passed" in reason
+        for reason in payload["reasons"]
+    )
     assert any("stability classification" in reason for reason in payload["reasons"])
     assert any(
         gate["name"] == "retrieval_control_plane" and gate["passed"] is False
         for gate in payload["gates"]
     )
+    assert any(
+        gate["name"] == "retrieval_frontier" and gate["passed"] is False
+        for gate in payload["gates"]
+    )
+    retrieval_frontier_gate = next(
+        gate for gate in payload["gates"] if gate["name"] == "retrieval_frontier"
+    )
+    assert retrieval_frontier_gate["deep_symbol_summary"]["case_count"] == pytest.approx(2.0)
+    assert retrieval_frontier_gate["native_scip_summary"]["document_count_mean"] == pytest.approx(4.0)
 
 
 def test_validation_rich_gate_promotion_reports_eligible(tmp_path: Path) -> None:
@@ -111,6 +141,23 @@ def test_validation_rich_gate_promotion_reports_eligible(tmp_path: Path) -> None
                         "regression_evaluated": True,
                         "benchmark_regression_detected": False,
                         "failed_checks": [],
+                    },
+                    "retrieval_frontier_gate_summary": {
+                        "gate_passed": True,
+                        "failed_checks": [],
+                        "deep_symbol_case_recall": 0.92,
+                        "native_scip_loaded_rate": 0.76,
+                    },
+                    "deep_symbol_summary": {
+                        "case_count": 3.0,
+                        "recall": 0.92,
+                    },
+                    "native_scip_summary": {
+                        "loaded_rate": 0.76,
+                        "document_count_mean": 5.0,
+                        "definition_occurrence_count_mean": 7.0,
+                        "reference_occurrence_count_mean": 11.0,
+                        "symbol_definition_count_mean": 3.0,
                     },
                 },
                 "failed_check_top3": [],
@@ -153,6 +200,15 @@ def test_validation_rich_gate_promotion_reports_eligible(tmp_path: Path) -> None
         gate["name"] == "retrieval_control_plane" and gate["passed"] is True
         for gate in payload["gates"]
     )
+    assert any(
+        gate["name"] == "retrieval_frontier" and gate["passed"] is True
+        for gate in payload["gates"]
+    )
+    retrieval_frontier_gate = next(
+        gate for gate in payload["gates"] if gate["name"] == "retrieval_frontier"
+    )
+    assert retrieval_frontier_gate["deep_symbol_summary"]["recall"] == pytest.approx(0.92)
+    assert retrieval_frontier_gate["native_scip_summary"]["loaded_rate"] == pytest.approx(0.76)
 
 
 def test_validation_rich_gate_promotion_treats_history_failed_checks_as_warning(
@@ -181,6 +237,23 @@ def test_validation_rich_gate_promotion_treats_history_failed_checks_as_warning(
                         "regression_evaluated": True,
                         "benchmark_regression_detected": False,
                         "failed_checks": [],
+                    },
+                    "retrieval_frontier_gate_summary": {
+                        "gate_passed": True,
+                        "failed_checks": [],
+                        "deep_symbol_case_recall": 0.93,
+                        "native_scip_loaded_rate": 0.78,
+                    },
+                    "deep_symbol_summary": {
+                        "case_count": 3.0,
+                        "recall": 0.93,
+                    },
+                    "native_scip_summary": {
+                        "loaded_rate": 0.78,
+                        "document_count_mean": 5.5,
+                        "definition_occurrence_count_mean": 7.5,
+                        "reference_occurrence_count_mean": 11.5,
+                        "symbol_definition_count_mean": 3.5,
                     },
                 },
                 "failed_check_top3": [{"check": "latency_p95_ms", "count": 3}],

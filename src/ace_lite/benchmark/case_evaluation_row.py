@@ -125,6 +125,18 @@ def build_case_evaluation_row(
     plan_replay_cache_stale_hit_safe: bool,
     chunk_stage_miss: dict[str, Any],
     validation_tests: list[Any],
+    validation_probe_enabled: bool,
+    validation_probe_status: str,
+    validation_probe_executed_count: int,
+    validation_probe_issue_count: int,
+    source_plan_validation_feedback_present: bool,
+    source_plan_validation_feedback_status: str,
+    source_plan_validation_feedback_issue_count: int,
+    source_plan_validation_feedback_probe_status: str,
+    source_plan_validation_feedback_probe_issue_count: int,
+    source_plan_validation_feedback_probe_executed_count: int,
+    source_plan_validation_feedback_selected_test_count: int,
+    source_plan_validation_feedback_executed_test_count: int,
     source_plan_evidence_summary: dict[str, float],
     source_plan_graph_closure_preference_enabled: bool,
     source_plan_graph_closure_bonus_candidate_count: int,
@@ -412,6 +424,56 @@ def build_case_evaluation_row(
         "chunk_stage_miss_classified": 1.0 if chunk_stage_miss["label"] else 0.0,
         "chunk_stage_miss": str(chunk_stage_miss["label"]),
         "validation_test_count": len(validation_tests),
+        "validation_probe_enabled": 1.0 if validation_probe_enabled else 0.0,
+        "validation_probe_status": str(validation_probe_status or ""),
+        "validation_probe_executed_count": float(validation_probe_executed_count),
+        "validation_probe_issue_count": float(validation_probe_issue_count),
+        "validation_probe_failed": (
+            1.0
+            if str(validation_probe_status or "").strip().lower() in {"failed", "degraded"}
+            or int(validation_probe_issue_count or 0) > 0
+            else 0.0
+        ),
+        "source_plan_validation_feedback_present": (
+            1.0 if source_plan_validation_feedback_present else 0.0
+        ),
+        "source_plan_validation_feedback_status": str(
+            source_plan_validation_feedback_status or ""
+        ),
+        "source_plan_validation_feedback_issue_count": float(
+            source_plan_validation_feedback_issue_count
+        ),
+        "source_plan_validation_feedback_failed": (
+            1.0
+            if str(source_plan_validation_feedback_status or "").strip().lower()
+            in {"failed", "degraded"}
+            or int(source_plan_validation_feedback_issue_count or 0) > 0
+            else 0.0
+        ),
+        "source_plan_validation_feedback_probe_status": str(
+            source_plan_validation_feedback_probe_status or ""
+        ),
+        "source_plan_validation_feedback_probe_issue_count": float(
+            source_plan_validation_feedback_probe_issue_count
+        ),
+        "source_plan_validation_feedback_probe_executed_count": float(
+            source_plan_validation_feedback_probe_executed_count
+        ),
+        "source_plan_validation_feedback_probe_failed": (
+            1.0
+            if str(source_plan_validation_feedback_probe_status or "")
+            .strip()
+            .lower()
+            in {"failed", "degraded"}
+            or int(source_plan_validation_feedback_probe_issue_count or 0) > 0
+            else 0.0
+        ),
+        "source_plan_validation_feedback_selected_test_count": float(
+            source_plan_validation_feedback_selected_test_count
+        ),
+        "source_plan_validation_feedback_executed_test_count": float(
+            source_plan_validation_feedback_executed_test_count
+        ),
         "source_plan_direct_evidence_ratio": float(
             source_plan_evidence_summary.get("direct_ratio", 0.0) or 0.0
         ),

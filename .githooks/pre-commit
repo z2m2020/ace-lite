@@ -1,0 +1,2 @@
+#!/usr/bin/env sh
+python scripts/run_precommit_validation.py --staged

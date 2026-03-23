@@ -115,6 +115,18 @@ def _base_row_kwargs() -> dict[str, object]:
         "plan_replay_cache_stale_hit_safe": True,
         "chunk_stage_miss": {"applicable": False, "label": ""},
         "validation_tests": ["tests.test_auth::test_token"],
+        "validation_probe_enabled": True,
+        "validation_probe_status": "failed",
+        "validation_probe_executed_count": 2,
+        "validation_probe_issue_count": 1,
+        "source_plan_validation_feedback_present": True,
+        "source_plan_validation_feedback_status": "failed",
+        "source_plan_validation_feedback_issue_count": 2,
+        "source_plan_validation_feedback_probe_status": "failed",
+        "source_plan_validation_feedback_probe_issue_count": 1,
+        "source_plan_validation_feedback_probe_executed_count": 1,
+        "source_plan_validation_feedback_selected_test_count": 1,
+        "source_plan_validation_feedback_executed_test_count": 1,
         "source_plan_evidence_summary": {
             "direct_ratio": 0.5,
             "neighbor_context_ratio": 0.5,
@@ -258,6 +270,16 @@ def test_build_case_evaluation_row_contract() -> None:
     assert row["deep_symbol_case"] == 1.0
     assert row["task_success_mode"] == "positive"
     assert row["chunk_contract_fallback_count"] == 1.0
+    assert row["source_plan_validation_feedback_present"] == 1.0
+    assert row["source_plan_validation_feedback_status"] == "failed"
+    assert row["source_plan_validation_feedback_issue_count"] == 2.0
+    assert row["source_plan_validation_feedback_failed"] == 1.0
+    assert row["source_plan_validation_feedback_probe_status"] == "failed"
+    assert row["source_plan_validation_feedback_probe_issue_count"] == 1.0
+    assert row["source_plan_validation_feedback_probe_executed_count"] == 1.0
+    assert row["source_plan_validation_feedback_probe_failed"] == 1.0
+    assert row["source_plan_validation_feedback_selected_test_count"] == 1.0
+    assert row["source_plan_validation_feedback_executed_test_count"] == 1.0
     assert row["skills_budget_exhausted"] == 1.0
     assert row["plan_replay_cache_hit"] == 1.0
     assert row["source_plan_granularity_preferred_count"] == 1.0

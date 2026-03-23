@@ -85,6 +85,14 @@ def _extract_failure_signatures(payload: dict[str, Any]) -> list[str]:
     validation_gate = (
         validation_gate_raw if isinstance(validation_gate_raw, dict) else {}
     )
+    validation_frontier_gate_raw = validation_rich.get(
+        "retrieval_frontier_gate_summary"
+    )
+    validation_frontier_gate = (
+        validation_frontier_gate_raw
+        if isinstance(validation_frontier_gate_raw, dict)
+        else {}
+    )
     if validation_gate and not bool(validation_gate.get("gate_passed", False)):
         failed_checks_raw = validation_gate.get("failed_checks")
         failed_checks = failed_checks_raw if isinstance(failed_checks_raw, list) else []
@@ -95,6 +103,22 @@ def _extract_failure_signatures(payload: dict[str, Any]) -> list[str]:
                     signatures.append(f"validation_rich_q2_gate:{metric}")
         else:
             signatures.append("validation_rich_q2_gate:gate_failed")
+    if validation_frontier_gate and not bool(
+        validation_frontier_gate.get("gate_passed", False)
+    ):
+        frontier_failed_checks_raw = validation_frontier_gate.get("failed_checks")
+        frontier_failed_checks = (
+            frontier_failed_checks_raw
+            if isinstance(frontier_failed_checks_raw, list)
+            else []
+        )
+        if frontier_failed_checks:
+            for item in frontier_failed_checks:
+                metric = str(item).strip()
+                if metric:
+                    signatures.append(f"validation_rich_q3_gate:{metric}")
+        else:
+            signatures.append("validation_rich_q3_gate:gate_failed")
     return signatures
 
 
@@ -122,6 +146,22 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     validation_rich = validation_rich_raw if isinstance(validation_rich_raw, dict) else {}
     validation_gate_raw = validation_rich.get("retrieval_control_plane_gate_summary")
     validation_gate = validation_gate_raw if isinstance(validation_gate_raw, dict) else {}
+    validation_frontier_gate_raw = validation_rich.get(
+        "retrieval_frontier_gate_summary"
+    )
+    validation_frontier_gate = (
+        validation_frontier_gate_raw
+        if isinstance(validation_frontier_gate_raw, dict)
+        else {}
+    )
+    validation_deep_symbol_raw = validation_rich.get("deep_symbol_summary")
+    validation_deep_symbol = (
+        validation_deep_symbol_raw if isinstance(validation_deep_symbol_raw, dict) else {}
+    )
+    validation_native_scip_raw = validation_rich.get("native_scip_summary")
+    validation_native_scip = (
+        validation_native_scip_raw if isinstance(validation_native_scip_raw, dict) else {}
+    )
 
     return {
         "generated_at": str(payload.get("generated_at", "") or ""),
@@ -147,6 +187,27 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "validation_rich_q2_latency_p95_ms": _safe_float(
             validation_gate.get("latency_p95_ms"), 0.0
+        ),
+        "validation_rich_q3_gate_passed": bool(
+            validation_frontier_gate.get("gate_passed", False)
+        ),
+        "validation_rich_q3_deep_symbol_case_recall": _safe_float(
+            validation_frontier_gate.get("deep_symbol_case_recall"), 0.0
+        ),
+        "validation_rich_q3_native_scip_loaded_rate": _safe_float(
+            validation_frontier_gate.get("native_scip_loaded_rate"), 0.0
+        ),
+        "validation_rich_q3_precision_at_k": _safe_float(
+            validation_frontier_gate.get("precision_at_k"), 0.0
+        ),
+        "validation_rich_q3_noise_rate": _safe_float(
+            validation_frontier_gate.get("noise_rate"), 0.0
+        ),
+        "validation_rich_q3_deep_symbol_case_count": _safe_float(
+            validation_deep_symbol.get("case_count"), 0.0
+        ),
+        "validation_rich_q3_native_scip_document_count_mean": _safe_float(
+            validation_native_scip.get("document_count_mean"), 0.0
         ),
         "failure_signatures": _extract_failure_signatures(payload),
     }
@@ -180,6 +241,12 @@ def _build_delta(*, latest: dict[str, Any], previous: dict[str, Any]) -> dict[st
         "validation_rich_q2_shadow_coverage",
         "validation_rich_q2_risk_upgrade_gain",
         "validation_rich_q2_latency_p95_ms",
+        "validation_rich_q3_deep_symbol_case_recall",
+        "validation_rich_q3_native_scip_loaded_rate",
+        "validation_rich_q3_precision_at_k",
+        "validation_rich_q3_noise_rate",
+        "validation_rich_q3_deep_symbol_case_count",
+        "validation_rich_q3_native_scip_document_count_mean",
     )
     delta: dict[str, float] = {}
     for key in keys:
@@ -234,6 +301,32 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 ),
             )
         )
+        lines.append(
+            "- Validation-rich Q3 gate: passed={passed}, deep_symbol_case_recall={recall:.4f}, native_scip_loaded_rate={native_scip:.4f}, precision_at_k={precision:.4f}, noise_rate={noise:.4f}".format(
+                passed=bool(latest.get("validation_rich_q3_gate_passed", False)),
+                recall=_safe_float(
+                    latest.get("validation_rich_q3_deep_symbol_case_recall"), 0.0
+                ),
+                native_scip=_safe_float(
+                    latest.get("validation_rich_q3_native_scip_loaded_rate"), 0.0
+                ),
+                precision=_safe_float(
+                    latest.get("validation_rich_q3_precision_at_k"), 0.0
+                ),
+                noise=_safe_float(latest.get("validation_rich_q3_noise_rate"), 0.0),
+            )
+        )
+        lines.append(
+            "- Validation-rich Q3 evidence: deep_symbol_case_count={case_count:.4f}, native_scip_document_count_mean={document:.4f}".format(
+                case_count=_safe_float(
+                    latest.get("validation_rich_q3_deep_symbol_case_count"), 0.0
+                ),
+                document=_safe_float(
+                    latest.get("validation_rich_q3_native_scip_document_count_mean"),
+                    0.0,
+                ),
+            )
+        )
         lines.append("")
 
     if previous:
@@ -243,7 +336,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         lines.append("")
         lines.append(f"- Previous path: `{previous.get('path', '')}`")
         lines.append(
-            "- Delta: tabiv3_p95={tabi:+.2f}, tabiv3_repomap_p95={repomap:+.2f}, concept_precision={c_prec:+.4f}, concept_noise={c_noise:+.4f}, external_precision={e_prec:+.4f}, external_noise={e_noise:+.4f}, embedding_enabled_ratio={emb:+.4f}, validation_q2_shadow={shadow:+.4f}, validation_q2_gain={gain:+.4f}, validation_q2_latency={latency:+.2f}".format(
+            "- Delta: tabiv3_p95={tabi:+.2f}, tabiv3_repomap_p95={repomap:+.2f}, concept_precision={c_prec:+.4f}, concept_noise={c_noise:+.4f}, external_precision={e_prec:+.4f}, external_noise={e_noise:+.4f}, embedding_enabled_ratio={emb:+.4f}, validation_q2_shadow={shadow:+.4f}, validation_q2_gain={gain:+.4f}, validation_q2_latency={latency:+.2f}, validation_q3_recall={q3_recall:+.4f}, validation_q3_native_scip={q3_scip:+.4f}, validation_q3_precision={q3_precision:+.4f}, validation_q3_noise={q3_noise:+.4f}, validation_q3_case_count={q3_case_count:+.4f}, validation_q3_document_count={q3_document:+.4f}".format(
                 tabi=_safe_float(delta.get("tabiv3_latency_p95_ms"), 0.0),
                 repomap=_safe_float(delta.get("tabiv3_repomap_latency_p95_ms"), 0.0),
                 c_prec=_safe_float(delta.get("concept_precision_at_k"), 0.0),
@@ -259,6 +352,27 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 ),
                 latency=_safe_float(
                     delta.get("validation_rich_q2_latency_p95_ms"), 0.0
+                ),
+                q3_recall=_safe_float(
+                    delta.get("validation_rich_q3_deep_symbol_case_recall"), 0.0
+                ),
+                q3_scip=_safe_float(
+                    delta.get("validation_rich_q3_native_scip_loaded_rate"), 0.0
+                ),
+                q3_precision=_safe_float(
+                    delta.get("validation_rich_q3_precision_at_k"), 0.0
+                ),
+                q3_noise=_safe_float(
+                    delta.get("validation_rich_q3_noise_rate"), 0.0
+                ),
+                q3_case_count=_safe_float(
+                    delta.get("validation_rich_q3_deep_symbol_case_count"), 0.0
+                ),
+                q3_document=_safe_float(
+                    delta.get(
+                        "validation_rich_q3_native_scip_document_count_mean"
+                    ),
+                    0.0,
                 ),
             )
         )
@@ -295,13 +409,13 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
 
     lines.append("## History")
     lines.append("")
-    lines.append("| Generated | Passed | Tabiv3 p95 | Repomap p95 | Concept P | Concept N | External P | External N | Embedding Ratio | Validation Q2 Gate |")
-    lines.append("| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |")
+    lines.append("| Generated | Passed | Tabiv3 p95 | Repomap p95 | Concept P | Concept N | External P | External N | Embedding Ratio | Validation Q2 Gate | Validation Q3 Gate |")
+    lines.append("| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | :---: |")
     for row in rows:
         if not isinstance(row, dict):
             continue
         lines.append(
-            "| {generated} | {passed} | {tabi:.2f} | {repomap:.2f} | {cp:.4f} | {cn:.4f} | {ep:.4f} | {en:.4f} | {emb:.4f} | {vq2} |".format(
+            "| {generated} | {passed} | {tabi:.2f} | {repomap:.2f} | {cp:.4f} | {cn:.4f} | {ep:.4f} | {en:.4f} | {emb:.4f} | {vq2} | {vq3} |".format(
                 generated=str(row.get("generated_at", "")),
                 passed="✅" if bool(row.get("passed", False)) else "❌",
                 tabi=_safe_float(row.get("tabiv3_latency_p95_ms"), 0.0),
@@ -312,6 +426,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 en=_safe_float(row.get("external_noise_rate"), 0.0),
                 emb=_safe_float(row.get("embedding_enabled_ratio"), 0.0),
                 vq2="✅" if bool(row.get("validation_rich_q2_gate_passed", False)) else "❌",
+                vq3="✅" if bool(row.get("validation_rich_q3_gate_passed", False)) else "❌",
             )
         )
 

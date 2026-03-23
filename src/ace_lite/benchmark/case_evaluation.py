@@ -158,6 +158,34 @@ def evaluate_case_result(
     source_plan_latency_ms = metrics.source_plan_latency_ms
 
     validation_tests = metrics.validation_tests
+    validation_probe_enabled = metrics.validation_probe_enabled
+    validation_probe_status = metrics.validation_probe_status
+    validation_probe_executed_count = metrics.validation_probe_executed_count
+    validation_probe_issue_count = metrics.validation_probe_issue_count
+    source_plan_validation_feedback_present = (
+        metrics.source_plan_validation_feedback_present
+    )
+    source_plan_validation_feedback_status = (
+        metrics.source_plan_validation_feedback_status
+    )
+    source_plan_validation_feedback_issue_count = (
+        metrics.source_plan_validation_feedback_issue_count
+    )
+    source_plan_validation_feedback_probe_status = (
+        metrics.source_plan_validation_feedback_probe_status
+    )
+    source_plan_validation_feedback_probe_issue_count = (
+        metrics.source_plan_validation_feedback_probe_issue_count
+    )
+    source_plan_validation_feedback_probe_executed_count = (
+        metrics.source_plan_validation_feedback_probe_executed_count
+    )
+    source_plan_validation_feedback_selected_test_count = (
+        metrics.source_plan_validation_feedback_selected_test_count
+    )
+    source_plan_validation_feedback_executed_test_count = (
+        metrics.source_plan_validation_feedback_executed_test_count
+    )
     notes_hit_ratio = metrics.notes_hit_ratio
     profile_selected_count = metrics.profile_selected_count
     capture_triggered = metrics.capture_triggered
@@ -507,6 +535,34 @@ def evaluate_case_result(
         plan_replay_cache_stale_hit_safe=plan_replay_cache_stale_hit_safe,
         chunk_stage_miss=chunk_stage_miss,
         validation_tests=validation_tests,
+        validation_probe_enabled=validation_probe_enabled,
+        validation_probe_status=validation_probe_status,
+        validation_probe_executed_count=validation_probe_executed_count,
+        validation_probe_issue_count=validation_probe_issue_count,
+        source_plan_validation_feedback_present=(
+            source_plan_validation_feedback_present
+        ),
+        source_plan_validation_feedback_status=(
+            source_plan_validation_feedback_status
+        ),
+        source_plan_validation_feedback_issue_count=(
+            source_plan_validation_feedback_issue_count
+        ),
+        source_plan_validation_feedback_probe_status=(
+            source_plan_validation_feedback_probe_status
+        ),
+        source_plan_validation_feedback_probe_issue_count=(
+            source_plan_validation_feedback_probe_issue_count
+        ),
+        source_plan_validation_feedback_probe_executed_count=(
+            source_plan_validation_feedback_probe_executed_count
+        ),
+        source_plan_validation_feedback_selected_test_count=(
+            source_plan_validation_feedback_selected_test_count
+        ),
+        source_plan_validation_feedback_executed_test_count=(
+            source_plan_validation_feedback_executed_test_count
+        ),
         source_plan_evidence_summary=source_plan_evidence_summary,
         source_plan_graph_closure_preference_enabled=(
             source_plan_graph_closure_preference_enabled

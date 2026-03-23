@@ -50,6 +50,40 @@ def test_validation_rich_stability_evaluate_stability() -> None:
                 "risk_upgrade_precision_gain": 0.02,
                 "latency_p95_ms": 640.0,
             },
+            retrieval_frontier_gate_summary={
+                "gate_passed": True,
+                "deep_symbol_case_recall": 0.92,
+                "native_scip_loaded_rate": 0.76,
+                "precision_at_k": 0.43,
+                "noise_rate": 0.57,
+            },
+            deep_symbol_summary={
+                "case_count": 3.0,
+                "recall": 0.92,
+            },
+            native_scip_summary={
+                "loaded_rate": 0.76,
+                "document_count_mean": 5.0,
+                "definition_occurrence_count_mean": 7.0,
+                "reference_occurrence_count_mean": 11.0,
+                "symbol_definition_count_mean": 3.0,
+            },
+            validation_probe_summary={
+                "validation_test_count": 5.0,
+                "probe_enabled_ratio": 0.67,
+                "probe_executed_count_mean": 1.5,
+                "probe_failure_rate": 0.1,
+            },
+            source_plan_validation_feedback_summary={
+                "present_ratio": 1.0,
+                "issue_count_mean": 0.25,
+                "failure_rate": 0.2,
+                "probe_issue_count_mean": 0.25,
+                "probe_executed_count_mean": 1.5,
+                "probe_failure_rate": 0.1,
+                "selected_test_count_mean": 1.0,
+                "executed_test_count_mean": 0.75,
+            },
         ),
         module.IterationResult(
             run_id=2,
@@ -76,6 +110,40 @@ def test_validation_rich_stability_evaluate_stability() -> None:
                 "risk_upgrade_precision_gain": -0.03,
                 "latency_p95_ms": 880.0,
             },
+            retrieval_frontier_gate_summary={
+                "gate_passed": False,
+                "deep_symbol_case_recall": 0.81,
+                "native_scip_loaded_rate": 0.68,
+                "precision_at_k": 0.35,
+                "noise_rate": 0.65,
+            },
+            deep_symbol_summary={
+                "case_count": 2.0,
+                "recall": 0.81,
+            },
+            native_scip_summary={
+                "loaded_rate": 0.68,
+                "document_count_mean": 4.0,
+                "definition_occurrence_count_mean": 6.0,
+                "reference_occurrence_count_mean": 10.0,
+                "symbol_definition_count_mean": 2.0,
+            },
+            validation_probe_summary={
+                "validation_test_count": 4.0,
+                "probe_enabled_ratio": 0.5,
+                "probe_executed_count_mean": 1.0,
+                "probe_failure_rate": 0.25,
+            },
+            source_plan_validation_feedback_summary={
+                "present_ratio": 1.0,
+                "issue_count_mean": 1.0,
+                "failure_rate": 0.5,
+                "probe_issue_count_mean": 0.5,
+                "probe_executed_count_mean": 1.0,
+                "probe_failure_rate": 0.25,
+                "selected_test_count_mean": 1.0,
+                "executed_test_count_mean": 0.5,
+            },
         ),
     ]
 
@@ -92,7 +160,15 @@ def test_validation_rich_stability_evaluate_stability() -> None:
     assert summary["classification"] == "one_off_pass"
     assert summary["passed"] is False
     assert summary["q2_gate_failed_count"] == 1
+    assert summary["q3_gate_failed_count"] == 1
     assert summary["latest_retrieval_control_plane_gate_summary"]["gate_passed"] is False
+    assert summary["latest_retrieval_frontier_gate_summary"]["gate_passed"] is False
+    assert summary["latest_deep_symbol_summary"]["case_count"] == pytest.approx(2.0)
+    assert summary["latest_native_scip_summary"]["document_count_mean"] == pytest.approx(4.0)
+    assert summary["latest_validation_probe_summary"]["probe_failure_rate"] == pytest.approx(0.25)
+    assert summary["latest_source_plan_validation_feedback_summary"][
+        "executed_test_count_mean"
+    ] == pytest.approx(0.5)
     assert summary["failed_runs"][0]["run_id"] == 2
     precision_row = next(
         item for item in summary["metric_ranges"] if item["metric"] == "precision_at_k"
@@ -136,6 +212,40 @@ def test_validation_rich_stability_main_writes_report(
                 "risk_upgrade_precision_gain": 0.02 if passed else -0.03,
                 "latency_p95_ms": 640.0 if passed else 880.0,
             },
+            retrieval_frontier_gate_summary={
+                "gate_passed": passed,
+                "deep_symbol_case_recall": 0.92 if passed else 0.81,
+                "native_scip_loaded_rate": 0.76 if passed else 0.68,
+                "precision_at_k": 0.43 if passed else 0.35,
+                "noise_rate": 0.57 if passed else 0.65,
+            },
+            deep_symbol_summary={
+                "case_count": 3.0 if passed else 2.0,
+                "recall": 0.92 if passed else 0.81,
+            },
+            native_scip_summary={
+                "loaded_rate": 0.76 if passed else 0.68,
+                "document_count_mean": 5.0 if passed else 4.0,
+                "definition_occurrence_count_mean": 7.0 if passed else 6.0,
+                "reference_occurrence_count_mean": 11.0 if passed else 10.0,
+                "symbol_definition_count_mean": 3.0 if passed else 2.0,
+            },
+            validation_probe_summary={
+                "validation_test_count": 5.0 if passed else 4.0,
+                "probe_enabled_ratio": 0.67 if passed else 0.5,
+                "probe_executed_count_mean": 1.5 if passed else 1.0,
+                "probe_failure_rate": 0.1 if passed else 0.25,
+            },
+            source_plan_validation_feedback_summary={
+                "present_ratio": 1.0,
+                "issue_count_mean": 0.25 if passed else 1.0,
+                "failure_rate": 0.2 if passed else 0.5,
+                "probe_issue_count_mean": 0.25 if passed else 0.5,
+                "probe_executed_count_mean": 1.5 if passed else 1.0,
+                "probe_failure_rate": 0.1 if passed else 0.25,
+                "selected_test_count_mean": 1.0,
+                "executed_test_count_mean": 0.75 if passed else 0.5,
+            },
         )
 
     monkeypatch.setattr(
@@ -167,18 +277,43 @@ def test_validation_rich_stability_main_writes_report(
     assert payload["classification"] == "mixed"
     assert payload["passed"] is True
     assert payload["q2_gate_failed_count"] == 1
+    assert payload["q3_gate_failed_count"] == 1
     assert payload["latest_retrieval_control_plane_gate_summary"]["gate_passed"] is False
+    assert payload["latest_retrieval_frontier_gate_summary"]["gate_passed"] is False
+    assert payload["latest_deep_symbol_summary"]["case_count"] == pytest.approx(2.0)
+    assert payload["latest_native_scip_summary"]["document_count_mean"] == pytest.approx(4.0)
+    assert payload["latest_validation_probe_summary"]["probe_failure_rate"] == pytest.approx(0.25)
+    assert payload["latest_source_plan_validation_feedback_summary"][
+        "executed_test_count_mean"
+    ] == pytest.approx(0.5)
     assert payload["thresholds"]["min_task_success_rate"] == pytest.approx(0.9)
     assert len(payload["iterations"]) == 3
     assert payload["iterations"][2]["retrieval_control_plane_gate_summary"]["gate_passed"] is False
+    assert payload["iterations"][2]["retrieval_frontier_gate_summary"]["gate_passed"] is False
+    assert payload["iterations"][2]["deep_symbol_summary"]["recall"] == pytest.approx(0.81)
+    assert payload["iterations"][2]["validation_probe_summary"][
+        "probe_executed_count_mean"
+    ] == pytest.approx(1.0)
+    assert payload["iterations"][2]["source_plan_validation_feedback_summary"][
+        "failure_rate"
+    ] == pytest.approx(0.5)
 
     markdown = (tmp_path / "stability" / "stability_summary.md").read_text(
         encoding="utf-8"
     )
     assert "# Validation-Rich Stability Summary" in markdown
     assert "## Latest Q2 Retrieval Control Plane Gate" in markdown
+    assert "## Latest Q3 Retrieval Frontier Gate" in markdown
+    assert "## Latest Q3 Frontier Evidence" in markdown
+    assert "## Latest Q4 Validation Probe Summary" in markdown
+    assert "## Latest Q4 Source Plan Validation Feedback Summary" in markdown
     assert "- Q2 gate failed count: 1" in markdown
+    assert "- Q3 gate failed count: 1" in markdown
     assert "q2_gate: passed=False, shadow_coverage=0.7400, risk_upgrade_gain=-0.0300, latency_p95_ms=880.00" in markdown
+    assert "q3_gate: passed=False, deep_symbol_case_recall=0.8100, native_scip_loaded_rate=0.6800, precision_at_k=0.3500, noise_rate=0.6500" in markdown
+    assert "q3_frontier_evidence: case_count=2.0000, recall=0.8100, loaded_rate=0.6800, document_count_mean=4.0000" in markdown
+    assert "- Probe failure rate: 0.2500" in markdown
+    assert "- Executed test count mean: 0.5000" in markdown
     assert "## Metric Ranges" in markdown
     assert "| precision_at_k |" in markdown
 
@@ -215,6 +350,24 @@ def test_validation_rich_stability_main_fails_on_gate(
                 "adaptive_router_shadow_coverage": 0.74,
                 "risk_upgrade_precision_gain": -0.03,
                 "latency_p95_ms": 880.0,
+            },
+            retrieval_frontier_gate_summary={
+                "gate_passed": False,
+                "deep_symbol_case_recall": 0.81,
+                "native_scip_loaded_rate": 0.68,
+                "precision_at_k": 0.35,
+                "noise_rate": 0.65,
+            },
+            deep_symbol_summary={
+                "case_count": 2.0,
+                "recall": 0.81,
+            },
+            native_scip_summary={
+                "loaded_rate": 0.68,
+                "document_count_mean": 4.0,
+                "definition_occurrence_count_mean": 6.0,
+                "reference_occurrence_count_mean": 10.0,
+                "symbol_definition_count_mean": 2.0,
             },
         )
 

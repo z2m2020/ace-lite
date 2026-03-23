@@ -38,6 +38,11 @@ def _write_validation_rich_summary(
     evidence_insufficient_rate: float,
     missing_validation_rate: float,
     retrieval_control_plane_gate_summary: dict[str, object] | None = None,
+    retrieval_frontier_gate_summary: dict[str, object] | None = None,
+    deep_symbol_summary: dict[str, object] | None = None,
+    native_scip_summary: dict[str, object] | None = None,
+    validation_probe_summary: dict[str, object] | None = None,
+    source_plan_validation_feedback_summary: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -59,6 +64,18 @@ def _write_validation_rich_summary(
     if retrieval_control_plane_gate_summary is not None:
         payload["retrieval_control_plane_gate_summary"] = (
             retrieval_control_plane_gate_summary
+        )
+    if retrieval_frontier_gate_summary is not None:
+        payload["retrieval_frontier_gate_summary"] = retrieval_frontier_gate_summary
+    if deep_symbol_summary is not None:
+        payload["deep_symbol_summary"] = deep_symbol_summary
+    if native_scip_summary is not None:
+        payload["native_scip_summary"] = native_scip_summary
+    if validation_probe_summary is not None:
+        payload["validation_probe_summary"] = validation_probe_summary
+    if source_plan_validation_feedback_summary is not None:
+        payload["source_plan_validation_feedback_summary"] = (
+            source_plan_validation_feedback_summary
         )
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -103,6 +120,41 @@ def test_validation_rich_trend_report_main_writes_summary(
             "latency_p95_ms_passed": True,
             "gate_passed": False,
         },
+        retrieval_frontier_gate_summary={
+            "deep_symbol_case_recall": 0.81,
+            "native_scip_loaded_rate": 0.68,
+            "precision_at_k": 0.35,
+            "noise_rate": 0.65,
+            "failed_checks": ["deep_symbol_case_recall", "native_scip_loaded_rate"],
+            "gate_passed": False,
+        },
+        deep_symbol_summary={
+            "case_count": 2.0,
+            "recall": 0.81,
+        },
+        native_scip_summary={
+            "loaded_rate": 0.68,
+            "document_count_mean": 4.0,
+            "definition_occurrence_count_mean": 6.0,
+            "reference_occurrence_count_mean": 10.0,
+            "symbol_definition_count_mean": 2.0,
+        },
+        validation_probe_summary={
+            "validation_test_count": 4.0,
+            "probe_enabled_ratio": 0.5,
+            "probe_executed_count_mean": 1.0,
+            "probe_failure_rate": 0.25,
+        },
+        source_plan_validation_feedback_summary={
+            "present_ratio": 1.0,
+            "issue_count_mean": 1.0,
+            "failure_rate": 0.5,
+            "probe_issue_count_mean": 0.5,
+            "probe_executed_count_mean": 1.0,
+            "probe_failure_rate": 0.25,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 0.5,
+        },
     )
     _write_validation_rich_summary(
         report_b,
@@ -133,6 +185,41 @@ def test_validation_rich_trend_report_main_writes_summary(
             "latency_p95_ms_threshold": 850.0,
             "latency_p95_ms_passed": True,
             "gate_passed": True,
+        },
+        retrieval_frontier_gate_summary={
+            "deep_symbol_case_recall": 0.92,
+            "native_scip_loaded_rate": 0.76,
+            "precision_at_k": 0.425,
+            "noise_rate": 0.575,
+            "failed_checks": [],
+            "gate_passed": True,
+        },
+        deep_symbol_summary={
+            "case_count": 3.0,
+            "recall": 0.92,
+        },
+        native_scip_summary={
+            "loaded_rate": 0.76,
+            "document_count_mean": 5.0,
+            "definition_occurrence_count_mean": 7.0,
+            "reference_occurrence_count_mean": 11.0,
+            "symbol_definition_count_mean": 3.0,
+        },
+        validation_probe_summary={
+            "validation_test_count": 5.0,
+            "probe_enabled_ratio": 0.67,
+            "probe_executed_count_mean": 1.5,
+            "probe_failure_rate": 0.1,
+        },
+        source_plan_validation_feedback_summary={
+            "present_ratio": 1.0,
+            "issue_count_mean": 0.25,
+            "failure_rate": 0.2,
+            "probe_issue_count_mean": 0.25,
+            "probe_executed_count_mean": 1.5,
+            "probe_failure_rate": 0.1,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 0.75,
         },
     )
 
@@ -173,12 +260,31 @@ def test_validation_rich_trend_report_main_writes_summary(
     assert output["latest"]["generated_at"] == "2026-03-12T00:00:00+00:00"
     assert output["previous"]["generated_at"] == "2026-03-11T00:00:00+00:00"
     assert output["latest"]["retrieval_control_plane_gate_summary"]["gate_passed"] is True
+    assert output["latest"]["retrieval_frontier_gate_summary"]["gate_passed"] is True
+    assert output["latest"]["deep_symbol_summary"]["case_count"] == pytest.approx(3.0)
+    assert output["latest"]["native_scip_summary"]["document_count_mean"] == pytest.approx(5.0)
+    assert output["latest"]["validation_probe_summary"]["probe_failure_rate"] == pytest.approx(0.1)
+    assert output["latest"]["source_plan_validation_feedback_summary"][
+        "executed_test_count_mean"
+    ] == pytest.approx(0.75)
     assert (
         output["previous"]["retrieval_control_plane_gate_summary"][
             "benchmark_regression_detected"
         ]
         is True
     )
+    assert (
+        output["previous"]["retrieval_frontier_gate_summary"][
+            "native_scip_loaded_rate"
+        ]
+        == pytest.approx(0.68)
+    )
+    assert output["previous"]["validation_probe_summary"][
+        "probe_executed_count_mean"
+    ] == pytest.approx(1.0)
+    assert output["previous"]["source_plan_validation_feedback_summary"][
+        "failure_rate"
+    ] == pytest.approx(0.5)
     assert output["delta"]["task_success_rate"] == {
         "current": 1.0,
         "previous": 0.8,
@@ -210,6 +316,16 @@ def test_validation_rich_trend_report_main_writes_summary(
     assert "## Latest Q2 Retrieval Control Plane Gate" in markdown
     assert "- Gate passed: True" in markdown
     assert "- Shadow coverage: 0.8500" in markdown
+    assert "## Latest Q3 Retrieval Frontier Gate" in markdown
+    assert "- Deep symbol case recall: 0.9200" in markdown
+    assert "- Native SCIP loaded rate: 0.7600" in markdown
+    assert "## Latest Q3 Frontier Evidence" in markdown
+    assert "- Deep symbol case count: 3.0000; recall: 0.9200" in markdown
+    assert "document_count_mean=5.0000" in markdown
+    assert "## Latest Q4 Validation Probe Summary" in markdown
+    assert "## Latest Q4 Source Plan Validation Feedback Summary" in markdown
+    assert "- Probe failure rate: 0.1000" in markdown
+    assert "- Executed test count mean: 0.7500" in markdown
     assert "## Delta" in markdown
     assert "| task_success_rate | 1.0000 | 0.8000 | +0.2000 |" in markdown
     assert "| validation_test_count | 5.0000 | 4.0000 | +1.0000 |" in markdown

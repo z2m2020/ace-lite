@@ -12,6 +12,8 @@ from typing import Any
 import yaml
 
 from ace_lite.benchmark_ops import (
+    read_benchmark_deep_symbol_summary,
+    read_benchmark_native_scip_summary,
     read_benchmark_retrieval_control_plane_gate_summary,
     read_benchmark_retrieval_frontier_gate_summary,
 )
@@ -340,6 +342,8 @@ def build_summary(
                 "retrieval_frontier_gate_summary": dict(
                     item.get("retrieval_frontier_gate_summary", {})
                 ),
+                "deep_symbol_summary": dict(item.get("deep_symbol_summary", {})),
+                "native_scip_summary": dict(item.get("native_scip_summary", {})),
                 "results_json": str(item.get("results_json") or ""),
                 "summary_json": str(item.get("summary_json") or ""),
                 "report_md": str(item.get("report_md") or ""),
@@ -376,8 +380,8 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
         "",
         "## Leaderboard",
         "",
-        "| Arm | task_success_rate | precision_at_k | noise_rate | latency_p95_ms | regressed | q2_gate | q3_gate |",
-        "| --- | ---: | ---: | ---: | ---: | --- | --- | --- |",
+        "| Arm | task_success_rate | precision_at_k | noise_rate | latency_p95_ms | regressed | q2_gate | q3_gate | deep_symbol_cases | native_scip_loaded |",
+        "| --- | ---: | ---: | ---: | ---: | --- | --- | --- | ---: | ---: |",
     ]
     for item in summary.get("leaderboard", []):
         if not isinstance(item, dict):
@@ -386,11 +390,19 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
         task_success_summary = item.get("task_success_summary")
         gate_summary = item.get("retrieval_control_plane_gate_summary")
         frontier_gate_summary = item.get("retrieval_frontier_gate_summary")
+        deep_symbol_summary = item.get("deep_symbol_summary")
+        native_scip_summary = item.get("native_scip_summary")
         metrics_map = metrics if isinstance(metrics, dict) else {}
         task_success_map = task_success_summary if isinstance(task_success_summary, dict) else {}
         gate_map = gate_summary if isinstance(gate_summary, dict) else {}
         frontier_gate_map = (
             frontier_gate_summary if isinstance(frontier_gate_summary, dict) else {}
+        )
+        deep_symbol_map = (
+            deep_symbol_summary if isinstance(deep_symbol_summary, dict) else {}
+        )
+        native_scip_map = (
+            native_scip_summary if isinstance(native_scip_summary, dict) else {}
         )
         gate_label = "n/a"
         if gate_map:
@@ -401,7 +413,7 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
                 "pass" if bool(frontier_gate_map.get("gate_passed", False)) else "fail"
             )
         lines.append(
-            "| {arm} | {task_success:.4f} | {precision:.4f} | {noise:.4f} | {latency:.2f} | {regressed} | {gate} | {frontier_gate} |".format(
+            "| {arm} | {task_success:.4f} | {precision:.4f} | {noise:.4f} | {latency:.2f} | {regressed} | {gate} | {frontier_gate} | {deep_symbol_cases:.4f} | {native_scip_loaded:.4f} |".format(
                 arm=str(item.get("arm_id") or ""),
                 task_success=float(
                     task_success_map.get(
@@ -416,6 +428,10 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
                 regressed="yes" if bool(item.get("regressed", False)) else "no",
                 gate=gate_label,
                 frontier_gate=frontier_gate_label,
+                deep_symbol_cases=float(deep_symbol_map.get("case_count", 0.0) or 0.0),
+                native_scip_loaded=float(
+                    native_scip_map.get("loaded_rate", 0.0) or 0.0
+                ),
             )
         )
     lines.extend(
@@ -503,6 +519,8 @@ def run_arm_sweeper(
                 "retrieval_frontier_gate_summary": (
                     read_benchmark_retrieval_frontier_gate_summary(summary_json)
                 ),
+                "deep_symbol_summary": read_benchmark_deep_symbol_summary(summary_json),
+                "native_scip_summary": read_benchmark_native_scip_summary(summary_json),
                 "regressed": bool(summary_payload.get("regressed", False)),
                 "failed_checks": list(summary_payload.get("failed_checks", [])),
                 "cases": list(results_payload.get("cases", [])),

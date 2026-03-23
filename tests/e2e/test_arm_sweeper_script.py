@@ -29,6 +29,8 @@ def _write_results(
     failed_checks: list[str] | None = None,
     retrieval_control_plane_gate_summary: dict[str, object] | None = None,
     retrieval_frontier_gate_summary: dict[str, object] | None = None,
+    deep_symbol_summary: dict[str, object] | None = None,
+    native_scip_summary: dict[str, object] | None = None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "results.json").write_text(
@@ -51,6 +53,8 @@ def _write_results(
                 "retrieval_frontier_gate_summary": dict(
                     retrieval_frontier_gate_summary or {}
                 ),
+                "deep_symbol_summary": dict(deep_symbol_summary or {}),
+                "native_scip_summary": dict(native_scip_summary or {}),
             },
             ensure_ascii=False,
             indent=2,
@@ -119,6 +123,8 @@ cases:
                 },
                 retrieval_control_plane_gate_summary={"gate_passed": True},
                 retrieval_frontier_gate_summary={"gate_passed": False},
+                deep_symbol_summary={"case_count": 2.0, "recall": 0.81},
+                native_scip_summary={"loaded_rate": 0.68},
                 cases=[
                     {
                         "case_id": "c1",
@@ -151,6 +157,8 @@ cases:
                 },
                 retrieval_control_plane_gate_summary={"gate_passed": True},
                 retrieval_frontier_gate_summary={"gate_passed": True},
+                deep_symbol_summary={"case_count": 3.0, "recall": 0.92},
+                native_scip_summary={"loaded_rate": 0.76},
                 cases=[
                     {
                         "case_id": "c1",
@@ -204,6 +212,8 @@ cases:
     assert summary["leaderboard"][0]["retrieval_frontier_gate_summary"] == {
         "gate_passed": True
     }
+    assert summary["leaderboard"][0]["deep_symbol_summary"]["case_count"] == pytest.approx(3.0)
+    assert summary["leaderboard"][0]["native_scip_summary"]["loaded_rate"] == pytest.approx(0.76)
     assert summary["leaderboard"][1]["retrieval_frontier_gate_summary"] == {
         "gate_passed": False
     }
@@ -213,8 +223,8 @@ cases:
     }
     summary_md = Path(outputs["summary_md"]).read_text(encoding="utf-8")
     assert "q3_gate" in summary_md
-    assert "| general_rrf | 1.0000 | 0.7000 | 0.1000 | 12.00 | yes | pass | pass |" in summary_md
-    assert "| auto_default | 0.5000 | 0.5000 | 0.2000 | 10.00 | no | pass | fail |" in summary_md
+    assert "| general_rrf | 1.0000 | 0.7000 | 0.1000 | 12.00 | yes | pass | pass | 3.0000 | 0.7600 |" in summary_md
+    assert "| auto_default | 0.5000 | 0.5000 | 0.2000 | 10.00 | no | pass | fail | 2.0000 | 0.6800 |" in summary_md
 
     oracle = json.loads(Path(outputs["oracle_relabel_json"]).read_text(encoding="utf-8"))
     assert oracle["case_count"] == 2

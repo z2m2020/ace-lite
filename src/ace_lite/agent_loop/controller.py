@@ -130,13 +130,12 @@ class BoundedLoopController:
         validation_stage: dict[str, Any],
     ) -> dict[str, Any] | None:
         diagnostics = validation_stage.get("diagnostics", [])
-        if not isinstance(diagnostics, list) or not diagnostics:
-            return None
-
         focus_paths: list[str] = []
         seen_paths: set[str] = set()
         messages: list[str] = []
-        for item in diagnostics:
+        metadata: dict[str, Any] = {"source": "validation"}
+        normalized_diagnostics = diagnostics if isinstance(diagnostics, list) else []
+        for item in normalized_diagnostics:
             if not isinstance(item, dict):
                 continue
             path = str(item.get("path") or "").strip().replace("\\", "/")
@@ -146,24 +145,75 @@ class BoundedLoopController:
             message = str(item.get("message") or "").strip()
             if message and message not in messages and len(messages) < 2:
                 messages.append(message)
+        if normalized_diagnostics:
+            metadata["diagnostic_count"] = len(normalized_diagnostics)
+            reason = "validation_diagnostics"
+            focus_prefix = "Focus on validation diagnostics for "
+        else:
+            probe_payload = (
+                validation_stage.get("probes", {})
+                if isinstance(validation_stage.get("probes"), dict)
+                else (
+                    validation_stage.get("result", {}).get("probes", {})
+                    if isinstance(validation_stage.get("result"), dict)
+                    else {}
+                )
+            )
+            probe_results = (
+                probe_payload.get("results", [])
+                if isinstance(probe_payload, dict) and isinstance(probe_payload.get("results"), list)
+                else []
+            )
+            failed_probe_names: list[str] = []
+            probe_issue_count = 0
+            for probe in probe_results:
+                if not isinstance(probe, dict):
+                    continue
+                status = str(probe.get("status") or "").strip().lower()
+                issue_count = int(probe.get("issue_count", 0) or 0)
+                if status not in {"failed", "degraded"} and issue_count <= 0:
+                    continue
+                name = str(probe.get("name") or "").strip()
+                if name and name not in failed_probe_names:
+                    failed_probe_names.append(name)
+                probe_issue_count += max(0, issue_count)
+                issues = probe.get("issues", [])
+                if not isinstance(issues, list):
+                    continue
+                for item in issues:
+                    if not isinstance(item, dict):
+                        continue
+                    path = str(item.get("path") or "").strip().replace("\\", "/")
+                    if path and path not in seen_paths and len(focus_paths) < self.max_focus_paths:
+                        seen_paths.add(path)
+                        focus_paths.append(path)
+                    message = str(item.get("message") or "").strip()
+                    if message and message not in messages and len(messages) < 2:
+                        messages.append(message)
+            if not failed_probe_names and not focus_paths and not messages:
+                return None
+            metadata["probe_issue_count"] = probe_issue_count
+            metadata["probe_names"] = failed_probe_names
+            metadata["probe_status"] = str(probe_payload.get("status") or "").strip().lower()
+            reason = "validation_probes"
+            focus_prefix = "Focus on validation probe failures for "
+
         if not focus_paths and not messages:
             return None
 
         hint_parts: list[str] = []
         if focus_paths:
-            hint_parts.append(
-                "Focus on validation diagnostics for " + ", ".join(focus_paths)
-            )
+            hint_parts.append(focus_prefix + ", ".join(focus_paths))
         if messages:
             hint_parts.append(messages[0][: self.query_hint_max_chars])
         return build_agent_loop_action_v1(
             action_type="request_more_context",
-            reason="validation_diagnostics",
+            reason=reason,
             query_hint=". ".join(
                 part for part in hint_parts if part
             )[: self.query_hint_max_chars],
             focus_paths=focus_paths,
-            metadata={"source": "validation", "diagnostic_count": len(diagnostics)},
+            metadata=metadata,
         ).as_dict()
 
     def select_action(

@@ -141,6 +141,32 @@ The feature slice matrix now also includes a perturbation slice that checks robu
 - `repomap_perturbation`: reruns paired harmless graph/path perturbations with `repomap` enabled and gates `dependency_recall` alongside task success, precision, and noise so graph-aware retrieval remains stable under dependency rename and path-move changes
 
 The provider path stays opt-in through `embeddings.enabled` / `--embedding-enabled`, so local-first default plans continue on the existing path unless a benchmarked provider experiment is explicitly enabled.
+For the current repo, paired graph-seeded repomap review should prefer the
+stable `repomap_seed_summary` contract in `summary.json` and `report.md`
+instead of re-deriving seed/cache numbers from raw metrics only. The maintained
+fields are:
+
+- `worktree_seed_count_mean`
+- `subgraph_seed_count_mean`
+- `seed_candidates_count_mean`
+- `cache_hit_ratio`
+- `precompute_hit_ratio`
+
+These are the same seed/cache values consumed by `benchmark_ops` helpers and by
+the `dependency_recall` / `repomap_perturbation` feature-slice scripts.
+For the current `Y7502` retrieval-frontier lane, maintainers should treat the
+top-level `deep_symbol_summary` and `native_scip_summary` contracts in
+`summary.json` / `results.json` as the canonical evidence surface for:
+
+- deep-symbol case volume and recall
+- native SCIP load rate
+- native SCIP document / definition-occurrence / reference-occurrence /
+  symbol-definition means
+
+`report.md` renders the same sections and now prefers those top-level summaries
+before falling back to `retrieval_frontier_gate_summary` or raw `metrics`, so
+benchmark review, script automation, and human-readable reports stay aligned on
+the same Q3 evidence contract.
 
 ## Validation-Rich Lane
 
@@ -183,6 +209,11 @@ across benchmark and freeze review:
 - current summary: `artifacts/benchmark/validation_rich/latest/summary.json`
 - previous summary: a dated prior `summary.json` when delta review is needed
 - gate mode: `freeze.validation_rich_gate.mode`
+- Q3 frontier gate summary: `retrieval_frontier_gate_summary` in the same
+  current/previous validation-rich summaries and the paired freeze artifact
+- top-level frontier evidence: `deep_symbol_summary` and `native_scip_summary`
+  in the same summaries when you need stable recall / native-SCIP means without
+  re-deriving them from raw metrics
 
 `validation_rich_gate` mode guidance for the current repo:
 - `disabled`: benchmark evidence is collected, but freeze does not evaluate a
@@ -254,6 +285,15 @@ The trend report is report-only. Use it to review current-vs-previous deltas for
 `task_success_rate`, `precision_at_k`, `noise_rate`, `validation_test_count`,
 `missing_validation_rate`, and `evidence_insufficient_rate` before tightening
 release gating.
+The same trend artifact now also carries the current and previous
+`retrieval_frontier_gate_summary` blocks so maintainers can review the Q3
+frontier-readiness deltas in the same place:
+
+- `deep_symbol_case_recall`
+- `native_scip_loaded_rate`
+- `precision_at_k`
+- `noise_rate`
+- gate-level `failed_checks`
 
 When you are comparing a known-good baseline, the current default path, and a
 tuned experiment in one review, build the three-way comparison artifact:
@@ -272,6 +312,9 @@ Expected comparison artifacts:
 
 This report is also report-only. Its role is to make `baseline -> current ->
 tuned` tradeoffs explicit before any discussion of gate-mode upgrades.
+It now mirrors the same Q3 frontier gate surface across baseline/current/tuned
+inputs so tuning reviews can compare `retrieval_frontier_gate_summary` without
+opening raw summaries.
 
 To make the gate-mode decision explicit, evaluate the accumulated trend and
 stability evidence with the promotion helper:
@@ -291,6 +334,9 @@ Expected promotion artifacts:
 Promotion evaluation contract:
 - `trend.latest.regressed`, latest metric thresholds, stability classification, and comparison regressions are hard gates.
 - `trend.failed_check_top3` remains maintainer-facing history context and is emitted as a warning in the promotion decision; it should not permanently block promotion after the current latest/stability/comparison evidence is healthy.
+- `retrieval_frontier` is evaluated as an additional offline gate. A failed
+  `retrieval_frontier_gate_summary` keeps the recommendation at
+  `stay_report_only` even when the core validation-rich gate remains green.
 
 If the recommendation still says `stay_report_only`, archive the current
 evidence snapshot and carry the unresolved reasons into the next cycle:
@@ -307,6 +353,12 @@ python scripts/archive_validation_rich_evidence.py \
   --promotion-decision artifacts/benchmark/validation_rich/promotion/latest/promotion_decision.json \
   --output-root artifacts/benchmark/validation_rich/archive
 ```
+
+Archive behavior for the current repo:
+- `archive_manifest.json` retains both `validation_rich_gate_summary` and
+  `retrieval_frontier_gate_summary`
+- `next_cycle_todo.md` includes a dedicated `Q3 Retrieval Frontier Gate`
+  section so the next tuning cycle can pick up the failed Q3 checks directly
 
 The same promotion rule now applies to future skills-routing architecture experiments:
 - keep `route early, hydrate later` off the default path until a paired benchmark lane shows no task-success, precision, noise, latency, or skills-budget regressions
@@ -397,11 +449,28 @@ benchmark runs keep passing the current task-success / precision / noise /
 latency / validation-test-count thresholds without drifting into repeated
 `failed_checks`, `missing_validation_rate`, or `evidence_insufficient_rate`
 regressions.
+The same stability artifact now also records Q3 frontier drift through
+`q3_gate_failed_count` and `latest_retrieval_frontier_gate_summary`, so the
+repeated-run review can distinguish "validation lane still green" from
+"frontier-readiness regressed".
 
 Current validation-rich stability artifacts:
 
 - `artifacts/benchmark/validation_rich/stability/latest/stability_summary.json`
 - `artifacts/benchmark/validation_rich/stability/latest/stability_summary.md`
+
+When a dated checkpoint needs a compact machine-readable handoff artifact, emit:
+
+```bash
+python scripts/metrics_collector.py \
+  --current artifacts/benchmark/matrix/latest/matrix_summary.json \
+  --validation-rich-current artifacts/benchmark/validation_rich/latest/summary.json \
+  --output artifacts/benchmark/matrix/latest-metrics.json
+```
+
+The collector now keeps both `validation_rich_gate_summary` and
+`retrieval_frontier_gate_summary` so CI, dashboards, or release notes can
+consume Q2 and Q3 readiness from one JSON surface.
 
 ## Latency And SLO Trend Reporting
 

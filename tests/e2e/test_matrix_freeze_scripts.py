@@ -2558,6 +2558,14 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
                     "latency_p95_ms": 617.66,
                     "gate_passed": True,
                 },
+                "retrieval_frontier_gate_summary": {
+                    "deep_symbol_case_recall": 0.92,
+                    "native_scip_loaded_rate": 0.76,
+                    "precision_at_k": 0.425,
+                    "noise_rate": 0.575,
+                    "failed_checks": [],
+                    "gate_passed": True,
+                },
                 "previous_metrics": {
                     "task_success_rate": 0.8,
                     "precision_at_k": 0.35,
@@ -2574,6 +2582,17 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
                     "adaptive_router_shadow_coverage": 0.75,
                     "risk_upgrade_precision_gain": -0.01,
                     "latency_p95_ms": 692.08,
+                    "gate_passed": False,
+                },
+                "previous_retrieval_frontier_gate_summary": {
+                    "deep_symbol_case_recall": 0.81,
+                    "native_scip_loaded_rate": 0.68,
+                    "precision_at_k": 0.35,
+                    "noise_rate": 0.65,
+                    "failed_checks": [
+                        "deep_symbol_case_recall",
+                        "native_scip_loaded_rate",
+                    ],
                     "gate_passed": False,
                 },
                 "delta": {
@@ -2628,7 +2647,9 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
     assert "Metrics: task_success=1.0000, precision=0.4250, noise=0.5750, validation_test_count=5.0000, latency_p95_ms=617.66, evidence_insufficient=0.0000, missing_validation=0.0000" in markdown
     assert "Previous metrics: task_success=0.8000, precision=0.3500, noise=0.6500, validation_test_count=4.0000, latency_p95_ms=692.08, evidence_insufficient=0.2000, missing_validation=0.2000" in markdown
     assert "Q2 retrieval control plane gate: passed=True, regression_evaluated=True, regression_detected=False, shadow_coverage=0.8500, risk_upgrade_gain=0.0400, latency_p95_ms=617.66, failed_checks=(none)" in markdown
+    assert "Q3 retrieval frontier gate: passed=True, deep_symbol_case_recall=0.9200, native_scip_loaded_rate=0.7600, precision_at_k=0.4250, noise_rate=0.5750, failed_checks=(none)" in markdown
     assert "Previous Q2 retrieval control plane gate: passed=False, regression_evaluated=True, regression_detected=True, shadow_coverage=0.7500, risk_upgrade_gain=-0.0100, latency_p95_ms=692.08, failed_checks=benchmark_regression_detected" in markdown
+    assert "Previous Q3 retrieval frontier gate: passed=False, deep_symbol_case_recall=0.8100, native_scip_loaded_rate=0.6800, precision_at_k=0.3500, noise_rate=0.6500, failed_checks=deep_symbol_case_recall,native_scip_loaded_rate" in markdown
     assert "Delta summary:" in markdown
     assert "precision_at_k: current=0.4250, previous=0.3500, delta=+0.0750" in markdown
     assert "latency_p95_ms: current=617.6600, previous=692.0800, delta=-74.4200" in markdown
@@ -3455,6 +3476,33 @@ def test_release_freeze_main_includes_validation_rich_summary(
                     "latency_p95_ms_passed": True,
                     "gate_passed": True,
                 },
+                "retrieval_frontier_gate_summary": {
+                    "deep_symbol_case_recall": 0.92,
+                    "deep_symbol_case_recall_threshold": 0.9,
+                    "deep_symbol_case_recall_passed": True,
+                    "native_scip_loaded_rate": 0.76,
+                    "native_scip_loaded_rate_threshold": 0.7,
+                    "native_scip_loaded_rate_passed": True,
+                    "precision_at_k": 0.425,
+                    "precision_at_k_threshold": 0.64,
+                    "precision_at_k_passed": False,
+                    "noise_rate": 0.575,
+                    "noise_rate_threshold": 0.36,
+                    "noise_rate_passed": False,
+                    "failed_checks": ["precision_at_k", "noise_rate"],
+                    "gate_passed": False,
+                },
+                "deep_symbol_summary": {
+                    "case_count": 3.0,
+                    "recall": 0.92,
+                },
+                "native_scip_summary": {
+                    "loaded_rate": 0.76,
+                    "document_count_mean": 5.0,
+                    "definition_occurrence_count_mean": 7.0,
+                    "reference_occurrence_count_mean": 11.0,
+                    "symbol_definition_count_mean": 3.0,
+                },
             }
         ),
         encoding="utf-8",
@@ -3490,6 +3538,38 @@ def test_release_freeze_main_includes_validation_rich_summary(
                     "latency_p95_ms_threshold": 850.0,
                     "latency_p95_ms_passed": True,
                     "gate_passed": False,
+                },
+                "retrieval_frontier_gate_summary": {
+                    "deep_symbol_case_recall": 0.81,
+                    "deep_symbol_case_recall_threshold": 0.9,
+                    "deep_symbol_case_recall_passed": False,
+                    "native_scip_loaded_rate": 0.68,
+                    "native_scip_loaded_rate_threshold": 0.7,
+                    "native_scip_loaded_rate_passed": False,
+                    "precision_at_k": 0.35,
+                    "precision_at_k_threshold": 0.64,
+                    "precision_at_k_passed": False,
+                    "noise_rate": 0.65,
+                    "noise_rate_threshold": 0.36,
+                    "noise_rate_passed": False,
+                    "failed_checks": [
+                        "deep_symbol_case_recall",
+                        "native_scip_loaded_rate",
+                        "precision_at_k",
+                        "noise_rate",
+                    ],
+                    "gate_passed": False,
+                },
+                "deep_symbol_summary": {
+                    "case_count": 2.0,
+                    "recall": 0.81,
+                },
+                "native_scip_summary": {
+                    "loaded_rate": 0.68,
+                    "document_count_mean": 4.0,
+                    "definition_occurrence_count_mean": 6.0,
+                    "reference_occurrence_count_mean": 10.0,
+                    "symbol_definition_count_mean": 2.0,
                 },
             }
         ),
@@ -3581,6 +3661,12 @@ def test_release_freeze_main_includes_validation_rich_summary(
     assert validation_payload["retrieval_control_plane_gate_summary"][
         "adaptive_router_shadow_coverage"
     ] == 0.85
+    assert validation_payload["retrieval_frontier_gate_summary"]["gate_passed"] is False
+    assert validation_payload["retrieval_frontier_gate_summary"][
+        "deep_symbol_case_recall"
+    ] == 0.92
+    assert validation_payload["deep_symbol_summary"]["case_count"] == 3.0
+    assert validation_payload["native_scip_summary"]["document_count_mean"] == 5.0
     assert validation_payload["previous_metrics"] == {
         "task_success_rate": 0.8,
         "precision_at_k": 0.35,
@@ -3596,6 +3682,14 @@ def test_release_freeze_main_includes_validation_rich_summary(
         ]
         is True
     )
+    assert (
+        validation_payload["previous_retrieval_frontier_gate_summary"][
+            "native_scip_loaded_rate"
+        ]
+        == 0.68
+    )
+    assert validation_payload["previous_deep_symbol_summary"]["case_count"] == 2.0
+    assert validation_payload["previous_native_scip_summary"]["document_count_mean"] == 4.0
     assert validation_payload["delta"]["task_success_rate"] == {
         "current": 1.0,
         "previous": 0.8,

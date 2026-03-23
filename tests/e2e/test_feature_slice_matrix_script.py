@@ -33,6 +33,7 @@ def _write_benchmark_results(
     routing_source_by_case: dict[str, str] | None = None,
     metrics_overrides: dict[str, float] | None = None,
     comparison_lane_summary: dict[str, object] | None = None,
+    repomap_seed_summary: dict[str, float] | None = None,
 ) -> None:
     precision_rows = precision_by_case or {}
     noise_rows = noise_by_case or {}
@@ -93,6 +94,8 @@ def _write_benchmark_results(
     payload: dict[str, object] = {"metrics": metrics, "cases": case_rows}
     if isinstance(comparison_lane_summary, dict):
         payload["comparison_lane_summary"] = comparison_lane_summary
+    if isinstance(repomap_seed_summary, dict):
+        payload["repomap_seed_summary"] = repomap_seed_summary
     (output_dir / "results.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -857,6 +860,13 @@ def test_run_dependency_recall_slice_passes_when_graph_profile_is_not_worse(
                     "dependency_recall": 1.0,
                     "latency_p95_ms": 18.0,
                 },
+                repomap_seed_summary={
+                    "worktree_seed_count_mean": 1.0,
+                    "subgraph_seed_count_mean": 2.0,
+                    "seed_candidates_count_mean": 3.0,
+                    "cache_hit_ratio": 0.0,
+                    "precompute_hit_ratio": 1.0,
+                },
             )
         else:
             _write_benchmark_results(
@@ -868,6 +878,13 @@ def test_run_dependency_recall_slice_passes_when_graph_profile_is_not_worse(
                 metrics_overrides={
                     "dependency_recall": 0.5,
                     "latency_p95_ms": 15.0,
+                },
+                repomap_seed_summary={
+                    "worktree_seed_count_mean": 1.0,
+                    "subgraph_seed_count_mean": 0.0,
+                    "seed_candidates_count_mean": 1.0,
+                    "cache_hit_ratio": 1.0,
+                    "precompute_hit_ratio": 0.0,
                 },
             )
         return module.CommandResult(
@@ -909,6 +926,20 @@ def test_run_dependency_recall_slice_passes_when_graph_profile_is_not_worse(
         "off": "heuristic",
         "on": "graph_seeded",
     }
+    assert slice_payload["off"]["repomap_seed_summary"] == {
+        "worktree_seed_count_mean": 1.0,
+        "subgraph_seed_count_mean": 0.0,
+        "seed_candidates_count_mean": 1.0,
+        "cache_hit_ratio": 1.0,
+        "precompute_hit_ratio": 0.0,
+    }
+    assert slice_payload["on"]["repomap_seed_summary"] == {
+        "worktree_seed_count_mean": 1.0,
+        "subgraph_seed_count_mean": 2.0,
+        "seed_candidates_count_mean": 3.0,
+        "cache_hit_ratio": 0.0,
+        "precompute_hit_ratio": 1.0,
+    }
     assert slice_payload["deltas"]["dependency_recall_delta"] == pytest.approx(0.5)
     assert slice_payload["deltas"]["latency_growth_factor"] == pytest.approx(1.2)
 
@@ -920,6 +951,14 @@ def test_run_dependency_recall_slice_passes_when_graph_profile_is_not_worse(
         }
     )
     assert "## Dependency Recall Details" in markdown
+    assert (
+        "- Repomap seed summary (heuristic): worktree_seed_count_mean=1.0000, subgraph_seed_count_mean=0.0000, seed_candidates_count_mean=1.0000, cache_hit_ratio=1.0000, precompute_hit_ratio=0.0000"
+        in markdown
+    )
+    assert (
+        "- Repomap seed summary (graph_seeded): worktree_seed_count_mean=1.0000, subgraph_seed_count_mean=2.0000, seed_candidates_count_mean=3.0000, cache_hit_ratio=0.0000, precompute_hit_ratio=1.0000"
+        in markdown
+    )
     assert "| graph_seeded | 1.0000 | 1.0000 | 0.0000 | 18.00 |" in markdown
 
 
@@ -1970,6 +2009,13 @@ def test_run_repomap_perturbation_slice_passes_and_renders_markdown(
                 "graph-rename-perturbed": 1.0,
                 "graph-path-move-perturbed": 1.0,
             },
+            repomap_seed_summary={
+                "worktree_seed_count_mean": 1.0,
+                "subgraph_seed_count_mean": 2.0,
+                "seed_candidates_count_mean": 3.0,
+                "cache_hit_ratio": 0.5,
+                "precompute_hit_ratio": 1.0,
+            },
         )
         return module.CommandResult(
             cmd=cmd,
@@ -2007,6 +2053,20 @@ def test_run_repomap_perturbation_slice_passes_and_renders_markdown(
     assert seen_profiles == ["graph_seeded", "graph_seeded"]
     assert slice_payload["passed"] is True
     assert slice_payload["profiles"] == {"repomap": "graph_seeded"}
+    assert slice_payload["baseline"]["repomap_seed_summary"] == {
+        "worktree_seed_count_mean": 1.0,
+        "subgraph_seed_count_mean": 2.0,
+        "seed_candidates_count_mean": 3.0,
+        "cache_hit_ratio": 0.5,
+        "precompute_hit_ratio": 1.0,
+    }
+    assert slice_payload["perturbed"]["repomap_seed_summary"] == {
+        "worktree_seed_count_mean": 1.0,
+        "subgraph_seed_count_mean": 2.0,
+        "seed_candidates_count_mean": 3.0,
+        "cache_hit_ratio": 0.5,
+        "precompute_hit_ratio": 1.0,
+    }
     assert [item["name"] for item in slice_payload["perturbations"]] == [
         "dependency_rename",
         "dependency_path_move",
@@ -2026,6 +2086,14 @@ def test_run_repomap_perturbation_slice_passes_and_renders_markdown(
         }
     )
     assert "## Repomap Perturbation Details" in markdown
+    assert (
+        "- Repomap seed summary (baseline): worktree_seed_count_mean=1.0000, subgraph_seed_count_mean=2.0000, seed_candidates_count_mean=3.0000, cache_hit_ratio=0.5000, precompute_hit_ratio=1.0000"
+        in markdown
+    )
+    assert (
+        "- Repomap seed summary (perturbed): worktree_seed_count_mean=1.0000, subgraph_seed_count_mean=2.0000, seed_candidates_count_mean=3.0000, cache_hit_ratio=0.5000, precompute_hit_ratio=1.0000"
+        in markdown
+    )
     assert "| dependency_path_move | PASS | +0.0000 | +0.0000 | +0.0000 | +0.0000 |" in markdown
 
 

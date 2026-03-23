@@ -647,6 +647,15 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
         )
         result = output.get("result", {}) if isinstance(output.get("result"), dict) else {}
         summary = result.get("summary", {}) if isinstance(result.get("summary"), dict) else {}
+        probes = (
+            output.get("probes", {})
+            if isinstance(output.get("probes"), dict)
+            else (
+                result.get("probes", {})
+                if isinstance(result.get("probes"), dict)
+                else {}
+            )
+        )
         xref = output.get("xref", {}) if isinstance(output.get("xref"), dict) else {}
         return {
             "enabled": bool(output.get("enabled", False)),
@@ -661,6 +670,21 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "xref_count": int(xref.get("count", 0) or 0),
             "validation_status": str(summary.get("status", "")),
             "validation_issue_count": int(summary.get("issue_count", 0) or 0),
+            "validation_probe_enabled": bool(probes.get("enabled", False)),
+            "validation_probe_available_count": len(probes.get("available", []))
+            if isinstance(probes.get("available"), list)
+            else 0,
+            "validation_probe_count": len(probes.get("results", []))
+            if isinstance(probes.get("results"), list)
+            else 0,
+            "validation_probe_selected_count": int(
+                probes.get("selected_count", 0) or 0
+            ),
+            "validation_probe_executed_count": int(
+                probes.get("executed_count", 0) or 0
+            ),
+            "validation_probe_issue_count": int(probes.get("issue_count", 0) or 0),
+            "validation_probe_status": str(probes.get("status", "")),
             "policy_name": policy_name,
             "policy_version": policy_version,
         }

@@ -8,6 +8,7 @@ from ace_lite.chunking.skeleton import CHUNK_SKELETON_SCHEMA_VERSION
 from ace_lite.pipeline.stages.source_plan import run_source_plan
 from ace_lite.pipeline.types import StageContext
 from ace_lite.source_plan import pack_source_plan_chunks, rank_source_plan_chunks
+from ace_lite.validation.result import build_validation_result_v1
 
 
 def _random_chunks(*, seed: int, count: int) -> list[dict[str, object]]:
@@ -225,6 +226,83 @@ def test_run_source_plan_emits_selected_ltm_constraints() -> None:
             "graph_neighbor_count": 1,
         }
     ]
+
+
+def test_run_source_plan_bridges_validation_result_from_validation_stage() -> None:
+    ctx = StageContext(query="rerank after failed validation probe", repo="demo", root=".")
+    validation_result = build_validation_result_v1(
+        replay_key="validation-run-001",
+        selected_tests=["tests/unit/test_validation_stage.py::test_probe_failure"],
+        executed_tests=["tests/unit/test_validation_stage.py::test_probe_failure"],
+        probes=[
+            {
+                "name": "compile",
+                "status": "failed",
+                "selected": True,
+                "executed": True,
+                "issues": [
+                    {
+                        "code": "compile_error",
+                        "message": "py_compile failed",
+                        "path": "src/demo.py",
+                        "severity": "error",
+                        "line": 7,
+                        "column": 1,
+                    }
+                ],
+            }
+        ],
+        status="failed",
+    ).as_dict()
+
+    ctx.state = {
+        "memory": {},
+        "index": {
+            "candidate_files": [{"path": "src/demo.py"}],
+            "candidate_chunks": [],
+            "chunk_metrics": {"chunk_budget_used": 0.0},
+        },
+        "repomap": {"focused_files": ["src/demo.py"]},
+        "augment": {
+            "diagnostics": [],
+            "xref": {"count": 0, "results": []},
+            "tests": {"suspicious_chunks": [], "suggested_tests": []},
+        },
+        "skills": {"selected": []},
+        "validation": {"result": validation_result},
+        "__policy": {"name": "bugfix_test", "version": "v1", "test_signal_weight": 1.0},
+    }
+
+    result = run_source_plan(
+        ctx=ctx,
+        pipeline_order=[
+            "memory",
+            "index",
+            "repomap",
+            "augment",
+            "skills",
+            "source_plan",
+            "validation",
+        ],
+        chunk_top_k=4,
+        chunk_per_file_limit=2,
+        chunk_token_budget=128,
+        chunk_disclosure="refs",
+        policy_version="v1",
+    )
+
+    assert result["validation_result"]["summary"]["status"] == "failed"
+    assert result["validation_result"]["probes"]["status"] == "failed"
+    validate_step = next(item for item in result["steps"] if item.get("stage") == "validate")
+    assert validate_step["validation_feedback_summary"] == {
+        "status": "failed",
+        "issue_count": 1,
+        "probe_status": "failed",
+        "probe_issue_count": 1,
+        "probe_executed_count": 1,
+        "selected_test_count": 1,
+        "executed_test_count": 1,
+    }
 
 
 def test_run_source_plan_preserves_mixed_chunk_disclosure_contracts() -> None:

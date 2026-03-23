@@ -65,6 +65,10 @@ Minimum checks:
 - no unexpected `benchmark_regression_detected`
 - `retrieval_policy_summary` does not show a new regression cluster for the candidate policy mix
 - `latency_slo_summary` still matches the expected workload buckets and does not hide downgrade spikes
+- if the candidate touches repomap ranking or cache/precompute behavior, review
+  the benchmark `repomap_seed_summary` contract in `summary.json` / `report.md`
+  so release notes cite the same seed/cache evidence used by feature-slice
+  scripts
 
 If the release touches validation planning, `agent_loop`, MCP self-test / doctor,
 or `validation_result` schema contracts, also collect the narrower validation-rich
@@ -77,6 +81,18 @@ lane from the same tree:
 Review `artifacts/benchmark/validation_rich/latest/results.json` and the paired
 report output to confirm `task_success_rate`, `precision_at_k`, `noise_rate`,
 and `validation_test_count` stay non-regressed on that validation-specific lane.
+For the current `Y7502` retrieval-frontier stream, review the same summary for
+`retrieval_frontier_gate_summary` and confirm these Q3 readiness metrics remain
+inside the active thresholds:
+
+- `deep_symbol_case_recall`
+- `native_scip_loaded_rate`
+- `precision_at_k`
+- `noise_rate`
+When writing release notes or freeze commentary, also prefer the paired
+top-level `deep_symbol_summary` and `native_scip_summary` blocks from the same
+validation-rich `summary.json` if you need stable deep-symbol recall and native
+SCIP means without re-deriving them from raw `metrics`.
 If you pass that summary into freeze regression, the generated
 `freeze_regression.json` / `.md` will also carry a report-only
 `validation_rich_benchmark` section for the same evidence set:
@@ -100,6 +116,11 @@ raw config:
 - previous summary if available: a dated prior `summary.json` from the same lane
 - gate mode: `disabled`, `report_only`, or `enforced`
 - gate result: passed / failed, plus rollback reason if `enforced` was reverted
+- Q3 frontier gate result: pass / fail from the same summary or freeze
+  `validation_rich_benchmark.retrieval_frontier_gate_summary`
+- stable frontier evidence blocks: `deep_symbol_summary` and
+  `native_scip_summary` from the same benchmark summary when citing recall or
+  native SCIP evidence in a checkpoint or changelog
 
 If the release candidate depends on retry/downgrade visibility or any logic that
 changes `decision_trace`, require the same freeze run to carry a
@@ -134,6 +155,8 @@ Minimum checks:
 - latest and previous rows are ordered by `generated_at`, not directory mtime
 - delta stays report-only and is paired with the exact current/previous summary paths used for freeze
 - any `failed_checks` drift is called out in the release checkpoint before discussing `validation_rich_gate.mode=enforced`
+- any `retrieval_frontier_gate_summary.failed_checks` drift is called out before
+  treating the checkpoint as Q3-frontier-ready
 
 If a tuning round also compares a baseline snapshot against the current default
 path and a tuned candidate, attach the three-way comparison artifact:
@@ -152,6 +175,13 @@ Minimum checks:
 - baseline/current/tuned use the exact dated inputs cited in the release note or tuning review
 - tuned improvements are not hiding worse `noise_rate`, `missing_validation_rate`, or `evidence_insufficient_rate`
 - the comparison artifact is treated as decision support for `VR14`, not as an automatic gate on its own
+- baseline/current/tuned `retrieval_frontier_gate_summary` blocks are reviewed
+  together so native SCIP and deep-symbol recall gains are not claimed from a
+  single raw summary only
+- if release notes cite Q3 retrieval-frontier improvements, verify the matching
+  `deep_symbol_summary` and `native_scip_summary` blocks across the same
+  baseline/current/tuned inputs so the prose uses the same stable contract as
+  scripts and `report.md`
 
 Before changing `validation_rich_gate.mode`, generate the explicit promotion
 decision artifact:
@@ -166,6 +196,9 @@ Required checks:
   config proposal moves beyond `report_only`
 - otherwise keep `validation_rich_gate.mode=report_only` and carry the reasons
   forward into the next checkpoint
+- if `failed_gates` includes `retrieval_frontier`, keep the release note or
+  tuning checkpoint in evidence-gathering mode even when the core
+  `validation_rich_gate` recommendation remains green
 
 ### 3.2 Latency and SLO trend report
 
@@ -183,6 +216,11 @@ validation-specific signals in one `metrics.json` artifact:
 ```powershell
 python scripts/metrics_collector.py --current artifacts/benchmark/matrix/latest/matrix_summary.json --validation-rich-current artifacts/benchmark/validation_rich/latest/summary.json --output artifacts/benchmark/matrix/latest-metrics.json
 ```
+
+Review the generated metrics payload for both:
+
+- `validation_rich_gate_summary`
+- `retrieval_frontier_gate_summary`
 
 If the release checkpoint also needs a dated validation-rich trend artifact,
 build it from the same lane before writing release notes:
@@ -395,6 +433,8 @@ Required checks:
   `missing_validation_rate` / `evidence_insufficient_rate`
 - the stability artifact is reviewed together with the current
   `validation_rich_trend_report.*` outputs rather than as a replacement for them
+- `q3_gate_failed_count` stays at `0` if the release candidate claims Q3
+  retrieval-frontier readiness
 
 ## 4. Upgrade Validation
 

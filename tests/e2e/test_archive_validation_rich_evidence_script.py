@@ -44,7 +44,45 @@ def test_archive_validation_rich_evidence_main_copies_files(tmp_path: Path) -> N
                     "risk_upgrade_precision_gain": -0.01,
                     "latency_p95_ms": 692.08,
                     "gate_passed": False,
-                }
+                },
+                "retrieval_frontier_gate_summary": {
+                    "deep_symbol_case_recall": 0.81,
+                    "native_scip_loaded_rate": 0.68,
+                    "precision_at_k": 0.35,
+                    "noise_rate": 0.65,
+                    "failed_checks": [
+                        "deep_symbol_case_recall",
+                        "native_scip_loaded_rate",
+                    ],
+                    "gate_passed": False,
+                },
+                "deep_symbol_summary": {
+                    "case_count": 2.0,
+                    "recall": 0.81,
+                },
+                "native_scip_summary": {
+                    "loaded_rate": 0.68,
+                    "document_count_mean": 4.0,
+                    "definition_occurrence_count_mean": 6.0,
+                    "reference_occurrence_count_mean": 10.0,
+                    "symbol_definition_count_mean": 2.0,
+                },
+                "validation_probe_summary": {
+                    "validation_test_count": 4.0,
+                    "probe_enabled_ratio": 0.5,
+                    "probe_executed_count_mean": 1.0,
+                    "probe_failure_rate": 0.25,
+                },
+                "source_plan_validation_feedback_summary": {
+                    "present_ratio": 1.0,
+                    "issue_count_mean": 1.0,
+                    "failure_rate": 0.5,
+                    "probe_issue_count_mean": 0.5,
+                    "probe_executed_count_mean": 1.0,
+                    "probe_failure_rate": 0.25,
+                    "selected_test_count_mean": 1.0,
+                    "executed_test_count_mean": 0.5,
+                },
             }
         ),
         encoding="utf-8",
@@ -106,8 +144,30 @@ def test_archive_validation_rich_evidence_main_copies_files(tmp_path: Path) -> N
         ]
         is True
     )
+    assert manifest["retrieval_frontier_gate_summary"]["gate_passed"] is False
+    assert (
+        manifest["retrieval_frontier_gate_summary"]["native_scip_loaded_rate"] == 0.68
+    )
+    assert manifest["deep_symbol_summary"] == {
+        "case_count": 2.0,
+        "recall": 0.81,
+    }
+    assert manifest["native_scip_summary"]["document_count_mean"] == 4.0
+    assert manifest["validation_probe_summary"]["probe_failure_rate"] == 0.25
+    assert (
+        manifest["source_plan_validation_feedback_summary"]["executed_test_count_mean"]
+        == 0.5
+    )
 
     todo = (dated_root / "next_cycle_todo.md").read_text(encoding="utf-8")
     assert "## Q2 Retrieval Control Plane Gate" in todo
+    assert "## Q3 Retrieval Frontier Gate" in todo
+    assert "## Q3 Frontier Evidence" in todo
+    assert "## Q4 Validation Probe Summary" in todo
+    assert "## Q4 Source Plan Validation Feedback" in todo
     assert "- Gate passed: False" in todo
+    assert "- Native SCIP loaded rate: 0.6800" in todo
+    assert "- Deep symbol case count: 2.0000; recall: 0.8100" in todo
+    assert "- Probe failure rate: 0.2500" in todo
+    assert "- Executed test count mean: 0.5000" in todo
     assert "- Resolve: need more evidence" in todo

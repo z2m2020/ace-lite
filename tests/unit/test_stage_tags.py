@@ -323,10 +323,28 @@ def test_validation_stage_tags_include_sandbox_and_result_summary() -> None:
                 },
             },
             "result": {
+                "probes": {
+                    "enabled": True,
+                    "available": ["compile", "import", "tests"],
+                    "results": [{"name": "compile", "status": "passed"}],
+                    "selected_count": 1,
+                    "executed_count": 1,
+                    "issue_count": 0,
+                    "status": "passed",
+                },
                 "summary": {
                     "status": "failed",
                     "issue_count": 2,
                 }
+            },
+            "probes": {
+                "enabled": True,
+                "available": ["compile", "import", "tests"],
+                "results": [{"name": "compile", "status": "passed"}],
+                "selected_count": 1,
+                "executed_count": 1,
+                "issue_count": 0,
+                "status": "passed",
             },
             "policy_name": "general",
             "policy_version": "v1",
@@ -345,3 +363,10 @@ def test_validation_stage_tags_include_sandbox_and_result_summary() -> None:
     assert tags["xref_count"] == 1
     assert tags["validation_status"] == "failed"
     assert tags["validation_issue_count"] == 2
+    assert tags["validation_probe_enabled"] is True
+    assert tags["validation_probe_available_count"] == 3
+    assert tags["validation_probe_count"] == 1
+    assert tags["validation_probe_selected_count"] == 1
+    assert tags["validation_probe_executed_count"] == 1
+    assert tags["validation_probe_issue_count"] == 0
+    assert tags["validation_probe_status"] == "passed"

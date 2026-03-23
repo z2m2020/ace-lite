@@ -17,18 +17,23 @@ from ace_lite.benchmark.scoring import (
     build_adaptive_router_pair_summary,
     build_comparison_lane_summary,
     build_chunk_stage_miss_summary,
+    build_deep_symbol_summary,
     build_decision_observability_summary,
     build_evidence_insufficiency_summary,
     build_feedback_loop_summary,
     build_feedback_observability_summary,
     build_missing_context_risk_summary,
     build_ltm_explainability_summary,
+    build_native_scip_summary,
     build_preference_observability_summary,
+    build_repomap_seed_summary,
     build_retrieval_control_plane_gate_summary,
     build_retrieval_frontier_gate_summary,
     build_retrieval_context_observability_summary,
+    build_source_plan_validation_feedback_summary,
     build_slo_budget_summary,
     build_stage_latency_summary,
+    build_validation_probe_summary,
     compare_metrics,
     detect_regression,
     evaluate_case_result,
@@ -615,6 +620,15 @@ class BenchmarkRunner:
         )
         output["retrieval_frontier_gate_summary"] = (
             build_retrieval_frontier_gate_summary(metrics=metrics)
+        )
+        output["repomap_seed_summary"] = build_repomap_seed_summary(metrics=metrics)
+        output["deep_symbol_summary"] = build_deep_symbol_summary(metrics=metrics)
+        output["native_scip_summary"] = build_native_scip_summary(metrics=metrics)
+        output["validation_probe_summary"] = build_validation_probe_summary(
+            metrics=metrics
+        )
+        output["source_plan_validation_feedback_summary"] = (
+            build_source_plan_validation_feedback_summary(metrics=metrics)
         )
 
         return output

@@ -17,6 +17,7 @@ from ace_lite.prompt_rendering.segments import (
     canonicalize_segments,
 )
 from ace_lite.source_plan.steps import build_source_plan_steps
+from ace_lite.validation.result import build_validation_result_v1
 
 
 def _sample_segments() -> list[dict[str, object]]:
@@ -123,6 +124,27 @@ def test_render_prompt_uses_canonical_order_and_stable_manifest() -> None:
 
 
 def test_build_source_plan_steps_exposes_prompt_rendering_boundary_metadata() -> None:
+    validation_result = build_validation_result_v1(
+        replay_key="validation-run-001",
+        selected_tests=["pytest -q tests/unit/test_prompt_rendering_boundary.py"],
+        executed_tests=["pytest -q tests/unit/test_prompt_rendering_boundary.py"],
+        probes=[
+            {
+                "name": "compile",
+                "status": "failed",
+                "selected": True,
+                "executed": True,
+                "issues": [
+                    {
+                        "code": "probe.compile.failed",
+                        "message": "compile probe failed",
+                        "path": "src/alpha.py",
+                    }
+                ],
+            }
+        ],
+        status="failed",
+    ).as_dict()
     steps = build_source_plan_steps(
         index_stage={"targets": [], "languages_covered": []},
         repomap_stage={"seed_count": 1, "neighbor_count": 0},
@@ -153,6 +175,7 @@ def test_build_source_plan_steps_exposes_prompt_rendering_boundary_metadata() ->
             "seed_paths": [],
             "edge_counts": {},
         },
+        validation_result=validation_result,
     )
 
     source_plan_step = next(
@@ -162,6 +185,16 @@ def test_build_source_plan_steps_exposes_prompt_rendering_boundary_metadata() ->
         **build_prompt_rendering_boundary(),
     }
     assert source_plan_step["subgraph_payload"]["payload_version"] == "subgraph_payload_v1"
+    validate_step = next(item for item in steps if item.get("stage") == "validate")
+    assert validate_step["validation_feedback_summary"] == {
+        "status": "failed",
+        "issue_count": 1,
+        "probe_status": "failed",
+        "probe_issue_count": 1,
+        "probe_executed_count": 1,
+        "selected_test_count": 1,
+        "executed_test_count": 1,
+    }
 
 
 def test_run_source_plan_exposes_top_level_contract_metadata() -> None:

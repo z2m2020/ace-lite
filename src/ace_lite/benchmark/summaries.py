@@ -292,6 +292,62 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         item for item in elevated_risk_cases if not _is_risk_upgrade_case_impl(item)
     ]
     validation_counts = [float(item.get("validation_test_count", 0.0)) for item in case_results]
+    validation_probe_enabled = [
+        float(item.get("validation_probe_enabled", 0.0) or 0.0)
+        for item in case_results
+    ]
+    validation_probe_executed_counts = [
+        float(item.get("validation_probe_executed_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    validation_probe_failed = [
+        float(item.get("validation_probe_failed", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_validation_feedback_present = [
+        float(item.get("source_plan_validation_feedback_present", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_validation_feedback_issue_counts = [
+        float(item.get("source_plan_validation_feedback_issue_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_validation_feedback_failed = [
+        float(item.get("source_plan_validation_feedback_failed", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_validation_feedback_probe_issue_counts = [
+        float(
+            item.get("source_plan_validation_feedback_probe_issue_count", 0.0)
+            or 0.0
+        )
+        for item in case_results
+    ]
+    source_plan_validation_feedback_probe_executed_counts = [
+        float(
+            item.get("source_plan_validation_feedback_probe_executed_count", 0.0)
+            or 0.0
+        )
+        for item in case_results
+    ]
+    source_plan_validation_feedback_probe_failed = [
+        float(item.get("source_plan_validation_feedback_probe_failed", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_validation_feedback_selected_test_counts = [
+        float(
+            item.get("source_plan_validation_feedback_selected_test_count", 0.0)
+            or 0.0
+        )
+        for item in case_results
+    ]
+    source_plan_validation_feedback_executed_test_counts = [
+        float(
+            item.get("source_plan_validation_feedback_executed_test_count", 0.0)
+            or 0.0
+        )
+        for item in case_results
+    ]
     source_plan_direct_ratios = [
         float(item.get("source_plan_direct_evidence_ratio", 0.0) or 0.0)
         for item in case_results
@@ -952,6 +1008,35 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
             else 0.0
         ),
         "validation_test_count": mean(validation_counts),
+        "validation_probe_enabled_ratio": mean(validation_probe_enabled),
+        "validation_probe_executed_count_mean": mean(
+            validation_probe_executed_counts
+        ),
+        "validation_probe_failure_rate": mean(validation_probe_failed),
+        "source_plan_validation_feedback_present_ratio": mean(
+            source_plan_validation_feedback_present
+        ),
+        "source_plan_validation_feedback_issue_count_mean": mean(
+            source_plan_validation_feedback_issue_counts
+        ),
+        "source_plan_validation_feedback_failure_rate": mean(
+            source_plan_validation_feedback_failed
+        ),
+        "source_plan_validation_feedback_probe_issue_count_mean": mean(
+            source_plan_validation_feedback_probe_issue_counts
+        ),
+        "source_plan_validation_feedback_probe_executed_count_mean": mean(
+            source_plan_validation_feedback_probe_executed_counts
+        ),
+        "source_plan_validation_feedback_probe_failure_rate": mean(
+            source_plan_validation_feedback_probe_failed
+        ),
+        "source_plan_validation_feedback_selected_test_count_mean": mean(
+            source_plan_validation_feedback_selected_test_counts
+        ),
+        "source_plan_validation_feedback_executed_test_count_mean": mean(
+            source_plan_validation_feedback_executed_test_counts
+        ),
         "source_plan_direct_evidence_ratio": mean(source_plan_direct_ratios),
         "source_plan_symbol_count_mean": mean(source_plan_symbol_counts),
         "source_plan_signature_count_mean": mean(source_plan_signature_counts),
@@ -1219,6 +1304,199 @@ def build_retrieval_frontier_gate_summary(
     }
 
 
+def build_repomap_seed_summary(*, metrics: dict[str, Any]) -> dict[str, float]:
+    normalized_metrics = normalize_metrics(metrics)
+    return {
+        "worktree_seed_count_mean": round(
+            float(normalized_metrics.get("repomap_worktree_seed_count_mean", 0.0) or 0.0),
+            6,
+        ),
+        "subgraph_seed_count_mean": round(
+            float(normalized_metrics.get("repomap_subgraph_seed_count_mean", 0.0) or 0.0),
+            6,
+        ),
+        "seed_candidates_count_mean": round(
+            float(
+                normalized_metrics.get("repomap_seed_candidates_count_mean", 0.0)
+                or 0.0
+            ),
+            6,
+        ),
+        "cache_hit_ratio": round(
+            float(normalized_metrics.get("repomap_cache_hit_ratio", 0.0) or 0.0),
+            6,
+        ),
+        "precompute_hit_ratio": round(
+            float(normalized_metrics.get("repomap_precompute_hit_ratio", 0.0) or 0.0),
+            6,
+        ),
+    }
+
+
+def build_deep_symbol_summary(*, metrics: dict[str, Any]) -> dict[str, float]:
+    normalized_metrics = normalize_metrics(metrics)
+    return {
+        "case_count": round(
+            float(normalized_metrics.get("deep_symbol_case_count", 0.0) or 0.0),
+            6,
+        ),
+        "recall": round(
+            float(normalized_metrics.get("deep_symbol_case_recall", 0.0) or 0.0),
+            6,
+        ),
+    }
+
+
+def build_native_scip_summary(*, metrics: dict[str, Any]) -> dict[str, float]:
+    normalized_metrics = normalize_metrics(metrics)
+    return {
+        "loaded_rate": round(
+            float(normalized_metrics.get("native_scip_loaded_rate", 0.0) or 0.0),
+            6,
+        ),
+        "document_count_mean": round(
+            float(
+                normalized_metrics.get("native_scip_document_count_mean", 0.0) or 0.0
+            ),
+            6,
+        ),
+        "definition_occurrence_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "native_scip_definition_occurrence_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "reference_occurrence_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "native_scip_reference_occurrence_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "symbol_definition_count_mean": round(
+            float(
+                normalized_metrics.get("native_scip_symbol_definition_count_mean", 0.0)
+                or 0.0
+            ),
+            6,
+        ),
+    }
+
+
+def build_validation_probe_summary(*, metrics: dict[str, Any]) -> dict[str, float]:
+    normalized_metrics = normalize_metrics(metrics)
+    return {
+        "validation_test_count": round(
+            float(normalized_metrics.get("validation_test_count", 0.0) or 0.0),
+            6,
+        ),
+        "probe_enabled_ratio": round(
+            float(
+                normalized_metrics.get("validation_probe_enabled_ratio", 0.0) or 0.0
+            ),
+            6,
+        ),
+        "probe_executed_count_mean": round(
+            float(
+                normalized_metrics.get("validation_probe_executed_count_mean", 0.0)
+                or 0.0
+            ),
+            6,
+        ),
+        "probe_failure_rate": round(
+            float(
+                normalized_metrics.get("validation_probe_failure_rate", 0.0) or 0.0
+            ),
+            6,
+        ),
+    }
+
+
+def build_source_plan_validation_feedback_summary(
+    *, metrics: dict[str, Any]
+) -> dict[str, float]:
+    normalized_metrics = normalize_metrics(metrics)
+    return {
+        "present_ratio": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_validation_feedback_present_ratio", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "issue_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_validation_feedback_issue_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "failure_rate": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_validation_feedback_failure_rate", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "probe_issue_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_validation_feedback_probe_issue_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "probe_executed_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_validation_feedback_probe_executed_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "probe_failure_rate": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_validation_feedback_probe_failure_rate", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "selected_test_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_validation_feedback_selected_test_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "executed_test_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_validation_feedback_executed_test_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+    }
+
+
 def build_evidence_insufficiency_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -1365,17 +1643,22 @@ __all__ = [
     "build_adaptive_router_observability_summary",
     "build_adaptive_router_pair_summary",
     "build_chunk_stage_miss_summary",
+    "build_deep_symbol_summary",
     "build_decision_observability_summary",
     "build_evidence_insufficiency_summary",
     "build_feedback_loop_summary",
     "build_feedback_observability_summary",
     "build_missing_context_risk_summary",
     "build_ltm_explainability_summary",
+    "build_native_scip_summary",
     "build_preference_observability_summary",
+    "build_repomap_seed_summary",
     "build_retrieval_control_plane_gate_summary",
     "build_retrieval_frontier_gate_summary",
     "build_retrieval_context_observability_summary",
+    "build_source_plan_validation_feedback_summary",
     "build_slo_budget_summary",
     "build_stage_latency_summary",
+    "build_validation_probe_summary",
     "compare_metrics",
 ]

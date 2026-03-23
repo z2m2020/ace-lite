@@ -244,6 +244,11 @@ def run_source_plan(
     repomap_stage = ctx.state.get("repomap", {}) if isinstance(ctx.state.get("repomap"), dict) else {}
     skills_stage = ctx.state.get("skills", {}) if isinstance(ctx.state.get("skills"), dict) else {}
     augment_stage = ctx.state.get("augment", {}) if isinstance(ctx.state.get("augment"), dict) else {}
+    validation_stage = (
+        ctx.state.get("validation", {})
+        if isinstance(ctx.state.get("validation"), dict)
+        else {}
+    )
     policy = ctx.state.get("__policy", {}) if isinstance(ctx.state.get("__policy"), dict) else {}
 
     memory_hits = _extract_memory_hits(memory_stage)
@@ -329,6 +334,11 @@ def run_source_plan(
             else {}
         ),
     )
+    validation_result = (
+        validation_stage.get("result")
+        if isinstance(validation_stage.get("result"), dict)
+        else {}
+    )
 
     steps = build_source_plan_steps(
         index_stage=index_stage,
@@ -344,14 +354,14 @@ def run_source_plan(
         tests=tests,
         validation_tests=validation_tests,
         subgraph_payload=subgraph_payload,
+        validation_result=validation_result,
     )
     prompt_rendering_boundary = build_prompt_rendering_boundary()
     chunk_contract = summarize_chunk_contract(
         candidate_chunks=grounded_chunks[: max(1, int(chunk_top_k))],
         requested_disclosure=str(chunk_disclosure or "refs"),
     )
-
-    return {
+    payload = {
         "repo": ctx.repo,
         "root": ctx.root,
         "query": ctx.query,
@@ -392,6 +402,9 @@ def run_source_plan(
             },
         },
     }
+    if isinstance(validation_result, dict) and validation_result:
+        payload["validation_result"] = dict(validation_result)
+    return payload
 
 
 __all__ = ["run_source_plan"]

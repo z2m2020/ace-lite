@@ -7,6 +7,7 @@ from typing import Any
 
 VALIDATION_RESULT_SCHEMA_VERSION = "validation_result_v1"
 VALIDATION_RESULT_STATUS_VALUES = ("passed", "failed", "degraded", "skipped")
+VALIDATION_PROBE_STATUS_VALUES = ("disabled", "passed", "failed", "degraded", "skipped")
 
 
 def _normalize_issue_list(*, value: Any, context: str) -> tuple[dict[str, Any], ...]:
@@ -63,6 +64,90 @@ def _build_issue_section(*, issues: tuple[dict[str, Any], ...]) -> dict[str, Any
     }
 
 
+def _normalize_probe_results(*, value: Any, context: str) -> tuple[dict[str, Any], ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError(f"{context} must be a list")
+    normalized: list[dict[str, Any]] = []
+    seen_names: set[str] = set()
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ValueError(f"{context}[{index}] must be a mapping")
+        name = str(item.get("name") or "").strip()
+        if not name:
+            raise ValueError(f"{context}[{index}].name cannot be empty")
+        if name in seen_names:
+            raise ValueError(f"{context}[{index}].name must be unique")
+        seen_names.add(name)
+        status = str(item.get("status") or "").strip().lower()
+        if status not in VALIDATION_PROBE_STATUS_VALUES:
+            status = "disabled"
+        issues = _normalize_issue_list(
+            value=item.get("issues"),
+            context=f"{context}[{index}].issues",
+        )
+        artifacts = _normalize_text_list(
+            value=item.get("artifacts"),
+            context=f"{context}[{index}].artifacts",
+        )
+        degraded_reasons = _normalize_text_list(
+            value=item.get("degraded_reasons"),
+            context=f"{context}[{index}].degraded_reasons",
+        )
+        executed = bool(item.get("executed", False))
+        selected = bool(item.get("selected", executed))
+        issue_count = len(issues)
+        ok = status in {"disabled", "passed", "skipped"} and issue_count == 0
+        normalized.append(
+            {
+                "name": name,
+                "status": status,
+                "ok": ok,
+                "selected": selected,
+                "executed": executed,
+                "issue_count": issue_count,
+                "issues": [dict(entry) for entry in issues],
+                "artifacts": list(artifacts),
+                "degraded_reasons": list(degraded_reasons),
+                "timed_out": bool(item.get("timed_out", False)),
+            }
+        )
+    return tuple(normalized)
+
+
+def _build_probe_section(
+    *,
+    available: tuple[str, ...],
+    results: tuple[dict[str, Any], ...],
+) -> dict[str, Any]:
+    selected_count = sum(1 for item in results if bool(item.get("selected", False)))
+    executed_count = sum(1 for item in results if bool(item.get("executed", False)))
+    issue_count = sum(int(item.get("issue_count", 0) or 0) for item in results)
+    statuses = {str(item.get("status") or "").strip().lower() for item in results}
+    if not results:
+        status = "disabled"
+    elif "failed" in statuses:
+        status = "failed"
+    elif "degraded" in statuses:
+        status = "degraded"
+    elif "passed" in statuses:
+        status = "passed"
+    elif "skipped" in statuses:
+        status = "skipped"
+    else:
+        status = "disabled"
+    return {
+        "enabled": bool(available),
+        "available": list(available),
+        "results": [dict(item) for item in results],
+        "selected_count": selected_count,
+        "executed_count": executed_count,
+        "issue_count": issue_count,
+        "status": status,
+    }
+
+
 def _compute_comparison_key(*, payload: dict[str, Any]) -> str:
     canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode(
         "utf-8",
@@ -76,6 +161,7 @@ class ValidationResultV1:
     syntax: dict[str, Any]
     type_results: dict[str, Any]
     tests: dict[str, Any]
+    probes: dict[str, Any]
     environment: dict[str, Any]
     summary: dict[str, Any]
 
@@ -85,6 +171,7 @@ class ValidationResultV1:
             "syntax": dict(self.syntax),
             "type": dict(self.type_results),
             "tests": dict(self.tests),
+            "probes": dict(self.probes),
             "environment": dict(self.environment),
             "summary": dict(self.summary),
         }
@@ -97,6 +184,8 @@ def build_validation_result_v1(
     test_issues: list[dict[str, Any]] | None = None,
     selected_tests: list[str] | None = None,
     executed_tests: list[str] | None = None,
+    probes: list[dict[str, Any]] | None = None,
+    available_probes: list[str] | None = None,
     sandboxed: bool = True,
     runner: str = "sandbox",
     artifacts: list[str] | None = None,
@@ -124,6 +213,20 @@ def build_validation_result_v1(
         value=executed_tests,
         context="executed_tests",
     )
+    normalized_available_probes = _normalize_text_list(
+        value=available_probes,
+        context="available_probes",
+    )
+    normalized_probe_results = _normalize_probe_results(
+        value=probes,
+        context="probes",
+    )
+    if not normalized_available_probes and normalized_probe_results:
+        normalized_available_probes = tuple(
+            str(item.get("name") or "").strip()
+            for item in normalized_probe_results
+            if str(item.get("name") or "").strip()
+        )
     normalized_artifacts = _normalize_text_list(value=artifacts, context="artifacts")
     normalized_degraded_reasons = _normalize_text_list(
         value=degraded_reasons,
@@ -135,6 +238,10 @@ def build_validation_result_v1(
     tests = _build_issue_section(issues=normalized_test_issues)
     tests["selected"] = list(normalized_selected_tests)
     tests["executed"] = list(normalized_executed_tests)
+    probe_section = _build_probe_section(
+        available=normalized_available_probes,
+        results=normalized_probe_results,
+    )
 
     environment = {
         "ok": len(normalized_degraded_reasons) == 0,
@@ -144,11 +251,20 @@ def build_validation_result_v1(
         "degraded_reasons": list(normalized_degraded_reasons),
     }
 
-    overall_ok = bool(syntax["ok"] and type_results["ok"] and tests["ok"] and environment["ok"])
+    probe_ok = str(probe_section.get("status") or "") in {"disabled", "passed", "skipped"}
+    overall_ok = bool(
+        syntax["ok"]
+        and type_results["ok"]
+        and tests["ok"]
+        and probe_ok
+        and environment["ok"]
+    )
     effective_status = str(status or "").strip().lower()
     if effective_status not in VALIDATION_RESULT_STATUS_VALUES:
         effective_status = "passed" if overall_ok else (
-            "degraded" if not environment["ok"] and syntax["ok"] and type_results["ok"] and tests["ok"] else "failed"
+            "degraded"
+            if not environment["ok"] and syntax["ok"] and type_results["ok"] and tests["ok"] and probe_ok
+            else "failed"
         )
 
     base_payload = {
@@ -156,6 +272,7 @@ def build_validation_result_v1(
         "syntax": syntax,
         "type": type_results,
         "tests": tests,
+        "probes": probe_section,
         "environment": environment,
     }
     summary = {
@@ -165,6 +282,7 @@ def build_validation_result_v1(
             int(syntax["issue_count"])
             + int(type_results["issue_count"])
             + int(tests["issue_count"])
+            + int(probe_section["issue_count"])
         ),
         "replay_key": str(replay_key or "").strip(),
         "artifact_refs": list(normalized_artifacts),
@@ -174,6 +292,7 @@ def build_validation_result_v1(
         syntax=syntax,
         type_results=type_results,
         tests=tests,
+        probes=probe_section,
         environment=environment,
         summary=summary,
     )
@@ -200,8 +319,36 @@ def compare_validation_results_v1(
             if isinstance(item, dict) and str(item.get("code") or "").strip()
         }
 
-    before_codes = _issue_codes(before_payload, "syntax") | _issue_codes(before_payload, "type") | _issue_codes(before_payload, "tests")
-    after_codes = _issue_codes(after_payload, "syntax") | _issue_codes(after_payload, "type") | _issue_codes(after_payload, "tests")
+    def _probe_issue_codes(payload: dict[str, Any]) -> set[str]:
+        probes = payload.get("probes", {})
+        results = probes.get("results", []) if isinstance(probes, dict) else []
+        if not isinstance(results, list):
+            return set()
+        codes: set[str] = set()
+        for item in results:
+            issues = item.get("issues", []) if isinstance(item, dict) else []
+            if not isinstance(issues, list):
+                continue
+            for issue in issues:
+                if not isinstance(issue, dict):
+                    continue
+                code = str(issue.get("code") or "").strip()
+                if code:
+                    codes.add(code)
+        return codes
+
+    before_codes = (
+        _issue_codes(before_payload, "syntax")
+        | _issue_codes(before_payload, "type")
+        | _issue_codes(before_payload, "tests")
+        | _probe_issue_codes(before_payload)
+    )
+    after_codes = (
+        _issue_codes(after_payload, "syntax")
+        | _issue_codes(after_payload, "type")
+        | _issue_codes(after_payload, "tests")
+        | _probe_issue_codes(after_payload)
+    )
     before_summary = before_payload.get("summary", {}) if isinstance(before_payload.get("summary"), dict) else {}
     after_summary = after_payload.get("summary", {}) if isinstance(after_payload.get("summary"), dict) else {}
 
@@ -288,6 +435,45 @@ def validate_validation_result_v1(
                         message=f"tests.{field_name} must be a list",
                         context={"field": field_name},
                     )
+
+    probes = payload.get("probes")
+    if not isinstance(probes, dict):
+        _add_violation(
+            code="validation_result_probes_invalid",
+            field="probes",
+            message="probes must be a mapping",
+        )
+        probes = {}
+    if not isinstance(probes.get("enabled"), bool):
+        _add_violation(
+            code="validation_result_probes_enabled_invalid",
+            field="probes.enabled",
+            message="probes.enabled must be a bool",
+        )
+    for field_name in ("available", "results"):
+        if not isinstance(probes.get(field_name), list):
+            _add_violation(
+                code="validation_result_probes_list_invalid",
+                field=f"probes.{field_name}",
+                message=f"probes.{field_name} must be a list",
+                context={"field": field_name},
+            )
+    for field_name in ("selected_count", "executed_count", "issue_count"):
+        if not isinstance(probes.get(field_name), (int, float)):
+            _add_violation(
+                code="validation_result_probes_count_invalid",
+                field=f"probes.{field_name}",
+                message=f"probes.{field_name} must be numeric",
+                context={"field": field_name},
+            )
+    probe_status = str(probes.get("status") or "").strip().lower()
+    if probe_status not in VALIDATION_PROBE_STATUS_VALUES:
+        _add_violation(
+            code="validation_result_probes_status_invalid",
+            field="probes.status",
+            message="probes.status must be disabled, passed, failed, degraded, or skipped",
+            context={"status": probe_status},
+        )
 
     environment = payload.get("environment")
     if not isinstance(environment, dict):
