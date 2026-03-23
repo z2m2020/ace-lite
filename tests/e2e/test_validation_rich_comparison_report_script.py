@@ -40,6 +40,7 @@ def _write_summary(
     native_scip_summary: dict[str, object] | None = None,
     validation_probe_summary: dict[str, object] | None = None,
     source_plan_validation_feedback_summary: dict[str, object] | None = None,
+    source_plan_failure_signal_summary: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -73,6 +74,10 @@ def _write_summary(
     if source_plan_validation_feedback_summary is not None:
         payload["source_plan_validation_feedback_summary"] = (
             source_plan_validation_feedback_summary
+        )
+    if source_plan_failure_signal_summary is not None:
+        payload["source_plan_failure_signal_summary"] = (
+            source_plan_failure_signal_summary
         )
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -149,6 +154,20 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
             "selected_test_count_mean": 1.0,
             "executed_test_count_mean": 0.5,
         },
+        source_plan_failure_signal_summary={
+            "present_ratio": 1.0,
+            "issue_count_mean": 1.0,
+            "failure_rate": 0.5,
+            "probe_issue_count_mean": 0.5,
+            "probe_executed_count_mean": 1.0,
+            "probe_failure_rate": 0.25,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 0.5,
+            "replay_cache_origin_ratio": 1.0,
+            "observability_origin_ratio": 0.0,
+            "source_plan_origin_ratio": 0.0,
+            "validate_step_origin_ratio": 0.0,
+        },
     )
     _write_summary(
         current,
@@ -211,6 +230,20 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
             "probe_executed_count_mean": 1.5,
             "selected_test_count_mean": 1.0,
             "executed_test_count_mean": 0.75,
+        },
+        source_plan_failure_signal_summary={
+            "present_ratio": 1.0,
+            "issue_count_mean": 0.25,
+            "failure_rate": 0.2,
+            "probe_issue_count_mean": 0.25,
+            "probe_executed_count_mean": 1.5,
+            "probe_failure_rate": 0.1,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 0.75,
+            "replay_cache_origin_ratio": 1.0,
+            "observability_origin_ratio": 0.0,
+            "source_plan_origin_ratio": 0.0,
+            "validate_step_origin_ratio": 0.0,
         },
     )
     _write_summary(
@@ -275,6 +308,20 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
             "selected_test_count_mean": 1.0,
             "executed_test_count_mean": 1.0,
         },
+        source_plan_failure_signal_summary={
+            "present_ratio": 1.0,
+            "issue_count_mean": 0.0,
+            "failure_rate": 0.0,
+            "probe_issue_count_mean": 0.0,
+            "probe_executed_count_mean": 2.0,
+            "probe_failure_rate": 0.0,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 1.0,
+            "replay_cache_origin_ratio": 1.0,
+            "observability_origin_ratio": 0.0,
+            "source_plan_origin_ratio": 0.0,
+            "validate_step_origin_ratio": 0.0,
+        },
     )
 
     module.sys.argv = [
@@ -315,6 +362,9 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
     assert payload["current"]["source_plan_validation_feedback_summary"][
         "failure_rate"
     ] == pytest.approx(0.2)
+    assert payload["current"]["source_plan_failure_signal_summary"][
+        "replay_cache_origin_ratio"
+    ] == pytest.approx(1.0)
     assert payload["tuned"]["native_scip_summary"]["document_count_mean"] == pytest.approx(6.0)
     assert payload["tuned"]["retrieval_control_plane_gate_summary"][
         "risk_upgrade_precision_gain"
@@ -326,6 +376,9 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
     assert payload["tuned"]["source_plan_validation_feedback_summary"][
         "executed_test_count_mean"
     ] == pytest.approx(1.0)
+    assert payload["tuned"]["source_plan_failure_signal_summary"][
+        "failure_rate"
+    ] == pytest.approx(0.0)
     assert payload["comparisons"]["baseline_vs_current"]["precision_at_k"]["delta"] == pytest.approx(
         0.075
     )
@@ -343,6 +396,7 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
     assert "## Q3 Frontier Evidence" in markdown
     assert "## Q4 Validation Probe Summary" in markdown
     assert "## Q4 Source Plan Validation Feedback Summary" in markdown
+    assert "## Q1 Source Plan Failure Signal Summary" in markdown
     assert "| precision_at_k | 0.3500 | 0.4250 | +0.0750 |" in markdown
     assert (
         "| baseline | no | yes | yes | 0.7500 | -0.0100 | 692.08 | "
@@ -360,6 +414,7 @@ def test_validation_rich_comparison_report_main_writes_summary(tmp_path: Path) -
     )
     assert "| baseline | 4.0000 | 0.5000 | 1.0000 | 0.2500 |" in markdown
     assert "| current | 1.0000 | 0.2000 | 0.2500 | 0.2500 | 1.5000 | 1.0000 | 0.7500 |" in markdown
+    assert "| current | 1.0000 | 0.2000 | 0.2500 | 0.2500 | 1.5000 | 1.0000 | 0.0000 | 0.0000 | 0.0000 |" in markdown
 
 
 def test_validation_rich_comparison_report_requires_all_inputs(tmp_path: Path) -> None:

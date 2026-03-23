@@ -6,41 +6,7 @@ from typing import Any
 
 from ace_lite.chunking import build_chunk_step_reason
 from ace_lite.prompt_rendering.renderer import build_prompt_rendering_boundary
-
-
-def _build_validation_feedback_summary(
-    validation_result: dict[str, Any] | None,
-) -> dict[str, Any]:
-    if not isinstance(validation_result, dict) or not validation_result:
-        return {}
-
-    summary = (
-        validation_result.get("summary")
-        if isinstance(validation_result.get("summary"), dict)
-        else {}
-    )
-    probes = (
-        validation_result.get("probes")
-        if isinstance(validation_result.get("probes"), dict)
-        else {}
-    )
-    tests = (
-        validation_result.get("tests")
-        if isinstance(validation_result.get("tests"), dict)
-        else {}
-    )
-    selected_tests = tests.get("selected", [])
-    executed_tests = tests.get("executed", [])
-
-    return {
-        "status": str(summary.get("status") or "").strip() or "skipped",
-        "issue_count": int(summary.get("issue_count", 0) or 0),
-        "probe_status": str(probes.get("status") or "").strip() or "disabled",
-        "probe_issue_count": int(probes.get("issue_count", 0) or 0),
-        "probe_executed_count": int(probes.get("executed_count", 0) or 0),
-        "selected_test_count": len(selected_tests) if isinstance(selected_tests, list) else 0,
-        "executed_test_count": len(executed_tests) if isinstance(executed_tests, list) else 0,
-    }
+from ace_lite.source_plan.cards import build_validation_feedback_summary
 
 
 def build_chunk_steps(
@@ -128,7 +94,7 @@ def build_source_plan_steps(
             path = str(item.get("path") or "").strip()
             if path:
                 changed_files.append(path)
-    validation_feedback_summary = _build_validation_feedback_summary(validation_result)
+    validation_feedback_summary = build_validation_feedback_summary(validation_result)
 
     validate_step: dict[str, Any] = {
         "id": 7,

@@ -27,6 +27,15 @@ def test_build_adaptive_router_payload_uses_defaults_and_configured_confidence()
         "shadow_arm_id": "shadow_arm",
         "shadow_source": "",
         "shadow_confidence": 0.25,
+        "guarded_rollout": {
+            "enabled": False,
+            "eligible": False,
+            "active": False,
+            "decision": "stay_report_only",
+            "reason": "guarded_rollout_disabled",
+            "source_reason": "",
+            "shadow_arm_id": "",
+        },
         "online_bandit": {"requested": True},
     }
 
@@ -50,4 +59,45 @@ def test_build_adaptive_router_payload_disables_arm_fields_when_router_disabled(
     assert payload["shadow_arm_id"] == ""
     assert payload["shadow_source"] == ""
     assert payload["shadow_confidence"] == 0.0
+    assert payload["guarded_rollout"] == {
+        "enabled": False,
+        "eligible": False,
+        "active": False,
+        "decision": "stay_report_only",
+        "reason": "guarded_rollout_disabled",
+        "source_reason": "",
+        "shadow_arm_id": "",
+    }
     assert payload["online_bandit"] == {"requested": False}
+
+
+def test_build_adaptive_router_payload_accepts_guarded_rollout_override() -> None:
+    payload = build_adaptive_router_payload(
+        enabled=True,
+        mode="shadow",
+        model_path="m.json",
+        state_path="s.json",
+        arm_set="retrieval_policy_shadow",
+        policy={"name": "feature", "source": "configured"},
+        shadow={"arm_id": "shadow_arm", "confidence": 0.75},
+        guarded_rollout={
+            "enabled": False,
+            "eligible": True,
+            "active": False,
+            "decision": "stay_report_only",
+            "reason": "guarded_rollout_disabled",
+            "source_reason": "eligible_pending_guarded_rollout",
+            "shadow_arm_id": "shadow_arm",
+        },
+        online_bandit={"requested": False},
+    )
+
+    assert payload["guarded_rollout"] == {
+        "enabled": False,
+        "eligible": True,
+        "active": False,
+        "decision": "stay_report_only",
+        "reason": "guarded_rollout_disabled",
+        "source_reason": "eligible_pending_guarded_rollout",
+        "shadow_arm_id": "shadow_arm",
+    }

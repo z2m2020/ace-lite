@@ -137,6 +137,20 @@ def build_case_evaluation_row(
     source_plan_validation_feedback_probe_executed_count: int,
     source_plan_validation_feedback_selected_test_count: int,
     source_plan_validation_feedback_executed_test_count: int,
+    source_plan_failure_signal_origin: str,
+    source_plan_failure_signal_present: bool,
+    source_plan_failure_signal_status: str,
+    source_plan_failure_signal_issue_count: int,
+    source_plan_failure_signal_probe_status: str,
+    source_plan_failure_signal_probe_issue_count: int,
+    source_plan_failure_signal_probe_executed_count: int,
+    source_plan_failure_signal_selected_test_count: int,
+    source_plan_failure_signal_executed_test_count: int,
+    source_plan_failure_signal_has_failure: bool,
+    source_plan_evidence_card_count: int,
+    source_plan_file_card_count: int,
+    source_plan_chunk_card_count: int,
+    source_plan_validation_card_present: bool,
     source_plan_evidence_summary: dict[str, float],
     source_plan_graph_closure_preference_enabled: bool,
     source_plan_graph_closure_bonus_candidate_count: int,
@@ -473,6 +487,45 @@ def build_case_evaluation_row(
         ),
         "source_plan_validation_feedback_executed_test_count": float(
             source_plan_validation_feedback_executed_test_count
+        ),
+        "source_plan_failure_signal_origin": str(source_plan_failure_signal_origin or ""),
+        "source_plan_failure_signal_present": (
+            1.0 if source_plan_failure_signal_present else 0.0
+        ),
+        "source_plan_failure_signal_status": str(source_plan_failure_signal_status or ""),
+        "source_plan_failure_signal_issue_count": float(
+            source_plan_failure_signal_issue_count
+        ),
+        "source_plan_failure_signal_failed": (
+            1.0 if source_plan_failure_signal_has_failure else 0.0
+        ),
+        "source_plan_failure_signal_probe_status": str(
+            source_plan_failure_signal_probe_status or ""
+        ),
+        "source_plan_failure_signal_probe_issue_count": float(
+            source_plan_failure_signal_probe_issue_count
+        ),
+        "source_plan_failure_signal_probe_executed_count": float(
+            source_plan_failure_signal_probe_executed_count
+        ),
+        "source_plan_failure_signal_probe_failed": (
+            1.0
+            if str(source_plan_failure_signal_probe_status or "").strip().lower()
+            in {"failed", "degraded", "timeout"}
+            or int(source_plan_failure_signal_probe_issue_count or 0) > 0
+            else 0.0
+        ),
+        "source_plan_failure_signal_selected_test_count": float(
+            source_plan_failure_signal_selected_test_count
+        ),
+        "source_plan_failure_signal_executed_test_count": float(
+            source_plan_failure_signal_executed_test_count
+        ),
+        "source_plan_evidence_card_count": float(source_plan_evidence_card_count),
+        "source_plan_file_card_count": float(source_plan_file_card_count),
+        "source_plan_chunk_card_count": float(source_plan_chunk_card_count),
+        "source_plan_validation_card_present": (
+            1.0 if source_plan_validation_card_present else 0.0
         ),
         "source_plan_direct_evidence_ratio": float(
             source_plan_evidence_summary.get("direct_ratio", 0.0) or 0.0

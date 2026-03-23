@@ -17,7 +17,9 @@ from ace_lite.scip.subgraph import build_subgraph_payload
 from ace_lite.source_plan import (
     annotate_source_plan_grounding,
     build_chunk_steps,
+    build_source_plan_cards,
     build_source_plan_steps,
+    build_validation_feedback_summary,
     pack_source_plan_chunks,
     rank_source_plan_chunks,
     select_validation_tests,
@@ -339,6 +341,27 @@ def run_source_plan(
         if isinstance(validation_stage.get("result"), dict)
         else {}
     )
+    validation_feedback_summary = build_validation_feedback_summary(validation_result)
+    failure_signal_summary = dict(validation_feedback_summary)
+    if not failure_signal_summary:
+        failure_signal_summary = {
+            "status": "skipped",
+            "issue_count": 0,
+            "probe_status": "disabled",
+            "probe_issue_count": 0,
+            "probe_executed_count": 0,
+            "selected_test_count": 0,
+            "executed_test_count": 0,
+        }
+    failure_signal_summary["has_failure"] = bool(
+        str(failure_signal_summary.get("status") or "").strip().lower()
+        in {"failed", "degraded", "timeout"}
+        or str(failure_signal_summary.get("probe_status") or "").strip().lower()
+        in {"failed", "degraded", "timeout"}
+        or int(failure_signal_summary.get("issue_count", 0) or 0) > 0
+        or int(failure_signal_summary.get("probe_issue_count", 0) or 0) > 0
+    )
+    failure_signal_summary["source"] = "source_plan.validate_step"
 
     steps = build_source_plan_steps(
         index_stage=index_stage,
@@ -360,6 +383,11 @@ def run_source_plan(
     chunk_contract = summarize_chunk_contract(
         candidate_chunks=grounded_chunks[: max(1, int(chunk_top_k))],
         requested_disclosure=str(chunk_disclosure or "refs"),
+    )
+    evidence_cards, file_cards, chunk_cards, card_summary = build_source_plan_cards(
+        prioritized_chunks=grounded_chunks[: max(1, int(chunk_top_k))],
+        evidence_summary=evidence_summary,
+        validation_result=validation_result,
     )
     payload = {
         "repo": ctx.repo,
@@ -383,6 +411,11 @@ def run_source_plan(
         "prompt_rendering_boundary": prompt_rendering_boundary,
         "packing": packing,
         "evidence_summary": evidence_summary,
+        "evidence_cards": evidence_cards,
+        "file_cards": file_cards,
+        "chunk_cards": chunk_cards,
+        "card_summary": card_summary,
+        "failure_signal_summary": failure_signal_summary,
         "policy_name": str(policy.get("name", "general")),
         "policy_version": str(policy.get("version", policy_version)),
         "steps": steps,

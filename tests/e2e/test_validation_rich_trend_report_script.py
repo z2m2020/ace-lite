@@ -43,6 +43,7 @@ def _write_validation_rich_summary(
     native_scip_summary: dict[str, object] | None = None,
     validation_probe_summary: dict[str, object] | None = None,
     source_plan_validation_feedback_summary: dict[str, object] | None = None,
+    source_plan_failure_signal_summary: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -76,6 +77,10 @@ def _write_validation_rich_summary(
     if source_plan_validation_feedback_summary is not None:
         payload["source_plan_validation_feedback_summary"] = (
             source_plan_validation_feedback_summary
+        )
+    if source_plan_failure_signal_summary is not None:
+        payload["source_plan_failure_signal_summary"] = (
+            source_plan_failure_signal_summary
         )
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -155,6 +160,20 @@ def test_validation_rich_trend_report_main_writes_summary(
             "selected_test_count_mean": 1.0,
             "executed_test_count_mean": 0.5,
         },
+        source_plan_failure_signal_summary={
+            "present_ratio": 1.0,
+            "issue_count_mean": 1.0,
+            "failure_rate": 0.5,
+            "probe_issue_count_mean": 0.5,
+            "probe_executed_count_mean": 1.0,
+            "probe_failure_rate": 0.25,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 0.5,
+            "replay_cache_origin_ratio": 1.0,
+            "observability_origin_ratio": 0.0,
+            "source_plan_origin_ratio": 0.0,
+            "validate_step_origin_ratio": 0.0,
+        },
     )
     _write_validation_rich_summary(
         report_b,
@@ -221,6 +240,20 @@ def test_validation_rich_trend_report_main_writes_summary(
             "selected_test_count_mean": 1.0,
             "executed_test_count_mean": 0.75,
         },
+        source_plan_failure_signal_summary={
+            "present_ratio": 1.0,
+            "issue_count_mean": 0.25,
+            "failure_rate": 0.2,
+            "probe_issue_count_mean": 0.25,
+            "probe_executed_count_mean": 1.5,
+            "probe_failure_rate": 0.1,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 0.75,
+            "replay_cache_origin_ratio": 1.0,
+            "observability_origin_ratio": 0.0,
+            "source_plan_origin_ratio": 0.0,
+            "validate_step_origin_ratio": 0.0,
+        },
     )
 
     def fake_git_diff(cmd, cwd, check, capture_output, text):
@@ -267,6 +300,9 @@ def test_validation_rich_trend_report_main_writes_summary(
     assert output["latest"]["source_plan_validation_feedback_summary"][
         "executed_test_count_mean"
     ] == pytest.approx(0.75)
+    assert output["latest"]["source_plan_failure_signal_summary"][
+        "replay_cache_origin_ratio"
+    ] == pytest.approx(1.0)
     assert (
         output["previous"]["retrieval_control_plane_gate_summary"][
             "benchmark_regression_detected"
@@ -283,6 +319,9 @@ def test_validation_rich_trend_report_main_writes_summary(
         "probe_executed_count_mean"
     ] == pytest.approx(1.0)
     assert output["previous"]["source_plan_validation_feedback_summary"][
+        "failure_rate"
+    ] == pytest.approx(0.5)
+    assert output["previous"]["source_plan_failure_signal_summary"][
         "failure_rate"
     ] == pytest.approx(0.5)
     assert output["delta"]["task_success_rate"] == {
@@ -324,8 +363,10 @@ def test_validation_rich_trend_report_main_writes_summary(
     assert "document_count_mean=5.0000" in markdown
     assert "## Latest Q4 Validation Probe Summary" in markdown
     assert "## Latest Q4 Source Plan Validation Feedback Summary" in markdown
+    assert "## Latest Q1 Source Plan Failure Signal Summary" in markdown
     assert "- Probe failure rate: 0.1000" in markdown
     assert "- Executed test count mean: 0.7500" in markdown
+    assert "- Replay cache origin ratio: 1.0000; observability origin ratio: 0.0000; source_plan origin ratio: 0.0000; validate_step origin ratio: 0.0000" in markdown
     assert "## Delta" in markdown
     assert "| task_success_rate | 1.0000 | 0.8000 | +0.2000 |" in markdown
     assert "| validation_test_count | 5.0000 | 4.0000 | +1.0000 |" in markdown

@@ -63,6 +63,31 @@ def test_validation_rich_gate_promotion_reports_stay_report_only(tmp_path: Path)
                         "reference_occurrence_count_mean": 10.0,
                         "symbol_definition_count_mean": 2.0,
                     },
+                    "validation_probe_summary": {
+                        "validation_test_count": 4.0,
+                        "probe_enabled_ratio": 0.5,
+                        "probe_executed_count_mean": 1.0,
+                        "probe_failure_rate": 0.25,
+                    },
+                    "source_plan_validation_feedback_summary": {
+                        "present_ratio": 1.0,
+                        "failure_rate": 0.5,
+                        "issue_count_mean": 1.0,
+                        "probe_issue_count_mean": 0.5,
+                        "probe_executed_count_mean": 1.0,
+                        "selected_test_count_mean": 1.0,
+                        "executed_test_count_mean": 0.5,
+                    },
+                    "source_plan_failure_signal_summary": {
+                        "present_ratio": 1.0,
+                        "failure_rate": 0.5,
+                        "issue_count_mean": 1.0,
+                        "probe_issue_count_mean": 0.5,
+                        "probe_executed_count_mean": 1.0,
+                        "selected_test_count_mean": 1.0,
+                        "executed_test_count_mean": 0.5,
+                        "replay_cache_origin_ratio": 1.0,
+                    },
                 },
                 "failed_check_top3": [{"check": "precision_at_k", "count": 1}],
             }
@@ -115,6 +140,20 @@ def test_validation_rich_gate_promotion_reports_stay_report_only(tmp_path: Path)
     )
     assert retrieval_frontier_gate["deep_symbol_summary"]["case_count"] == pytest.approx(2.0)
     assert retrieval_frontier_gate["native_scip_summary"]["document_count_mean"] == pytest.approx(4.0)
+    validation_probe_gate = next(
+        gate for gate in payload["gates"] if gate["name"] == "validation_probe_summary"
+    )
+    assert validation_probe_gate["probe_failure_rate"] == pytest.approx(0.25)
+    source_plan_feedback_gate = next(
+        gate
+        for gate in payload["gates"]
+        if gate["name"] == "source_plan_validation_feedback"
+    )
+    assert source_plan_feedback_gate["executed_test_count_mean"] == pytest.approx(0.5)
+    source_plan_failure_gate = next(
+        gate for gate in payload["gates"] if gate["name"] == "source_plan_failure_signal"
+    )
+    assert source_plan_failure_gate["replay_cache_origin_ratio"] == pytest.approx(1.0)
 
 
 def test_validation_rich_gate_promotion_reports_eligible(tmp_path: Path) -> None:
@@ -158,6 +197,31 @@ def test_validation_rich_gate_promotion_reports_eligible(tmp_path: Path) -> None
                         "definition_occurrence_count_mean": 7.0,
                         "reference_occurrence_count_mean": 11.0,
                         "symbol_definition_count_mean": 3.0,
+                    },
+                    "validation_probe_summary": {
+                        "validation_test_count": 5.0,
+                        "probe_enabled_ratio": 0.67,
+                        "probe_executed_count_mean": 1.5,
+                        "probe_failure_rate": 0.1,
+                    },
+                    "source_plan_validation_feedback_summary": {
+                        "present_ratio": 1.0,
+                        "failure_rate": 0.2,
+                        "issue_count_mean": 0.25,
+                        "probe_issue_count_mean": 0.25,
+                        "probe_executed_count_mean": 1.5,
+                        "selected_test_count_mean": 1.0,
+                        "executed_test_count_mean": 0.75,
+                    },
+                    "source_plan_failure_signal_summary": {
+                        "present_ratio": 1.0,
+                        "failure_rate": 0.2,
+                        "issue_count_mean": 0.25,
+                        "probe_issue_count_mean": 0.25,
+                        "probe_executed_count_mean": 1.5,
+                        "selected_test_count_mean": 1.0,
+                        "executed_test_count_mean": 0.75,
+                        "replay_cache_origin_ratio": 1.0,
                     },
                 },
                 "failed_check_top3": [],
@@ -209,6 +273,20 @@ def test_validation_rich_gate_promotion_reports_eligible(tmp_path: Path) -> None
     )
     assert retrieval_frontier_gate["deep_symbol_summary"]["recall"] == pytest.approx(0.92)
     assert retrieval_frontier_gate["native_scip_summary"]["loaded_rate"] == pytest.approx(0.76)
+    validation_probe_gate = next(
+        gate for gate in payload["gates"] if gate["name"] == "validation_probe_summary"
+    )
+    assert validation_probe_gate["probe_executed_count_mean"] == pytest.approx(1.5)
+    source_plan_feedback_gate = next(
+        gate
+        for gate in payload["gates"]
+        if gate["name"] == "source_plan_validation_feedback"
+    )
+    assert source_plan_feedback_gate["failure_rate"] == pytest.approx(0.2)
+    source_plan_failure_gate = next(
+        gate for gate in payload["gates"] if gate["name"] == "source_plan_failure_signal"
+    )
+    assert source_plan_failure_gate["failure_rate"] == pytest.approx(0.2)
 
 
 def test_validation_rich_gate_promotion_treats_history_failed_checks_as_warning(

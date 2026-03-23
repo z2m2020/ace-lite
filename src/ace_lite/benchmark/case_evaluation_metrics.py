@@ -72,6 +72,8 @@ def _build_ltm_attribution_preview(attribution: list[Any], *, limit: int = 2) ->
 @dataclass(frozen=True, slots=True)
 class CaseEvaluationMetrics:
     source_plan_evidence_summary: dict[str, float]
+    source_plan_card_summary: dict[str, Any]
+    source_plan_failure_signal_summary: dict[str, Any]
     skills_payload: dict[str, Any]
     plan_replay_cache_payload: dict[str, Any]
     subgraph_payload: dict[str, Any]
@@ -91,6 +93,20 @@ class CaseEvaluationMetrics:
     source_plan_validation_feedback_probe_executed_count: int
     source_plan_validation_feedback_selected_test_count: int
     source_plan_validation_feedback_executed_test_count: int
+    source_plan_failure_signal_origin: str
+    source_plan_failure_signal_present: bool
+    source_plan_failure_signal_status: str
+    source_plan_failure_signal_issue_count: int
+    source_plan_failure_signal_probe_status: str
+    source_plan_failure_signal_probe_issue_count: int
+    source_plan_failure_signal_probe_executed_count: int
+    source_plan_failure_signal_selected_test_count: int
+    source_plan_failure_signal_executed_test_count: int
+    source_plan_failure_signal_has_failure: bool
+    source_plan_evidence_card_count: int
+    source_plan_file_card_count: int
+    source_plan_chunk_card_count: int
+    source_plan_validation_card_present: bool
     exact_search_payload: dict[str, Any]
     second_pass_payload: dict[str, Any]
     refine_pass_payload: dict[str, Any]
@@ -338,6 +354,7 @@ def build_case_evaluation_metrics(
     source_plan_evidence_summary = normalize_source_plan_evidence_summary(
         source_plan_payload.get("evidence_summary", {})
     )
+    source_plan_card_summary = _as_dict(source_plan_payload.get("card_summary"))
     source_plan_steps = _as_list(source_plan_payload.get("steps"))
     validate_step = next(
         (
@@ -350,6 +367,21 @@ def build_case_evaluation_metrics(
     )
     source_plan_validation_feedback = _as_dict(
         _as_dict(validate_step).get("validation_feedback_summary")
+    )
+    source_plan_evidence_card_count = max(
+        0,
+        int(source_plan_card_summary.get("evidence_card_count", 0) or 0),
+    )
+    source_plan_file_card_count = max(
+        0,
+        int(source_plan_card_summary.get("file_card_count", 0) or 0),
+    )
+    source_plan_chunk_card_count = max(
+        0,
+        int(source_plan_card_summary.get("chunk_card_count", 0) or 0),
+    )
+    source_plan_validation_card_present = bool(
+        source_plan_card_summary.get("validation_card_present", False)
     )
     skills_payload = _as_dict(plan_payload.get("skills"))
     repomap_payload = _as_dict(plan_payload.get("repomap"))
@@ -1414,7 +1446,8 @@ def build_case_evaluation_metrics(
     skills_precomputed_route = (
         str(skills_payload.get("routing_source") or "").strip().lower() == "precomputed"
     )
-    plan_replay_cache_payload = _as_dict(_as_dict(plan_payload.get("observability")).get("plan_replay_cache"))
+    observability_payload = _as_dict(plan_payload.get("observability"))
+    plan_replay_cache_payload = _as_dict(observability_payload.get("plan_replay_cache"))
     plan_replay_cache_enabled = bool(plan_replay_cache_payload.get("enabled", False))
     plan_replay_cache_hit = bool(plan_replay_cache_payload.get("hit", False))
     plan_replay_cache_stale_hit_safe = bool(
@@ -1423,6 +1456,66 @@ def build_case_evaluation_metrics(
             plan_replay_cache_payload.get("safe_hit", False),
         )
     )
+    source_plan_failure_signal_summary = _as_dict(
+        plan_replay_cache_payload.get("failure_signal_summary")
+    )
+    source_plan_failure_signal_origin = "plan_replay_cache" if source_plan_failure_signal_summary else ""
+    if not source_plan_failure_signal_summary:
+        source_plan_failure_signal_summary = _as_dict(
+            observability_payload.get("source_plan_failure_signal_summary")
+        )
+        source_plan_failure_signal_origin = (
+            "observability" if source_plan_failure_signal_summary else ""
+        )
+    if not source_plan_failure_signal_summary:
+        source_plan_failure_signal_summary = _as_dict(
+            source_plan_payload.get("failure_signal_summary")
+        )
+        source_plan_failure_signal_origin = (
+            "source_plan" if source_plan_failure_signal_summary else ""
+        )
+    if not source_plan_failure_signal_summary and source_plan_validation_feedback:
+        source_plan_failure_signal_summary = dict(source_plan_validation_feedback)
+        source_plan_failure_signal_origin = "validate_step"
+    source_plan_failure_signal_present = bool(source_plan_failure_signal_summary)
+    source_plan_failure_signal_status = str(
+        source_plan_failure_signal_summary.get("status", "") or ""
+    )
+    source_plan_failure_signal_issue_count = max(
+        0,
+        int(source_plan_failure_signal_summary.get("issue_count", 0) or 0),
+    )
+    source_plan_failure_signal_probe_status = str(
+        source_plan_failure_signal_summary.get("probe_status", "") or ""
+    )
+    source_plan_failure_signal_probe_issue_count = max(
+        0,
+        int(source_plan_failure_signal_summary.get("probe_issue_count", 0) or 0),
+    )
+    source_plan_failure_signal_probe_executed_count = max(
+        0,
+        int(source_plan_failure_signal_summary.get("probe_executed_count", 0) or 0),
+    )
+    source_plan_failure_signal_selected_test_count = max(
+        0,
+        int(source_plan_failure_signal_summary.get("selected_test_count", 0) or 0),
+    )
+    source_plan_failure_signal_executed_test_count = max(
+        0,
+        int(source_plan_failure_signal_summary.get("executed_test_count", 0) or 0),
+    )
+    source_plan_failure_signal_has_failure = bool(
+        source_plan_failure_signal_summary.get("has_failure", False)
+    )
+    if source_plan_failure_signal_present and not source_plan_failure_signal_has_failure:
+        source_plan_failure_signal_has_failure = bool(
+            str(source_plan_failure_signal_status or "").strip().lower()
+            in {"failed", "degraded", "timeout"}
+            or str(source_plan_failure_signal_probe_status or "").strip().lower()
+            in {"failed", "degraded", "timeout"}
+            or source_plan_failure_signal_issue_count > 0
+            or source_plan_failure_signal_probe_issue_count > 0
+        )
     source_plan_graph_closure_preference_enabled = bool(
         source_plan_packing_payload.get(
             "graph_closure_preference_enabled",
@@ -1676,6 +1769,8 @@ def build_case_evaluation_metrics(
 
     return CaseEvaluationMetrics(
         source_plan_evidence_summary=source_plan_evidence_summary,
+        source_plan_card_summary=source_plan_card_summary,
+        source_plan_failure_signal_summary=source_plan_failure_signal_summary,
         skills_payload=skills_payload,
         plan_replay_cache_payload=plan_replay_cache_payload,
         subgraph_payload=subgraph_payload,
@@ -1711,6 +1806,30 @@ def build_case_evaluation_metrics(
         source_plan_validation_feedback_executed_test_count=(
             source_plan_validation_feedback_executed_test_count
         ),
+        source_plan_failure_signal_origin=source_plan_failure_signal_origin,
+        source_plan_failure_signal_present=source_plan_failure_signal_present,
+        source_plan_failure_signal_status=source_plan_failure_signal_status,
+        source_plan_failure_signal_issue_count=source_plan_failure_signal_issue_count,
+        source_plan_failure_signal_probe_status=(
+            source_plan_failure_signal_probe_status
+        ),
+        source_plan_failure_signal_probe_issue_count=(
+            source_plan_failure_signal_probe_issue_count
+        ),
+        source_plan_failure_signal_probe_executed_count=(
+            source_plan_failure_signal_probe_executed_count
+        ),
+        source_plan_failure_signal_selected_test_count=(
+            source_plan_failure_signal_selected_test_count
+        ),
+        source_plan_failure_signal_executed_test_count=(
+            source_plan_failure_signal_executed_test_count
+        ),
+        source_plan_failure_signal_has_failure=source_plan_failure_signal_has_failure,
+        source_plan_evidence_card_count=source_plan_evidence_card_count,
+        source_plan_file_card_count=source_plan_file_card_count,
+        source_plan_chunk_card_count=source_plan_chunk_card_count,
+        source_plan_validation_card_present=source_plan_validation_card_present,
         exact_search_payload=exact_search_payload,
         second_pass_payload=second_pass_payload,
         refine_pass_payload=refine_pass_payload,

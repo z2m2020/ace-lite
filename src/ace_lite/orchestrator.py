@@ -58,6 +58,7 @@ from ace_lite.profile_store import ProfileStore
 from ace_lite.runtime_manager import RuntimeManager
 from ace_lite.runtime_state import RuntimeState
 from ace_lite.schema import SCHEMA_VERSION
+from ace_lite.retrieval_shared import build_guarded_rollout_payload
 from ace_lite.scoring_config import (
     BM25_B,
     BM25_K1,
@@ -75,6 +76,7 @@ from ace_lite.token_estimator import (
 )
 from ace_lite.tracing import export_stage_trace_jsonl, export_stage_trace_otlp
 from ace_lite.runtime_stats import RuntimeInvocationStats
+from ace_lite.runtime_stats import build_learning_router_rollout_decision_payload
 from ace_lite.validation.result import build_validation_result_v1
 
 logger = logging.getLogger(__name__)
@@ -161,6 +163,7 @@ class AceOrchestrator:
             )
             else None
         )
+        self._last_learning_router_rollout_decision: dict[str, Any] = {}
 
     @property
     def config(self) -> OrchestratorConfig:
@@ -188,6 +191,7 @@ class AceOrchestrator:
         end_date: str | None = None,
         filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        self._last_learning_router_rollout_decision = {}
         preparation = run_orchestrator_preparation(
             orchestrator=self,
             query=query,
@@ -341,6 +345,45 @@ class AceOrchestrator:
         }
         if isinstance(replay_cache_info, dict):
             observability["plan_replay_cache"] = dict(replay_cache_info)
+        observability["source_plan_failure_signal_summary"] = (
+            self._extract_source_plan_failure_signal_summary(
+                ctx.state.get("source_plan", {})
+            )
+        )
+        learning_router_rollout_decision = (
+            build_learning_router_rollout_decision_payload(
+                adaptive_router=(
+                    ctx.state.get("index", {}).get("adaptive_router", {})
+                    if isinstance(ctx.state.get("index", {}), dict)
+                    else {}
+                ),
+                card_summary=(
+                    ctx.state.get("source_plan", {}).get("card_summary", {})
+                    if isinstance(ctx.state.get("source_plan", {}), dict)
+                    else {}
+                ),
+                validation_feedback_summary=self._extract_source_plan_validation_feedback_summary(
+                    ctx.state.get("source_plan", {})
+                ),
+                failure_signal_summary=observability["source_plan_failure_signal_summary"],
+            )
+        )
+        observability["learning_router_rollout_decision"] = (
+            learning_router_rollout_decision
+        )
+        guarded_rollout = build_guarded_rollout_payload(
+            rollout_decision=learning_router_rollout_decision,
+            enabled=False,
+        )
+        index_stage = ctx.state.get("index", {})
+        if isinstance(index_stage, dict):
+            adaptive_router = index_stage.get("adaptive_router", {})
+            if isinstance(adaptive_router, dict):
+                adaptive_router["guarded_rollout"] = dict(guarded_rollout)
+        observability["guarded_rollout"] = dict(guarded_rollout)
+        self._last_learning_router_rollout_decision = dict(
+            learning_router_rollout_decision
+        )
         if isinstance(ctx.state.get("_agent_loop"), dict):
             observability["agent_loop"] = dict(ctx.state.get("_agent_loop", {}))
         if isinstance(ctx.state.get("_long_term_capture"), list):
@@ -444,6 +487,32 @@ class AceOrchestrator:
             "policy_version": str(self._config.retrieval.policy_version),
         }
 
+    @staticmethod
+    def _extract_source_plan_validation_feedback_summary(
+        source_plan_stage: Any,
+    ) -> dict[str, Any]:
+        if not isinstance(source_plan_stage, dict):
+            return {}
+        steps = (
+            source_plan_stage.get("steps")
+            if isinstance(source_plan_stage.get("steps"), list)
+            else []
+        )
+        validate_step = next(
+            (
+                item
+                for item in steps
+                if isinstance(item, dict)
+                and str(item.get("stage") or "").strip() == "validate"
+            ),
+            {},
+        )
+        return (
+            dict(validate_step.get("validation_feedback_summary"))
+            if isinstance(validate_step.get("validation_feedback_summary"), dict)
+            else {}
+        )
+
     def _capture_long_term_stage_observation(
         self,
         *,
@@ -479,6 +548,64 @@ class AceOrchestrator:
             return default_plan_replay_cache_path(root=root)
         return self._resolve_repo_relative_path(root=root, configured_path=configured)
 
+    @staticmethod
+    def _extract_source_plan_failure_signal_summary(
+        source_plan_stage: Any,
+    ) -> dict[str, Any]:
+        default_summary = {
+            "status": "skipped",
+            "issue_count": 0,
+            "probe_status": "disabled",
+            "probe_issue_count": 0,
+            "probe_executed_count": 0,
+            "selected_test_count": 0,
+            "executed_test_count": 0,
+            "has_failure": False,
+            "source": "source_plan",
+        }
+        if not isinstance(source_plan_stage, dict):
+            return dict(default_summary)
+
+        summary = (
+            dict(source_plan_stage.get("failure_signal_summary"))
+            if isinstance(source_plan_stage.get("failure_signal_summary"), dict)
+            else {}
+        )
+        if not summary:
+            steps = (
+                source_plan_stage.get("steps")
+                if isinstance(source_plan_stage.get("steps"), list)
+                else []
+            )
+            validate_step = next(
+                (
+                    item
+                    for item in steps
+                    if isinstance(item, dict)
+                    and str(item.get("stage") or "").strip() == "validate"
+                ),
+                {},
+            )
+            feedback_summary = (
+                validate_step.get("validation_feedback_summary")
+                if isinstance(validate_step.get("validation_feedback_summary"), dict)
+                else {}
+            )
+            summary = dict(feedback_summary) if feedback_summary else {}
+
+        normalized = dict(default_summary)
+        normalized.update(summary)
+        normalized["has_failure"] = bool(
+            str(normalized.get("status") or "").strip().lower()
+            in {"failed", "degraded", "timeout"}
+            or str(normalized.get("probe_status") or "").strip().lower()
+            in {"failed", "degraded", "timeout"}
+            or int(normalized.get("issue_count", 0) or 0) > 0
+            or int(normalized.get("probe_issue_count", 0) or 0) > 0
+        )
+        normalized["source"] = str(normalized.get("source") or "source_plan")
+        return normalized
+
     def _default_plan_replay_cache_info(self, *, root: str) -> dict[str, Any]:
         enabled = bool(self._config.plan_replay_cache.enabled)
         return {
@@ -496,6 +623,9 @@ class AceOrchestrator:
             "age_seconds": None,
             "trust_class": "",
             "policy_name": self.PLAN_REPLAY_STAGE,
+            "failure_signal_summary": self._extract_source_plan_failure_signal_summary(
+                {}
+            ),
             "reason": "disabled" if not enabled else "not_reached",
         }
 
@@ -545,6 +675,9 @@ class AceOrchestrator:
             cache_metadata.get("policy_name") or self.PLAN_REPLAY_STAGE
         )
         replay_cache_info["reason"] = "hit"
+        replay_cache_info["failure_signal_summary"] = (
+            self._extract_source_plan_failure_signal_summary(cached_source_plan)
+        )
         return cached_source_plan, replay_cache_info
 
     def _store_source_plan_replay(
@@ -580,6 +713,9 @@ class AceOrchestrator:
         updated_info["origin"] = "stage_artifact_cache"
         updated_info["trust_class"] = "exact"
         updated_info["policy_name"] = self.PLAN_REPLAY_STAGE
+        updated_info["failure_signal_summary"] = (
+            self._extract_source_plan_failure_signal_summary(source_plan_payload)
+        )
         if not bool(stored):
             updated_info["reason"] = "store_failed"
         return updated_info
@@ -835,6 +971,9 @@ class AceOrchestrator:
                     + (
                         {"stage_name": "total", "elapsed_ms": round(float(total_ms), 6)},
                     ),
+                    learning_router_rollout_decision=dict(
+                        self._last_learning_router_rollout_decision
+                    ),
                     plan_replay_hit=bool((replay_cache_info or {}).get("hit", False)),
                     plan_replay_safe_hit=bool(
                         (replay_cache_info or {}).get("safe_hit", False)
@@ -856,6 +995,9 @@ class AceOrchestrator:
                 "invocation_id": invocation_id,
                 "status": status,
                 "db_path": str(getattr(store, "db_path", "")),
+                "learning_router_rollout_decision": dict(
+                    self._last_learning_router_rollout_decision
+                ),
             }
         except Exception as exc:
             logger.warning(
@@ -869,6 +1011,9 @@ class AceOrchestrator:
                 "invocation_id": invocation_id,
                 "status": status,
                 "error": str(exc),
+                "learning_router_rollout_decision": dict(
+                    self._last_learning_router_rollout_decision
+                ),
             }
 
     @staticmethod

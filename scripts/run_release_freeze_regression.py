@@ -950,6 +950,28 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
     native_scip_summary = (
         native_scip_summary_raw if isinstance(native_scip_summary_raw, dict) else {}
     )
+    validation_probe_summary_raw = payload.get("validation_probe_summary")
+    validation_probe_summary = (
+        validation_probe_summary_raw
+        if isinstance(validation_probe_summary_raw, dict)
+        else {}
+    )
+    source_plan_feedback_summary_raw = payload.get(
+        "source_plan_validation_feedback_summary"
+    )
+    source_plan_feedback_summary = (
+        source_plan_feedback_summary_raw
+        if isinstance(source_plan_feedback_summary_raw, dict)
+        else {}
+    )
+    source_plan_failure_signal_summary_raw = payload.get(
+        "source_plan_failure_signal_summary"
+    )
+    source_plan_failure_signal_summary = (
+        source_plan_failure_signal_summary_raw
+        if isinstance(source_plan_failure_signal_summary_raw, dict)
+        else {}
+    )
     summary = {
         "path": str(summary_path),
         "repo": str(payload.get("repo", "") or ""),
@@ -1018,6 +1040,31 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
     }
     if native_scip_snapshot:
         summary["native_scip_summary"] = native_scip_snapshot
+    validation_probe_snapshot = {
+        str(key): float(value or 0.0)
+        for key, value in validation_probe_summary.items()
+        if isinstance(key, str) and isinstance(value, (int, float))
+    }
+    if validation_probe_snapshot:
+        summary["validation_probe_summary"] = validation_probe_snapshot
+    source_plan_feedback_snapshot = {
+        str(key): float(value or 0.0)
+        for key, value in source_plan_feedback_summary.items()
+        if isinstance(key, str) and isinstance(value, (int, float))
+    }
+    if source_plan_feedback_snapshot:
+        summary["source_plan_validation_feedback_summary"] = (
+            source_plan_feedback_snapshot
+        )
+    source_plan_failure_signal_snapshot = {
+        str(key): float(value or 0.0)
+        for key, value in source_plan_failure_signal_summary.items()
+        if isinstance(key, str) and isinstance(value, (int, float))
+    }
+    if source_plan_failure_signal_snapshot:
+        summary["source_plan_failure_signal_summary"] = (
+            source_plan_failure_signal_snapshot
+        )
     return summary
 
 
@@ -2463,6 +2510,81 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         or "(none)",
                     )
                 )
+            validation_probe_summary_raw = validation_rich.get(
+                "validation_probe_summary"
+            )
+            validation_probe_summary = (
+                validation_probe_summary_raw
+                if isinstance(validation_probe_summary_raw, dict)
+                else {}
+            )
+            if validation_probe_summary:
+                lines.append(
+                    "- Q4 validation probe summary: validation_test_count={test_count:.4f}, probe_enabled_ratio={enabled:.4f}, probe_executed_count_mean={executed:.4f}, probe_failure_rate={failure:.4f}".format(
+                        test_count=float(
+                            validation_probe_summary.get("validation_test_count", 0.0)
+                            or 0.0
+                        ),
+                        enabled=float(
+                            validation_probe_summary.get("probe_enabled_ratio", 0.0)
+                            or 0.0
+                        ),
+                        executed=float(
+                            validation_probe_summary.get(
+                                "probe_executed_count_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        failure=float(
+                            validation_probe_summary.get("probe_failure_rate", 0.0)
+                            or 0.0
+                        ),
+                    )
+                )
+            source_plan_feedback_raw = validation_rich.get(
+                "source_plan_validation_feedback_summary"
+            )
+            source_plan_feedback = (
+                source_plan_feedback_raw
+                if isinstance(source_plan_feedback_raw, dict)
+                else {}
+            )
+            if source_plan_feedback:
+                lines.append(
+                    "- Q4 source-plan validation feedback: present_ratio={present:.4f}, failure_rate={failure:.4f}, issue_count_mean={issue:.4f}, probe_issue_count_mean={probe_issue:.4f}, probe_executed_count_mean={probe_executed:.4f}, selected_test_count_mean={selected:.4f}, executed_test_count_mean={executed:.4f}".format(
+                        present=float(
+                            source_plan_feedback.get("present_ratio", 0.0) or 0.0
+                        ),
+                        failure=float(
+                            source_plan_feedback.get("failure_rate", 0.0) or 0.0
+                        ),
+                        issue=float(
+                            source_plan_feedback.get("issue_count_mean", 0.0) or 0.0
+                        ),
+                        probe_issue=float(
+                            source_plan_feedback.get("probe_issue_count_mean", 0.0)
+                            or 0.0
+                        ),
+                        probe_executed=float(
+                            source_plan_feedback.get(
+                                "probe_executed_count_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        selected=float(
+                            source_plan_feedback.get(
+                                "selected_test_count_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        executed=float(
+                            source_plan_feedback.get(
+                                "executed_test_count_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                    )
+                )
             previous_gate_summary_raw = validation_rich.get(
                 "previous_retrieval_control_plane_gate_summary"
             )
@@ -2566,6 +2688,92 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                             if str(item).strip()
                         )
                         or "(none)",
+                    )
+                )
+            previous_validation_probe_summary_raw = validation_rich.get(
+                "previous_validation_probe_summary"
+            )
+            previous_validation_probe_summary = (
+                previous_validation_probe_summary_raw
+                if isinstance(previous_validation_probe_summary_raw, dict)
+                else {}
+            )
+            if previous_validation_probe_summary:
+                lines.append(
+                    "- Previous Q4 validation probe summary: validation_test_count={test_count:.4f}, probe_enabled_ratio={enabled:.4f}, probe_executed_count_mean={executed:.4f}, probe_failure_rate={failure:.4f}".format(
+                        test_count=float(
+                            previous_validation_probe_summary.get(
+                                "validation_test_count", 0.0
+                            )
+                            or 0.0
+                        ),
+                        enabled=float(
+                            previous_validation_probe_summary.get(
+                                "probe_enabled_ratio", 0.0
+                            )
+                            or 0.0
+                        ),
+                        executed=float(
+                            previous_validation_probe_summary.get(
+                                "probe_executed_count_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        failure=float(
+                            previous_validation_probe_summary.get(
+                                "probe_failure_rate", 0.0
+                            )
+                            or 0.0
+                        ),
+                    )
+                )
+            previous_source_plan_feedback_raw = validation_rich.get(
+                "previous_source_plan_validation_feedback_summary"
+            )
+            previous_source_plan_feedback = (
+                previous_source_plan_feedback_raw
+                if isinstance(previous_source_plan_feedback_raw, dict)
+                else {}
+            )
+            if previous_source_plan_feedback:
+                lines.append(
+                    "- Previous Q4 source-plan validation feedback: present_ratio={present:.4f}, failure_rate={failure:.4f}, issue_count_mean={issue:.4f}, probe_issue_count_mean={probe_issue:.4f}, probe_executed_count_mean={probe_executed:.4f}, selected_test_count_mean={selected:.4f}, executed_test_count_mean={executed:.4f}".format(
+                        present=float(
+                            previous_source_plan_feedback.get("present_ratio", 0.0)
+                            or 0.0
+                        ),
+                        failure=float(
+                            previous_source_plan_feedback.get("failure_rate", 0.0)
+                            or 0.0
+                        ),
+                        issue=float(
+                            previous_source_plan_feedback.get("issue_count_mean", 0.0)
+                            or 0.0
+                        ),
+                        probe_issue=float(
+                            previous_source_plan_feedback.get(
+                                "probe_issue_count_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        probe_executed=float(
+                            previous_source_plan_feedback.get(
+                                "probe_executed_count_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        selected=float(
+                            previous_source_plan_feedback.get(
+                                "selected_test_count_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        executed=float(
+                            previous_source_plan_feedback.get(
+                                "executed_test_count_mean", 0.0
+                            )
+                            or 0.0
+                        ),
                     )
                 )
             delta_raw = validation_rich.get("delta")
@@ -4655,6 +4863,35 @@ def main() -> int:
                 if isinstance(validation_rich_summary.get("native_scip_summary", {}), dict)
                 else {}
             ),
+            "validation_probe_summary": (
+                validation_rich_summary.get("validation_probe_summary", {})
+                if isinstance(
+                    validation_rich_summary.get("validation_probe_summary", {}), dict
+                )
+                else {}
+            ),
+            "source_plan_validation_feedback_summary": (
+                validation_rich_summary.get(
+                    "source_plan_validation_feedback_summary", {}
+                )
+                if isinstance(
+                    validation_rich_summary.get(
+                        "source_plan_validation_feedback_summary", {}
+                    ),
+                    dict,
+                )
+                else {}
+            ),
+            "source_plan_failure_signal_summary": (
+                validation_rich_summary.get("source_plan_failure_signal_summary", {})
+                if isinstance(
+                    validation_rich_summary.get(
+                        "source_plan_failure_signal_summary", {}
+                    ),
+                    dict,
+                )
+                else {}
+            ),
             "previous_metrics": (
                 validation_rich_previous_summary.get("metrics", {})
                 if isinstance(validation_rich_previous_summary.get("metrics"), dict)
@@ -4696,6 +4933,40 @@ def main() -> int:
                 validation_rich_previous_summary.get("native_scip_summary", {})
                 if isinstance(
                     validation_rich_previous_summary.get("native_scip_summary", {}),
+                    dict,
+                )
+                else {}
+            ),
+            "previous_validation_probe_summary": (
+                validation_rich_previous_summary.get("validation_probe_summary", {})
+                if isinstance(
+                    validation_rich_previous_summary.get(
+                        "validation_probe_summary", {}
+                    ),
+                    dict,
+                )
+                else {}
+            ),
+            "previous_source_plan_validation_feedback_summary": (
+                validation_rich_previous_summary.get(
+                    "source_plan_validation_feedback_summary", {}
+                )
+                if isinstance(
+                    validation_rich_previous_summary.get(
+                        "source_plan_validation_feedback_summary", {}
+                    ),
+                    dict,
+                )
+                else {}
+            ),
+            "previous_source_plan_failure_signal_summary": (
+                validation_rich_previous_summary.get(
+                    "source_plan_failure_signal_summary", {}
+                )
+                if isinstance(
+                    validation_rich_previous_summary.get(
+                        "source_plan_failure_signal_summary", {}
+                    ),
                     dict,
                 )
                 else {}

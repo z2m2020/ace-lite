@@ -18,6 +18,7 @@ from ace_lite.benchmark_ops import (
     read_benchmark_retrieval_control_plane_gate_summary,
     read_benchmark_retrieval_frontier_gate_summary,
     read_benchmark_repomap_seed_summary,
+    read_benchmark_source_plan_failure_signal_summary,
     read_benchmark_source_plan_validation_feedback_summary,
     read_benchmark_validation_probe_summary,
     read_benchmark_metrics,
@@ -47,6 +48,10 @@ def test_benchmark_ops_facade_exports_match_support_module() -> None:
         is module.read_benchmark_retrieval_frontier_gate_summary
     )
     assert read_benchmark_repomap_seed_summary is module.read_benchmark_repomap_seed_summary
+    assert (
+        read_benchmark_source_plan_failure_signal_summary
+        is module.read_benchmark_source_plan_failure_signal_summary
+    )
     assert (
         read_benchmark_source_plan_validation_feedback_summary
         is module.read_benchmark_source_plan_validation_feedback_summary
@@ -122,6 +127,7 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
     assert read_benchmark_retrieval_control_plane_gate_summary(missing_path) == {}
     assert read_benchmark_retrieval_frontier_gate_summary(missing_path) == {}
     assert read_benchmark_repomap_seed_summary(missing_path) == {}
+    assert read_benchmark_source_plan_failure_signal_summary(missing_path) == {}
     assert read_benchmark_source_plan_validation_feedback_summary(missing_path) == {}
     assert read_benchmark_validation_probe_summary(missing_path) == {}
 
@@ -243,6 +249,20 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
     "probe_failure_rate": 1,
     "selected_test_count_mean": 1,
     "executed_test_count_mean": 1
+  },
+  "source_plan_failure_signal_summary": {
+    "present_ratio": 1,
+    "issue_count_mean": 2,
+    "failure_rate": 1,
+    "probe_issue_count_mean": 1,
+    "probe_executed_count_mean": 1,
+    "probe_failure_rate": 1,
+    "selected_test_count_mean": 1,
+    "executed_test_count_mean": 1,
+    "replay_cache_origin_ratio": 1,
+    "observability_origin_ratio": 0,
+    "source_plan_origin_ratio": 0,
+    "validate_step_origin_ratio": 0
   }
 }
 """.strip(),
@@ -359,6 +379,20 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
         "probe_failure_rate": 1.0,
         "selected_test_count_mean": 1.0,
         "executed_test_count_mean": 1.0,
+    }
+    assert read_benchmark_source_plan_failure_signal_summary(payload_path) == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 2.0,
+        "failure_rate": 1.0,
+        "probe_issue_count_mean": 1.0,
+        "probe_executed_count_mean": 1.0,
+        "probe_failure_rate": 1.0,
+        "selected_test_count_mean": 1.0,
+        "executed_test_count_mean": 1.0,
+        "replay_cache_origin_ratio": 1.0,
+        "observability_origin_ratio": 0.0,
+        "source_plan_origin_ratio": 0.0,
+        "validate_step_origin_ratio": 0.0,
     }
 
 
@@ -496,6 +530,62 @@ def test_read_benchmark_source_plan_validation_feedback_summary_prefers_top_leve
         "probe_failure_rate": 1.0,
         "selected_test_count_mean": 1.0,
         "executed_test_count_mean": 1.0,
+    }
+
+
+def test_read_benchmark_source_plan_failure_signal_summary_prefers_top_level_summary_over_metrics(
+    tmp_path: Path,
+) -> None:
+    payload_path = tmp_path / "results.json"
+    payload_path.write_text(
+        """
+{
+  "metrics": {
+    "source_plan_failure_signal_present_ratio": 0.0,
+    "source_plan_failure_signal_issue_count_mean": 0.5,
+    "source_plan_failure_signal_failure_rate": 0.5,
+    "source_plan_failure_signal_probe_issue_count_mean": 0.25,
+    "source_plan_failure_signal_probe_executed_count_mean": 0.25,
+    "source_plan_failure_signal_probe_failure_rate": 0.5,
+    "source_plan_failure_signal_selected_test_count_mean": 0.25,
+    "source_plan_failure_signal_executed_test_count_mean": 0.25,
+    "source_plan_failure_signal_replay_cache_origin_ratio": 0.0,
+    "source_plan_failure_signal_observability_origin_ratio": 1.0,
+    "source_plan_failure_signal_source_plan_origin_ratio": 0.0,
+    "source_plan_failure_signal_validate_step_origin_ratio": 0.0
+  },
+  "source_plan_failure_signal_summary": {
+    "present_ratio": 1,
+    "issue_count_mean": 2,
+    "failure_rate": 1,
+    "probe_issue_count_mean": 1,
+    "probe_executed_count_mean": 1,
+    "probe_failure_rate": 1,
+    "selected_test_count_mean": 1,
+    "executed_test_count_mean": 1,
+    "replay_cache_origin_ratio": 1,
+    "observability_origin_ratio": 0,
+    "source_plan_origin_ratio": 0,
+    "validate_step_origin_ratio": 0
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert read_benchmark_source_plan_failure_signal_summary(payload_path) == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 2.0,
+        "failure_rate": 1.0,
+        "probe_issue_count_mean": 1.0,
+        "probe_executed_count_mean": 1.0,
+        "probe_failure_rate": 1.0,
+        "selected_test_count_mean": 1.0,
+        "executed_test_count_mean": 1.0,
+        "replay_cache_origin_ratio": 1.0,
+        "observability_origin_ratio": 0.0,
+        "source_plan_origin_ratio": 0.0,
+        "validate_step_origin_ratio": 0.0,
     }
 
 

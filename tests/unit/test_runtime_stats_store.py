@@ -114,6 +114,12 @@ def test_durable_stats_store_can_read_individual_invocation(tmp_path: Path) -> N
             started_at="2026-03-19T00:00:00+00:00",
             finished_at="2026-03-19T00:00:01+00:00",
             degraded_reason_codes=("memory_fallback",),
+            learning_router_rollout_decision={
+                "phase": "report_only",
+                "decision": "stay_report_only",
+                "reason": "adaptive_router_disabled",
+                "eligible_for_guarded_rollout": False,
+            },
         )
     )
 
@@ -124,6 +130,12 @@ def test_durable_stats_store_can_read_individual_invocation(tmp_path: Path) -> N
     assert loaded.repo_key == "repo-alpha"
     assert loaded.event_class == RUNTIME_STATS_DEFAULT_EVENT_CLASS
     assert loaded.degraded_reason_codes == ("memory_fallback",)
+    assert loaded.learning_router_rollout_decision == {
+        "phase": "report_only",
+        "decision": "stay_report_only",
+        "reason": "adaptive_router_disabled",
+        "eligible_for_guarded_rollout": False,
+    }
 
 
 def test_durable_stats_store_canonicalizes_reason_aliases_but_preserves_unknown_codes(

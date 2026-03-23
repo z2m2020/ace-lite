@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def build_case_detail_payload(
     *,
     top_candidates: list[Any],
@@ -20,6 +24,8 @@ def build_case_detail_payload(
     chunk_hits: list[str],
     validation_tests: list[Any],
     source_plan_evidence_summary: dict[str, float],
+    source_plan_card_summary: dict[str, Any],
+    source_plan_failure_signal_summary: dict[str, Any],
     memory_latency_ms: float,
     index_latency_ms: float,
     repomap_latency_ms: float,
@@ -168,6 +174,8 @@ def build_case_detail_payload(
             str(item).strip() for item in validation_tests if str(item).strip()
         ][:20],
         "source_plan_evidence_summary": source_plan_evidence_summary,
+        "source_plan_card_summary": source_plan_card_summary,
+        "source_plan_failure_signal_summary": source_plan_failure_signal_summary,
         "stage_latency_ms": {
             "memory": round(memory_latency_ms, 3),
             "index": round(index_latency_ms, 3),
@@ -258,6 +266,9 @@ def build_case_detail_payload(
             "stage": str(plan_replay_cache_payload.get("stage", "")),
             "reason": str(plan_replay_cache_payload.get("reason", "")),
             "stored": bool(plan_replay_cache_payload.get("stored", False)),
+            "failure_signal_summary": _as_dict(
+                plan_replay_cache_payload.get("failure_signal_summary")
+            ),
         },
         "slo_downgrade_signals": slo_downgrade_signals,
         "slo_budget_limits_ms": {

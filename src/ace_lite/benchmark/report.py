@@ -475,6 +475,75 @@ def _append_validation_probe_summary(lines: list[str], results: dict[str, Any]) 
     lines.append("")
 
 
+def _append_source_plan_card_summary(lines: list[str], results: dict[str, Any]) -> None:
+    summary_raw = results.get("source_plan_card_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    metrics = _normalize_metrics(results.get("metrics"))
+    evidence_card_count_mean = float(
+        summary.get(
+            "evidence_card_count_mean",
+            metrics.get("source_plan_evidence_card_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    file_card_count_mean = float(
+        summary.get(
+            "file_card_count_mean",
+            metrics.get("source_plan_file_card_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    chunk_card_count_mean = float(
+        summary.get(
+            "chunk_card_count_mean",
+            metrics.get("source_plan_chunk_card_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    validation_card_present_ratio = float(
+        summary.get(
+            "validation_card_present_ratio",
+            metrics.get("source_plan_validation_card_present_ratio", 0.0),
+        )
+        or 0.0
+    )
+    if (
+        evidence_card_count_mean <= 0.0
+        and file_card_count_mean <= 0.0
+        and chunk_card_count_mean <= 0.0
+        and validation_card_present_ratio <= 0.0
+    ):
+        return
+
+    lines.append("## Source Plan Card Summary")
+    lines.append("")
+    lines.append(
+        "- Evidence/file/chunk card means: evidence={evidence}; file={file}; chunk={chunk}".format(
+            evidence=_format_metric(
+                "source_plan_evidence_card_count_mean",
+                evidence_card_count_mean,
+            ),
+            file=_format_metric(
+                "source_plan_file_card_count_mean",
+                file_card_count_mean,
+            ),
+            chunk=_format_metric(
+                "source_plan_chunk_card_count_mean",
+                chunk_card_count_mean,
+            ),
+        )
+    )
+    lines.append(
+        "- Validation card present ratio: {ratio}".format(
+            ratio=_format_metric(
+                "source_plan_validation_card_present_ratio",
+                validation_card_present_ratio,
+            )
+        )
+    )
+    lines.append("")
+
+
 def _append_source_plan_validation_feedback_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
@@ -605,6 +674,246 @@ def _append_source_plan_validation_feedback_summary(
             ),
         )
     )
+    lines.append("")
+
+
+def _append_source_plan_failure_signal_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("source_plan_failure_signal_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    metrics = _normalize_metrics(results.get("metrics"))
+    present_ratio = float(
+        summary.get(
+            "present_ratio",
+            metrics.get("source_plan_failure_signal_present_ratio", 0.0),
+        )
+        or 0.0
+    )
+    issue_count_mean = float(
+        summary.get(
+            "issue_count_mean",
+            metrics.get("source_plan_failure_signal_issue_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    failure_rate = float(
+        summary.get(
+            "failure_rate",
+            metrics.get("source_plan_failure_signal_failure_rate", 0.0),
+        )
+        or 0.0
+    )
+    probe_issue_count_mean = float(
+        summary.get(
+            "probe_issue_count_mean",
+            metrics.get("source_plan_failure_signal_probe_issue_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    probe_executed_count_mean = float(
+        summary.get(
+            "probe_executed_count_mean",
+            metrics.get("source_plan_failure_signal_probe_executed_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    probe_failure_rate = float(
+        summary.get(
+            "probe_failure_rate",
+            metrics.get("source_plan_failure_signal_probe_failure_rate", 0.0),
+        )
+        or 0.0
+    )
+    selected_test_count_mean = float(
+        summary.get(
+            "selected_test_count_mean",
+            metrics.get("source_plan_failure_signal_selected_test_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    executed_test_count_mean = float(
+        summary.get(
+            "executed_test_count_mean",
+            metrics.get("source_plan_failure_signal_executed_test_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    replay_cache_origin_ratio = float(
+        summary.get(
+            "replay_cache_origin_ratio",
+            metrics.get("source_plan_failure_signal_replay_cache_origin_ratio", 0.0),
+        )
+        or 0.0
+    )
+    observability_origin_ratio = float(
+        summary.get(
+            "observability_origin_ratio",
+            metrics.get(
+                "source_plan_failure_signal_observability_origin_ratio", 0.0
+            ),
+        )
+        or 0.0
+    )
+    source_plan_origin_ratio = float(
+        summary.get(
+            "source_plan_origin_ratio",
+            metrics.get("source_plan_failure_signal_source_plan_origin_ratio", 0.0),
+        )
+        or 0.0
+    )
+    validate_step_origin_ratio = float(
+        summary.get(
+            "validate_step_origin_ratio",
+            metrics.get("source_plan_failure_signal_validate_step_origin_ratio", 0.0),
+        )
+        or 0.0
+    )
+    if (
+        present_ratio <= 0.0
+        and issue_count_mean <= 0.0
+        and failure_rate <= 0.0
+        and probe_issue_count_mean <= 0.0
+        and probe_executed_count_mean <= 0.0
+        and probe_failure_rate <= 0.0
+        and selected_test_count_mean <= 0.0
+        and executed_test_count_mean <= 0.0
+        and replay_cache_origin_ratio <= 0.0
+        and observability_origin_ratio <= 0.0
+        and source_plan_origin_ratio <= 0.0
+        and validate_step_origin_ratio <= 0.0
+    ):
+        return
+
+    lines.append("## Source Plan Failure Signal Summary")
+    lines.append("")
+    lines.append(
+        "- Present ratio: {present}; issue count mean: {issues}; failure rate: {failure}".format(
+            present=_format_metric(
+                "source_plan_failure_signal_present_ratio",
+                present_ratio,
+            ),
+            issues=_format_metric(
+                "source_plan_failure_signal_issue_count_mean",
+                issue_count_mean,
+            ),
+            failure=_format_metric(
+                "source_plan_failure_signal_failure_rate",
+                failure_rate,
+            ),
+        )
+    )
+    lines.append(
+        "- Probe issue count mean: {issues}; probe executed count mean: {executed}; probe failure rate: {failure}".format(
+            issues=_format_metric(
+                "source_plan_failure_signal_probe_issue_count_mean",
+                probe_issue_count_mean,
+            ),
+            executed=_format_metric(
+                "source_plan_failure_signal_probe_executed_count_mean",
+                probe_executed_count_mean,
+            ),
+            failure=_format_metric(
+                "source_plan_failure_signal_probe_failure_rate",
+                probe_failure_rate,
+            ),
+        )
+    )
+    lines.append(
+        "- Selected test count mean: {selected}; executed test count mean: {executed}".format(
+            selected=_format_metric(
+                "source_plan_failure_signal_selected_test_count_mean",
+                selected_test_count_mean,
+            ),
+            executed=_format_metric(
+                "source_plan_failure_signal_executed_test_count_mean",
+                executed_test_count_mean,
+            ),
+        )
+    )
+    lines.append(
+        "- Origin ratios: replay_cache={replay}; observability={observability}; source_plan={source_plan}; validate_step={validate_step}".format(
+            replay=_format_metric(
+                "source_plan_failure_signal_replay_cache_origin_ratio",
+                replay_cache_origin_ratio,
+            ),
+            observability=_format_metric(
+                "source_plan_failure_signal_observability_origin_ratio",
+                observability_origin_ratio,
+            ),
+            source_plan=_format_metric(
+                "source_plan_failure_signal_source_plan_origin_ratio",
+                source_plan_origin_ratio,
+            ),
+            validate_step=_format_metric(
+                "source_plan_failure_signal_validate_step_origin_ratio",
+                validate_step_origin_ratio,
+            ),
+        )
+    )
+    lines.append("")
+
+
+def _append_learning_router_rollout_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("learning_router_rollout_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    case_count = int(summary.get("case_count", 0) or 0)
+    lines.append("## Learning Router Rollout Summary")
+    lines.append("")
+    lines.append(
+        "- Router enabled: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("router_enabled_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("router_enabled_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Shadow mode: {count}/{total} ({rate:.4f}); shadow-ready: {ready}/{total} ({ready_rate:.4f})".format(
+            count=int(summary.get("shadow_mode_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("shadow_mode_case_rate", 0.0) or 0.0),
+            ready=int(summary.get("shadow_ready_case_count", 0) or 0),
+            ready_rate=float(summary.get("shadow_ready_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Source-plan cards present: {count}/{total} ({rate:.4f}); failure-signal blocked: {blocked}/{total} ({blocked_rate:.4f})".format(
+            count=int(summary.get("source_plan_card_present_case_count", 0) or 0),
+            total=case_count,
+            rate=float(
+                summary.get("source_plan_card_present_case_rate", 0.0) or 0.0
+            ),
+            blocked=int(summary.get("failure_signal_blocked_case_count", 0) or 0),
+            blocked_rate=float(
+                summary.get("failure_signal_blocked_case_rate", 0.0) or 0.0
+            ),
+        )
+    )
+    lines.append(
+        "- Guarded-rollout eligible: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("eligible_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("eligible_case_rate", 0.0) or 0.0),
+        )
+    )
+    reason_counts_raw = summary.get("reason_counts")
+    reason_counts: dict[str, Any] = (
+        reason_counts_raw if isinstance(reason_counts_raw, dict) else {}
+    )
+    if reason_counts:
+        formatted = ", ".join(
+            f"{name}={int(count or 0)}"
+            for name, count in sorted(
+                reason_counts.items(),
+                key=lambda item: (-int(item[1] or 0), str(item[0])),
+            )
+        )
+        lines.append(f"- Reason counts: {formatted}")
     lines.append("")
 
 
@@ -2636,7 +2945,10 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     _append_index_fusion_granularity_summary(lines, metrics)
     _append_graph_lookup_summary(lines, metrics)
     _append_validation_probe_summary(lines, results)
+    _append_source_plan_card_summary(lines, results)
     _append_source_plan_validation_feedback_summary(lines, results)
+    _append_source_plan_failure_signal_summary(lines, results)
+    _append_learning_router_rollout_summary(lines, results)
     _append_repomap_seed_summary(lines, results)
     _append_deep_symbol_summary(lines, results)
     _append_native_scip_summary(lines, results)

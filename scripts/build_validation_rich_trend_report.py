@@ -15,6 +15,7 @@ from ace_lite.benchmark_ops import (
     read_benchmark_native_scip_summary,
     read_benchmark_retrieval_control_plane_gate_summary,
     read_benchmark_retrieval_frontier_gate_summary,
+    read_benchmark_source_plan_failure_signal_summary,
     read_benchmark_source_plan_validation_feedback_summary,
     read_benchmark_validation_probe_summary,
 )
@@ -137,6 +138,9 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "deep_symbol_summary": read_benchmark_deep_symbol_summary(path),
         "native_scip_summary": read_benchmark_native_scip_summary(path),
         "validation_probe_summary": read_benchmark_validation_probe_summary(path),
+        "source_plan_failure_signal_summary": (
+            read_benchmark_source_plan_failure_signal_summary(path)
+        ),
         "source_plan_validation_feedback_summary": (
             read_benchmark_source_plan_validation_feedback_summary(path)
         ),
@@ -234,6 +238,14 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         latest_source_plan_feedback = (
             latest_source_plan_feedback_raw
             if isinstance(latest_source_plan_feedback_raw, dict)
+            else {}
+        )
+        latest_source_plan_failure_raw = latest.get(
+            "source_plan_failure_signal_summary"
+        )
+        latest_source_plan_failure = (
+            latest_source_plan_failure_raw
+            if isinstance(latest_source_plan_failure_raw, dict)
             else {}
         )
         lines.extend(
@@ -456,6 +468,56 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                             ),
                             0.0,
                         )
+                    ),
+                    "",
+                ]
+            )
+        if latest_source_plan_failure:
+            lines.extend(
+                [
+                    "## Latest Q1 Source Plan Failure Signal Summary",
+                    "",
+                    "- Present ratio: {ratio:.4f}".format(
+                        ratio=_safe_float(
+                            latest_source_plan_failure.get("present_ratio", 0.0), 0.0
+                        )
+                    ),
+                    "- Failure rate: {rate:.4f}".format(
+                        rate=_safe_float(
+                            latest_source_plan_failure.get("failure_rate", 0.0), 0.0
+                        )
+                    ),
+                    "- Issue count mean: {count:.4f}".format(
+                        count=_safe_float(
+                            latest_source_plan_failure.get("issue_count_mean", 0.0),
+                            0.0,
+                        )
+                    ),
+                    "- Replay cache origin ratio: {replay:.4f}; observability origin ratio: {observability:.4f}; source_plan origin ratio: {source_plan:.4f}; validate_step origin ratio: {validate_step:.4f}".format(
+                        replay=_safe_float(
+                            latest_source_plan_failure.get(
+                                "replay_cache_origin_ratio", 0.0
+                            ),
+                            0.0,
+                        ),
+                        observability=_safe_float(
+                            latest_source_plan_failure.get(
+                                "observability_origin_ratio", 0.0
+                            ),
+                            0.0,
+                        ),
+                        source_plan=_safe_float(
+                            latest_source_plan_failure.get(
+                                "source_plan_origin_ratio", 0.0
+                            ),
+                            0.0,
+                        ),
+                        validate_step=_safe_float(
+                            latest_source_plan_failure.get(
+                                "validate_step_origin_ratio", 0.0
+                            ),
+                            0.0,
+                        ),
                     ),
                     "",
                 ]

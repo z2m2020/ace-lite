@@ -397,8 +397,109 @@ def build_adaptive_router_observability_summary(
     }
 
 
+def _classify_learning_router_rollout_reason(item: dict[str, Any]) -> str:
+    if not bool(item.get("router_enabled", False)):
+        return "adaptive_router_disabled"
+    if str(item.get("router_mode") or "").strip().lower() != "shadow":
+        return "adaptive_router_not_shadow"
+    if not str(item.get("router_shadow_arm_id") or "").strip():
+        return "shadow_arm_missing"
+    if int(float(item.get("source_plan_evidence_card_count", 0.0) or 0.0)) <= 0:
+        return "missing_source_plan_cards"
+    if bool(float(item.get("source_plan_failure_signal_failed", 0.0) or 0.0)):
+        return "failure_signal_present"
+    if int(float(item.get("source_plan_failure_signal_issue_count", 0.0) or 0.0)) > 0:
+        return "failure_signal_present"
+    if int(float(item.get("source_plan_failure_signal_probe_issue_count", 0.0) or 0.0)) > 0:
+        return "failure_signal_present"
+    if bool(float(item.get("source_plan_failure_signal_present", 0.0) or 0.0)):
+        return "failure_signal_present"
+    return "eligible_pending_guarded_rollout"
+
+
+def build_learning_router_rollout_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {
+            "case_count": 0,
+            "router_enabled_case_count": 0,
+            "router_enabled_case_rate": 0.0,
+            "shadow_mode_case_count": 0,
+            "shadow_mode_case_rate": 0.0,
+            "shadow_ready_case_count": 0,
+            "shadow_ready_case_rate": 0.0,
+            "source_plan_card_present_case_count": 0,
+            "source_plan_card_present_case_rate": 0.0,
+            "failure_signal_blocked_case_count": 0,
+            "failure_signal_blocked_case_rate": 0.0,
+            "eligible_case_count": 0,
+            "eligible_case_rate": 0.0,
+            "reason_counts": {},
+        }
+
+    router_enabled_case_count = 0
+    shadow_mode_case_count = 0
+    shadow_ready_case_count = 0
+    source_plan_card_present_case_count = 0
+    failure_signal_blocked_case_count = 0
+    eligible_case_count = 0
+    reason_counts: dict[str, int] = {}
+
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        router_enabled = bool(item.get("router_enabled", False))
+        if router_enabled:
+            router_enabled_case_count += 1
+        if router_enabled and str(item.get("router_mode") or "").strip().lower() == "shadow":
+            shadow_mode_case_count += 1
+        if router_enabled and str(item.get("router_shadow_arm_id") or "").strip():
+            shadow_ready_case_count += 1
+        if int(float(item.get("source_plan_evidence_card_count", 0.0) or 0.0)) > 0:
+            source_plan_card_present_case_count += 1
+
+        reason = _classify_learning_router_rollout_reason(item)
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        if reason == "failure_signal_present":
+            failure_signal_blocked_case_count += 1
+        if reason == "eligible_pending_guarded_rollout":
+            eligible_case_count += 1
+
+    return {
+        "case_count": case_count,
+        "router_enabled_case_count": router_enabled_case_count,
+        "router_enabled_case_rate": round(
+            float(router_enabled_case_count) / float(case_count), 6
+        ),
+        "shadow_mode_case_count": shadow_mode_case_count,
+        "shadow_mode_case_rate": round(
+            float(shadow_mode_case_count) / float(case_count), 6
+        ),
+        "shadow_ready_case_count": shadow_ready_case_count,
+        "shadow_ready_case_rate": round(
+            float(shadow_ready_case_count) / float(case_count), 6
+        ),
+        "source_plan_card_present_case_count": source_plan_card_present_case_count,
+        "source_plan_card_present_case_rate": round(
+            float(source_plan_card_present_case_count) / float(case_count), 6
+        ),
+        "failure_signal_blocked_case_count": failure_signal_blocked_case_count,
+        "failure_signal_blocked_case_rate": round(
+            float(failure_signal_blocked_case_count) / float(case_count), 6
+        ),
+        "eligible_case_count": eligible_case_count,
+        "eligible_case_rate": round(float(eligible_case_count) / float(case_count), 6),
+        "reason_counts": dict(
+            sorted(reason_counts.items(), key=lambda item: (-int(item[1]), item[0]))
+        ),
+    }
+
+
 __all__ = [
     "build_adaptive_router_arm_summary",
     "build_adaptive_router_observability_summary",
     "build_adaptive_router_pair_summary",
+    "build_learning_router_rollout_summary",
 ]

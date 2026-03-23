@@ -58,6 +58,7 @@ Benchmark reports also emit:
 - `Evidence Insufficiency Summary` so failing positive cases are classified into additive `no_hit`, `low_support`, `missing_validation`, `budget_limited`, and `noisy_hit` surfaces without changing stable benchmark report contracts
 - `Decision Observability Summary` so retry, skip, fallback, downgrade, and exact-search boost events are aggregated without changing stage behavior
 - `Graph Lookup Summary` so maintainers can inspect `graph_lookup` enablement, guard-hit rate, candidate-count pressure, query-term guard thresholds, normalization mix, signal maxima, and the per-signal path mix without opening raw payload JSON
+- `Learning Router Rollout Summary` so maintainers can inspect guarded-rollout readiness as a report-only surface before any online default switch is considered
 
 Evidence-insufficiency reporting is intentionally report-only in the current lane:
 - it applies only to failing `positive` task-success cases
@@ -69,6 +70,12 @@ Decision observability is also additive and report-only in the current lane:
 - each decision event records `stage`, `action`, `target`, `reason`, and optional `outcome`
 - benchmark summaries aggregate action/target/reason/outcome counts so maintainers can see why retries or downgrades happened before any adaptive feature promotion
 - `scripts/run_release_freeze_regression.py` can now gate on the presence and structural integrity of `decision_observability_summary` without turning any of its counts into hard promotion thresholds
+
+The rollout-readiness summary is additive and report-only in the current lane:
+- `summary.json` / `report.md` carry top-level `learning_router_rollout_summary`
+- the summary classifies each case into the same readiness reasons used by the current guarded-rollout evidence path: `adaptive_router_disabled`, `adaptive_router_not_shadow`, `shadow_arm_missing`, `missing_source_plan_cards`, `failure_signal_present`, or `eligible_pending_guarded_rollout`
+- use it to review whether shadow coverage, source-plan cards, and failure-signal hygiene are converging before proposing any guarded-rollout default switch
+- do not treat it as an automatic release blocker until a future stream explicitly promotes it into a normative freeze gate
 
 ## Run benchmarks
 
@@ -211,9 +218,22 @@ across benchmark and freeze review:
 - gate mode: `freeze.validation_rich_gate.mode`
 - Q3 frontier gate summary: `retrieval_frontier_gate_summary` in the same
   current/previous validation-rich summaries and the paired freeze artifact
+- Q4 validation summaries: `validation_probe_summary` and
+  `source_plan_validation_feedback_summary` in the same current/previous
+  validation-rich summaries and the paired freeze artifact when you need stable
+  probe enablement, probe failure rate, feedback presence, or executed-test
+  means without re-deriving them from raw `metrics`
 - top-level frontier evidence: `deep_symbol_summary` and `native_scip_summary`
   in the same summaries when you need stable recall / native-SCIP means without
   re-deriving them from raw metrics
+
+The Q4 validation summaries are additive evidence only in the current lane:
+- benchmark review, promotion review, freeze regression, and freeze-trend
+  reports may surface them directly
+- they do not change the existing `validation_rich_gate` pass/fail thresholds by
+  themselves
+- use them to explain validation probe coverage and validation-feedback drift,
+  not to replace the canonical gate metrics above
 
 `validation_rich_gate` mode guidance for the current repo:
 - `disabled`: benchmark evidence is collected, but freeze does not evaluate a

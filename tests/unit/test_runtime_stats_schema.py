@@ -88,6 +88,7 @@ def test_runtime_stats_schema_bootstrap_creates_expected_tables(tmp_path: Path) 
             RUNTIME_STATS_SCHEMA_VERSION
         )
         assert "event_class" in invocation_columns
+        assert "learning_router_rollout_json" in invocation_columns
         assert {
             RUNTIME_STATS_INVOCATIONS_TABLE,
             RUNTIME_STATS_ROLLUPS_TABLE,
@@ -213,16 +214,17 @@ def test_runtime_stats_schema_v2_backfills_event_class_for_legacy_doctor_rows(
     )
     try:
         rows = migrated.execute(
-            f"SELECT invocation_id, event_class FROM {RUNTIME_STATS_INVOCATIONS_TABLE} "
+            f"SELECT invocation_id, event_class, learning_router_rollout_json "
+            f"FROM {RUNTIME_STATS_INVOCATIONS_TABLE} "
             "ORDER BY invocation_id"
         ).fetchall()
         assert get_runtime_db_schema_version(
             migrated,
             schema_name=RUNTIME_STATS_SCHEMA_NAME,
         ) == RUNTIME_STATS_SCHEMA_VERSION
-        assert [(str(row[0]), str(row[1])) for row in rows] == [
-            ("inv-doctor", RUNTIME_STATS_DOCTOR_EVENT_CLASS),
-            ("inv-runtime", RUNTIME_STATS_DEFAULT_EVENT_CLASS),
+        assert [(str(row[0]), str(row[1]), str(row[2])) for row in rows] == [
+            ("inv-doctor", RUNTIME_STATS_DOCTOR_EVENT_CLASS, "{}"),
+            ("inv-runtime", RUNTIME_STATS_DEFAULT_EVENT_CLASS, "{}"),
         ]
     finally:
         migrated.close()

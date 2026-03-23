@@ -8,6 +8,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.54] - 2026-03-23
+
+### Added
+
+- Added runtime persistence for `learning_router_rollout_decision` plus guarded-rollout scaffold payloads in `index.adaptive_router` and `observability`, while keeping rollout disabled by default.
+- Added top-level benchmark and report contracts for `source_plan_failure_signal_summary` and `learning_router_rollout_summary` so validation-rich, freeze, and maintainer review flows can consume stable rollout-readiness evidence.
+
+### Changed
+
+- Extended validation-rich and release-freeze scripts to preserve the newer report-only rollout summaries across metrics collection, trend/comparison reports, promotion review, and freeze regression.
+- Updated maintainer benchmarking and releasing guides to document the guarded-rollout readiness review path and the new report-only evidence surfaces.
+
 ## [0.3.52] - 2026-03-23
 
 ### Added

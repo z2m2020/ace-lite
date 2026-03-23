@@ -1192,6 +1192,27 @@ def test_build_results_summary_preserves_validation_probe_summary() -> None:
     }
 
 
+def test_build_results_summary_preserves_source_plan_card_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "source_plan_card_summary": {
+                "evidence_card_count_mean": 2.0,
+                "file_card_count_mean": 3.0,
+                "chunk_card_count_mean": 5.0,
+                "validation_card_present_ratio": 0.5,
+            },
+        }
+    )
+
+    assert summary["source_plan_card_summary"] == {
+        "evidence_card_count_mean": 2.0,
+        "file_card_count_mean": 3.0,
+        "chunk_card_count_mean": 5.0,
+        "validation_card_present_ratio": 0.5,
+    }
+
+
 def test_build_results_summary_preserves_source_plan_validation_feedback_summary() -> None:
     summary = build_results_summary(
         {
@@ -1218,6 +1239,90 @@ def test_build_results_summary_preserves_source_plan_validation_feedback_summary
         "probe_failure_rate": 1.0,
         "selected_test_count_mean": 1.0,
         "executed_test_count_mean": 1.0,
+    }
+
+
+def test_build_results_summary_preserves_source_plan_failure_signal_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "source_plan_failure_signal_summary": {
+                "present_ratio": 1.0,
+                "issue_count_mean": 2.0,
+                "failure_rate": 1.0,
+                "probe_issue_count_mean": 1.0,
+                "probe_executed_count_mean": 1.0,
+                "probe_failure_rate": 1.0,
+                "selected_test_count_mean": 1.0,
+                "executed_test_count_mean": 1.0,
+                "replay_cache_origin_ratio": 1.0,
+                "observability_origin_ratio": 0.0,
+                "source_plan_origin_ratio": 0.0,
+                "validate_step_origin_ratio": 0.0,
+            },
+        }
+    )
+
+    assert summary["source_plan_failure_signal_summary"] == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 2.0,
+        "failure_rate": 1.0,
+        "probe_issue_count_mean": 1.0,
+        "probe_executed_count_mean": 1.0,
+        "probe_failure_rate": 1.0,
+        "selected_test_count_mean": 1.0,
+        "executed_test_count_mean": 1.0,
+        "replay_cache_origin_ratio": 1.0,
+        "observability_origin_ratio": 0.0,
+        "source_plan_origin_ratio": 0.0,
+        "validate_step_origin_ratio": 0.0,
+    }
+
+
+def test_build_results_summary_preserves_learning_router_rollout_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "learning_router_rollout_summary": {
+                "case_count": 4,
+                "router_enabled_case_count": 3,
+                "router_enabled_case_rate": 0.75,
+                "shadow_mode_case_count": 2,
+                "shadow_mode_case_rate": 0.5,
+                "shadow_ready_case_count": 2,
+                "shadow_ready_case_rate": 0.5,
+                "source_plan_card_present_case_count": 3,
+                "source_plan_card_present_case_rate": 0.75,
+                "failure_signal_blocked_case_count": 1,
+                "failure_signal_blocked_case_rate": 0.25,
+                "eligible_case_count": 1,
+                "eligible_case_rate": 0.25,
+                "reason_counts": {
+                    "adaptive_router_disabled": 1,
+                    "eligible_pending_guarded_rollout": 1,
+                },
+            },
+        }
+    )
+
+    assert summary["learning_router_rollout_summary"] == {
+        "case_count": 4,
+        "router_enabled_case_count": 3,
+        "router_enabled_case_rate": 0.75,
+        "shadow_mode_case_count": 2,
+        "shadow_mode_case_rate": 0.5,
+        "shadow_ready_case_count": 2,
+        "shadow_ready_case_rate": 0.5,
+        "source_plan_card_present_case_count": 3,
+        "source_plan_card_present_case_rate": 0.75,
+        "failure_signal_blocked_case_count": 1,
+        "failure_signal_blocked_case_rate": 0.25,
+        "eligible_case_count": 1,
+        "eligible_case_rate": 0.25,
+        "reason_counts": {
+            "adaptive_router_disabled": 1,
+            "eligible_pending_guarded_rollout": 1,
+        },
     }
 
 
@@ -1313,6 +1418,31 @@ def test_build_report_markdown_prefers_top_level_validation_probe_summary() -> N
     assert "Probe executed count mean: 2.0000; failure rate: 0.5000" in report
 
 
+def test_build_report_markdown_prefers_top_level_source_plan_card_summary() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {
+                "task_success_rate": 1.0,
+                "source_plan_evidence_card_count_mean": 0.0,
+                "source_plan_file_card_count_mean": 0.0,
+                "source_plan_chunk_card_count_mean": 0.0,
+                "source_plan_validation_card_present_ratio": 0.0,
+            },
+            "source_plan_card_summary": {
+                "evidence_card_count_mean": 2.0,
+                "file_card_count_mean": 3.0,
+                "chunk_card_count_mean": 5.0,
+                "validation_card_present_ratio": 0.5,
+            },
+        }
+    )
+
+    assert "## Source Plan Card Summary" in report
+    assert "Evidence/file/chunk card means: evidence=2.0000; file=3.0000; chunk=5.0000" in report
+    assert "Validation card present ratio: 0.5000" in report
+
+
 def test_build_report_markdown_includes_source_plan_validation_feedback_summary() -> None:
     report = build_report_markdown(
         {
@@ -1369,6 +1499,116 @@ def test_build_report_markdown_prefers_top_level_source_plan_validation_feedback
     assert "Present ratio: 1.0000; issue count mean: 2.0000; failure rate: 1.0000" in report
     assert "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000" in report
     assert "Selected test count mean: 1.0000; executed test count mean: 1.0000" in report
+
+
+def test_build_report_markdown_includes_source_plan_failure_signal_summary() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {
+                "task_success_rate": 1.0,
+                "source_plan_failure_signal_present_ratio": 1.0,
+                "source_plan_failure_signal_issue_count_mean": 2.0,
+                "source_plan_failure_signal_failure_rate": 1.0,
+                "source_plan_failure_signal_probe_issue_count_mean": 1.0,
+                "source_plan_failure_signal_probe_executed_count_mean": 1.0,
+                "source_plan_failure_signal_probe_failure_rate": 1.0,
+                "source_plan_failure_signal_selected_test_count_mean": 1.0,
+                "source_plan_failure_signal_executed_test_count_mean": 1.0,
+                "source_plan_failure_signal_replay_cache_origin_ratio": 1.0,
+                "source_plan_failure_signal_observability_origin_ratio": 0.0,
+                "source_plan_failure_signal_source_plan_origin_ratio": 0.0,
+                "source_plan_failure_signal_validate_step_origin_ratio": 0.0,
+            },
+        }
+    )
+
+    assert "## Source Plan Failure Signal Summary" in report
+    assert "Present ratio: 1.0000; issue count mean: 2.0000; failure rate: 1.0000" in report
+    assert "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000" in report
+    assert "Selected test count mean: 1.0000; executed test count mean: 1.0000" in report
+    assert "Origin ratios: replay_cache=1.0000; observability=0.0000; source_plan=0.0000; validate_step=0.0000" in report
+
+
+def test_build_report_markdown_prefers_top_level_source_plan_failure_signal_summary() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {
+                "task_success_rate": 1.0,
+                "source_plan_failure_signal_present_ratio": 0.0,
+                "source_plan_failure_signal_issue_count_mean": 0.0,
+                "source_plan_failure_signal_failure_rate": 0.0,
+                "source_plan_failure_signal_probe_issue_count_mean": 0.0,
+                "source_plan_failure_signal_probe_executed_count_mean": 0.0,
+                "source_plan_failure_signal_probe_failure_rate": 0.0,
+                "source_plan_failure_signal_selected_test_count_mean": 0.0,
+                "source_plan_failure_signal_executed_test_count_mean": 0.0,
+                "source_plan_failure_signal_replay_cache_origin_ratio": 0.0,
+                "source_plan_failure_signal_observability_origin_ratio": 0.0,
+                "source_plan_failure_signal_source_plan_origin_ratio": 0.0,
+                "source_plan_failure_signal_validate_step_origin_ratio": 0.0,
+            },
+            "source_plan_failure_signal_summary": {
+                "present_ratio": 1.0,
+                "issue_count_mean": 2.0,
+                "failure_rate": 1.0,
+                "probe_issue_count_mean": 1.0,
+                "probe_executed_count_mean": 1.0,
+                "probe_failure_rate": 1.0,
+                "selected_test_count_mean": 1.0,
+                "executed_test_count_mean": 1.0,
+                "replay_cache_origin_ratio": 1.0,
+                "observability_origin_ratio": 0.0,
+                "source_plan_origin_ratio": 0.0,
+                "validate_step_origin_ratio": 0.0,
+            },
+        }
+    )
+
+    assert "## Source Plan Failure Signal Summary" in report
+    assert "Present ratio: 1.0000; issue count mean: 2.0000; failure rate: 1.0000" in report
+    assert "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000" in report
+    assert "Selected test count mean: 1.0000; executed test count mean: 1.0000" in report
+    assert "Origin ratios: replay_cache=1.0000; observability=0.0000; source_plan=0.0000; validate_step=0.0000" in report
+
+
+def test_build_report_markdown_includes_learning_router_rollout_summary() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {"task_success_rate": 1.0},
+            "learning_router_rollout_summary": {
+                "case_count": 4,
+                "router_enabled_case_count": 3,
+                "router_enabled_case_rate": 0.75,
+                "shadow_mode_case_count": 2,
+                "shadow_mode_case_rate": 0.5,
+                "shadow_ready_case_count": 2,
+                "shadow_ready_case_rate": 0.5,
+                "source_plan_card_present_case_count": 3,
+                "source_plan_card_present_case_rate": 0.75,
+                "failure_signal_blocked_case_count": 1,
+                "failure_signal_blocked_case_rate": 0.25,
+                "eligible_case_count": 1,
+                "eligible_case_rate": 0.25,
+                "reason_counts": {
+                    "adaptive_router_disabled": 1,
+                    "eligible_pending_guarded_rollout": 1,
+                },
+            },
+        }
+    )
+
+    assert "## Learning Router Rollout Summary" in report
+    assert "Router enabled: 3/4 (0.7500)" in report
+    assert "Shadow mode: 2/4 (0.5000); shadow-ready: 2/4 (0.5000)" in report
+    assert "Source-plan cards present: 3/4 (0.7500); failure-signal blocked: 1/4 (0.2500)" in report
+    assert "Guarded-rollout eligible: 1/4 (0.2500)" in report
+    assert (
+        "Reason counts: adaptive_router_disabled=1, eligible_pending_guarded_rollout=1"
+        in report
+    )
 
 
 def test_build_report_markdown_prefers_frontier_gate_summary_for_deep_symbol_and_native_scip() -> None:

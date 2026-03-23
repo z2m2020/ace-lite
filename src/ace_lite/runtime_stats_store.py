@@ -37,6 +37,14 @@ def _json_load_list(value: str) -> list[Any]:
     return payload if isinstance(payload, list) else []
 
 
+def _json_load_mapping(value: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(str(value or "").strip() or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def _counter_delta(stats: RuntimeInvocationStats) -> dict[str, int]:
     return {
         "invocation_count": 1,
@@ -250,6 +258,9 @@ class DurableStatsStore:
                 "contract_error_code": row["contract_error_code"],
                 "degraded_reason_codes": _json_load_list(row["degraded_reason_codes"]),
                 "stage_latencies": _json_load_list(row["stage_latency_json"]),
+                "learning_router_rollout_decision": _json_load_mapping(
+                    row["learning_router_rollout_json"]
+                ),
                 "plan_replay_hit": bool(row["plan_replay_hit"]),
                 "plan_replay_safe_hit": bool(row["plan_replay_safe_hit"]),
                 "plan_replay_store_written": bool(row["plan_replay_store_written"]),
@@ -264,9 +275,10 @@ class DurableStatsStore:
             f"INSERT INTO {RUNTIME_STATS_INVOCATIONS_TABLE}("
             "invocation_id, session_id, repo_key, profile_key, event_class, settings_fingerprint, "
             "status, contract_error_code, degraded_reason_codes, stage_latency_json, "
-            "plan_replay_hit, plan_replay_safe_hit, plan_replay_store_written, "
-            "trace_exported, trace_export_failed, total_latency_ms, started_at, finished_at"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "learning_router_rollout_json, plan_replay_hit, plan_replay_safe_hit, "
+            "plan_replay_store_written, trace_exported, trace_export_failed, "
+            "total_latency_ms, started_at, finished_at"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(invocation_id) DO UPDATE SET "
             "session_id = excluded.session_id, "
             "repo_key = excluded.repo_key, "
@@ -277,6 +289,7 @@ class DurableStatsStore:
             "contract_error_code = excluded.contract_error_code, "
             "degraded_reason_codes = excluded.degraded_reason_codes, "
             "stage_latency_json = excluded.stage_latency_json, "
+            "learning_router_rollout_json = excluded.learning_router_rollout_json, "
             "plan_replay_hit = excluded.plan_replay_hit, "
             "plan_replay_safe_hit = excluded.plan_replay_safe_hit, "
             "plan_replay_store_written = excluded.plan_replay_store_written, "
@@ -296,6 +309,7 @@ class DurableStatsStore:
                 payload["contract_error_code"],
                 payload["degraded_reason_codes"],
                 payload["stage_latency_json"],
+                payload["learning_router_rollout_json"],
                 payload["plan_replay_hit"],
                 payload["plan_replay_safe_hit"],
                 payload["plan_replay_store_written"],

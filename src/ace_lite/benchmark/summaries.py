@@ -28,6 +28,7 @@ from ace_lite.benchmark.summary_quality import (
 )
 from ace_lite.benchmark.summary_router import (
     build_adaptive_router_arm_summary as _build_adaptive_router_arm_summary_impl,
+    build_learning_router_rollout_summary as _build_learning_router_rollout_summary_impl,
     build_adaptive_router_observability_summary as _build_adaptive_router_observability_summary_impl,
     build_adaptive_router_pair_summary as _build_adaptive_router_pair_summary_impl,
 )
@@ -346,6 +347,94 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
             item.get("source_plan_validation_feedback_executed_test_count", 0.0)
             or 0.0
         )
+        for item in case_results
+    ]
+    source_plan_failure_signal_present = [
+        float(item.get("source_plan_failure_signal_present", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_failure_signal_issue_counts = [
+        float(item.get("source_plan_failure_signal_issue_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_failure_signal_failed = [
+        float(item.get("source_plan_failure_signal_failed", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_failure_signal_probe_issue_counts = [
+        float(
+            item.get("source_plan_failure_signal_probe_issue_count", 0.0)
+            or 0.0
+        )
+        for item in case_results
+    ]
+    source_plan_failure_signal_probe_executed_counts = [
+        float(
+            item.get("source_plan_failure_signal_probe_executed_count", 0.0)
+            or 0.0
+        )
+        for item in case_results
+    ]
+    source_plan_failure_signal_probe_failed = [
+        float(item.get("source_plan_failure_signal_probe_failed", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_failure_signal_selected_test_counts = [
+        float(
+            item.get("source_plan_failure_signal_selected_test_count", 0.0)
+            or 0.0
+        )
+        for item in case_results
+    ]
+    source_plan_failure_signal_executed_test_counts = [
+        float(
+            item.get("source_plan_failure_signal_executed_test_count", 0.0)
+            or 0.0
+        )
+        for item in case_results
+    ]
+    source_plan_failure_signal_replay_cache_origin = [
+        1.0
+        if str(item.get("source_plan_failure_signal_origin") or "").strip()
+        == "plan_replay_cache"
+        else 0.0
+        for item in case_results
+    ]
+    source_plan_failure_signal_observability_origin = [
+        1.0
+        if str(item.get("source_plan_failure_signal_origin") or "").strip()
+        == "observability"
+        else 0.0
+        for item in case_results
+    ]
+    source_plan_failure_signal_source_plan_origin = [
+        1.0
+        if str(item.get("source_plan_failure_signal_origin") or "").strip()
+        == "source_plan"
+        else 0.0
+        for item in case_results
+    ]
+    source_plan_failure_signal_validate_step_origin = [
+        1.0
+        if str(item.get("source_plan_failure_signal_origin") or "").strip()
+        == "validate_step"
+        else 0.0
+        for item in case_results
+    ]
+    source_plan_evidence_card_counts = [
+        float(item.get("source_plan_evidence_card_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_file_card_counts = [
+        float(item.get("source_plan_file_card_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_chunk_card_counts = [
+        float(item.get("source_plan_chunk_card_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_validation_card_present = [
+        float(item.get("source_plan_validation_card_present", 0.0) or 0.0)
         for item in case_results
     ]
     source_plan_direct_ratios = [
@@ -1013,6 +1102,14 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
             validation_probe_executed_counts
         ),
         "validation_probe_failure_rate": mean(validation_probe_failed),
+        "source_plan_evidence_card_count_mean": mean(
+            source_plan_evidence_card_counts
+        ),
+        "source_plan_file_card_count_mean": mean(source_plan_file_card_counts),
+        "source_plan_chunk_card_count_mean": mean(source_plan_chunk_card_counts),
+        "source_plan_validation_card_present_ratio": mean(
+            source_plan_validation_card_present
+        ),
         "source_plan_validation_feedback_present_ratio": mean(
             source_plan_validation_feedback_present
         ),
@@ -1036,6 +1133,42 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         ),
         "source_plan_validation_feedback_executed_test_count_mean": mean(
             source_plan_validation_feedback_executed_test_counts
+        ),
+        "source_plan_failure_signal_present_ratio": mean(
+            source_plan_failure_signal_present
+        ),
+        "source_plan_failure_signal_issue_count_mean": mean(
+            source_plan_failure_signal_issue_counts
+        ),
+        "source_plan_failure_signal_failure_rate": mean(
+            source_plan_failure_signal_failed
+        ),
+        "source_plan_failure_signal_probe_issue_count_mean": mean(
+            source_plan_failure_signal_probe_issue_counts
+        ),
+        "source_plan_failure_signal_probe_executed_count_mean": mean(
+            source_plan_failure_signal_probe_executed_counts
+        ),
+        "source_plan_failure_signal_probe_failure_rate": mean(
+            source_plan_failure_signal_probe_failed
+        ),
+        "source_plan_failure_signal_selected_test_count_mean": mean(
+            source_plan_failure_signal_selected_test_counts
+        ),
+        "source_plan_failure_signal_executed_test_count_mean": mean(
+            source_plan_failure_signal_executed_test_counts
+        ),
+        "source_plan_failure_signal_replay_cache_origin_ratio": mean(
+            source_plan_failure_signal_replay_cache_origin
+        ),
+        "source_plan_failure_signal_observability_origin_ratio": mean(
+            source_plan_failure_signal_observability_origin
+        ),
+        "source_plan_failure_signal_source_plan_origin_ratio": mean(
+            source_plan_failure_signal_source_plan_origin
+        ),
+        "source_plan_failure_signal_validate_step_origin_ratio": mean(
+            source_plan_failure_signal_validate_step_origin
         ),
         "source_plan_direct_evidence_ratio": mean(source_plan_direct_ratios),
         "source_plan_symbol_count_mean": mean(source_plan_symbol_counts),
@@ -1417,6 +1550,31 @@ def build_validation_probe_summary(*, metrics: dict[str, Any]) -> dict[str, floa
     }
 
 
+def build_source_plan_card_summary(*, metrics: dict[str, Any]) -> dict[str, float]:
+    normalized_metrics = normalize_metrics(metrics)
+    return {
+        "evidence_card_count_mean": round(
+            float(normalized_metrics.get("source_plan_evidence_card_count_mean", 0.0) or 0.0),
+            6,
+        ),
+        "file_card_count_mean": round(
+            float(normalized_metrics.get("source_plan_file_card_count_mean", 0.0) or 0.0),
+            6,
+        ),
+        "chunk_card_count_mean": round(
+            float(normalized_metrics.get("source_plan_chunk_card_count_mean", 0.0) or 0.0),
+            6,
+        ),
+        "validation_card_present_ratio": round(
+            float(
+                normalized_metrics.get("source_plan_validation_card_present_ratio", 0.0)
+                or 0.0
+            ),
+            6,
+        ),
+    }
+
+
 def build_source_plan_validation_feedback_summary(
     *, metrics: dict[str, Any]
 ) -> dict[str, float]:
@@ -1489,6 +1647,120 @@ def build_source_plan_validation_feedback_summary(
             float(
                 normalized_metrics.get(
                     "source_plan_validation_feedback_executed_test_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+    }
+
+
+def build_source_plan_failure_signal_summary(
+    *, metrics: dict[str, Any]
+) -> dict[str, float]:
+    normalized_metrics = normalize_metrics(metrics)
+    return {
+        "present_ratio": round(
+            float(
+                normalized_metrics.get("source_plan_failure_signal_present_ratio", 0.0)
+                or 0.0
+            ),
+            6,
+        ),
+        "issue_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_failure_signal_issue_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "failure_rate": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_failure_signal_failure_rate", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "probe_issue_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_failure_signal_probe_issue_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "probe_executed_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_failure_signal_probe_executed_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "probe_failure_rate": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_failure_signal_probe_failure_rate", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "selected_test_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_failure_signal_selected_test_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "executed_test_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_failure_signal_executed_test_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "replay_cache_origin_ratio": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_failure_signal_replay_cache_origin_ratio", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "observability_origin_ratio": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_failure_signal_observability_origin_ratio", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "source_plan_origin_ratio": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_failure_signal_source_plan_origin_ratio", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "validate_step_origin_ratio": round(
+            float(
+                normalized_metrics.get(
+                    "source_plan_failure_signal_validate_step_origin_ratio", 0.0
                 )
                 or 0.0
             ),
@@ -1613,6 +1885,12 @@ def build_adaptive_router_arm_summary(
     return _build_adaptive_router_arm_summary_impl(case_results)
 
 
+def build_learning_router_rollout_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return _build_learning_router_rollout_summary_impl(case_results)
+
+
 def build_adaptive_router_pair_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -1640,6 +1918,7 @@ __all__ = [
     "PIPELINE_STAGE_ORDER",
     "aggregate_metrics",
     "build_adaptive_router_arm_summary",
+    "build_learning_router_rollout_summary",
     "build_adaptive_router_observability_summary",
     "build_adaptive_router_pair_summary",
     "build_chunk_stage_miss_summary",
@@ -1656,6 +1935,8 @@ __all__ = [
     "build_retrieval_control_plane_gate_summary",
     "build_retrieval_frontier_gate_summary",
     "build_retrieval_context_observability_summary",
+    "build_source_plan_card_summary",
+    "build_source_plan_failure_signal_summary",
     "build_source_plan_validation_feedback_summary",
     "build_slo_budget_summary",
     "build_stage_latency_summary",

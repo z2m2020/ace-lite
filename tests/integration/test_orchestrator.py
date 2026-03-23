@@ -203,6 +203,60 @@ def test_orchestrator_pipeline_and_injected_client(tmp_path: Path, fake_skill_ma
     assert payload["validation"]["reason"] == "disabled"
     assert isinstance(payload["observability"]["stage_metrics"], list)
     assert len(payload["observability"]["stage_metrics"]) == 7
+    assert payload["source_plan"]["failure_signal_summary"]["status"] == "skipped"
+    assert (
+        payload["observability"]["source_plan_failure_signal_summary"]["status"]
+        == "skipped"
+    )
+    assert payload["observability"]["learning_router_rollout_decision"] == {
+        "phase": "report_only",
+        "decision": "stay_report_only",
+        "reason": "adaptive_router_disabled",
+        "eligible_for_guarded_rollout": False,
+        "router_enabled": False,
+        "router_mode": "observe",
+        "router_arm_id": "",
+        "router_source": "disabled",
+        "shadow_arm_id": "",
+        "shadow_source": "",
+        "online_bandit_requested": False,
+        "online_bandit_eligible": False,
+        "online_bandit_active": False,
+        "evidence_card_count": 1,
+        "validation_card_present": False,
+        "validation_feedback_present": False,
+        "validation_selected_test_count": 0,
+        "validation_executed_test_count": 0,
+        "failure_signal_status": "skipped",
+        "failure_signal_has_failure": False,
+        "failure_signal_issue_count": 0,
+        "failure_signal_probe_issue_count": 0,
+        "failure_signal_source": "source_plan.validate_step",
+    }
+    assert payload["index"]["adaptive_router"]["guarded_rollout"] == {
+        "enabled": False,
+        "eligible": False,
+        "active": False,
+        "decision": "stay_report_only",
+        "reason": "guarded_rollout_disabled",
+        "source_reason": "adaptive_router_disabled",
+        "shadow_arm_id": "",
+    }
+    assert payload["observability"]["guarded_rollout"] == {
+        "enabled": False,
+        "eligible": False,
+        "active": False,
+        "decision": "stay_report_only",
+        "reason": "guarded_rollout_disabled",
+        "source_reason": "adaptive_router_disabled",
+        "shadow_arm_id": "",
+    }
+    assert (
+        payload["observability"]["durable_stats"]["learning_router_rollout_decision"][
+            "reason"
+        ]
+        == "adaptive_router_disabled"
+    )
     first_stage = payload["observability"]["stage_metrics"][0]
     assert "tags" in first_stage
     assert isinstance(first_stage["tags"], dict)
@@ -254,12 +308,129 @@ def test_orchestrator_plan_records_durable_runtime_stats(
         scope_kind="session",
         scope_key=str(durable_stats["session_id"]),
     )
+    invocation = store.read_invocation(
+        invocation_id=str(durable_stats["invocation_id"]),
+    )
 
     assert all_time is not None
     assert session is not None
+    assert invocation is not None
     assert all_time.to_payload()["counters"]["invocation_count"] == 1
     assert session.to_payload()["counters"]["invocation_count"] == 1
     assert "total" in [item["stage_name"] for item in session.to_payload()["stage_latencies"]]
+    assert invocation.learning_router_rollout_decision["reason"] == "adaptive_router_disabled"
+
+
+def test_orchestrator_plan_records_learning_router_rollout_decision_for_shadow_mode(
+    tmp_path: Path,
+    fake_skill_manifest: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_repo(tmp_path)
+    db_path = tmp_path / "user-runtime" / "runtime-stats.db"
+    config = OrchestratorConfig(
+        skills={"manifest": fake_skill_manifest},
+        index={
+            "languages": ["python"],
+            "cache_path": tmp_path / "context-map" / "index.json",
+        },
+        retrieval={
+            "adaptive_router_enabled": True,
+            "adaptive_router_mode": "shadow",
+            "adaptive_router_arm_set": "retrieval_policy_shadow",
+        },
+        repomap={"enabled": False},
+        validation={"enabled": True},
+    )
+    orchestrator = AceOrchestrator(
+        config=config,
+        durable_stats_store_factory=lambda: DurableStatsStore(db_path=db_path),
+    )
+
+    def fake_run_validation(*, ctx):
+        validation_result = build_validation_result_v1(
+            available_probes=["compile", "import", "tests"],
+            replay_key="",
+            status="passed",
+        ).as_dict()
+        return {
+            "enabled": True,
+            "reason": "ok",
+            "sandbox": {
+                "enabled": True,
+                "sandbox_root": str(tmp_path / "sandbox"),
+                "patch_applied": True,
+                "cleanup_ok": True,
+                "restore_ok": True,
+                "apply_result": {"ok": True, "reason": "ok"},
+            },
+            "diagnostics": [],
+            "diagnostic_count": 0,
+            "xref_enabled": False,
+            "xref": {
+                "count": 0,
+                "results": [],
+                "errors": [],
+                "budget_exhausted": False,
+                "elapsed_ms": 0.0,
+                "time_budget_ms": 0,
+            },
+            "probes": dict(validation_result.get("probes", {})),
+            "result": validation_result,
+            "patch_artifact_present": True,
+            "policy_name": "general",
+            "policy_version": "v1",
+        }
+
+    monkeypatch.setattr(orchestrator, "_run_validation", fake_run_validation)
+
+    payload = orchestrator.plan(
+        query="record guarded rollout readiness",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+    )
+
+    decision = payload["observability"]["learning_router_rollout_decision"]
+    assert decision["phase"] == "report_only"
+    assert decision["decision"] == "stay_report_only"
+    assert decision["reason"] == "eligible_pending_guarded_rollout"
+    assert decision["eligible_for_guarded_rollout"] is True
+    assert decision["router_enabled"] is True
+    assert decision["router_mode"] == "shadow"
+    assert decision["shadow_arm_id"] == "general_heuristic"
+    assert decision["validation_feedback_present"] is False
+    assert decision["failure_signal_has_failure"] is False
+    assert payload["index"]["adaptive_router"]["guarded_rollout"] == {
+        "enabled": False,
+        "eligible": True,
+        "active": False,
+        "decision": "stay_report_only",
+        "reason": "guarded_rollout_disabled",
+        "source_reason": "eligible_pending_guarded_rollout",
+        "shadow_arm_id": "general_heuristic",
+    }
+    assert payload["observability"]["guarded_rollout"] == {
+        "enabled": False,
+        "eligible": True,
+        "active": False,
+        "decision": "stay_report_only",
+        "reason": "guarded_rollout_disabled",
+        "source_reason": "eligible_pending_guarded_rollout",
+        "shadow_arm_id": "general_heuristic",
+    }
+    assert (
+        payload["observability"]["durable_stats"]["learning_router_rollout_decision"][
+            "eligible_for_guarded_rollout"
+        ]
+        is True
+    )
+    invocation = DurableStatsStore(db_path=db_path).read_invocation(
+        invocation_id=str(payload["observability"]["durable_stats"]["invocation_id"])
+    )
+    assert invocation is not None
+    assert invocation.learning_router_rollout_decision["reason"] == (
+        "eligible_pending_guarded_rollout"
+    )
 
 
 def test_orchestrator_plan_captures_long_term_stage_observations(
@@ -520,6 +691,7 @@ def test_orchestrator_plan_replay_cache_hits_on_second_run(
     assert first_cache["origin"] == "stage_artifact_cache"
     assert first_cache["trust_class"] == "exact"
     assert first_cache["policy_name"] == "source_plan"
+    assert first_cache["failure_signal_summary"]["status"] == "skipped"
 
     assert second_cache["enabled"] is True
     assert second_cache["stage"] == "source_plan"
@@ -530,6 +702,7 @@ def test_orchestrator_plan_replay_cache_hits_on_second_run(
     assert second_cache["origin"] == "stage_artifact_cache"
     assert second_cache["trust_class"] == "exact"
     assert second_cache["policy_name"] == "source_plan"
+    assert second_cache["failure_signal_summary"]["status"] == "skipped"
     assert float(second_cache["age_seconds"]) >= 0.0
     assert Path(second_cache["cache_path"]).exists()
     assert first["source_plan"] == second["source_plan"]

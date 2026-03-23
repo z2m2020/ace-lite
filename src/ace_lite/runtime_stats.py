@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -11,6 +11,9 @@ from ace_lite.runtime_stats_schema import (
     RUNTIME_STATS_DEGRADED_REASON_CODES,
     RUNTIME_STATS_DOCTOR_EVENT_CLASS,
     RUNTIME_STATS_EVENT_CLASS_VALUES,
+    RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_DECISION_VALUES,
+    RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_PHASE_VALUES,
+    RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_REASON_CODES,
     RUNTIME_STATS_STAGE_NAMES,
     RUNTIME_STATS_STATUS_VALUES,
 )
@@ -35,6 +38,14 @@ def _normalize_latency(value: Any) -> float:
     if parsed < 0.0:
         return 0.0
     return round(parsed, 6)
+
+
+def _normalize_count(value: Any) -> int:
+    try:
+        parsed = int(value or 0)
+    except Exception:
+        return 0
+    return max(0, parsed)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +75,7 @@ class RuntimeInvocationStats:
     contract_error_code: str = ""
     degraded_reason_codes: tuple[str, ...] = ()
     stage_latencies: tuple[RuntimeStageLatency, ...] = ()
+    learning_router_rollout_decision: dict[str, Any] = field(default_factory=dict)
     plan_replay_hit: bool = False
     plan_replay_safe_hit: bool = False
     plan_replay_store_written: bool = False
@@ -85,6 +97,9 @@ class RuntimeInvocationStats:
             "contract_error_code": self.contract_error_code,
             "degraded_reason_codes": list(self.degraded_reason_codes),
             "stage_latencies": [item.to_payload() for item in self.stage_latencies],
+            "learning_router_rollout_decision": dict(
+                self.learning_router_rollout_decision
+            ),
             "plan_replay_hit": self.plan_replay_hit,
             "plan_replay_safe_hit": self.plan_replay_safe_hit,
             "plan_replay_store_written": self.plan_replay_store_written,
@@ -114,6 +129,12 @@ class RuntimeInvocationStats:
                 [item.to_payload() for item in self.stage_latencies],
                 ensure_ascii=False,
                 separators=(",", ":"),
+            ),
+            "learning_router_rollout_json": json.dumps(
+                dict(self.learning_router_rollout_decision),
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
             ),
             "plan_replay_hit": 1 if self.plan_replay_hit else 0,
             "plan_replay_safe_hit": 1 if self.plan_replay_safe_hit else 0,
@@ -200,6 +221,32 @@ def normalize_runtime_degraded_reason_codes(value: Any) -> tuple[str, ...]:
     return tuple(sorted(normalized))
 
 
+def normalize_runtime_learning_router_rollout_decision(value: Any) -> dict[str, Any]:
+    payload = value if isinstance(value, dict) else {}
+    normalized: dict[str, Any] = {}
+    for key, raw_value in payload.items():
+        normalized_key = _normalize_text(key, max_len=128)
+        if not normalized_key:
+            continue
+        if isinstance(raw_value, bool):
+            normalized[normalized_key] = raw_value
+        elif isinstance(raw_value, int):
+            normalized[normalized_key] = _normalize_count(raw_value)
+        elif isinstance(raw_value, float):
+            normalized[normalized_key] = _normalize_latency(raw_value)
+        elif isinstance(raw_value, str):
+            normalized[normalized_key] = _normalize_text(raw_value, max_len=255)
+        elif isinstance(raw_value, (list, tuple)):
+            normalized[normalized_key] = [
+                item
+                for item in (
+                    _normalize_text(candidate, max_len=255) for candidate in raw_value
+                )
+                if item
+            ]
+    return normalized
+
+
 def normalize_runtime_invocation_stats(
     stats: RuntimeInvocationStats | dict[str, Any],
 ) -> RuntimeInvocationStats:
@@ -252,6 +299,9 @@ def normalize_runtime_invocation_stats(
             raw.get("degraded_reason_codes")
         ),
         stage_latencies=normalize_runtime_stage_latencies(raw.get("stage_latencies")),
+        learning_router_rollout_decision=normalize_runtime_learning_router_rollout_decision(
+            raw.get("learning_router_rollout_decision")
+        ),
         plan_replay_hit=bool(raw.get("plan_replay_hit")),
         plan_replay_safe_hit=bool(raw.get("plan_replay_safe_hit")),
         plan_replay_store_written=bool(raw.get("plan_replay_store_written")),
@@ -260,13 +310,119 @@ def normalize_runtime_invocation_stats(
     )
 
 
+def build_learning_router_rollout_decision_payload(
+    *,
+    adaptive_router: dict[str, Any] | None,
+    card_summary: dict[str, Any] | None,
+    validation_feedback_summary: dict[str, Any] | None,
+    failure_signal_summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    router = adaptive_router if isinstance(adaptive_router, dict) else {}
+    cards = card_summary if isinstance(card_summary, dict) else {}
+    validation_feedback = (
+        validation_feedback_summary
+        if isinstance(validation_feedback_summary, dict)
+        else {}
+    )
+    failure_signal = (
+        failure_signal_summary if isinstance(failure_signal_summary, dict) else {}
+    )
+    online_bandit = (
+        router.get("online_bandit")
+        if isinstance(router.get("online_bandit"), dict)
+        else {}
+    )
+
+    phase = "report_only"
+    if phase not in RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_PHASE_VALUES:
+        phase = RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_PHASE_VALUES[0]
+
+    decision = "stay_report_only"
+    if decision not in RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_DECISION_VALUES:
+        decision = RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_DECISION_VALUES[0]
+
+    router_enabled = bool(router.get("enabled", False))
+    router_mode = _normalize_text(router.get("mode"), max_len=32).lower() or "disabled"
+    router_arm_id = _normalize_text(router.get("arm_id"), max_len=128)
+    router_source = _normalize_text(router.get("source"), max_len=64)
+    shadow_arm_id = _normalize_text(router.get("shadow_arm_id"), max_len=128)
+    shadow_source = _normalize_text(router.get("shadow_source"), max_len=64)
+    evidence_card_count = _normalize_count(cards.get("evidence_card_count"))
+    validation_card_present = bool(cards.get("validation_card_present", False))
+    validation_feedback_present = bool(validation_feedback) or validation_card_present
+    failure_signal_status = (
+        _normalize_text(failure_signal.get("status"), max_len=32).lower() or "skipped"
+    )
+    failure_signal_has_failure = bool(
+        failure_signal.get("has_failure", False)
+        or failure_signal_status in {"failed", "degraded", "timeout"}
+        or _normalize_count(failure_signal.get("issue_count")) > 0
+        or _normalize_count(failure_signal.get("probe_issue_count")) > 0
+    )
+    eligible_for_guarded_rollout = False
+    reason = "adaptive_router_disabled"
+    if router_enabled:
+        if router_mode != "shadow":
+            reason = "adaptive_router_not_shadow"
+        elif not shadow_arm_id:
+            reason = "shadow_arm_missing"
+        elif evidence_card_count <= 0:
+            reason = "missing_source_plan_cards"
+        elif failure_signal_has_failure:
+            reason = "failure_signal_present"
+        else:
+            reason = "eligible_pending_guarded_rollout"
+            eligible_for_guarded_rollout = True
+    if reason not in RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_REASON_CODES:
+        reason = "adaptive_router_disabled"
+
+    return {
+        "phase": phase,
+        "decision": decision,
+        "reason": reason,
+        "eligible_for_guarded_rollout": eligible_for_guarded_rollout,
+        "router_enabled": router_enabled,
+        "router_mode": router_mode,
+        "router_arm_id": router_arm_id,
+        "router_source": router_source,
+        "shadow_arm_id": shadow_arm_id,
+        "shadow_source": shadow_source,
+        "online_bandit_requested": bool(online_bandit.get("requested", False)),
+        "online_bandit_eligible": bool(online_bandit.get("eligible", False)),
+        "online_bandit_active": bool(online_bandit.get("active", False)),
+        "evidence_card_count": evidence_card_count,
+        "validation_card_present": validation_card_present,
+        "validation_feedback_present": validation_feedback_present,
+        "validation_selected_test_count": _normalize_count(
+            validation_feedback.get("selected_test_count")
+        ),
+        "validation_executed_test_count": _normalize_count(
+            validation_feedback.get("executed_test_count")
+        ),
+        "failure_signal_status": failure_signal_status,
+        "failure_signal_has_failure": failure_signal_has_failure,
+        "failure_signal_issue_count": _normalize_count(
+            failure_signal.get("issue_count")
+        ),
+        "failure_signal_probe_issue_count": _normalize_count(
+            failure_signal.get("probe_issue_count")
+        ),
+        "failure_signal_source": _normalize_text(
+            failure_signal.get("source"),
+            max_len=64,
+        ),
+    }
+
+
 __all__ = [
     "RuntimeInvocationStats",
     "RuntimeScopeRollup",
     "RuntimeStageLatency",
     "RuntimeStatsSnapshot",
+    "build_learning_router_rollout_decision_payload",
     "normalize_runtime_degraded_reason_codes",
     "normalize_runtime_invocation_stats",
+    "normalize_runtime_learning_router_rollout_decision",
     "normalize_runtime_stage_latencies",
     "utc_now_iso",
 ]

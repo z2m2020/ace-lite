@@ -62,6 +62,7 @@ def _validation_rich_summary(
     native_scip_summary: dict[str, object] | None = None,
     validation_probe_summary: dict[str, object] | None = None,
     source_plan_validation_feedback_summary: dict[str, object] | None = None,
+    source_plan_failure_signal_summary: dict[str, object] | None = None,
 ) -> None:
     payload = {
         "metrics": {
@@ -89,6 +90,10 @@ def _validation_rich_summary(
     if source_plan_validation_feedback_summary is not None:
         payload["source_plan_validation_feedback_summary"] = (
             source_plan_validation_feedback_summary
+        )
+    if source_plan_failure_signal_summary is not None:
+        payload["source_plan_failure_signal_summary"] = (
+            source_plan_failure_signal_summary
         )
     payload_path.write_text(
         json.dumps(payload),
@@ -210,6 +215,20 @@ def test_metrics_collector_main_writes_validation_rich_section(
             "selected_test_count_mean": 1.0,
             "executed_test_count_mean": 1.0,
         },
+        source_plan_failure_signal_summary={
+            "present_ratio": 1.0,
+            "issue_count_mean": 0.0,
+            "failure_rate": 0.0,
+            "probe_issue_count_mean": 0.0,
+            "probe_executed_count_mean": 1.0,
+            "probe_failure_rate": 0.0,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 1.0,
+            "replay_cache_origin_ratio": 1.0,
+            "observability_origin_ratio": 0.0,
+            "source_plan_origin_ratio": 0.0,
+            "validate_step_origin_ratio": 0.0,
+        },
     )
     _validation_rich_summary(
         validation_current,
@@ -267,6 +286,20 @@ def test_metrics_collector_main_writes_validation_rich_section(
             "probe_failure_rate": 0.1,
             "selected_test_count_mean": 1.0,
             "executed_test_count_mean": 0.75,
+        },
+        source_plan_failure_signal_summary={
+            "present_ratio": 1.0,
+            "issue_count_mean": 0.25,
+            "failure_rate": 0.2,
+            "probe_issue_count_mean": 0.25,
+            "probe_executed_count_mean": 1.5,
+            "probe_failure_rate": 0.1,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 0.75,
+            "replay_cache_origin_ratio": 1.0,
+            "observability_origin_ratio": 0.0,
+            "source_plan_origin_ratio": 0.0,
+            "validate_step_origin_ratio": 0.0,
         },
     )
     output_path = tmp_path / "report.json"
@@ -340,6 +373,20 @@ def test_metrics_collector_main_writes_validation_rich_section(
         "selected_test_count_mean": 1.0,
         "executed_test_count_mean": 0.75,
     }
+    assert payload["validation_rich_source_plan_failure_signal_summary"] == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 0.25,
+        "failure_rate": 0.2,
+        "probe_issue_count_mean": 0.25,
+        "probe_executed_count_mean": 1.5,
+        "probe_failure_rate": 0.1,
+        "selected_test_count_mean": 1.0,
+        "executed_test_count_mean": 0.75,
+        "replay_cache_origin_ratio": 1.0,
+        "observability_origin_ratio": 0.0,
+        "source_plan_origin_ratio": 0.0,
+        "validate_step_origin_ratio": 0.0,
+    }
     assert payload["validation_rich_previous_validation_probe_summary"] == {
         "validation_test_count": 5.0,
         "probe_enabled_ratio": 0.5,
@@ -355,6 +402,20 @@ def test_metrics_collector_main_writes_validation_rich_section(
         "probe_failure_rate": 0.0,
         "selected_test_count_mean": 1.0,
         "executed_test_count_mean": 1.0,
+    }
+    assert payload["validation_rich_previous_source_plan_failure_signal_summary"] == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 0.0,
+        "failure_rate": 0.0,
+        "probe_issue_count_mean": 0.0,
+        "probe_executed_count_mean": 1.0,
+        "probe_failure_rate": 0.0,
+        "selected_test_count_mean": 1.0,
+        "executed_test_count_mean": 1.0,
+        "replay_cache_origin_ratio": 1.0,
+        "observability_origin_ratio": 0.0,
+        "source_plan_origin_ratio": 0.0,
+        "validate_step_origin_ratio": 0.0,
     }
     assert payload["validation_rich_regressions"] == []
 

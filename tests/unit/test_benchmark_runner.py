@@ -821,6 +821,12 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
         "probe_executed_count_mean": 0.0,
         "probe_failure_rate": 0.0,
     }
+    assert results["source_plan_card_summary"] == {
+        "evidence_card_count_mean": 0.0,
+        "file_card_count_mean": 0.0,
+        "chunk_card_count_mean": 0.0,
+        "validation_card_present_ratio": 0.0,
+    }
     assert results["source_plan_validation_feedback_summary"] == {
         "present_ratio": 0.0,
         "issue_count_mean": 0.0,
@@ -830,6 +836,20 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
         "probe_failure_rate": 0.0,
         "selected_test_count_mean": 0.0,
         "executed_test_count_mean": 0.0,
+    }
+    assert results["source_plan_failure_signal_summary"] == {
+        "present_ratio": 0.0,
+        "issue_count_mean": 0.0,
+        "failure_rate": 0.0,
+        "probe_issue_count_mean": 0.0,
+        "probe_executed_count_mean": 0.0,
+        "probe_failure_rate": 0.0,
+        "selected_test_count_mean": 0.0,
+        "executed_test_count_mean": 0.0,
+        "replay_cache_origin_ratio": 0.0,
+        "observability_origin_ratio": 0.0,
+        "source_plan_origin_ratio": 0.0,
+        "validate_step_origin_ratio": 0.0,
     }
     assert results["deep_symbol_summary"] == {
         "case_count": 0.0,

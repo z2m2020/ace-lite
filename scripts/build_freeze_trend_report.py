@@ -162,6 +162,26 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     validation_native_scip = (
         validation_native_scip_raw if isinstance(validation_native_scip_raw, dict) else {}
     )
+    validation_probe_raw = validation_rich.get("validation_probe_summary")
+    validation_probe = (
+        validation_probe_raw if isinstance(validation_probe_raw, dict) else {}
+    )
+    validation_source_plan_feedback_raw = validation_rich.get(
+        "source_plan_validation_feedback_summary"
+    )
+    validation_source_plan_feedback = (
+        validation_source_plan_feedback_raw
+        if isinstance(validation_source_plan_feedback_raw, dict)
+        else {}
+    )
+    validation_source_plan_failure_raw = validation_rich.get(
+        "source_plan_failure_signal_summary"
+    )
+    validation_source_plan_failure = (
+        validation_source_plan_failure_raw
+        if isinstance(validation_source_plan_failure_raw, dict)
+        else {}
+    )
 
     return {
         "generated_at": str(payload.get("generated_at", "") or ""),
@@ -209,6 +229,35 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "validation_rich_q3_native_scip_document_count_mean": _safe_float(
             validation_native_scip.get("document_count_mean"), 0.0
         ),
+        "validation_rich_q4_probe_enabled_ratio": _safe_float(
+            validation_probe.get("probe_enabled_ratio"), 0.0
+        ),
+        "validation_rich_q4_probe_failure_rate": _safe_float(
+            validation_probe.get("probe_failure_rate"), 0.0
+        ),
+        "validation_rich_q4_feedback_present_ratio": _safe_float(
+            validation_source_plan_feedback.get("present_ratio"), 0.0
+        ),
+        "validation_rich_q4_feedback_failure_rate": _safe_float(
+            validation_source_plan_feedback.get("failure_rate"), 0.0
+        ),
+        "validation_rich_q4_feedback_executed_test_count_mean": _safe_float(
+            validation_source_plan_feedback.get("executed_test_count_mean"), 0.0
+        ),
+        "validation_rich_q1_failure_present_ratio": _safe_float(
+            validation_source_plan_failure.get("present_ratio"), 0.0
+        ),
+        "validation_rich_q1_failure_failure_rate": _safe_float(
+            validation_source_plan_failure.get("failure_rate"), 0.0
+        ),
+        "validation_rich_q1_failure_replay_cache_origin_ratio": _safe_float(
+            validation_source_plan_failure.get("replay_cache_origin_ratio"), 0.0
+        ),
+        "validation_probe_summary": dict(validation_probe),
+        "source_plan_validation_feedback_summary": dict(
+            validation_source_plan_feedback
+        ),
+        "source_plan_failure_signal_summary": dict(validation_source_plan_failure),
         "failure_signatures": _extract_failure_signatures(payload),
     }
 
@@ -247,6 +296,14 @@ def _build_delta(*, latest: dict[str, Any], previous: dict[str, Any]) -> dict[st
         "validation_rich_q3_noise_rate",
         "validation_rich_q3_deep_symbol_case_count",
         "validation_rich_q3_native_scip_document_count_mean",
+        "validation_rich_q4_probe_enabled_ratio",
+        "validation_rich_q4_probe_failure_rate",
+        "validation_rich_q4_feedback_present_ratio",
+        "validation_rich_q4_feedback_failure_rate",
+        "validation_rich_q4_feedback_executed_test_count_mean",
+        "validation_rich_q1_failure_present_ratio",
+        "validation_rich_q1_failure_failure_rate",
+        "validation_rich_q1_failure_replay_cache_origin_ratio",
     )
     delta: dict[str, float] = {}
     for key in keys:
@@ -327,6 +384,48 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 ),
             )
         )
+        lines.append(
+            "- Validation-rich Q4 validation probe: probe_enabled_ratio={enabled:.4f}, probe_failure_rate={failure:.4f}".format(
+                enabled=_safe_float(
+                    latest.get("validation_rich_q4_probe_enabled_ratio"), 0.0
+                ),
+                failure=_safe_float(
+                    latest.get("validation_rich_q4_probe_failure_rate"), 0.0
+                ),
+            )
+        )
+        lines.append(
+            "- Validation-rich Q4 source-plan feedback: present_ratio={present:.4f}, failure_rate={failure:.4f}, executed_test_count_mean={executed:.4f}".format(
+                present=_safe_float(
+                    latest.get("validation_rich_q4_feedback_present_ratio"), 0.0
+                ),
+                failure=_safe_float(
+                    latest.get("validation_rich_q4_feedback_failure_rate"), 0.0
+                ),
+                executed=_safe_float(
+                    latest.get(
+                        "validation_rich_q4_feedback_executed_test_count_mean"
+                    ),
+                    0.0,
+                ),
+            )
+        )
+        lines.append(
+            "- Validation-rich Q1 failure signal: present_ratio={present:.4f}, failure_rate={failure:.4f}, replay_cache_origin_ratio={replay:.4f}".format(
+                present=_safe_float(
+                    latest.get("validation_rich_q1_failure_present_ratio"), 0.0
+                ),
+                failure=_safe_float(
+                    latest.get("validation_rich_q1_failure_failure_rate"), 0.0
+                ),
+                replay=_safe_float(
+                    latest.get(
+                        "validation_rich_q1_failure_replay_cache_origin_ratio"
+                    ),
+                    0.0,
+                ),
+            )
+        )
         lines.append("")
 
     if previous:
@@ -371,6 +470,44 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 q3_document=_safe_float(
                     delta.get(
                         "validation_rich_q3_native_scip_document_count_mean"
+                    ),
+                    0.0,
+                ),
+            )
+        )
+        lines.append(
+            "- Validation-rich Q4 delta: probe_enabled={probe_enabled:+.4f}, probe_failure={probe_failure:+.4f}, feedback_present={feedback_present:+.4f}, feedback_failure={feedback_failure:+.4f}, feedback_executed_tests={feedback_executed:+.4f}".format(
+                probe_enabled=_safe_float(
+                    delta.get("validation_rich_q4_probe_enabled_ratio"), 0.0
+                ),
+                probe_failure=_safe_float(
+                    delta.get("validation_rich_q4_probe_failure_rate"), 0.0
+                ),
+                feedback_present=_safe_float(
+                    delta.get("validation_rich_q4_feedback_present_ratio"), 0.0
+                ),
+                feedback_failure=_safe_float(
+                    delta.get("validation_rich_q4_feedback_failure_rate"), 0.0
+                ),
+                feedback_executed=_safe_float(
+                    delta.get(
+                        "validation_rich_q4_feedback_executed_test_count_mean"
+                    ),
+                    0.0,
+                ),
+            )
+        )
+        lines.append(
+            "- Validation-rich Q1 delta: failure_present={present:+.4f}, failure_rate={failure:+.4f}, replay_cache_origin={replay:+.4f}".format(
+                present=_safe_float(
+                    delta.get("validation_rich_q1_failure_present_ratio"), 0.0
+                ),
+                failure=_safe_float(
+                    delta.get("validation_rich_q1_failure_failure_rate"), 0.0
+                ),
+                replay=_safe_float(
+                    delta.get(
+                        "validation_rich_q1_failure_replay_cache_origin_ratio"
                     ),
                     0.0,
                 ),

@@ -228,6 +228,106 @@ def test_run_source_plan_emits_selected_ltm_constraints() -> None:
     ]
 
 
+def test_run_source_plan_emits_compact_cards_for_replay_and_explainability() -> None:
+    ctx = StageContext(query="compact evidence for replay", repo="demo", root=".")
+    validation_result = build_validation_result_v1(
+        replay_key="validation-run-002",
+        selected_tests=["tests/unit/test_source_plan_properties.py::test_case"],
+        executed_tests=["tests/unit/test_source_plan_properties.py::test_case"],
+        probes=[
+            {
+                "name": "compile",
+                "status": "failed",
+                "selected": True,
+                "executed": True,
+                "issues": [
+                    {
+                        "code": "compile_error",
+                        "message": "py_compile failed",
+                        "path": "src/demo.py",
+                        "severity": "error",
+                        "line": 7,
+                        "column": 1,
+                    }
+                ],
+            }
+        ],
+        status="failed",
+    ).as_dict()
+    ctx.state = {
+        "memory": {},
+        "index": {
+            "candidate_files": [
+                {"path": "src/direct.py"},
+                {"path": "src/neighbor.py"},
+            ],
+            "candidate_chunks": [
+                {
+                    "path": "src/direct.py",
+                    "qualified_name": "direct_hit",
+                    "kind": "function",
+                    "lineno": 10,
+                    "end_lineno": 20,
+                    "score": 9.0,
+                    "signature": "def direct_hit() -> None:",
+                },
+                {
+                    "path": "src/neighbor.py",
+                    "qualified_name": "neighbor_hit",
+                    "kind": "function",
+                    "lineno": 30,
+                    "end_lineno": 40,
+                    "score": 4.0,
+                },
+            ],
+            "chunk_metrics": {"chunk_budget_used": 32.0},
+        },
+        "repomap": {"focused_files": ["src/direct.py", "src/neighbor.py"]},
+        "augment": {
+            "diagnostics": [],
+            "xref": {"count": 0, "results": []},
+            "tests": {
+                "suspicious_chunks": [
+                    {
+                        "path": "src/direct.py",
+                        "qualified_name": "direct_hit",
+                        "kind": "function",
+                        "lineno": 10,
+                        "end_lineno": 20,
+                        "score": 1.0,
+                    }
+                ],
+                "suggested_tests": ["pytest -q tests/unit/test_source_plan_properties.py"],
+            },
+        },
+        "skills": {"selected": []},
+        "validation": {"result": validation_result},
+        "__policy": {"name": "bugfix_test", "version": "v1", "test_signal_weight": 1.0},
+    }
+
+    result = run_source_plan(
+        ctx=ctx,
+        pipeline_order=["index", "repomap", "augment", "skills", "source_plan"],
+        chunk_top_k=4,
+        chunk_per_file_limit=2,
+        chunk_token_budget=128,
+        chunk_disclosure="refs",
+        policy_version="v1",
+    )
+
+    assert result["card_summary"] == {
+        "schema_version": "y7503-card-v1",
+        "evidence_card_count": 2,
+        "file_card_count": 2,
+        "chunk_card_count": 2,
+        "validation_card_present": True,
+    }
+    assert result["chunk_cards"][0]["card_id"] == "src/direct.py:direct_hit:10-20"
+    assert result["file_cards"][0]["card_id"] == "file:src/direct.py"
+    assert result["evidence_cards"][0]["topic"] == "retrieval_grounding"
+    assert result["evidence_cards"][1]["topic"] == "validation_feedback"
+
+
 def test_run_source_plan_bridges_validation_result_from_validation_stage() -> None:
     ctx = StageContext(query="rerank after failed validation probe", repo="demo", root=".")
     validation_result = build_validation_result_v1(

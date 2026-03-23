@@ -8,8 +8,8 @@ from ace_lite.runtime_db_migrate import build_runtime_db_migration_bootstrap
 
 
 RUNTIME_STATS_SCHEMA_NAME = "runtime_stats"
-RUNTIME_STATS_SCHEMA_VERSION = 2
-RUNTIME_STATS_SCHEMA_LABEL = "ace-lite-runtime-stats-v2"
+RUNTIME_STATS_SCHEMA_VERSION = 3
+RUNTIME_STATS_SCHEMA_LABEL = "ace-lite-runtime-stats-v3"
 RUNTIME_STATS_ALL_TIME_SCOPE_KEY = "all"
 RUNTIME_STATS_DEFAULT_EVENT_CLASS = "runtime_invocation"
 RUNTIME_STATS_DOCTOR_EVENT_CLASS = "doctor_runtime_event"
@@ -35,6 +35,25 @@ RUNTIME_STATS_STAGE_NAMES = (
     "total",
 )
 RUNTIME_STATS_STATUS_VALUES = ("succeeded", "degraded", "failed")
+RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_PHASE_VALUES = (
+    "report_only",
+    "guarded_rollout",
+    "default",
+)
+RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_DECISION_VALUES = (
+    "stay_report_only",
+    "apply_guarded_rollout",
+    "default_active",
+)
+RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_REASON_CODES = (
+    "adaptive_router_disabled",
+    "adaptive_router_not_shadow",
+    "shadow_arm_missing",
+    "missing_source_plan_cards",
+    "missing_validation_feedback",
+    "failure_signal_present",
+    "eligible_pending_guarded_rollout",
+)
 RUNTIME_STATS_COUNTER_FIELDS = (
     "invocation_count",
     "success_count",
@@ -203,6 +222,7 @@ def _build_table_specs() -> tuple[RuntimeStatsTableSpec, ...]:
             "contract_error_code TEXT NOT NULL DEFAULT '', "
             "degraded_reason_codes TEXT NOT NULL DEFAULT '[]', "
             "stage_latency_json TEXT NOT NULL DEFAULT '[]', "
+            "learning_router_rollout_json TEXT NOT NULL DEFAULT '{}', "
             "plan_replay_hit INTEGER NOT NULL DEFAULT 0, "
             "plan_replay_safe_hit INTEGER NOT NULL DEFAULT 0, "
             "plan_replay_store_written INTEGER NOT NULL DEFAULT 0, "
@@ -229,6 +249,7 @@ def _build_table_specs() -> tuple[RuntimeStatsTableSpec, ...]:
             "contract_error_code",
             "degraded_reason_codes",
             "stage_latency_json",
+            "learning_router_rollout_json",
             "plan_replay_hit",
             "plan_replay_safe_hit",
             "plan_replay_store_written",
@@ -394,9 +415,22 @@ def _apply_runtime_stats_schema_v2(conn: Any) -> None:
     )
 
 
+def _apply_runtime_stats_schema_v3(conn: Any) -> None:
+    if not _table_has_column(
+        conn,
+        table_name=RUNTIME_STATS_INVOCATIONS_TABLE,
+        column_name="learning_router_rollout_json",
+    ):
+        conn.execute(
+            f"ALTER TABLE {RUNTIME_STATS_INVOCATIONS_TABLE} "
+            "ADD COLUMN learning_router_rollout_json TEXT NOT NULL DEFAULT '{}'"
+        )
+
+
 RUNTIME_STATS_MIGRATIONS = (
     RuntimeDbMigration(version=1, apply=_apply_runtime_stats_schema_v1),
     RuntimeDbMigration(version=2, apply=_apply_runtime_stats_schema_v2),
+    RuntimeDbMigration(version=3, apply=_apply_runtime_stats_schema_v3),
 )
 
 
@@ -417,6 +451,20 @@ def build_runtime_stats_schema_document() -> dict[str, Any]:
         "stage_names": list(RUNTIME_STATS_STAGE_NAMES),
         "status_values": list(RUNTIME_STATS_STATUS_VALUES),
         "event_class_values": list(RUNTIME_STATS_EVENT_CLASS_VALUES),
+        "learning_router_rollout": {
+            "phase_values": list(RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_PHASE_VALUES),
+            "decision_values": list(
+                RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_DECISION_VALUES
+            ),
+            "reason_codes": list(RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_REASON_CODES),
+            "source_signals": [
+                "index.adaptive_router",
+                "source_plan.card_summary",
+                "source_plan.steps.validate.validation_feedback_summary",
+                "source_plan.failure_signal_summary",
+                "observability.plan_replay_cache.failure_signal_summary",
+            ],
+        },
         "counter_fields": list(RUNTIME_STATS_COUNTER_FIELDS),
         "latency_aggregate_fields": list(RUNTIME_STATS_LATENCY_AGGREGATE_FIELDS),
         "degraded_reason_codes": list(RUNTIME_STATS_DEGRADED_REASON_CODES),
@@ -444,6 +492,9 @@ __all__ = [
     "RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE",
     "RUNTIME_STATS_EVENT_CLASS_VALUES",
     "RUNTIME_STATS_INVOCATIONS_TABLE",
+    "RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_DECISION_VALUES",
+    "RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_PHASE_VALUES",
+    "RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_REASON_CODES",
     "RUNTIME_STATS_LATENCY_AGGREGATE_FIELDS",
     "RUNTIME_STATS_MIGRATIONS",
     "RUNTIME_STATS_REQUIRED_ROLLUP_KINDS",

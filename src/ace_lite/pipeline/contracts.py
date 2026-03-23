@@ -203,6 +203,38 @@ def _validate_source_plan(output: dict[str, Any]) -> None:
     _require_str(output, "policy_version", stage=stage)
     _require_list(output, "steps", stage=stage)
     _require_dict(output, "writeback_template", stage=stage)
+    if "evidence_cards" in output and not isinstance(output.get("evidence_cards"), list):
+        raise StageContractError(
+            "stage output field must be a list: evidence_cards",
+            stage=stage,
+            error_code="stage_contract.invalid_type",
+            reason=f"{stage}.evidence_cards",
+            context={"key": "evidence_cards", "type": type(output.get("evidence_cards")).__name__},
+        )
+    if "file_cards" in output and not isinstance(output.get("file_cards"), list):
+        raise StageContractError(
+            "stage output field must be a list: file_cards",
+            stage=stage,
+            error_code="stage_contract.invalid_type",
+            reason=f"{stage}.file_cards",
+            context={"key": "file_cards", "type": type(output.get("file_cards")).__name__},
+        )
+    if "chunk_cards" in output and not isinstance(output.get("chunk_cards"), list):
+        raise StageContractError(
+            "stage output field must be a list: chunk_cards",
+            stage=stage,
+            error_code="stage_contract.invalid_type",
+            reason=f"{stage}.chunk_cards",
+            context={"key": "chunk_cards", "type": type(output.get("chunk_cards")).__name__},
+        )
+    if "card_summary" in output and not isinstance(output.get("card_summary"), dict):
+        raise StageContractError(
+            "stage output field must be a dictionary: card_summary",
+            stage=stage,
+            error_code="stage_contract.invalid_type",
+            reason=f"{stage}.card_summary",
+            context={"key": "card_summary", "type": type(output.get("card_summary")).__name__},
+        )
 
 
 def _validate_validation(output: dict[str, Any]) -> None:

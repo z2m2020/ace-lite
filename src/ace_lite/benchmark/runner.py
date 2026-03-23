@@ -13,6 +13,7 @@ from ace_lite.benchmark.report_metrics import ALL_METRIC_ORDER, normalize_metric
 from ace_lite.benchmark.scoring import (
     aggregate_metrics,
     build_adaptive_router_arm_summary,
+    build_learning_router_rollout_summary,
     build_adaptive_router_observability_summary,
     build_adaptive_router_pair_summary,
     build_comparison_lane_summary,
@@ -30,6 +31,8 @@ from ace_lite.benchmark.scoring import (
     build_retrieval_control_plane_gate_summary,
     build_retrieval_frontier_gate_summary,
     build_retrieval_context_observability_summary,
+    build_source_plan_card_summary,
+    build_source_plan_failure_signal_summary,
     build_source_plan_validation_feedback_summary,
     build_slo_budget_summary,
     build_stage_latency_summary,
@@ -559,6 +562,9 @@ class BenchmarkRunner:
             "adaptive_router_arm_summary": build_adaptive_router_arm_summary(
                 case_results
             ),
+            "learning_router_rollout_summary": build_learning_router_rollout_summary(
+                case_results
+            ),
             "adaptive_router_observability_summary": (
                 build_adaptive_router_observability_summary(case_results)
             ),
@@ -626,6 +632,12 @@ class BenchmarkRunner:
         output["native_scip_summary"] = build_native_scip_summary(metrics=metrics)
         output["validation_probe_summary"] = build_validation_probe_summary(
             metrics=metrics
+        )
+        output["source_plan_card_summary"] = build_source_plan_card_summary(
+            metrics=metrics
+        )
+        output["source_plan_failure_signal_summary"] = (
+            build_source_plan_failure_signal_summary(metrics=metrics)
         )
         output["source_plan_validation_feedback_summary"] = (
             build_source_plan_validation_feedback_summary(metrics=metrics)

@@ -7,11 +7,13 @@ from ace_lite.benchmark.scoring import (
     build_comparison_lane_summary,
     build_deep_symbol_summary,
     build_feedback_loop_summary,
+    build_learning_router_rollout_summary,
     build_ltm_explainability_summary,
     build_missing_context_risk_summary,
     build_native_scip_summary,
     build_retrieval_frontier_gate_summary,
     build_retrieval_control_plane_gate_summary,
+    build_source_plan_failure_signal_summary,
     build_validation_probe_summary,
     build_source_plan_validation_feedback_summary,
     compare_metrics,
@@ -181,6 +183,17 @@ def test_evaluate_case_result_and_aggregate() -> None:
                 "stage": "source_plan",
                 "reason": "hit",
                 "stored": False,
+                "failure_signal_summary": {
+                    "status": "failed",
+                    "issue_count": 2,
+                    "probe_status": "failed",
+                    "probe_issue_count": 1,
+                    "probe_executed_count": 1,
+                    "selected_test_count": 1,
+                    "executed_test_count": 1,
+                    "has_failure": True,
+                    "source": "source_plan.validate_step",
+                },
             },
             "stage_metrics": [
                 {"stage": "repomap", "elapsed_ms": 4.5},
@@ -231,6 +244,17 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert row["source_plan_validation_feedback_probe_failed"] == 1.0
     assert row["source_plan_validation_feedback_selected_test_count"] == 1.0
     assert row["source_plan_validation_feedback_executed_test_count"] == 1.0
+    assert row["source_plan_failure_signal_origin"] == "plan_replay_cache"
+    assert row["source_plan_failure_signal_present"] == 1.0
+    assert row["source_plan_failure_signal_status"] == "failed"
+    assert row["source_plan_failure_signal_issue_count"] == 2.0
+    assert row["source_plan_failure_signal_failed"] == 1.0
+    assert row["source_plan_failure_signal_probe_status"] == "failed"
+    assert row["source_plan_failure_signal_probe_issue_count"] == 1.0
+    assert row["source_plan_failure_signal_probe_executed_count"] == 1.0
+    assert row["source_plan_failure_signal_probe_failed"] == 1.0
+    assert row["source_plan_failure_signal_selected_test_count"] == 1.0
+    assert row["source_plan_failure_signal_executed_test_count"] == 1.0
     assert row["task_success_hit"] == 1.0
     assert row["task_success_mode"] == "positive"
     assert row["evidence_insufficient"] == 0.0
@@ -328,6 +352,17 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "stage": "source_plan",
         "reason": "hit",
         "stored": False,
+        "failure_signal_summary": {
+            "status": "failed",
+            "issue_count": 2,
+            "probe_status": "failed",
+            "probe_issue_count": 1,
+            "probe_executed_count": 1,
+            "selected_test_count": 1,
+            "executed_test_count": 1,
+            "has_failure": True,
+            "source": "source_plan.validate_step",
+        },
     }
     assert row["chunk_stage_miss_applicable"] == 0.0
     assert row["chunk_stage_miss_classified"] == 0.0
@@ -671,6 +706,17 @@ def test_evaluate_case_result_and_aggregate_preserves_extended_metric_contract()
                 "stage": "source_plan",
                 "reason": "hit",
                 "stored": False,
+                "failure_signal_summary": {
+                    "status": "failed",
+                    "issue_count": 2,
+                    "probe_status": "failed",
+                    "probe_issue_count": 1,
+                    "probe_executed_count": 1,
+                    "selected_test_count": 1,
+                    "executed_test_count": 1,
+                    "has_failure": True,
+                    "source": "source_plan.validate_step",
+                },
             },
             "stage_metrics": [
                 {"stage": "repomap", "elapsed_ms": 4.5},
@@ -757,6 +803,18 @@ def test_evaluate_case_result_and_aggregate_preserves_extended_metric_contract()
     assert metrics["source_plan_validation_feedback_probe_failure_rate"] == 1.0
     assert metrics["source_plan_validation_feedback_selected_test_count_mean"] == 1.0
     assert metrics["source_plan_validation_feedback_executed_test_count_mean"] == 1.0
+    assert metrics["source_plan_failure_signal_present_ratio"] == 1.0
+    assert metrics["source_plan_failure_signal_issue_count_mean"] == 2.0
+    assert metrics["source_plan_failure_signal_failure_rate"] == 1.0
+    assert metrics["source_plan_failure_signal_probe_issue_count_mean"] == 1.0
+    assert metrics["source_plan_failure_signal_probe_executed_count_mean"] == 1.0
+    assert metrics["source_plan_failure_signal_probe_failure_rate"] == 1.0
+    assert metrics["source_plan_failure_signal_selected_test_count_mean"] == 1.0
+    assert metrics["source_plan_failure_signal_executed_test_count_mean"] == 1.0
+    assert metrics["source_plan_failure_signal_replay_cache_origin_ratio"] == 1.0
+    assert metrics["source_plan_failure_signal_observability_origin_ratio"] == 0.0
+    assert metrics["source_plan_failure_signal_source_plan_origin_ratio"] == 0.0
+    assert metrics["source_plan_failure_signal_validate_step_origin_ratio"] == 0.0
     assert metrics["source_plan_direct_evidence_ratio"] == 1.0
     assert metrics["source_plan_graph_closure_preference_enabled_ratio"] == 1.0
     assert metrics["source_plan_graph_closure_bonus_candidate_count_mean"] == 2.0
@@ -2863,4 +2921,129 @@ def test_build_source_plan_validation_feedback_summary_rounds_core_metrics() -> 
         "probe_failure_rate": 0.456789,
         "selected_test_count_mean": 1.234568,
         "executed_test_count_mean": 1.123457,
+    }
+
+
+def test_build_source_plan_failure_signal_summary_rounds_core_metrics() -> None:
+    summary = build_source_plan_failure_signal_summary(
+        metrics={
+            "source_plan_failure_signal_present_ratio": 1.0,
+            "source_plan_failure_signal_issue_count_mean": 2.3456789,
+            "source_plan_failure_signal_failure_rate": 0.5,
+            "source_plan_failure_signal_probe_issue_count_mean": 1.2345678,
+            "source_plan_failure_signal_probe_executed_count_mean": 1.9876543,
+            "source_plan_failure_signal_probe_failure_rate": 0.4567891,
+            "source_plan_failure_signal_selected_test_count_mean": 1.2345678,
+            "source_plan_failure_signal_executed_test_count_mean": 1.1234567,
+            "source_plan_failure_signal_replay_cache_origin_ratio": 0.75,
+            "source_plan_failure_signal_observability_origin_ratio": 0.25,
+            "source_plan_failure_signal_source_plan_origin_ratio": 0.0,
+            "source_plan_failure_signal_validate_step_origin_ratio": 0.0,
+        }
+    )
+
+    assert summary == {
+        "present_ratio": 1.0,
+        "issue_count_mean": 2.345679,
+        "failure_rate": 0.5,
+        "probe_issue_count_mean": 1.234568,
+        "probe_executed_count_mean": 1.987654,
+        "probe_failure_rate": 0.456789,
+        "selected_test_count_mean": 1.234568,
+        "executed_test_count_mean": 1.123457,
+        "replay_cache_origin_ratio": 0.75,
+        "observability_origin_ratio": 0.25,
+        "source_plan_origin_ratio": 0.0,
+        "validate_step_origin_ratio": 0.0,
+    }
+
+
+def test_build_learning_router_rollout_summary_classifies_guarded_rollout_readiness() -> None:
+    summary = build_learning_router_rollout_summary(
+        [
+            {
+                "router_enabled": 0.0,
+                "router_mode": "observe",
+                "router_shadow_arm_id": "",
+                "source_plan_evidence_card_count": 0.0,
+                "source_plan_failure_signal_present": 0.0,
+                "source_plan_failure_signal_failed": 0.0,
+                "source_plan_failure_signal_issue_count": 0.0,
+                "source_plan_failure_signal_probe_issue_count": 0.0,
+            },
+            {
+                "router_enabled": 1.0,
+                "router_mode": "observe",
+                "router_shadow_arm_id": "",
+                "source_plan_evidence_card_count": 1.0,
+                "source_plan_failure_signal_present": 0.0,
+                "source_plan_failure_signal_failed": 0.0,
+                "source_plan_failure_signal_issue_count": 0.0,
+                "source_plan_failure_signal_probe_issue_count": 0.0,
+            },
+            {
+                "router_enabled": 1.0,
+                "router_mode": "shadow",
+                "router_shadow_arm_id": "",
+                "source_plan_evidence_card_count": 1.0,
+                "source_plan_failure_signal_present": 0.0,
+                "source_plan_failure_signal_failed": 0.0,
+                "source_plan_failure_signal_issue_count": 0.0,
+                "source_plan_failure_signal_probe_issue_count": 0.0,
+            },
+            {
+                "router_enabled": 1.0,
+                "router_mode": "shadow",
+                "router_shadow_arm_id": "general_heuristic",
+                "source_plan_evidence_card_count": 0.0,
+                "source_plan_failure_signal_present": 0.0,
+                "source_plan_failure_signal_failed": 0.0,
+                "source_plan_failure_signal_issue_count": 0.0,
+                "source_plan_failure_signal_probe_issue_count": 0.0,
+            },
+            {
+                "router_enabled": 1.0,
+                "router_mode": "shadow",
+                "router_shadow_arm_id": "general_heuristic",
+                "source_plan_evidence_card_count": 2.0,
+                "source_plan_failure_signal_present": 1.0,
+                "source_plan_failure_signal_failed": 1.0,
+                "source_plan_failure_signal_issue_count": 2.0,
+                "source_plan_failure_signal_probe_issue_count": 1.0,
+            },
+            {
+                "router_enabled": 1.0,
+                "router_mode": "shadow",
+                "router_shadow_arm_id": "general_heuristic",
+                "source_plan_evidence_card_count": 2.0,
+                "source_plan_failure_signal_present": 0.0,
+                "source_plan_failure_signal_failed": 0.0,
+                "source_plan_failure_signal_issue_count": 0.0,
+                "source_plan_failure_signal_probe_issue_count": 0.0,
+            },
+        ]
+    )
+
+    assert summary == {
+        "case_count": 6,
+        "router_enabled_case_count": 5,
+        "router_enabled_case_rate": 0.833333,
+        "shadow_mode_case_count": 4,
+        "shadow_mode_case_rate": 0.666667,
+        "shadow_ready_case_count": 3,
+        "shadow_ready_case_rate": 0.5,
+        "source_plan_card_present_case_count": 4,
+        "source_plan_card_present_case_rate": 0.666667,
+        "failure_signal_blocked_case_count": 1,
+        "failure_signal_blocked_case_rate": 0.166667,
+        "eligible_case_count": 1,
+        "eligible_case_rate": 0.166667,
+        "reason_counts": {
+            "adaptive_router_disabled": 1,
+            "adaptive_router_not_shadow": 1,
+            "eligible_pending_guarded_rollout": 1,
+            "failure_signal_present": 1,
+            "missing_source_plan_cards": 1,
+            "shadow_arm_missing": 1,
+        },
     }

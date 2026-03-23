@@ -119,6 +119,28 @@ def evaluate_promotion(
     native_scip_summary = (
         native_scip_summary_raw if isinstance(native_scip_summary_raw, dict) else {}
     )
+    validation_probe_summary_raw = trend_latest.get("validation_probe_summary")
+    validation_probe_summary = (
+        validation_probe_summary_raw
+        if isinstance(validation_probe_summary_raw, dict)
+        else {}
+    )
+    source_plan_feedback_summary_raw = trend_latest.get(
+        "source_plan_validation_feedback_summary"
+    )
+    source_plan_feedback_summary = (
+        source_plan_feedback_summary_raw
+        if isinstance(source_plan_feedback_summary_raw, dict)
+        else {}
+    )
+    source_plan_failure_summary_raw = trend_latest.get(
+        "source_plan_failure_signal_summary"
+    )
+    source_plan_failure_summary = (
+        source_plan_failure_summary_raw
+        if isinstance(source_plan_failure_summary_raw, dict)
+        else {}
+    )
 
     trend_ok = history_count >= max(1, int(min_history_count))
     if not trend_ok:
@@ -214,6 +236,84 @@ def evaluate_promotion(
             },
         }
     gates.append({"name": "retrieval_frontier", **retrieval_frontier_summary})
+    gates.append(
+        {
+            "name": "validation_probe_summary",
+            "present": bool(validation_probe_summary),
+            "passed": True,
+            "validation_test_count": _safe_float(
+                validation_probe_summary.get("validation_test_count"), 0.0
+            ),
+            "probe_enabled_ratio": _safe_float(
+                validation_probe_summary.get("probe_enabled_ratio"), 0.0
+            ),
+            "probe_executed_count_mean": _safe_float(
+                validation_probe_summary.get("probe_executed_count_mean"), 0.0
+            ),
+            "probe_failure_rate": _safe_float(
+                validation_probe_summary.get("probe_failure_rate"), 0.0
+            ),
+        }
+    )
+    gates.append(
+        {
+            "name": "source_plan_validation_feedback",
+            "present": bool(source_plan_feedback_summary),
+            "passed": True,
+            "present_ratio": _safe_float(
+                source_plan_feedback_summary.get("present_ratio"), 0.0
+            ),
+            "failure_rate": _safe_float(
+                source_plan_feedback_summary.get("failure_rate"), 0.0
+            ),
+            "issue_count_mean": _safe_float(
+                source_plan_feedback_summary.get("issue_count_mean"), 0.0
+            ),
+            "probe_issue_count_mean": _safe_float(
+                source_plan_feedback_summary.get("probe_issue_count_mean"), 0.0
+            ),
+            "probe_executed_count_mean": _safe_float(
+                source_plan_feedback_summary.get("probe_executed_count_mean"), 0.0
+            ),
+            "selected_test_count_mean": _safe_float(
+                source_plan_feedback_summary.get("selected_test_count_mean"), 0.0
+            ),
+            "executed_test_count_mean": _safe_float(
+                source_plan_feedback_summary.get("executed_test_count_mean"), 0.0
+            ),
+        }
+    )
+    gates.append(
+        {
+            "name": "source_plan_failure_signal",
+            "present": bool(source_plan_failure_summary),
+            "passed": True,
+            "present_ratio": _safe_float(
+                source_plan_failure_summary.get("present_ratio"), 0.0
+            ),
+            "failure_rate": _safe_float(
+                source_plan_failure_summary.get("failure_rate"), 0.0
+            ),
+            "issue_count_mean": _safe_float(
+                source_plan_failure_summary.get("issue_count_mean"), 0.0
+            ),
+            "probe_issue_count_mean": _safe_float(
+                source_plan_failure_summary.get("probe_issue_count_mean"), 0.0
+            ),
+            "probe_executed_count_mean": _safe_float(
+                source_plan_failure_summary.get("probe_executed_count_mean"), 0.0
+            ),
+            "selected_test_count_mean": _safe_float(
+                source_plan_failure_summary.get("selected_test_count_mean"), 0.0
+            ),
+            "executed_test_count_mean": _safe_float(
+                source_plan_failure_summary.get("executed_test_count_mean"), 0.0
+            ),
+            "replay_cache_origin_ratio": _safe_float(
+                source_plan_failure_summary.get("replay_cache_origin_ratio"), 0.0
+            ),
+        }
+    )
 
     classification = str(stability_payload.get("classification", "no_data") or "no_data")
     stability_ok = bool(stability_payload.get("passed", False)) and classification == "stable_pass"

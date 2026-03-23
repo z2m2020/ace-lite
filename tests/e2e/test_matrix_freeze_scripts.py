@@ -2566,6 +2566,21 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
                     "failed_checks": [],
                     "gate_passed": True,
                 },
+                "validation_probe_summary": {
+                    "validation_test_count": 5.0,
+                    "probe_enabled_ratio": 0.67,
+                    "probe_executed_count_mean": 1.5,
+                    "probe_failure_rate": 0.1,
+                },
+                "source_plan_validation_feedback_summary": {
+                    "present_ratio": 1.0,
+                    "failure_rate": 0.2,
+                    "issue_count_mean": 0.25,
+                    "probe_issue_count_mean": 0.25,
+                    "probe_executed_count_mean": 1.5,
+                    "selected_test_count_mean": 1.0,
+                    "executed_test_count_mean": 0.75,
+                },
                 "previous_metrics": {
                     "task_success_rate": 0.8,
                     "precision_at_k": 0.35,
@@ -2594,6 +2609,21 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
                         "native_scip_loaded_rate",
                     ],
                     "gate_passed": False,
+                },
+                "previous_validation_probe_summary": {
+                    "validation_test_count": 4.0,
+                    "probe_enabled_ratio": 0.5,
+                    "probe_executed_count_mean": 1.0,
+                    "probe_failure_rate": 0.25,
+                },
+                "previous_source_plan_validation_feedback_summary": {
+                    "present_ratio": 1.0,
+                    "failure_rate": 0.5,
+                    "issue_count_mean": 1.0,
+                    "probe_issue_count_mean": 0.5,
+                    "probe_executed_count_mean": 1.0,
+                    "selected_test_count_mean": 1.0,
+                    "executed_test_count_mean": 0.5,
                 },
                 "delta": {
                     "task_success_rate": {
@@ -2648,8 +2678,12 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
     assert "Previous metrics: task_success=0.8000, precision=0.3500, noise=0.6500, validation_test_count=4.0000, latency_p95_ms=692.08, evidence_insufficient=0.2000, missing_validation=0.2000" in markdown
     assert "Q2 retrieval control plane gate: passed=True, regression_evaluated=True, regression_detected=False, shadow_coverage=0.8500, risk_upgrade_gain=0.0400, latency_p95_ms=617.66, failed_checks=(none)" in markdown
     assert "Q3 retrieval frontier gate: passed=True, deep_symbol_case_recall=0.9200, native_scip_loaded_rate=0.7600, precision_at_k=0.4250, noise_rate=0.5750, failed_checks=(none)" in markdown
+    assert "Q4 validation probe summary: validation_test_count=5.0000, probe_enabled_ratio=0.6700, probe_executed_count_mean=1.5000, probe_failure_rate=0.1000" in markdown
+    assert "Q4 source-plan validation feedback: present_ratio=1.0000, failure_rate=0.2000, issue_count_mean=0.2500, probe_issue_count_mean=0.2500, probe_executed_count_mean=1.5000, selected_test_count_mean=1.0000, executed_test_count_mean=0.7500" in markdown
     assert "Previous Q2 retrieval control plane gate: passed=False, regression_evaluated=True, regression_detected=True, shadow_coverage=0.7500, risk_upgrade_gain=-0.0100, latency_p95_ms=692.08, failed_checks=benchmark_regression_detected" in markdown
     assert "Previous Q3 retrieval frontier gate: passed=False, deep_symbol_case_recall=0.8100, native_scip_loaded_rate=0.6800, precision_at_k=0.3500, noise_rate=0.6500, failed_checks=deep_symbol_case_recall,native_scip_loaded_rate" in markdown
+    assert "Previous Q4 validation probe summary: validation_test_count=4.0000, probe_enabled_ratio=0.5000, probe_executed_count_mean=1.0000, probe_failure_rate=0.2500" in markdown
+    assert "Previous Q4 source-plan validation feedback: present_ratio=1.0000, failure_rate=0.5000, issue_count_mean=1.0000, probe_issue_count_mean=0.5000, probe_executed_count_mean=1.0000, selected_test_count_mean=1.0000, executed_test_count_mean=0.5000" in markdown
     assert "Delta summary:" in markdown
     assert "precision_at_k: current=0.4250, previous=0.3500, delta=+0.0750" in markdown
     assert "latency_p95_ms: current=617.6600, previous=692.0800, delta=-74.4200" in markdown
@@ -3503,6 +3537,27 @@ def test_release_freeze_main_includes_validation_rich_summary(
                     "reference_occurrence_count_mean": 11.0,
                     "symbol_definition_count_mean": 3.0,
                 },
+                "validation_probe_summary": {
+                    "validation_test_count": 5.0,
+                    "probe_enabled_ratio": 0.67,
+                    "probe_executed_count_mean": 1.5,
+                    "probe_failure_rate": 0.1,
+                },
+                "source_plan_validation_feedback_summary": {
+                    "present_ratio": 1.0,
+                    "failure_rate": 0.2,
+                    "issue_count_mean": 0.25,
+                    "probe_issue_count_mean": 0.25,
+                    "probe_executed_count_mean": 1.5,
+                    "selected_test_count_mean": 1.0,
+                    "executed_test_count_mean": 0.75,
+                },
+                "source_plan_failure_signal_summary": {
+                    "present_ratio": 1.0,
+                    "failure_rate": 0.2,
+                    "issue_count_mean": 0.25,
+                    "replay_cache_origin_ratio": 1.0,
+                },
             }
         ),
         encoding="utf-8",
@@ -3570,6 +3625,27 @@ def test_release_freeze_main_includes_validation_rich_summary(
                     "definition_occurrence_count_mean": 6.0,
                     "reference_occurrence_count_mean": 10.0,
                     "symbol_definition_count_mean": 2.0,
+                },
+                "validation_probe_summary": {
+                    "validation_test_count": 4.0,
+                    "probe_enabled_ratio": 0.5,
+                    "probe_executed_count_mean": 1.0,
+                    "probe_failure_rate": 0.25,
+                },
+                "source_plan_validation_feedback_summary": {
+                    "present_ratio": 1.0,
+                    "failure_rate": 0.5,
+                    "issue_count_mean": 1.0,
+                    "probe_issue_count_mean": 0.5,
+                    "probe_executed_count_mean": 1.0,
+                    "selected_test_count_mean": 1.0,
+                    "executed_test_count_mean": 0.5,
+                },
+                "source_plan_failure_signal_summary": {
+                    "present_ratio": 1.0,
+                    "failure_rate": 0.5,
+                    "issue_count_mean": 1.0,
+                    "replay_cache_origin_ratio": 1.0,
                 },
             }
         ),
@@ -3667,6 +3743,14 @@ def test_release_freeze_main_includes_validation_rich_summary(
     ] == 0.92
     assert validation_payload["deep_symbol_summary"]["case_count"] == 3.0
     assert validation_payload["native_scip_summary"]["document_count_mean"] == 5.0
+    assert validation_payload["validation_probe_summary"]["probe_failure_rate"] == 0.1
+    assert (
+        validation_payload["source_plan_validation_feedback_summary"][
+            "executed_test_count_mean"
+        ]
+        == 0.75
+    )
+    assert validation_payload["source_plan_failure_signal_summary"]["failure_rate"] == 0.2
     assert validation_payload["previous_metrics"] == {
         "task_success_rate": 0.8,
         "precision_at_k": 0.35,
@@ -3690,6 +3774,19 @@ def test_release_freeze_main_includes_validation_rich_summary(
     )
     assert validation_payload["previous_deep_symbol_summary"]["case_count"] == 2.0
     assert validation_payload["previous_native_scip_summary"]["document_count_mean"] == 4.0
+    assert validation_payload["previous_validation_probe_summary"]["probe_failure_rate"] == 0.25
+    assert (
+        validation_payload["previous_source_plan_validation_feedback_summary"][
+            "executed_test_count_mean"
+        ]
+        == 0.5
+    )
+    assert (
+        validation_payload["previous_source_plan_failure_signal_summary"][
+            "failure_rate"
+        ]
+        == 0.5
+    )
     assert validation_payload["delta"]["task_success_rate"] == {
         "current": 1.0,
         "previous": 0.8,
@@ -4212,6 +4309,11 @@ def test_release_freeze_load_benchmark_summary(tmp_path: Path) -> None:
                     "noise_rate": 0.39,
                     "latency_p95_ms": 132.0,
                 },
+                "source_plan_failure_signal_summary": {
+                    "failure_rate": 0.25,
+                    "cache_origin_ratio": 0.5,
+                    "ignored_text": "drop-me",
+                },
             }
         ),
         encoding="utf-8",
@@ -4228,5 +4330,9 @@ def test_release_freeze_load_benchmark_summary(tmp_path: Path) -> None:
             "precision_at_k": 0.61,
             "noise_rate": 0.39,
             "latency_p95_ms": 132.0,
+        },
+        "source_plan_failure_signal_summary": {
+            "failure_rate": 0.25,
+            "cache_origin_ratio": 0.5,
         },
     }

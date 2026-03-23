@@ -12,6 +12,7 @@ from ace_lite.benchmark_ops import (
     read_benchmark_native_scip_summary,
     read_benchmark_retrieval_control_plane_gate_summary,
     read_benchmark_retrieval_frontier_gate_summary,
+    read_benchmark_source_plan_failure_signal_summary,
     read_benchmark_source_plan_validation_feedback_summary,
     read_benchmark_validation_probe_summary,
 )
@@ -82,6 +83,9 @@ def _extract_summary(*, label: str, path: Path, payload: dict[str, Any]) -> dict
         "deep_symbol_summary": read_benchmark_deep_symbol_summary(path),
         "native_scip_summary": read_benchmark_native_scip_summary(path),
         "validation_probe_summary": read_benchmark_validation_probe_summary(path),
+        "source_plan_failure_signal_summary": (
+            read_benchmark_source_plan_failure_signal_summary(path)
+        ),
         "source_plan_validation_feedback_summary": (
             read_benchmark_source_plan_validation_feedback_summary(path)
         ),
@@ -351,6 +355,55 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 ),
                 executed_test_count_mean=_safe_float(
                     source_plan_feedback.get("executed_test_count_mean", 0.0), 0.0
+                ),
+            )
+        )
+
+    lines.extend(["", "## Q1 Source Plan Failure Signal Summary", ""])
+    lines.append(
+        "| Label | Present Ratio | Failure Rate | Issue Count Mean | Probe Issue Count Mean | Probe Executed Count Mean | Replay Cache Origin Ratio | Observability Origin Ratio | Source Plan Origin Ratio | Validate Step Origin Ratio |"
+    )
+    lines.append(
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+    )
+    for row in (baseline, current, tuned):
+        if not isinstance(row, dict):
+            continue
+        source_plan_failure_raw = row.get("source_plan_failure_signal_summary")
+        source_plan_failure = (
+            source_plan_failure_raw
+            if isinstance(source_plan_failure_raw, dict)
+            else {}
+        )
+        lines.append(
+            "| {label} | {present_ratio:.4f} | {failure_rate:.4f} | {issue_count_mean:.4f} | {probe_issue_count_mean:.4f} | {probe_executed_count_mean:.4f} | {replay_cache_origin_ratio:.4f} | {observability_origin_ratio:.4f} | {source_plan_origin_ratio:.4f} | {validate_step_origin_ratio:.4f} |".format(
+                label=str(row.get("label", "")),
+                present_ratio=_safe_float(
+                    source_plan_failure.get("present_ratio", 0.0), 0.0
+                ),
+                failure_rate=_safe_float(
+                    source_plan_failure.get("failure_rate", 0.0), 0.0
+                ),
+                issue_count_mean=_safe_float(
+                    source_plan_failure.get("issue_count_mean", 0.0), 0.0
+                ),
+                probe_issue_count_mean=_safe_float(
+                    source_plan_failure.get("probe_issue_count_mean", 0.0), 0.0
+                ),
+                probe_executed_count_mean=_safe_float(
+                    source_plan_failure.get("probe_executed_count_mean", 0.0), 0.0
+                ),
+                replay_cache_origin_ratio=_safe_float(
+                    source_plan_failure.get("replay_cache_origin_ratio", 0.0), 0.0
+                ),
+                observability_origin_ratio=_safe_float(
+                    source_plan_failure.get("observability_origin_ratio", 0.0), 0.0
+                ),
+                source_plan_origin_ratio=_safe_float(
+                    source_plan_failure.get("source_plan_origin_ratio", 0.0), 0.0
+                ),
+                validate_step_origin_ratio=_safe_float(
+                    source_plan_failure.get("validate_step_origin_ratio", 0.0), 0.0
                 ),
             )
         )

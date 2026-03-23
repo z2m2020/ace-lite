@@ -205,6 +205,160 @@ def _validate_chunk_list(chunks: Any, *, prefix: str) -> None:
         _validate_chunk_ref(chunk, prefix=f"{prefix}[{index}]")
 
 
+def _validate_string_list(value: Any, *, prefix: str) -> None:
+    if not isinstance(value, list):
+        raise ValueError(f"{prefix} must be a list")
+    for index, item in enumerate(value):
+        if not isinstance(item, str):
+            raise ValueError(f"{prefix}[{index}] must be a string")
+
+
+def _validate_source_plan_chunk_card(card: Any, *, prefix: str) -> None:
+    if not isinstance(card, dict):
+        raise ValueError(f"{prefix} must be a dictionary")
+    for key in (
+        "schema_version",
+        "card_id",
+        "path",
+        "qualified_name",
+        "kind",
+        "lineno",
+        "end_lineno",
+        "score",
+        "evidence_role",
+        "granularity",
+        "sources",
+        "disclosure",
+        "skeleton_available",
+    ):
+        if key not in card:
+            raise ValueError(f"{prefix}.{key} is required")
+    if not isinstance(card.get("schema_version"), str):
+        raise ValueError(f"{prefix}.schema_version must be a string")
+    if not isinstance(card.get("card_id"), str):
+        raise ValueError(f"{prefix}.card_id must be a string")
+    if not isinstance(card.get("path"), str):
+        raise ValueError(f"{prefix}.path must be a string")
+    if not isinstance(card.get("qualified_name"), str):
+        raise ValueError(f"{prefix}.qualified_name must be a string")
+    if not isinstance(card.get("kind"), str):
+        raise ValueError(f"{prefix}.kind must be a string")
+    if not isinstance(card.get("lineno"), (int, float)):
+        raise ValueError(f"{prefix}.lineno must be numeric")
+    if not isinstance(card.get("end_lineno"), (int, float)):
+        raise ValueError(f"{prefix}.end_lineno must be numeric")
+    if not isinstance(card.get("score"), (int, float)):
+        raise ValueError(f"{prefix}.score must be numeric")
+    if not isinstance(card.get("evidence_role"), str):
+        raise ValueError(f"{prefix}.evidence_role must be a string")
+    _validate_string_list(card.get("granularity"), prefix=f"{prefix}.granularity")
+    _validate_string_list(card.get("sources"), prefix=f"{prefix}.sources")
+    if not isinstance(card.get("disclosure"), str):
+        raise ValueError(f"{prefix}.disclosure must be a string")
+    if not isinstance(card.get("skeleton_available"), bool):
+        raise ValueError(f"{prefix}.skeleton_available must be a boolean")
+
+
+def _validate_source_plan_file_card(card: Any, *, prefix: str) -> None:
+    if not isinstance(card, dict):
+        raise ValueError(f"{prefix} must be a dictionary")
+    for key in (
+        "schema_version",
+        "card_id",
+        "path",
+        "chunk_count",
+        "max_score",
+        "evidence_roles",
+        "qualified_names",
+        "chunk_card_ids",
+    ):
+        if key not in card:
+            raise ValueError(f"{prefix}.{key} is required")
+    if not isinstance(card.get("schema_version"), str):
+        raise ValueError(f"{prefix}.schema_version must be a string")
+    if not isinstance(card.get("card_id"), str):
+        raise ValueError(f"{prefix}.card_id must be a string")
+    if not isinstance(card.get("path"), str):
+        raise ValueError(f"{prefix}.path must be a string")
+    if not isinstance(card.get("chunk_count"), (int, float)):
+        raise ValueError(f"{prefix}.chunk_count must be numeric")
+    if not isinstance(card.get("max_score"), (int, float)):
+        raise ValueError(f"{prefix}.max_score must be numeric")
+    _validate_string_list(card.get("evidence_roles"), prefix=f"{prefix}.evidence_roles")
+    _validate_string_list(card.get("qualified_names"), prefix=f"{prefix}.qualified_names")
+    _validate_string_list(card.get("chunk_card_ids"), prefix=f"{prefix}.chunk_card_ids")
+
+
+def _validate_source_plan_evidence_card(card: Any, *, prefix: str) -> None:
+    if not isinstance(card, dict):
+        raise ValueError(f"{prefix} must be a dictionary")
+    for key in (
+        "schema_version",
+        "card_id",
+        "card_type",
+        "topic",
+        "title",
+        "summary",
+        "metrics",
+        "file_paths",
+        "chunk_card_ids",
+    ):
+        if key not in card:
+            raise ValueError(f"{prefix}.{key} is required")
+    if not isinstance(card.get("schema_version"), str):
+        raise ValueError(f"{prefix}.schema_version must be a string")
+    if not isinstance(card.get("card_id"), str):
+        raise ValueError(f"{prefix}.card_id must be a string")
+    if not isinstance(card.get("card_type"), str):
+        raise ValueError(f"{prefix}.card_type must be a string")
+    if not isinstance(card.get("topic"), str):
+        raise ValueError(f"{prefix}.topic must be a string")
+    if not isinstance(card.get("title"), str):
+        raise ValueError(f"{prefix}.title must be a string")
+    if not isinstance(card.get("summary"), str):
+        raise ValueError(f"{prefix}.summary must be a string")
+    if not isinstance(card.get("metrics"), dict):
+        raise ValueError(f"{prefix}.metrics must be a dictionary")
+    _validate_string_list(card.get("file_paths"), prefix=f"{prefix}.file_paths")
+    _validate_string_list(card.get("chunk_card_ids"), prefix=f"{prefix}.chunk_card_ids")
+
+
+def _validate_source_plan_card_summary(summary: Any, *, prefix: str) -> None:
+    if not isinstance(summary, dict):
+        raise ValueError(f"{prefix} must be a dictionary")
+    for key in (
+        "schema_version",
+        "evidence_card_count",
+        "file_card_count",
+        "chunk_card_count",
+        "validation_card_present",
+    ):
+        if key not in summary:
+            raise ValueError(f"{prefix}.{key} is required")
+    if not isinstance(summary.get("schema_version"), str):
+        raise ValueError(f"{prefix}.schema_version must be a string")
+    if not isinstance(summary.get("evidence_card_count"), (int, float)):
+        raise ValueError(f"{prefix}.evidence_card_count must be numeric")
+    if not isinstance(summary.get("file_card_count"), (int, float)):
+        raise ValueError(f"{prefix}.file_card_count must be numeric")
+    if not isinstance(summary.get("chunk_card_count"), (int, float)):
+        raise ValueError(f"{prefix}.chunk_card_count must be numeric")
+    if not isinstance(summary.get("validation_card_present"), bool):
+        raise ValueError(f"{prefix}.validation_card_present must be a boolean")
+
+
+def _validate_source_plan_cards(cards: Any, *, prefix: str, kind: str) -> None:
+    if not isinstance(cards, list):
+        raise ValueError(f"{prefix} must be a list")
+    validator = {
+        "evidence": _validate_source_plan_evidence_card,
+        "file": _validate_source_plan_file_card,
+        "chunk": _validate_source_plan_chunk_card,
+    }[kind]
+    for index, item in enumerate(cards):
+        validator(item, prefix=f"{prefix}[{index}]")
+
+
 def validate_validation_result_payload(payload: Any, *, prefix: str) -> None:
     if not isinstance(payload, dict):
         raise ValueError(f"{prefix} must be a dictionary")
@@ -292,6 +446,29 @@ def validate_context_plan(payload: dict[str, Any]) -> None:
             _validate_chunk_list(
                 source_plan.get("candidate_chunks"),
                 prefix="source_plan.candidate_chunks",
+            )
+        if "evidence_cards" in source_plan:
+            _validate_source_plan_cards(
+                source_plan.get("evidence_cards"),
+                prefix="source_plan.evidence_cards",
+                kind="evidence",
+            )
+        if "file_cards" in source_plan:
+            _validate_source_plan_cards(
+                source_plan.get("file_cards"),
+                prefix="source_plan.file_cards",
+                kind="file",
+            )
+        if "chunk_cards" in source_plan:
+            _validate_source_plan_cards(
+                source_plan.get("chunk_cards"),
+                prefix="source_plan.chunk_cards",
+                kind="chunk",
+            )
+        if "card_summary" in source_plan:
+            _validate_source_plan_card_summary(
+                source_plan.get("card_summary"),
+                prefix="source_plan.card_summary",
             )
         if "validation_result" in source_plan:
             validate_validation_result_payload(

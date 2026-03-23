@@ -197,6 +197,34 @@ def build_selection_observability(
     return payload
 
 
+def build_guarded_rollout_payload(
+    *,
+    rollout_decision: dict[str, Any] | None = None,
+    enabled: bool = False,
+) -> dict[str, Any]:
+    """Build the guarded-rollout scaffold without changing execution behavior."""
+
+    decision_payload = (
+        rollout_decision if isinstance(rollout_decision, dict) else {}
+    )
+    eligible = bool(decision_payload.get("eligible_for_guarded_rollout", False))
+    rollout_enabled = bool(enabled)
+    active = bool(rollout_enabled and eligible)
+    source_reason = str(decision_payload.get("reason", "")).strip()
+    shadow_arm_id = str(decision_payload.get("shadow_arm_id", "")).strip()
+    decision = "apply_guarded_rollout" if active else "stay_report_only"
+    reason = "guarded_rollout_active" if active else "guarded_rollout_disabled"
+    return {
+        "enabled": rollout_enabled,
+        "eligible": eligible,
+        "active": active,
+        "decision": decision,
+        "reason": reason,
+        "source_reason": source_reason,
+        "shadow_arm_id": shadow_arm_id,
+    }
+
+
 def rank_candidate_files(
     *,
     files_map: Any,
@@ -404,6 +432,7 @@ def select_initial_candidates(
 
 
 __all__ = [
+    "build_guarded_rollout_payload",
     "build_selection_observability",
     "build_retrieval_runtime_profile",
     "CandidateSelectionResult",

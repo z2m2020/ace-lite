@@ -342,6 +342,16 @@ def test_validate_context_plan_accepts_source_plan_roundtrip_without_internal_si
     source_plan_step = next(
         item for item in source_plan["steps"] if item.get("stage") == "source_plan"
     )
+    assert source_plan["card_summary"] == {
+        "schema_version": "y7503-card-v1",
+        "evidence_card_count": 1,
+        "file_card_count": 1,
+        "chunk_card_count": 1,
+        "validation_card_present": False,
+    }
+    assert source_plan["evidence_cards"][0]["topic"] == "retrieval_grounding"
+    assert source_plan["file_cards"][0]["card_id"] == "file:src/app.py"
+    assert source_plan["chunk_cards"][0]["card_id"] == "src/app.py:Auth.validate:10-20"
 
     for forbidden_key in (
         "_retrieval_context",
@@ -352,6 +362,23 @@ def test_validate_context_plan_accepts_source_plan_roundtrip_without_internal_si
         assert forbidden_key not in candidate
         assert forbidden_key not in chunk_ref
         assert forbidden_key not in source_plan_step["candidate_chunks"][0]
+
+
+def test_validate_context_plan_rejects_invalid_source_plan_card_summary() -> None:
+    payload = _valid_payload()
+    payload["source_plan"]["card_summary"] = {
+        "schema_version": "y7503-card-v1",
+        "evidence_card_count": "bad",
+        "file_card_count": 1,
+        "chunk_card_count": 1,
+        "validation_card_present": False,
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"source_plan\.card_summary\.evidence_card_count must be numeric",
+    ):
+        validate_context_plan(payload)
 
 
 def test_validate_context_plan_rejects_invalid_validation_stage_payload() -> None:

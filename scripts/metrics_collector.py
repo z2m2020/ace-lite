@@ -12,6 +12,7 @@ from ace_lite.benchmark_ops import (
     read_benchmark_native_scip_summary,
     read_benchmark_retrieval_control_plane_gate_summary,
     read_benchmark_retrieval_frontier_gate_summary,
+    read_benchmark_source_plan_failure_signal_summary,
     read_benchmark_source_plan_validation_feedback_summary,
     read_benchmark_validation_probe_summary,
 )
@@ -188,6 +189,12 @@ def collect_validation_rich_source_plan_validation_feedback_summary(
     *, summary_path: Path
 ) -> dict[str, float]:
     return read_benchmark_source_plan_validation_feedback_summary(summary_path)
+
+
+def collect_validation_rich_source_plan_failure_signal_summary(
+    *, summary_path: Path
+) -> dict[str, float]:
+    return read_benchmark_source_plan_failure_signal_summary(summary_path)
 
 
 def _is_metric_active(
@@ -425,6 +432,13 @@ def main() -> int:
         if isinstance(validation_rich_current_path, Path)
         else {}
     )
+    validation_rich_source_plan_failure_signal_summary = (
+        collect_validation_rich_source_plan_failure_signal_summary(
+            summary_path=validation_rich_current_path
+        )
+        if isinstance(validation_rich_current_path, Path)
+        else {}
+    )
     validation_rich_previous_metrics = (
         collect_validation_rich_metrics(summary_path=validation_rich_previous_path)
         if isinstance(validation_rich_previous_path, Path)
@@ -439,6 +453,13 @@ def main() -> int:
     )
     validation_rich_previous_source_plan_validation_feedback_summary = (
         collect_validation_rich_source_plan_validation_feedback_summary(
+            summary_path=validation_rich_previous_path
+        )
+        if isinstance(validation_rich_previous_path, Path)
+        else {}
+    )
+    validation_rich_previous_source_plan_failure_signal_summary = (
+        collect_validation_rich_source_plan_failure_signal_summary(
             summary_path=validation_rich_previous_path
         )
         if isinstance(validation_rich_previous_path, Path)
@@ -528,11 +549,17 @@ def main() -> int:
         "validation_rich_source_plan_validation_feedback_summary": (
             validation_rich_source_plan_validation_feedback_summary
         ),
+        "validation_rich_source_plan_failure_signal_summary": (
+            validation_rich_source_plan_failure_signal_summary
+        ),
         "validation_rich_previous_validation_probe_summary": (
             validation_rich_previous_validation_probe_summary
         ),
         "validation_rich_previous_source_plan_validation_feedback_summary": (
             validation_rich_previous_source_plan_validation_feedback_summary
+        ),
+        "validation_rich_previous_source_plan_failure_signal_summary": (
+            validation_rich_previous_source_plan_failure_signal_summary
         ),
         "validation_rich_lane": validation_rich_lane,
         "regressions": regressions,

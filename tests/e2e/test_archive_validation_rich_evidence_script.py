@@ -83,6 +83,20 @@ def test_archive_validation_rich_evidence_main_copies_files(tmp_path: Path) -> N
                     "selected_test_count_mean": 1.0,
                     "executed_test_count_mean": 0.5,
                 },
+                "source_plan_failure_signal_summary": {
+                    "present_ratio": 1.0,
+                    "issue_count_mean": 1.0,
+                    "failure_rate": 0.5,
+                    "probe_issue_count_mean": 0.5,
+                    "probe_executed_count_mean": 1.0,
+                    "probe_failure_rate": 0.25,
+                    "selected_test_count_mean": 1.0,
+                    "executed_test_count_mean": 0.5,
+                    "replay_cache_origin_ratio": 1.0,
+                    "observability_origin_ratio": 0.0,
+                    "source_plan_origin_ratio": 0.0,
+                    "validate_step_origin_ratio": 0.0,
+                },
             }
         ),
         encoding="utf-8",
@@ -158,6 +172,7 @@ def test_archive_validation_rich_evidence_main_copies_files(tmp_path: Path) -> N
         manifest["source_plan_validation_feedback_summary"]["executed_test_count_mean"]
         == 0.5
     )
+    assert manifest["source_plan_failure_signal_summary"]["failure_rate"] == 0.5
 
     todo = (dated_root / "next_cycle_todo.md").read_text(encoding="utf-8")
     assert "## Q2 Retrieval Control Plane Gate" in todo
@@ -165,9 +180,11 @@ def test_archive_validation_rich_evidence_main_copies_files(tmp_path: Path) -> N
     assert "## Q3 Frontier Evidence" in todo
     assert "## Q4 Validation Probe Summary" in todo
     assert "## Q4 Source Plan Validation Feedback" in todo
+    assert "## Q1 Source Plan Failure Signal Summary" in todo
     assert "- Gate passed: False" in todo
     assert "- Native SCIP loaded rate: 0.6800" in todo
     assert "- Deep symbol case count: 2.0000; recall: 0.8100" in todo
     assert "- Probe failure rate: 0.2500" in todo
     assert "- Executed test count mean: 0.5000" in todo
+    assert "- Replay cache origin ratio: 1.0000; observability origin ratio: 0.0000; source_plan origin ratio: 0.0000; validate_step origin ratio: 0.0000" in todo
     assert "- Resolve: need more evidence" in todo

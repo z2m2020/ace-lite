@@ -81,6 +81,14 @@ lane from the same tree:
 Review `artifacts/benchmark/validation_rich/latest/results.json` and the paired
 report output to confirm `task_success_rate`, `precision_at_k`, `noise_rate`,
 and `validation_test_count` stay non-regressed on that validation-specific lane.
+When the release touches learning-router rollout evidence, also review the same
+summary/report pair for top-level `learning_router_rollout_summary` and confirm
+the rollout-readiness surface stays report-only and interpretable:
+
+- `eligible_case_rate` is not regressing unexpectedly
+- `reason_counts` does not show a new spike in `failure_signal_present` or `missing_source_plan_cards`
+- any increase in `adaptive_router_not_shadow` or `shadow_arm_missing` is explained by an intentional config or routing change
+
 For the current `Y7502` retrieval-frontier stream, review the same summary for
 `retrieval_frontier_gate_summary` and confirm these Q3 readiness metrics remain
 inside the active thresholds:
@@ -118,9 +126,27 @@ raw config:
 - gate result: passed / failed, plus rollback reason if `enforced` was reverted
 - Q3 frontier gate result: pass / fail from the same summary or freeze
   `validation_rich_benchmark.retrieval_frontier_gate_summary`
+- Q4 validation summaries: `validation_probe_summary` and
+  `source_plan_validation_feedback_summary` from the same summary or freeze
+  `validation_rich_benchmark` section when checkpoint notes need stable probe
+  coverage, probe failure rate, feedback presence, or executed-test means
 - stable frontier evidence blocks: `deep_symbol_summary` and
   `native_scip_summary` from the same benchmark summary when citing recall or
   native SCIP evidence in a checkpoint or changelog
+
+Treat those Q4 validation summaries as report-only release evidence in the
+current lane:
+- freeze and promotion reporting may copy them forward directly from the
+  validation-rich summaries
+- they are intended to explain validation-test coverage and feedback drift
+- they do not add new blocking thresholds unless the gate contract is expanded
+  explicitly in a future stream
+
+Treat `learning_router_rollout_summary` the same way in the current `Y7504`
+lane:
+- it is a maintainer-facing readiness summary, not an automatic release gate
+- use it to explain why guarded rollout remains disabled or why a report-only checkpoint looks ready for the next governance review
+- if release notes cite guarded-rollout readiness, cite the exact dated benchmark artifact and the matching `reason_counts` / `eligible_case_rate` values from that summary instead of paraphrasing raw case payloads
 
 If the release candidate depends on retry/downgrade visibility or any logic that
 changes `decision_trace`, require the same freeze run to carry a
@@ -157,6 +183,10 @@ Minimum checks:
 - any `failed_checks` drift is called out in the release checkpoint before discussing `validation_rich_gate.mode=enforced`
 - any `retrieval_frontier_gate_summary.failed_checks` drift is called out before
   treating the checkpoint as Q3-frontier-ready
+- any drift in `validation_probe_summary` or
+  `source_plan_validation_feedback_summary` is called out as Q4 validation
+  evidence, but remains report-only unless a future gate revision makes those
+  summaries normative
 
 If a tuning round also compares a baseline snapshot against the current default
 path and a tuned candidate, attach the three-way comparison artifact:

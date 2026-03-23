@@ -186,6 +186,38 @@ def evaluate_case_result(
     source_plan_validation_feedback_executed_test_count = (
         metrics.source_plan_validation_feedback_executed_test_count
     )
+    source_plan_card_summary = metrics.source_plan_card_summary
+    source_plan_failure_signal_summary = metrics.source_plan_failure_signal_summary
+    source_plan_failure_signal_origin = metrics.source_plan_failure_signal_origin
+    source_plan_failure_signal_present = metrics.source_plan_failure_signal_present
+    source_plan_failure_signal_status = metrics.source_plan_failure_signal_status
+    source_plan_failure_signal_issue_count = (
+        metrics.source_plan_failure_signal_issue_count
+    )
+    source_plan_failure_signal_probe_status = (
+        metrics.source_plan_failure_signal_probe_status
+    )
+    source_plan_failure_signal_probe_issue_count = (
+        metrics.source_plan_failure_signal_probe_issue_count
+    )
+    source_plan_failure_signal_probe_executed_count = (
+        metrics.source_plan_failure_signal_probe_executed_count
+    )
+    source_plan_failure_signal_selected_test_count = (
+        metrics.source_plan_failure_signal_selected_test_count
+    )
+    source_plan_failure_signal_executed_test_count = (
+        metrics.source_plan_failure_signal_executed_test_count
+    )
+    source_plan_failure_signal_has_failure = (
+        metrics.source_plan_failure_signal_has_failure
+    )
+    source_plan_evidence_card_count = metrics.source_plan_evidence_card_count
+    source_plan_file_card_count = metrics.source_plan_file_card_count
+    source_plan_chunk_card_count = metrics.source_plan_chunk_card_count
+    source_plan_validation_card_present = (
+        metrics.source_plan_validation_card_present
+    )
     notes_hit_ratio = metrics.notes_hit_ratio
     profile_selected_count = metrics.profile_selected_count
     capture_triggered = metrics.capture_triggered
@@ -563,6 +595,34 @@ def evaluate_case_result(
         source_plan_validation_feedback_executed_test_count=(
             source_plan_validation_feedback_executed_test_count
         ),
+        source_plan_failure_signal_origin=source_plan_failure_signal_origin,
+        source_plan_failure_signal_present=source_plan_failure_signal_present,
+        source_plan_failure_signal_status=source_plan_failure_signal_status,
+        source_plan_failure_signal_issue_count=(
+            source_plan_failure_signal_issue_count
+        ),
+        source_plan_failure_signal_probe_status=(
+            source_plan_failure_signal_probe_status
+        ),
+        source_plan_failure_signal_probe_issue_count=(
+            source_plan_failure_signal_probe_issue_count
+        ),
+        source_plan_failure_signal_probe_executed_count=(
+            source_plan_failure_signal_probe_executed_count
+        ),
+        source_plan_failure_signal_selected_test_count=(
+            source_plan_failure_signal_selected_test_count
+        ),
+        source_plan_failure_signal_executed_test_count=(
+            source_plan_failure_signal_executed_test_count
+        ),
+        source_plan_failure_signal_has_failure=(
+            source_plan_failure_signal_has_failure
+        ),
+        source_plan_evidence_card_count=source_plan_evidence_card_count,
+        source_plan_file_card_count=source_plan_file_card_count,
+        source_plan_chunk_card_count=source_plan_chunk_card_count,
+        source_plan_validation_card_present=source_plan_validation_card_present,
         source_plan_evidence_summary=source_plan_evidence_summary,
         source_plan_graph_closure_preference_enabled=(
             source_plan_graph_closure_preference_enabled
@@ -717,10 +777,12 @@ def evaluate_case_result(
                 top_chunks=top_chunks,
                 expected_hits=expected_hits,
                 chunk_hits=chunk_hits,
-                validation_tests=validation_tests,
-                source_plan_evidence_summary=source_plan_evidence_summary,
-                memory_latency_ms=memory_latency_ms,
-                index_latency_ms=index_latency_ms,
+        validation_tests=validation_tests,
+        source_plan_evidence_summary=source_plan_evidence_summary,
+        source_plan_card_summary=source_plan_card_summary,
+        source_plan_failure_signal_summary=source_plan_failure_signal_summary,
+        memory_latency_ms=memory_latency_ms,
+        index_latency_ms=index_latency_ms,
                 repomap_latency_ms=repomap_latency_ms,
                 repomap_worktree_seed_count=repomap_worktree_seed_count,
                 repomap_subgraph_seed_count=repomap_subgraph_seed_count,

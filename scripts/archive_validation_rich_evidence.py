@@ -128,6 +128,10 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
         if isinstance(source_plan_feedback_raw, dict)
         else {}
     )
+    source_plan_failure_raw = payload.get("source_plan_failure_signal_summary")
+    source_plan_failure = (
+        source_plan_failure_raw if isinstance(source_plan_failure_raw, dict) else {}
+    )
 
     lines = [
         "# Validation-Rich Next Cycle Todo",
@@ -300,6 +304,43 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
                 ),
             ]
         )
+    if source_plan_failure:
+        lines.extend(
+            [
+                "",
+                "## Q1 Source Plan Failure Signal Summary",
+                "",
+                "- Present ratio: {ratio:.4f}".format(
+                    ratio=float(source_plan_failure.get("present_ratio", 0.0) or 0.0)
+                ),
+                "- Failure rate: {rate:.4f}".format(
+                    rate=float(source_plan_failure.get("failure_rate", 0.0) or 0.0)
+                ),
+                "- Issue count mean: {count:.4f}".format(
+                    count=float(
+                        source_plan_failure.get("issue_count_mean", 0.0) or 0.0
+                    )
+                ),
+                "- Replay cache origin ratio: {replay:.4f}; observability origin ratio: {observability:.4f}; source_plan origin ratio: {source_plan:.4f}; validate_step origin ratio: {validate_step:.4f}".format(
+                    replay=float(
+                        source_plan_failure.get("replay_cache_origin_ratio", 0.0)
+                        or 0.0
+                    ),
+                    observability=float(
+                        source_plan_failure.get("observability_origin_ratio", 0.0)
+                        or 0.0
+                    ),
+                    source_plan=float(
+                        source_plan_failure.get("source_plan_origin_ratio", 0.0)
+                        or 0.0
+                    ),
+                    validate_step=float(
+                        source_plan_failure.get("validate_step_origin_ratio", 0.0)
+                        or 0.0
+                    ),
+                ),
+            ]
+        )
 
     lines.extend(["", "## Follow-ups", ""])
     if reasons:
@@ -420,6 +461,10 @@ def main() -> int:
         "source_plan_validation_feedback_summary": _extract_numeric_summary(
             payload=summary_payload,
             key="source_plan_validation_feedback_summary",
+        ),
+        "source_plan_failure_signal_summary": _extract_numeric_summary(
+            payload=summary_payload,
+            key="source_plan_failure_signal_summary",
         ),
     }
     manifest_path = dated_root / "archive_manifest.json"

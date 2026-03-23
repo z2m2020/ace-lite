@@ -37,6 +37,9 @@ def _write_report(
     validation_rich_q3_gate_summary: dict[str, object] | None = None,
     deep_symbol_summary: dict[str, object] | None = None,
     native_scip_summary: dict[str, object] | None = None,
+    validation_probe_summary: dict[str, object] | None = None,
+    source_plan_validation_feedback_summary: dict[str, object] | None = None,
+    source_plan_failure_signal_summary: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -92,6 +95,16 @@ def _write_report(
             benchmark_payload["deep_symbol_summary"] = deep_symbol_summary
         if native_scip_summary is not None:
             benchmark_payload["native_scip_summary"] = native_scip_summary
+        if validation_probe_summary is not None:
+            benchmark_payload["validation_probe_summary"] = validation_probe_summary
+        if source_plan_validation_feedback_summary is not None:
+            benchmark_payload["source_plan_validation_feedback_summary"] = (
+                source_plan_validation_feedback_summary
+            )
+        if source_plan_failure_signal_summary is not None:
+            benchmark_payload["source_plan_failure_signal_summary"] = (
+                source_plan_failure_signal_summary
+            )
         payload["validation_rich_benchmark"] = benchmark_payload
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -133,6 +146,27 @@ def test_freeze_trend_report_main_writes_summary(
         },
         deep_symbol_summary={"case_count": 3.0, "recall": 0.93},
         native_scip_summary={"loaded_rate": 0.78, "document_count_mean": 5.0},
+        validation_probe_summary={
+            "validation_test_count": 5.0,
+            "probe_enabled_ratio": 0.67,
+            "probe_executed_count_mean": 1.5,
+            "probe_failure_rate": 0.1,
+        },
+        source_plan_validation_feedback_summary={
+            "present_ratio": 1.0,
+            "failure_rate": 0.2,
+            "issue_count_mean": 0.25,
+            "probe_issue_count_mean": 0.25,
+            "probe_executed_count_mean": 1.5,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 0.75,
+        },
+        source_plan_failure_signal_summary={
+            "present_ratio": 1.0,
+            "failure_rate": 0.2,
+            "issue_count_mean": 0.25,
+            "replay_cache_origin_ratio": 1.0,
+        },
     )
     _write_report(
         report_b,
@@ -169,6 +203,27 @@ def test_freeze_trend_report_main_writes_summary(
         },
         deep_symbol_summary={"case_count": 2.0, "recall": 0.84},
         native_scip_summary={"loaded_rate": 0.65, "document_count_mean": 4.0},
+        validation_probe_summary={
+            "validation_test_count": 4.0,
+            "probe_enabled_ratio": 0.5,
+            "probe_executed_count_mean": 1.0,
+            "probe_failure_rate": 0.25,
+        },
+        source_plan_validation_feedback_summary={
+            "present_ratio": 1.0,
+            "failure_rate": 0.5,
+            "issue_count_mean": 1.0,
+            "probe_issue_count_mean": 0.5,
+            "probe_executed_count_mean": 1.0,
+            "selected_test_count_mean": 1.0,
+            "executed_test_count_mean": 0.5,
+        },
+        source_plan_failure_signal_summary={
+            "present_ratio": 1.0,
+            "failure_rate": 0.5,
+            "issue_count_mean": 1.0,
+            "replay_cache_origin_ratio": 1.0,
+        },
     )
 
     def fake_git_diff(cmd, cwd, check, capture_output, text):
@@ -210,6 +265,11 @@ def test_freeze_trend_report_main_writes_summary(
     assert output["latest"]["validation_rich_q3_native_scip_loaded_rate"] == pytest.approx(0.65)
     assert output["latest"]["validation_rich_q3_deep_symbol_case_count"] == pytest.approx(2.0)
     assert output["latest"]["validation_rich_q3_native_scip_document_count_mean"] == pytest.approx(4.0)
+    assert output["latest"]["validation_rich_q4_probe_enabled_ratio"] == pytest.approx(0.5)
+    assert output["latest"]["validation_rich_q4_feedback_executed_test_count_mean"] == pytest.approx(0.5)
+    assert output["latest"]["validation_probe_summary"]["probe_failure_rate"] == pytest.approx(0.25)
+    assert output["latest"]["source_plan_validation_feedback_summary"]["failure_rate"] == pytest.approx(0.5)
+    assert output["latest"]["source_plan_failure_signal_summary"]["failure_rate"] == pytest.approx(0.5)
     assert "validation_rich_q3_gate:native_scip_loaded_rate" in output["latest"]["failure_signatures"]
     assert output["failure_top3"][0]["signature"] == "concept_gate:noise_rate"
     assert output["suspect_files"] == [
@@ -221,10 +281,15 @@ def test_freeze_trend_report_main_writes_summary(
     assert "Validation-rich Q2 gate: passed=False, shadow_coverage=0.7400, risk_upgrade_gain=-0.0300, latency_p95_ms=880.00" in markdown
     assert "Validation-rich Q3 gate: passed=False, deep_symbol_case_recall=0.8400, native_scip_loaded_rate=0.6500, precision_at_k=0.5800, noise_rate=0.3900" in markdown
     assert "Validation-rich Q3 evidence: deep_symbol_case_count=2.0000, native_scip_document_count_mean=4.0000" in markdown
+    assert "Validation-rich Q4 validation probe: probe_enabled_ratio=0.5000, probe_failure_rate=0.2500" in markdown
+    assert "Validation-rich Q4 source-plan feedback: present_ratio=1.0000, failure_rate=0.5000, executed_test_count_mean=0.5000" in markdown
+    assert "Validation-rich Q1 failure signal: present_ratio=1.0000, failure_rate=0.5000, replay_cache_origin_ratio=1.0000" in markdown
     assert "validation_q2_shadow=-0.1200" in markdown
     assert "validation_q3_native_scip=-0.1300" in markdown
     assert "validation_q3_case_count=-1.0000" in markdown
     assert "validation_q3_document_count=-1.0000" in markdown
+    assert "Validation-rich Q4 delta: probe_enabled=-0.1700, probe_failure=+0.1500, feedback_present=+0.0000, feedback_failure=+0.3000, feedback_executed_tests=-0.2500" in markdown
+    assert "Validation-rich Q1 delta: failure_present=+0.0000, failure_rate=+0.3000, replay_cache_origin=+0.0000" in markdown
     assert "validation_rich_q2_gate:adaptive_router_shadow_coverage" in markdown or output["failure_top3"][1]["signature"] == "validation_rich_q2_gate:adaptive_router_shadow_coverage"
     assert "validation_rich_q3_gate:native_scip_loaded_rate" in markdown or any(
         item["signature"] == "validation_rich_q3_gate:native_scip_loaded_rate"
