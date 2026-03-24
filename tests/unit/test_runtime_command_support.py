@@ -519,6 +519,11 @@ def test_load_runtime_stats_summary_canonicalizes_runtime_reason_aliases_in_top_
     assert payload["top_pain_summary"]["items"][0]["reason_family"] == "runtime"
     assert payload["top_pain_summary"]["items"][0]["capture_class"] == "budget"
     assert payload["top_pain_summary"]["items"][0]["runtime_event_count"] == 1
+    assert payload["next_cycle_input_summary"]["primary_stream"] == "budget"
+    assert payload["next_cycle_input_summary"]["priorities"][0]["reason_code"] == (
+        "latency_budget_exceeded"
+    )
+    assert payload["next_cycle_input_summary"]["priorities"][0]["action_hint"]
 
 
 def test_build_runtime_status_payload_canonicalizes_runtime_reason_aliases_in_degraded_services(
@@ -558,6 +563,10 @@ def test_build_runtime_status_payload_canonicalizes_runtime_reason_aliases_in_de
         and item["source"] == "latest_runtime_stats"
         for item in payload["degraded_services"]
     )
+    assert payload["next_cycle_input"]["primary_stream"] == "budget"
+    assert payload["latest_runtime"]["next_cycle_input_summary"]["priorities"][0][
+        "reason_code"
+    ] == "latency_budget_exceeded"
 
 
 def test_execute_codex_mcp_setup_plan_dry_run_does_not_run_commands() -> None:

@@ -129,6 +129,7 @@ def test_apply_post_generation_runtime_to_state_updates_outputs() -> None:
         candidates=[{"path": "src/app.py", "score": 1.0}],
         second_pass_payload={"enabled": False},
         refine_pass_payload={"enabled": False},
+        retrieval_refinement_payload={"enabled": False},
         cochange_payload={"enabled": False},
         scip_payload={"enabled": False},
         graph_lookup_payload={"enabled": False},

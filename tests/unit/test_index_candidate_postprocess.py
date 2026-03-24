@@ -130,3 +130,50 @@ def test_postprocess_candidates_can_disable_refine_retry() -> None:
         "candidate_count_after": 1,
         "max_passes": 1,
     }
+
+
+def test_postprocess_candidates_applies_structured_retrieval_refinement() -> None:
+    result = postprocess_candidates(
+        candidates=[
+            {"path": "src/other.py", "score": 9.0},
+            {"path": "src/app/auth.py", "score": 5.0},
+        ],
+        files_map={
+            "src/other.py": {"module": "src.other", "language": "python"},
+            "src/app/auth.py": {"module": "src.app.auth", "language": "python"},
+            "src/app/session.py": {"module": "src.app.session", "language": "python"},
+        },
+        selected_ranker="heuristic",
+        top_k_files=4,
+        candidate_relative_threshold=0.0,
+        refine_enabled=False,
+        retrieval_refinement={
+            "schema_version": "agent_loop_retrieval_refinement_v1",
+            "iteration_index": 1,
+            "action_type": "request_more_context",
+            "query_hint": "auth syntax fix",
+            "focus_paths": ["src/app/auth.py", "src/app/session.py"],
+        },
+        rank_candidates=lambda **kwargs: [],
+        merge_candidate_lists=lambda **kwargs: kwargs["primary"],
+    )
+
+    assert [item["path"] for item in result.candidates[:3]] == [
+        "src/app/auth.py",
+        "src/app/session.py",
+        "src/other.py",
+    ]
+    assert result.candidates[0]["agent_loop_focus"] is True
+    assert result.candidates[1]["selection_reason"] == "agent_loop_retrieval_refinement"
+    assert result.retrieval_refinement_payload["applied"] is True
+    assert result.retrieval_refinement_payload["focus_paths"] == [
+        "src/app/auth.py",
+        "src/app/session.py",
+    ]
+    assert result.retrieval_refinement_payload["boosted_paths"] == [
+        "src/app/auth.py",
+        "src/app/session.py",
+    ]
+    assert result.retrieval_refinement_payload["injected_paths"] == [
+        "src/app/session.py"
+    ]

@@ -53,6 +53,9 @@ def execute_index_stage_runtime(
         return bootstrap.cache_hit_payload
 
     state = deps.build_index_stage_execution_state_fn(bootstrap=bootstrap)
+    retrieval_refinement = ctx.state.get("_agent_loop_retrieval_refinement")
+    if isinstance(retrieval_refinement, dict) and retrieval_refinement:
+        setattr(state, "retrieval_refinement_payload", dict(retrieval_refinement))
 
     retrieval_runtime = deps.build_index_retrieval_runtime_fn(
         retrieval_cfg=retrieval_cfg,
@@ -197,6 +200,7 @@ def execute_index_stage_runtime(
             chunk_guard_cfg.compatibility_min_overlap
         ),
         mark_timing_fn=mark_timing,
+        retrieval_refinement=getattr(state, "retrieval_refinement_payload", {}),
         **deps.post_generation_helpers,
     )
     deps.apply_post_generation_runtime_to_state_fn(

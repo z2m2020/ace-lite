@@ -169,6 +169,11 @@ def test_build_runtime_doctor_payload_exposes_canonical_doctor_reason_codes(
         "git_unavailable",
         "install_drift",
     ]
+    assert payload["next_cycle_input"]["doctor_reason_codes"] == [
+        "stage_artifact_cache_corrupt",
+        "git_unavailable",
+        "install_drift",
+    ]
 
 
 def test_persist_runtime_doctor_invocation_records_degraded_event(tmp_path: Path) -> None:

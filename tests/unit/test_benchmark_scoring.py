@@ -16,6 +16,8 @@ from ace_lite.benchmark.scoring import (
     build_source_plan_failure_signal_summary,
     build_validation_probe_summary,
     build_source_plan_validation_feedback_summary,
+    build_validation_branch_gate_summary,
+    build_validation_branch_summary,
     compare_metrics,
     detect_regression,
     evaluate_case_result,
@@ -404,7 +406,11 @@ def test_evaluate_case_result_and_aggregate() -> None:
     }
     assert row["topological_shield"] == {
         "enabled": True,
+        "mode": "report_only",
         "report_only": True,
+        "max_attenuation": 0.6,
+        "shared_parent_attenuation": 0.2,
+        "adjacency_attenuation": 0.5,
         "attenuated_chunk_count": 1,
         "coverage_ratio": 0.5,
         "attenuation_total": 0.22,
@@ -2741,6 +2747,135 @@ def test_evaluate_case_result_reports_graph_lookup_kpis() -> None:
     assert metrics["graph_lookup_query_hit_path_ratio"] == 0.25
 
 
+def test_evaluate_case_result_reports_validation_branch_kpis() -> None:
+    case = {
+        "case_id": "c-validation-branch",
+        "query": "trace validation branch runner",
+        "expected_keys": ["validation", "branch"],
+        "top_k": 4,
+    }
+    payload = {
+        "index": {
+            "candidate_files": [
+                {
+                    "path": "src/ace_lite/pipeline/stages/validation.py",
+                    "module": "src.ace_lite.pipeline.stages.validation",
+                }
+            ]
+        },
+        "source_plan": {"validation_tests": ["tests.unit.test_validation_stage"]},
+        "validation": {
+            "patch_artifact": {"operations": [{"op": "replace", "path": "a.py"}]},
+            "rejected_patch_artifacts": [
+                {
+                    "branch_id": "candidate-2",
+                    "rejected_reason": "lower_score",
+                    "patch_artifact": {"operations": [{"op": "replace", "path": "b.py"}]},
+                }
+            ],
+            "selected_branch_id": "candidate-1",
+            "branch_batch": {
+                "candidate_count": 2,
+                "candidates": [
+                    {
+                        "branch_id": "candidate-1",
+                        "patch_scope_lines": 1,
+                        "artifact_refs": ["validation.patch_artifact"],
+                        "validation_branch_score": {
+                            "passed": True,
+                            "regressed": False,
+                            "score": 110.0,
+                            "after_issue_count": 0,
+                        },
+                    },
+                    {
+                        "branch_id": "candidate-2",
+                        "patch_scope_lines": 1,
+                        "artifact_refs": [
+                            "validation.rejected_patch_artifacts[0].patch_artifact"
+                        ],
+                        "validation_branch_score": {
+                            "passed": False,
+                            "regressed": True,
+                            "score": 10.0,
+                            "after_issue_count": 2,
+                        },
+                    },
+                ],
+                "metadata": {
+                    "source": "validation_stage",
+                    "candidate_origin": "source_plan.patch_artifacts",
+                    "execution_mode": "parallel",
+                },
+            },
+            "branch_selection": {
+                "winner_branch_id": "candidate-1",
+                "winner_validation_branch_score": {
+                    "passed": True,
+                    "regressed": False,
+                    "score": 110.0,
+                    "after_issue_count": 0,
+                },
+                "rejected": [
+                    {
+                        "branch_id": "candidate-2",
+                        "rejected_reason": "lower_pass_status",
+                        "validation_branch_score": {
+                            "passed": False,
+                            "regressed": True,
+                            "score": 10.0,
+                            "after_issue_count": 2,
+                        },
+                    }
+                ],
+            },
+            "result": {"summary": {"status": "passed", "issue_count": 0}},
+        },
+        "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+    }
+
+    row = evaluate_case_result(case=case, plan_payload=payload, latency_ms=9.0)
+
+    assert row["validation_branch_case"] == 1.0
+    assert row["validation_branch_candidate_count"] == 2.0
+    assert row["validation_branch_rejected_count"] == 1.0
+    assert row["validation_branch_selection_present"] == 1.0
+    assert row["validation_branch_patch_artifact_present"] == 1.0
+    assert row["validation_branch_archive_present"] == 1.0
+    assert row["validation_branch_parallel"] == 1.0
+    assert row["validation_branch_winner_passed"] == 1.0
+    assert row["validation_branch_winner_regressed"] == 0.0
+    assert row["validation_branch_winner_score"] == 110.0
+    assert row["validation_branch_winner_after_issue_count"] == 0.0
+    assert row["validation_branch"] == {
+        "applicable": True,
+        "candidate_count": 2,
+        "rejected_count": 1,
+        "selection_present": True,
+        "patch_artifact_present": True,
+        "archive_present": True,
+        "parallel": True,
+        "winner_passed": True,
+        "winner_regressed": False,
+        "winner_score": 110.0,
+        "winner_after_issue_count": 0,
+    }
+
+    metrics = aggregate_metrics([row])
+    assert metrics["validation_branch_case_count"] == 1.0
+    assert metrics["validation_branch_case_rate"] == 1.0
+    assert metrics["validation_branch_candidate_count_mean"] == 2.0
+    assert metrics["validation_branch_rejected_count_mean"] == 1.0
+    assert metrics["validation_branch_selection_present_ratio"] == 1.0
+    assert metrics["validation_branch_patch_artifact_present_ratio"] == 1.0
+    assert metrics["validation_branch_archive_present_ratio"] == 1.0
+    assert metrics["validation_branch_parallel_case_rate"] == 1.0
+    assert metrics["validation_branch_winner_pass_rate"] == 1.0
+    assert metrics["validation_branch_winner_regressed_rate"] == 0.0
+    assert metrics["validation_branch_winner_score_mean"] == 110.0
+    assert metrics["validation_branch_winner_after_issue_count_mean"] == 0.0
+
+
 def test_build_retrieval_control_plane_gate_summary_requires_regression_evidence() -> None:
     summary = build_retrieval_control_plane_gate_summary(
         metrics={
@@ -2896,6 +3031,59 @@ def test_build_validation_probe_summary_rounds_core_metrics() -> None:
         "probe_executed_count_mean": 2.345679,
         "probe_failure_rate": 0.456789,
     }
+
+
+def test_build_validation_branch_summary_rounds_core_metrics() -> None:
+    summary = build_validation_branch_summary(
+        metrics={
+            "validation_branch_case_count": 2.0,
+            "validation_branch_case_rate": 0.5,
+            "validation_branch_candidate_count_mean": 3.4567891,
+            "validation_branch_rejected_count_mean": 2.1234567,
+            "validation_branch_selection_present_ratio": 1.0,
+            "validation_branch_patch_artifact_present_ratio": 1.0,
+            "validation_branch_archive_present_ratio": 0.75,
+            "validation_branch_parallel_case_rate": 1.0,
+            "validation_branch_winner_pass_rate": 0.5,
+            "validation_branch_winner_regressed_rate": 0.25,
+            "validation_branch_winner_score_mean": 104.9876543,
+            "validation_branch_winner_after_issue_count_mean": 1.2345678,
+        }
+    )
+
+    assert summary == {
+        "case_count": 2.0,
+        "case_rate": 0.5,
+        "candidate_count_mean": 3.456789,
+        "rejected_count_mean": 2.123457,
+        "selection_present_ratio": 1.0,
+        "patch_artifact_present_ratio": 1.0,
+        "archive_present_ratio": 0.75,
+        "parallel_case_rate": 1.0,
+        "winner_pass_rate": 0.5,
+        "winner_regressed_rate": 0.25,
+        "winner_score_mean": 104.987654,
+        "winner_after_issue_count_mean": 1.234568,
+    }
+
+
+def test_build_validation_branch_gate_summary_reports_missing_contract_evidence() -> None:
+    summary = build_validation_branch_gate_summary(
+        metrics={
+            "validation_branch_case_count": 1.0,
+            "validation_branch_case_rate": 0.25,
+            "validation_branch_selection_present_ratio": 1.0,
+            "validation_branch_patch_artifact_present_ratio": 0.0,
+            "validation_branch_archive_present_ratio": 1.0,
+            "validation_branch_parallel_case_rate": 0.0,
+        }
+    )
+
+    assert summary["gate_passed"] is False
+    assert summary["failed_checks"] == [
+        "validation_branch_patch_artifact_present_ratio",
+        "validation_branch_parallel_case_rate",
+    ]
 
 
 def test_build_source_plan_validation_feedback_summary_rounds_core_metrics() -> None:

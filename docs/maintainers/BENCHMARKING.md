@@ -43,6 +43,12 @@ Common metrics include:
 
 For chunk-oriented metrics, benchmark scoring prefers the final `source_plan.candidate_chunks` and `source_plan.chunk_budget_used` payload when present, and falls back to raw `index` chunk outputs otherwise. That keeps chunk-packing experiments visible in the same benchmark and freeze artifacts that already track task success, latency, and noise.
 When `source_plan.evidence_summary` is present, benchmark artifacts also surface additive grounding ratios so maintainers can distinguish directly retrieved support from neighboring context and hint-only support without parsing `why` strings or other free-text explanations.
+When chunk selection emits internal retrieval-context sidecars, benchmark artifacts also surface additive retrieval-context observability through top-level `retrieval_context_observability_summary`, so maintainers can review context coverage, average context size, and rerank-pool exposure without reopening raw case payloads.
+The same benchmark artifacts also surface top-level `retrieval_default_strategy_summary`, which is the stable report-only contract for the current default retrieval shape: retrieval-context sidecar availability, graph-lookup default normalization and guard means, graph signal weight means, and topological-shield dominant mode plus attenuation means. Use that top-level summary when you need freeze- or release-facing evidence about the default retrieval contract instead of re-deriving those values from raw `metrics`, `candidate_ranking`, or chunk-selection payloads.
+For graph-aware retrieval work, keep governance minimal and explicit:
+- treat `feature`, `refactor`, and `general` as the current graph-aware policies because they all combine `graph_seeded` repomap with `index.graph_lookup`
+- compare them against the non-graph reference policies (`bugfix_test` / `doc_intent`) or against the prior dated config, not against raw single-case payloads
+- if graph-aware evidence turns noisy, record the failing summary and fallback to the prior dated policy/profile before widening rollout claims
 When `index.graph_lookup` is present, benchmark artifacts also surface additive graph-lookup observability such as `graph_lookup_enabled_ratio`, `graph_lookup_guarded_ratio`, `graph_lookup_candidate_count_mean`, `graph_lookup_query_hit_paths_mean`, the stable path-mix means for `scip`, `xref`, `symbol`, `import`, and `coverage`, the stable guard contract (`graph_lookup_reason`, `graph_lookup_guard_max_candidates`, `graph_lookup_guard_min_query_terms`, `graph_lookup_guard_max_query_terms`) copied from `candidate_ranking` / `metadata` when raw payload access is unavailable, and the stable signal-shape trace (`graph_lookup_normalization`, `graph_lookup_max_inbound`, `graph_lookup_max_xref_count`, `graph_lookup_max_query_hits`, `graph_lookup_max_symbol_hits`, `graph_lookup_max_import_hits`, `graph_lookup_max_query_coverage`) for tuning graph weights without reopening raw payload JSON.
 
 `task_success` schema v1:
@@ -57,7 +63,9 @@ Benchmark reports also emit:
 - `SLO Budget Summary` so explicit downgrade boundaries and budget-trigger signals are visible in both current artifacts and baseline deltas
 - `Evidence Insufficiency Summary` so failing positive cases are classified into additive `no_hit`, `low_support`, `missing_validation`, `budget_limited`, and `noisy_hit` surfaces without changing stable benchmark report contracts
 - `Decision Observability Summary` so retry, skip, fallback, downgrade, and exact-search boost events are aggregated without changing stage behavior
+- `Retrieval Context Summary` so maintainers can inspect retrieval-context chunk coverage, average context size, and chunk-rerank pool coverage without opening raw JSON
 - `Graph Lookup Summary` so maintainers can inspect `graph_lookup` enablement, guard-hit rate, candidate-count pressure, query-term guard thresholds, normalization mix, signal maxima, and the per-signal path mix without opening raw payload JSON
+- `Retrieval Default Strategy Summary` so maintainers can inspect the current default retrieval-context, graph-lookup, and topological-shield contract in the same top-level form that freeze and release artifacts consume
 - `Learning Router Rollout Summary` so maintainers can inspect guarded-rollout readiness as a report-only surface before any online default switch is considered
 
 Evidence-insufficiency reporting is intentionally report-only in the current lane:
@@ -126,6 +134,7 @@ The matrix summary also emits a richer `retrieval_policy_summary` so each policy
 - SLO downgrade rate
 
 `scripts/run_release_freeze_regression.py` now consumes those policy rows through `freeze.policy_guard`, so task-aware policy tuning only survives when policy-level benchmark evidence and SLO guardrails stay inside configured limits.
+That report-only `freeze.policy_guard` surface is also the first governance stop for graph-aware retrieval changes: use it to record regressions and rollback reasons before changing default policy posture.
 The same release-freeze summary also evaluates `freeze.memory_gate` against benchmark-level `notes_hit_ratio`, `profile_selected_mean`, and `capture_trigger_ratio`, so memory-policy experiments stay evidence-gated instead of quietly drifting into the default path.
 
 ## Feature And Perturbation Slices
@@ -218,6 +227,10 @@ across benchmark and freeze review:
 - gate mode: `freeze.validation_rich_gate.mode`
 - Q3 frontier gate summary: `retrieval_frontier_gate_summary` in the same
   current/previous validation-rich summaries and the paired freeze artifact
+- Q4 retrieval default strategy summary: `retrieval_default_strategy_summary`
+  in the same current/previous validation-rich summaries and the paired freeze
+  artifact when you need stable retrieval-context, graph-lookup guard,
+  normalization, or topological-shield attenuation evidence
 - Q4 validation summaries: `validation_probe_summary` and
   `source_plan_validation_feedback_summary` in the same current/previous
   validation-rich summaries and the paired freeze artifact when you need stable

@@ -129,6 +129,39 @@ def test_workspace_evidence_contract_includes_patch_artifacts_when_available() -
     assert contract["patch_artifacts"] == [patch_artifact]
 
 
+def test_workspace_evidence_contract_falls_back_to_top_level_patch_artifact() -> None:
+    patch_artifact = build_patch_artifact_contract_v1(
+        operations=[{"op": "update", "path": "src/billing/service.py", "hunk_count": 1}],
+        rollback_anchors=[
+            {"path": "src/billing/service.py", "strategy": "git_restore", "anchor": "HEAD"}
+        ],
+        patch_text="diff --git a/src/billing/service.py b/src/billing/service.py",
+    ).as_dict()
+
+    contract = build_workspace_evidence_contract_v1(
+        decision_target="billing checkout impact",
+        candidate_repos=[{"name": "billing-api"}],
+        selected_repos=[
+            {
+                "name": "billing-api",
+                "matched_terms": ["billing"],
+                "patch_artifact": patch_artifact,
+                "quick_plan": {
+                    "candidate_files": ["src/billing/service.py"],
+                    "rows": [{"module": "billing.service", "path": "src/billing/service.py"}],
+                    "repomap_stage": {
+                        "seed_paths": ["src/billing/service.py"],
+                        "neighbor_paths": ["src/billing/models.py"],
+                        "focused_files": ["src/billing/service.py"],
+                    },
+                },
+            }
+        ],
+    ).as_dict()
+
+    assert contract["patch_artifacts"] == [patch_artifact]
+
+
 def test_validate_workspace_evidence_contract_v1_surfaces_invalid_patch_artifact() -> None:
     payload = {
         "decision_target": "billing impact",

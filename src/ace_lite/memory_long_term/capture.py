@@ -37,6 +37,28 @@ def _resolve_root(root: str | Path | None) -> str:
     return str(Path(normalized).expanduser().resolve())
 
 
+def _resolve_stage_signal_count(*, stage_name: str, payload: dict[str, Any]) -> int:
+    if stage_name == "source_plan":
+        return sum(
+            (
+                int(payload.get("candidate_file_count", 0) or 0) > 0,
+                int(payload.get("candidate_chunk_count", 0) or 0) > 0,
+                int(payload.get("validation_test_count", 0) or 0) > 0,
+                bool(payload.get("patch_artifact_present", False)),
+            )
+        )
+    if stage_name == "validation":
+        return sum(
+            (
+                bool(str(payload.get("reason") or "").strip()),
+                int(payload.get("diagnostic_count", 0) or 0) > 0,
+                bool(payload.get("patch_artifact_present", False)),
+                int(payload.get("selected_test_count", 0) or 0) > 0,
+            )
+        )
+    return sum(1 for value in payload.values() if value not in ("", None, [], {}))
+
+
 class LongTermMemoryCaptureService:
     def __init__(
         self,
@@ -70,6 +92,15 @@ class LongTermMemoryCaptureService:
             stage_name=stage_name,
             stage_payload=stage_payload,
         )
+        signal_count = _resolve_stage_signal_count(stage_name=stage_name, payload=payload)
+        if signal_count <= 0:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "no_capture_signal",
+                "stage": stage_name,
+                "signal_count": 0,
+            }
         observation_id = hashlib.sha256(
             f"{stage_name}|{repo}|{query}|{observed_at}".encode("utf-8")
         ).hexdigest()[:24]
@@ -87,7 +118,12 @@ class LongTermMemoryCaptureService:
             source_run_id=str(source_run_id or "").strip(),
             severity="info" if stage_name == "source_plan" else self._resolve_validation_severity(stage_payload),
             status=str(payload.get("status") or "captured"),
-            metadata={"stage": stage_name},
+            metadata={
+                "stage": stage_name,
+                "capture_gate": "accepted",
+                "signal_count": signal_count,
+                "attribution_scope": "stage_payload_only",
+            },
         )
         entry = self._store.upsert_observation(contract)
         return {
@@ -97,6 +133,7 @@ class LongTermMemoryCaptureService:
             "handle": entry.handle,
             "as_of": entry.as_of,
             "status": payload.get("status", "captured"),
+            "signal_count": signal_count,
         }
 
     def capture_selection_feedback(
@@ -121,6 +158,29 @@ class LongTermMemoryCaptureService:
 
         observed_at = _normalize_text(captured_at) or _utc_now_iso()
         normalized_selected_path = _normalize_text(selected_path)
+        normalized_query = _normalize_text(query)
+        normalized_repo = _normalize_text(repo)
+        if not normalized_repo:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "missing_repo",
+                "stage": "selection_feedback",
+            }
+        if not normalized_query:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "missing_query",
+                "stage": "selection_feedback",
+            }
+        if not normalized_selected_path:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "missing_selected_path",
+                "stage": "selection_feedback",
+            }
         payload = {
             "status": "selected",
             "selected_path": normalized_selected_path,
@@ -149,6 +209,9 @@ class LongTermMemoryCaptureService:
             metadata={
                 "stage": "selection_feedback",
                 "selected_path": normalized_selected_path,
+                "capture_gate": "accepted",
+                "signal_count": 1,
+                "attribution_scope": "explicit_selection_only",
             },
         )
         entry = self._store.upsert_observation(contract)
@@ -159,6 +222,7 @@ class LongTermMemoryCaptureService:
             "handle": entry.handle,
             "as_of": entry.as_of,
             "status": "selected",
+            "signal_count": 1,
         }
 
     def capture_dev_issue(

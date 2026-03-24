@@ -68,6 +68,7 @@ def test_finalize_index_stage_output_attaches_filters_and_cache_metadata() -> No
         embeddings_payload={"enabled": False},
         feedback_payload={"enabled": False},
         multi_channel_fusion_payload={"enabled": False},
+        retrieval_refinement_payload={"enabled": True, "focus_paths": ["src/app.py"]},
         second_pass_payload={"enabled": False},
         refine_pass_payload={"enabled": False},
         chunk_semantic_rerank_payload={"enabled": False},
@@ -92,6 +93,7 @@ def test_finalize_index_stage_output_attaches_filters_and_cache_metadata() -> No
 
     assert captured["build"]["memory_paths"] == ["docs/guide.md"]
     assert payload["benchmark_filters"]["include_paths"] == ["src/app.py"]
+    assert payload["retrieval_refinement"]["focus_paths"] == ["src/app.py"]
     assert captured["store"]["meta"]["query"] == "router"
     assert captured["store"]["meta"]["ttl_seconds"] == 1800
     assert captured["store"]["meta"]["trust_class"] == "exact"
@@ -144,6 +146,7 @@ def test_finalize_index_stage_output_from_state_uses_state_contract() -> None:
         embeddings_payload={"enabled": False},
         feedback_payload={"enabled": False},
         multi_channel_fusion_payload={"enabled": False},
+        retrieval_refinement_payload={"enabled": True, "focus_paths": ["src/app.py"]},
         second_pass_payload={"enabled": False},
         refine_pass_payload={"enabled": False},
         chunk_semantic_rerank_payload={"enabled": False},
@@ -182,5 +185,8 @@ def test_finalize_index_stage_output_from_state_uses_state_contract() -> None:
 
     assert captured["build"]["memory_paths"] == ["docs/guide.md"]
     assert captured["build"]["top_k_files"] == 4
+    assert captured["cloned_payload"]["retrieval_refinement"]["focus_paths"] == [
+        "src/app.py"
+    ]
     assert captured["store"]["cache_path"] == Path("context-map/index_candidates/cache.db")
     assert payload["candidate_cache"]["store_written"] is False

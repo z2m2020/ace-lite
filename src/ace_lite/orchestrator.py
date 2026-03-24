@@ -15,6 +15,7 @@ from ace_lite.memory import (
 from ace_lite.memory.local_notes import append_capture_note
 from ace_lite.memory_long_term import LongTermMemoryCaptureService, LongTermMemoryStore
 from ace_lite.orchestrator_config import OrchestratorConfig
+from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.plan_replay_cache import (
     default_plan_replay_cache_path,
     load_cached_plan,
@@ -55,6 +56,7 @@ from ace_lite.pipeline.stages.validation import run_validation_stage
 from ace_lite.pipeline.types import StageContext, StageMetric
 from ace_lite.plugins.loader import PluginLoader
 from ace_lite.profile_store import ProfileStore
+from ace_lite.preference_capture_store import DurablePreferenceCaptureStore
 from ace_lite.runtime_manager import RuntimeManager
 from ace_lite.runtime_state import RuntimeState
 from ace_lite.schema import SCHEMA_VERSION
@@ -295,6 +297,28 @@ class AceOrchestrator:
             return exc
 
         ctx.state[stage_name] = stage_payload
+        if stage_name == "validation":
+            selected_patch_artifact = (
+                stage_payload.get("patch_artifact", {})
+                if isinstance(stage_payload, dict)
+                else {}
+            )
+            if isinstance(selected_patch_artifact, dict) and selected_patch_artifact:
+                ctx.state["_validation_patch_artifact"] = dict(selected_patch_artifact)
+            else:
+                ctx.state.pop("_validation_patch_artifact", None)
+
+            selected_patch_artifacts = (
+                stage_payload.get("patch_artifacts", [])
+                if isinstance(stage_payload, dict)
+                else []
+            )
+            if isinstance(selected_patch_artifacts, list) and selected_patch_artifacts:
+                ctx.state["_validation_patch_artifacts"] = [
+                    dict(item) for item in selected_patch_artifacts if isinstance(item, dict)
+                ]
+            else:
+                ctx.state.pop("_validation_patch_artifacts", None)
         if stage_name == "augment":
             if self._config.skills.precomputed_routing_enabled:
                 ctx.state["_skills_route"] = self._precompute_skills_route(ctx=ctx)
@@ -1186,6 +1210,23 @@ class AceOrchestrator:
             path = Path(root) / path
         return path
 
+    def _resolve_validation_preference_capture_store(
+        self,
+        *,
+        root: str,
+    ) -> DurablePreferenceCaptureStore | None:
+        if not self._config.memory.feedback.enabled:
+            return None
+        configured = str(self._config.memory.feedback.path or "").strip()
+        path = Path(configured).expanduser()
+        if not path.is_absolute():
+            path = Path(root) / path
+        feedback_store = SelectionFeedbackStore(
+            profile_path=path,
+            max_entries=self._config.memory.feedback.max_entries,
+        )
+        return DurablePreferenceCaptureStore(db_path=feedback_store.path)
+
     def _capture_memory_signal(
         self,
         *,
@@ -1463,6 +1504,9 @@ class AceOrchestrator:
             if isinstance(ctx.state.get("__policy"), dict)
             else {}
         )
+        preference_capture_store = self._resolve_validation_preference_capture_store(
+            root=ctx.root,
+        )
         return run_validation_stage(
             root=ctx.root,
             query=ctx.query,
@@ -1489,6 +1533,8 @@ class AceOrchestrator:
             ),
             policy_name=str(policy.get("name", "general")),
             policy_version=str(policy.get("version", cfg.retrieval.policy_version)),
+            preference_capture_store=preference_capture_store,
+            preference_capture_repo_key=ctx.repo,
         )
 
     @staticmethod

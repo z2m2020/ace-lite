@@ -20,6 +20,7 @@ from ace_lite.benchmark.summary_quality import (
     build_feedback_observability_summary as _build_feedback_observability_summary_impl,
     build_missing_context_risk_summary as _build_missing_context_risk_summary_impl,
     build_preference_observability_summary as _build_preference_observability_summary_impl,
+    build_retrieval_default_strategy_summary as _build_retrieval_default_strategy_summary_impl,
     build_retrieval_context_observability_summary as _build_retrieval_context_observability_summary_impl,
     build_slo_budget_summary as _build_slo_budget_summary_impl,
     build_stage_latency_summary as _build_stage_latency_summary_impl,
@@ -304,6 +305,54 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     validation_probe_failed = [
         float(item.get("validation_probe_failed", 0.0) or 0.0)
         for item in case_results
+    ]
+    validation_branch_cases = [
+        item
+        for item in case_results
+        if float(item.get("validation_branch_case", 0.0) or 0.0) > 0.0
+    ]
+    validation_branch_case_flags = [
+        float(item.get("validation_branch_case", 0.0) or 0.0) for item in case_results
+    ]
+    validation_branch_candidate_counts = [
+        float(item.get("validation_branch_candidate_count", 0.0) or 0.0)
+        for item in validation_branch_cases
+    ]
+    validation_branch_rejected_counts = [
+        float(item.get("validation_branch_rejected_count", 0.0) or 0.0)
+        for item in validation_branch_cases
+    ]
+    validation_branch_selection_present = [
+        float(item.get("validation_branch_selection_present", 0.0) or 0.0)
+        for item in validation_branch_cases
+    ]
+    validation_branch_patch_artifact_present = [
+        float(item.get("validation_branch_patch_artifact_present", 0.0) or 0.0)
+        for item in validation_branch_cases
+    ]
+    validation_branch_archive_present = [
+        float(item.get("validation_branch_archive_present", 0.0) or 0.0)
+        for item in validation_branch_cases
+    ]
+    validation_branch_parallel = [
+        float(item.get("validation_branch_parallel", 0.0) or 0.0)
+        for item in validation_branch_cases
+    ]
+    validation_branch_winner_passed = [
+        float(item.get("validation_branch_winner_passed", 0.0) or 0.0)
+        for item in validation_branch_cases
+    ]
+    validation_branch_winner_regressed = [
+        float(item.get("validation_branch_winner_regressed", 0.0) or 0.0)
+        for item in validation_branch_cases
+    ]
+    validation_branch_winner_scores = [
+        float(item.get("validation_branch_winner_score", 0.0) or 0.0)
+        for item in validation_branch_cases
+    ]
+    validation_branch_winner_after_issue_counts = [
+        float(item.get("validation_branch_winner_after_issue_count", 0.0) or 0.0)
+        for item in validation_branch_cases
     ]
     source_plan_validation_feedback_present = [
         float(item.get("source_plan_validation_feedback_present", 0.0) or 0.0)
@@ -1102,6 +1151,56 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
             validation_probe_executed_counts
         ),
         "validation_probe_failure_rate": mean(validation_probe_failed),
+        "validation_branch_case_count": float(len(validation_branch_cases)),
+        "validation_branch_case_rate": mean(validation_branch_case_flags),
+        "validation_branch_candidate_count_mean": (
+            mean(validation_branch_candidate_counts)
+            if validation_branch_candidate_counts
+            else 0.0
+        ),
+        "validation_branch_rejected_count_mean": (
+            mean(validation_branch_rejected_counts)
+            if validation_branch_rejected_counts
+            else 0.0
+        ),
+        "validation_branch_selection_present_ratio": (
+            mean(validation_branch_selection_present)
+            if validation_branch_selection_present
+            else 0.0
+        ),
+        "validation_branch_patch_artifact_present_ratio": (
+            mean(validation_branch_patch_artifact_present)
+            if validation_branch_patch_artifact_present
+            else 0.0
+        ),
+        "validation_branch_archive_present_ratio": (
+            mean(validation_branch_archive_present)
+            if validation_branch_archive_present
+            else 0.0
+        ),
+        "validation_branch_parallel_case_rate": (
+            mean(validation_branch_parallel) if validation_branch_parallel else 0.0
+        ),
+        "validation_branch_winner_pass_rate": (
+            mean(validation_branch_winner_passed)
+            if validation_branch_winner_passed
+            else 0.0
+        ),
+        "validation_branch_winner_regressed_rate": (
+            mean(validation_branch_winner_regressed)
+            if validation_branch_winner_regressed
+            else 0.0
+        ),
+        "validation_branch_winner_score_mean": (
+            mean(validation_branch_winner_scores)
+            if validation_branch_winner_scores
+            else 0.0
+        ),
+        "validation_branch_winner_after_issue_count_mean": (
+            mean(validation_branch_winner_after_issue_counts)
+            if validation_branch_winner_after_issue_counts
+            else 0.0
+        ),
         "source_plan_evidence_card_count_mean": mean(
             source_plan_evidence_card_counts
         ),
@@ -1550,6 +1649,187 @@ def build_validation_probe_summary(*, metrics: dict[str, Any]) -> dict[str, floa
     }
 
 
+def build_validation_branch_summary(*, metrics: dict[str, Any]) -> dict[str, float]:
+    normalized_metrics = normalize_metrics(metrics)
+    return {
+        "case_count": round(
+            float(normalized_metrics.get("validation_branch_case_count", 0.0) or 0.0),
+            6,
+        ),
+        "case_rate": round(
+            float(normalized_metrics.get("validation_branch_case_rate", 0.0) or 0.0),
+            6,
+        ),
+        "candidate_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "validation_branch_candidate_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "rejected_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "validation_branch_rejected_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "selection_present_ratio": round(
+            float(
+                normalized_metrics.get(
+                    "validation_branch_selection_present_ratio", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "patch_artifact_present_ratio": round(
+            float(
+                normalized_metrics.get(
+                    "validation_branch_patch_artifact_present_ratio", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "archive_present_ratio": round(
+            float(
+                normalized_metrics.get(
+                    "validation_branch_archive_present_ratio", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "parallel_case_rate": round(
+            float(
+                normalized_metrics.get("validation_branch_parallel_case_rate", 0.0)
+                or 0.0
+            ),
+            6,
+        ),
+        "winner_pass_rate": round(
+            float(
+                normalized_metrics.get("validation_branch_winner_pass_rate", 0.0)
+                or 0.0
+            ),
+            6,
+        ),
+        "winner_regressed_rate": round(
+            float(
+                normalized_metrics.get(
+                    "validation_branch_winner_regressed_rate", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+        "winner_score_mean": round(
+            float(
+                normalized_metrics.get("validation_branch_winner_score_mean", 0.0)
+                or 0.0
+            ),
+            6,
+        ),
+        "winner_after_issue_count_mean": round(
+            float(
+                normalized_metrics.get(
+                    "validation_branch_winner_after_issue_count_mean", 0.0
+                )
+                or 0.0
+            ),
+            6,
+        ),
+    }
+
+
+def build_validation_branch_gate_summary(
+    *, metrics: dict[str, Any]
+) -> dict[str, Any]:
+    normalized_metrics = normalize_metrics(metrics)
+    case_count = float(normalized_metrics.get("validation_branch_case_count", 0.0) or 0.0)
+    case_rate = float(normalized_metrics.get("validation_branch_case_rate", 0.0) or 0.0)
+    selection_present_ratio = float(
+        normalized_metrics.get("validation_branch_selection_present_ratio", 0.0)
+        or 0.0
+    )
+    patch_artifact_present_ratio = float(
+        normalized_metrics.get("validation_branch_patch_artifact_present_ratio", 0.0)
+        or 0.0
+    )
+    archive_present_ratio = float(
+        normalized_metrics.get("validation_branch_archive_present_ratio", 0.0) or 0.0
+    )
+    parallel_case_rate = float(
+        normalized_metrics.get("validation_branch_parallel_case_rate", 0.0) or 0.0
+    )
+
+    case_count_threshold = 1.0
+    selection_present_ratio_threshold = 1.0
+    patch_artifact_present_ratio_threshold = 1.0
+    archive_present_ratio_threshold = 1.0
+    parallel_case_rate_threshold = 1.0
+
+    case_count_passed = case_count >= case_count_threshold
+    selection_present_ratio_passed = (
+        selection_present_ratio >= selection_present_ratio_threshold
+    )
+    patch_artifact_present_ratio_passed = (
+        patch_artifact_present_ratio >= patch_artifact_present_ratio_threshold
+    )
+    archive_present_ratio_passed = (
+        archive_present_ratio >= archive_present_ratio_threshold
+    )
+    parallel_case_rate_passed = parallel_case_rate >= parallel_case_rate_threshold
+
+    failed_checks: list[str] = []
+    if not case_count_passed:
+        failed_checks.append("validation_branch_case_count")
+    if not selection_present_ratio_passed:
+        failed_checks.append("validation_branch_selection_present_ratio")
+    if not patch_artifact_present_ratio_passed:
+        failed_checks.append("validation_branch_patch_artifact_present_ratio")
+    if not archive_present_ratio_passed:
+        failed_checks.append("validation_branch_archive_present_ratio")
+    if not parallel_case_rate_passed:
+        failed_checks.append("validation_branch_parallel_case_rate")
+
+    return {
+        "failed_checks": failed_checks,
+        "case_count": round(case_count, 6),
+        "case_rate": round(case_rate, 6),
+        "case_count_threshold": case_count_threshold,
+        "case_count_passed": case_count_passed,
+        "selection_present_ratio": round(selection_present_ratio, 6),
+        "selection_present_ratio_threshold": selection_present_ratio_threshold,
+        "selection_present_ratio_passed": selection_present_ratio_passed,
+        "patch_artifact_present_ratio": round(patch_artifact_present_ratio, 6),
+        "patch_artifact_present_ratio_threshold": (
+            patch_artifact_present_ratio_threshold
+        ),
+        "patch_artifact_present_ratio_passed": (
+            patch_artifact_present_ratio_passed
+        ),
+        "archive_present_ratio": round(archive_present_ratio, 6),
+        "archive_present_ratio_threshold": archive_present_ratio_threshold,
+        "archive_present_ratio_passed": archive_present_ratio_passed,
+        "parallel_case_rate": round(parallel_case_rate, 6),
+        "parallel_case_rate_threshold": parallel_case_rate_threshold,
+        "parallel_case_rate_passed": parallel_case_rate_passed,
+        "gate_passed": (
+            case_count_passed
+            and selection_present_ratio_passed
+            and patch_artifact_present_ratio_passed
+            and archive_present_ratio_passed
+            and parallel_case_rate_passed
+        ),
+    }
+
+
 def build_source_plan_card_summary(*, metrics: dict[str, Any]) -> dict[str, float]:
     normalized_metrics = normalize_metrics(metrics)
     return {
@@ -1799,6 +2079,12 @@ def build_retrieval_context_observability_summary(
     return _build_retrieval_context_observability_summary_impl(case_results)
 
 
+def build_retrieval_default_strategy_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return _build_retrieval_default_strategy_summary_impl(case_results)
+
+
 def build_preference_observability_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -1934,10 +2220,13 @@ __all__ = [
     "build_repomap_seed_summary",
     "build_retrieval_control_plane_gate_summary",
     "build_retrieval_frontier_gate_summary",
+    "build_retrieval_default_strategy_summary",
     "build_retrieval_context_observability_summary",
     "build_source_plan_card_summary",
     "build_source_plan_failure_signal_summary",
     "build_source_plan_validation_feedback_summary",
+    "build_validation_branch_gate_summary",
+    "build_validation_branch_summary",
     "build_slo_budget_summary",
     "build_stage_latency_summary",
     "build_validation_probe_summary",

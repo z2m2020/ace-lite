@@ -106,6 +106,14 @@ def execute_post_source_plan_agent_loop(
         action_type = str(last_action.get("action_type") or "")
         rerun_stages = resolve_agent_loop_rerun_stages_fn(action_type=action_type)
         previous_validation_stage = get_stage_state_fn(ctx=ctx, stage_name="validation")
+        retrieval_refinement = controller.build_retrieval_refinement(
+            action=last_action,
+            iteration_index=controller.iteration_count + 1,
+        )
+        if retrieval_refinement:
+            ctx.state["_agent_loop_retrieval_refinement"] = dict(retrieval_refinement)
+        else:
+            ctx.state.pop("_agent_loop_retrieval_refinement", None)
         current_query = controller.build_incremental_query(
             base_query=current_query,
             action=last_action,
@@ -143,6 +151,7 @@ def execute_post_source_plan_agent_loop(
 
         controller.record_iteration(
             action=last_action,
+            retrieval_refinement=retrieval_refinement,
             query=current_query,
             rerun_stages=rerun_stages,
             source_plan_stage=get_stage_state_fn(ctx=ctx, stage_name="source_plan"),

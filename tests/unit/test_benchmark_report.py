@@ -1192,6 +1192,76 @@ def test_build_results_summary_preserves_validation_probe_summary() -> None:
     }
 
 
+def test_build_results_summary_preserves_validation_branch_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "validation_branch_summary": {
+                "case_count": 2.0,
+                "case_rate": 0.5,
+                "candidate_count_mean": 3.0,
+                "rejected_count_mean": 2.0,
+                "selection_present_ratio": 1.0,
+                "patch_artifact_present_ratio": 1.0,
+                "archive_present_ratio": 1.0,
+                "parallel_case_rate": 1.0,
+                "winner_pass_rate": 0.5,
+                "winner_regressed_rate": 0.25,
+                "winner_score_mean": 104.0,
+                "winner_after_issue_count_mean": 0.5,
+            },
+        }
+    )
+
+    assert summary["validation_branch_summary"] == {
+        "case_count": 2.0,
+        "case_rate": 0.5,
+        "candidate_count_mean": 3.0,
+        "rejected_count_mean": 2.0,
+        "selection_present_ratio": 1.0,
+        "patch_artifact_present_ratio": 1.0,
+        "archive_present_ratio": 1.0,
+        "parallel_case_rate": 1.0,
+        "winner_pass_rate": 0.5,
+        "winner_regressed_rate": 0.25,
+        "winner_score_mean": 104.0,
+        "winner_after_issue_count_mean": 0.5,
+    }
+
+
+def test_build_results_summary_preserves_validation_branch_gate_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "validation_branch_gate_summary": {
+                "failed_checks": ["validation_branch_archive_present_ratio"],
+                "case_count": 1.0,
+                "case_rate": 0.25,
+                "case_count_threshold": 1.0,
+                "case_count_passed": True,
+                "selection_present_ratio": 1.0,
+                "selection_present_ratio_threshold": 1.0,
+                "selection_present_ratio_passed": True,
+                "patch_artifact_present_ratio": 1.0,
+                "patch_artifact_present_ratio_threshold": 1.0,
+                "patch_artifact_present_ratio_passed": True,
+                "archive_present_ratio": 0.0,
+                "archive_present_ratio_threshold": 1.0,
+                "archive_present_ratio_passed": False,
+                "parallel_case_rate": 1.0,
+                "parallel_case_rate_threshold": 1.0,
+                "parallel_case_rate_passed": True,
+                "gate_passed": False,
+            },
+        }
+    )
+
+    assert summary["validation_branch_gate_summary"]["failed_checks"] == [
+        "validation_branch_archive_present_ratio"
+    ]
+    assert summary["validation_branch_gate_summary"]["gate_passed"] is False
+
+
 def test_build_results_summary_preserves_source_plan_card_summary() -> None:
     summary = build_results_summary(
         {
@@ -1416,6 +1486,69 @@ def test_build_report_markdown_prefers_top_level_validation_probe_summary() -> N
     assert "## Validation Probe Summary" in report
     assert "Validation tests mean: 1.5000; probe enabled ratio: 1.0000" in report
     assert "Probe executed count mean: 2.0000; failure rate: 0.5000" in report
+
+
+def test_build_report_markdown_prefers_top_level_validation_branch_summary() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {
+                "task_success_rate": 1.0,
+                "validation_branch_case_count": 0.0,
+                "validation_branch_case_rate": 0.0,
+                "validation_branch_candidate_count_mean": 0.0,
+                "validation_branch_rejected_count_mean": 0.0,
+                "validation_branch_selection_present_ratio": 0.0,
+                "validation_branch_patch_artifact_present_ratio": 0.0,
+                "validation_branch_archive_present_ratio": 0.0,
+                "validation_branch_parallel_case_rate": 0.0,
+                "validation_branch_winner_pass_rate": 0.0,
+                "validation_branch_winner_regressed_rate": 0.0,
+                "validation_branch_winner_score_mean": 0.0,
+                "validation_branch_winner_after_issue_count_mean": 0.0,
+            },
+            "validation_branch_summary": {
+                "case_count": 2.0,
+                "case_rate": 0.5,
+                "candidate_count_mean": 3.0,
+                "rejected_count_mean": 2.0,
+                "selection_present_ratio": 1.0,
+                "patch_artifact_present_ratio": 1.0,
+                "archive_present_ratio": 1.0,
+                "parallel_case_rate": 1.0,
+                "winner_pass_rate": 0.5,
+                "winner_regressed_rate": 0.0,
+                "winner_score_mean": 104.0,
+                "winner_after_issue_count_mean": 0.5,
+            },
+            "validation_branch_gate_summary": {
+                "failed_checks": [],
+                "case_count": 2.0,
+                "case_rate": 0.5,
+                "case_count_threshold": 1.0,
+                "case_count_passed": True,
+                "selection_present_ratio": 1.0,
+                "selection_present_ratio_threshold": 1.0,
+                "selection_present_ratio_passed": True,
+                "patch_artifact_present_ratio": 1.0,
+                "patch_artifact_present_ratio_threshold": 1.0,
+                "patch_artifact_present_ratio_passed": True,
+                "archive_present_ratio": 1.0,
+                "archive_present_ratio_threshold": 1.0,
+                "archive_present_ratio_passed": True,
+                "parallel_case_rate": 1.0,
+                "parallel_case_rate_threshold": 1.0,
+                "parallel_case_rate_passed": True,
+                "gate_passed": True,
+            },
+        }
+    )
+
+    assert "## Validation Branch Summary" in report
+    assert "Applicable case count / rate: 2.00 / 0.5000" in report
+    assert "Selection / winner artifact / loser archive ratios: 1.0000 / 1.0000 / 1.0000" in report
+    assert "## Validation Branch Gate Summary" in report
+    assert "- Gate passed: yes" in report
 
 
 def test_build_report_markdown_prefers_top_level_source_plan_card_summary() -> None:
@@ -1748,6 +1881,83 @@ def test_build_results_summary_preserves_retrieval_context_observability_summary
     }
 
 
+def test_build_results_summary_preserves_retrieval_default_strategy_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "retrieval_default_strategy_summary": {
+                "case_count": 2,
+                "retrieval_context_available_case_count": 2,
+                "retrieval_context_available_case_rate": 1.0,
+                "parent_symbol_available_case_count": 2,
+                "parent_symbol_available_case_rate": 1.0,
+                "reference_hint_available_case_count": 1,
+                "reference_hint_available_case_rate": 0.5,
+                "graph_lookup_enabled_case_count": 2,
+                "graph_lookup_enabled_case_rate": 1.0,
+                "graph_lookup_guarded_case_count": 1,
+                "graph_lookup_guarded_case_rate": 0.5,
+                "graph_lookup_dominant_normalization": "log1p",
+                "graph_lookup_pool_size_mean": 4.0,
+                "graph_lookup_guard_max_candidates_mean": 4.0,
+                "graph_lookup_guard_min_query_terms_mean": 1.0,
+                "graph_lookup_guard_max_query_terms_mean": 5.0,
+                "graph_lookup_weight_means": {
+                    "scip": 0.3,
+                    "xref": 0.2,
+                    "query_xref": 0.2,
+                    "symbol": 0.1,
+                    "import": 0.1,
+                    "coverage": 0.1,
+                },
+                "topological_shield_enabled_case_count": 2,
+                "topological_shield_enabled_case_rate": 1.0,
+                "topological_shield_report_only_case_count": 2,
+                "topological_shield_report_only_case_rate": 1.0,
+                "topological_shield_dominant_mode": "report_only",
+                "topological_shield_max_attenuation_mean": 0.6,
+                "topological_shield_shared_parent_attenuation_mean": 0.2,
+                "topological_shield_adjacency_attenuation_mean": 0.5,
+            },
+        }
+    )
+
+    assert summary["retrieval_default_strategy_summary"] == {
+        "case_count": 2,
+        "retrieval_context_available_case_count": 2,
+        "retrieval_context_available_case_rate": 1.0,
+        "parent_symbol_available_case_count": 2,
+        "parent_symbol_available_case_rate": 1.0,
+        "reference_hint_available_case_count": 1,
+        "reference_hint_available_case_rate": 0.5,
+        "graph_lookup_enabled_case_count": 2,
+        "graph_lookup_enabled_case_rate": 1.0,
+        "graph_lookup_guarded_case_count": 1,
+        "graph_lookup_guarded_case_rate": 0.5,
+        "graph_lookup_dominant_normalization": "log1p",
+        "graph_lookup_pool_size_mean": 4.0,
+        "graph_lookup_guard_max_candidates_mean": 4.0,
+        "graph_lookup_guard_min_query_terms_mean": 1.0,
+        "graph_lookup_guard_max_query_terms_mean": 5.0,
+        "graph_lookup_weight_means": {
+            "scip": 0.3,
+            "xref": 0.2,
+            "query_xref": 0.2,
+            "symbol": 0.1,
+            "import": 0.1,
+            "coverage": 0.1,
+        },
+        "topological_shield_enabled_case_count": 2,
+        "topological_shield_enabled_case_rate": 1.0,
+        "topological_shield_report_only_case_count": 2,
+        "topological_shield_report_only_case_rate": 1.0,
+        "topological_shield_dominant_mode": "report_only",
+        "topological_shield_max_attenuation_mean": 0.6,
+        "topological_shield_shared_parent_attenuation_mean": 0.2,
+        "topological_shield_adjacency_attenuation_mean": 0.5,
+    }
+
+
 def test_build_results_summary_preserves_missing_context_risk_summary() -> None:
     summary = build_results_summary(
         {
@@ -1947,6 +2157,58 @@ def test_build_report_markdown_includes_retrieval_context_observability_summary(
     assert "| parent_symbol_chunk_count_mean | 2.0000 |" in report
     assert "| reference_hint_coverage_ratio_mean | 0.5000 |" in report
     assert "| pool_coverage_ratio_mean | 0.5000 |" in report
+
+
+def test_build_report_markdown_includes_retrieval_default_strategy_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-24T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {},
+            "retrieval_default_strategy_summary": {
+                "case_count": 2,
+                "retrieval_context_available_case_count": 2,
+                "retrieval_context_available_case_rate": 1.0,
+                "parent_symbol_available_case_count": 2,
+                "parent_symbol_available_case_rate": 1.0,
+                "reference_hint_available_case_count": 1,
+                "reference_hint_available_case_rate": 0.5,
+                "graph_lookup_enabled_case_count": 2,
+                "graph_lookup_enabled_case_rate": 1.0,
+                "graph_lookup_guarded_case_count": 1,
+                "graph_lookup_guarded_case_rate": 0.5,
+                "graph_lookup_dominant_normalization": "log1p",
+                "graph_lookup_pool_size_mean": 4.0,
+                "graph_lookup_guard_max_candidates_mean": 4.0,
+                "graph_lookup_guard_min_query_terms_mean": 1.0,
+                "graph_lookup_guard_max_query_terms_mean": 5.0,
+                "graph_lookup_weight_means": {
+                    "scip": 0.3,
+                    "xref": 0.2,
+                    "query_xref": 0.2,
+                    "symbol": 0.1,
+                    "import": 0.1,
+                    "coverage": 0.1,
+                },
+                "topological_shield_enabled_case_count": 2,
+                "topological_shield_enabled_case_rate": 1.0,
+                "topological_shield_report_only_case_count": 2,
+                "topological_shield_report_only_case_rate": 1.0,
+                "topological_shield_dominant_mode": "report_only",
+                "topological_shield_max_attenuation_mean": 0.6,
+                "topological_shield_shared_parent_attenuation_mean": 0.2,
+                "topological_shield_adjacency_attenuation_mean": 0.5,
+            },
+        }
+    )
+
+    assert "## Retrieval Default Strategy Summary" in report
+    assert "- Retrieval-context cases: 2/2 (1.0000); parent-symbol: 2/2 (1.0000); reference-hint: 1/2 (0.5000)" in report
+    assert "- Graph lookup default: enabled=2/2 (1.0000); guarded=1/2 (0.5000); normalization=log1p" in report
+    assert "- Graph lookup guard means: pool=4.0000; max_candidates=4.0000; min_query_terms=1.0000; max_query_terms=5.0000" in report
+    assert "- Topological shield default: enabled=2/2 (1.0000); report_only=2/2 (1.0000); mode=report_only" in report
+    assert "- Topological shield attenuation means: max=0.6000; shared_parent=0.2000; adjacency=0.5000" in report
 
 
 def test_build_report_markdown_includes_missing_context_risk_summary() -> None:
@@ -2334,6 +2596,29 @@ def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> N
                         }
                     ],
                 },
+                "next_cycle_input_summary": {
+                    "primary_stream": "memory",
+                    "priority_count": 1,
+                    "priorities": [
+                        {
+                            "reason_code": "memory_fallback",
+                            "reason_family": "memory",
+                            "capture_class": "memory",
+                            "total_count": 3,
+                            "open_issue_count": 1,
+                            "fix_count": 1,
+                            "action_hint": "Stabilize memory fallback and capture quality before expanding retrieval breadth.",
+                        }
+                    ],
+                    "memory_focus": {
+                        "reason_count": 1,
+                        "runtime_event_count": 1,
+                        "open_issue_count": 1,
+                        "fix_count": 1,
+                        "resolution_rate": 1.0,
+                        "action_hint": "Stabilize memory fallback and capture quality before expanding retrieval breadth.",
+                    },
+                },
                 "preference_snapshot": {
                     "preference_observability_summary": {
                         "case_count": 2,
@@ -2439,6 +2724,10 @@ def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> N
     assert "Benchmark/runtime alignment gap: 1.50 ms" in report
     assert "Benchmark/runtime ratio: 0.7000" in report
     assert "| memory_fallback | 1 | 1 | 1 | 1 | 2026-03-17T00:00:00Z |" in report
+    assert "### Next Cycle Input" in report
+    assert "Primary stream: memory" in report
+    assert "| memory_fallback | memory | memory | 3 | 1 | 1 |" in report
+    assert "Memory focus: reasons=1 runtime_events=1 open_issues=1 fixes=1 resolution_rate=1.0000" in report
     assert "### Preference Snapshot" in report
     assert "- Preference observed cases: 2/2 (1.0000)" in report
     assert "- Preference profile-selected mean: 1.5000" in report

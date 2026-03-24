@@ -30,6 +30,7 @@ AGENT_LOOP_STOP_REASONS = (
 class AgentLoopIterationRecord:
     index: int
     action: dict[str, Any]
+    retrieval_refinement: dict[str, Any]
     query: str
     rerun_stages: tuple[str, ...]
     source_plan_step_count: int
@@ -42,6 +43,7 @@ class AgentLoopIterationRecord:
         return {
             "index": self.index,
             "action": dict(self.action),
+            "retrieval_refinement": dict(self.retrieval_refinement),
             "query": self.query,
             "rerun_stages": list(self.rerun_stages),
             "source_plan_step_count": self.source_plan_step_count,
@@ -278,10 +280,50 @@ class BoundedLoopController:
             )
         return "\n".join(part for part in parts if part)
 
+    def build_retrieval_refinement(
+        self,
+        *,
+        action: dict[str, Any],
+        iteration_index: int,
+    ) -> dict[str, Any]:
+        normalized = self._normalize_action(action)
+        if normalized is None:
+            return {}
+        if str(normalized.get("action_type") or "").strip() != "request_more_context":
+            return {}
+        focus_paths = normalized.get("focus_paths", [])
+        normalized_focus_paths = (
+            [
+                str(item).strip().replace("\\", "/")
+                for item in focus_paths
+                if str(item).strip()
+            ]
+            if isinstance(focus_paths, list)
+            else []
+        )
+        query_hint = str(normalized.get("query_hint") or "").strip()
+        if not normalized_focus_paths and not query_hint:
+            return {}
+        return {
+            "schema_version": "agent_loop_retrieval_refinement_v1",
+            "iteration_index": max(1, int(iteration_index)),
+            "action_type": "request_more_context",
+            "reason": str(normalized.get("reason") or "").strip(),
+            "query_hint": query_hint[: self.query_hint_max_chars],
+            "focus_paths": normalized_focus_paths[: self.max_focus_paths],
+            "source": "agent_loop",
+            "metadata": (
+                dict(normalized.get("metadata"))
+                if isinstance(normalized.get("metadata"), dict)
+                else {}
+            ),
+        }
+
     def record_iteration(
         self,
         *,
         action: dict[str, Any],
+        retrieval_refinement: dict[str, Any] | None,
         query: str,
         rerun_stages: list[str] | tuple[str, ...],
         source_plan_stage: dict[str, Any],
@@ -325,6 +367,11 @@ class BoundedLoopController:
             AgentLoopIterationRecord(
                 index=len(self._iterations) + 1,
                 action=normalized,
+                retrieval_refinement=(
+                    dict(retrieval_refinement)
+                    if isinstance(retrieval_refinement, dict)
+                    else {}
+                ),
                 query=str(query or ""),
                 rerun_stages=tuple(str(item) for item in rerun_stages),
                 source_plan_step_count=(

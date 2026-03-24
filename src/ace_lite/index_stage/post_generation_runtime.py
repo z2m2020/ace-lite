@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ace_lite.index_stage.benchmark_candidate_runtime import (
@@ -30,6 +30,7 @@ class IndexPostGenerationRuntimeResult:
     chunk_semantic_rerank_payload: dict[str, Any]
     topological_shield_payload: dict[str, Any]
     chunk_guard_payload: dict[str, Any]
+    retrieval_refinement_payload: dict[str, Any] = field(default_factory=dict)
 
 
 def run_index_post_generation_runtime(
@@ -139,6 +140,7 @@ def run_index_post_generation_runtime(
     rerank_rows_cross_encoder_with_time_budget_fn: Callable[
         ..., tuple[list[dict[str, Any]], Any]
     ],
+    retrieval_refinement: dict[str, Any] | None = None,
 ) -> IndexPostGenerationRuntimeResult:
     candidate_fusion = run_index_candidate_fusion_fn(
         root=root,
@@ -191,6 +193,7 @@ def run_index_post_generation_runtime(
         multi_channel_rrf_code_cap=int(multi_channel_rrf_code_cap),
         multi_channel_rrf_docs_cap=int(multi_channel_rrf_docs_cap),
         multi_channel_rrf_memory_cap=int(multi_channel_rrf_memory_cap),
+        retrieval_refinement=retrieval_refinement,
         refine_candidate_pool_fn=refine_candidate_pool_fn,
         postprocess_candidates_fn=postprocess_candidates_fn,
         apply_structural_rerank_fn=apply_structural_rerank_fn,
@@ -297,6 +300,7 @@ def run_index_post_generation_runtime(
         chunk_semantic_rerank_payload=chunk_selection.chunk_semantic_rerank_payload,
         topological_shield_payload=chunk_selection.topological_shield_payload,
         chunk_guard_payload=chunk_selection.chunk_guard_payload,
+        retrieval_refinement_payload=candidate_fusion.retrieval_refinement_payload,
     )
 
 

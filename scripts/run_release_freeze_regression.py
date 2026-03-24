@@ -972,6 +972,14 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
         if isinstance(source_plan_failure_signal_summary_raw, dict)
         else {}
     )
+    retrieval_default_strategy_summary_raw = payload.get(
+        "retrieval_default_strategy_summary"
+    )
+    retrieval_default_strategy_summary = (
+        retrieval_default_strategy_summary_raw
+        if isinstance(retrieval_default_strategy_summary_raw, dict)
+        else {}
+    )
     summary = {
         "path": str(summary_path),
         "repo": str(payload.get("repo", "") or ""),
@@ -1064,6 +1072,29 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
     if source_plan_failure_signal_snapshot:
         summary["source_plan_failure_signal_summary"] = (
             source_plan_failure_signal_snapshot
+        )
+    retrieval_default_strategy_snapshot = {
+        str(key): (
+            {
+                str(inner_key): float(inner_value or 0.0)
+                for inner_key, inner_value in value.items()
+                if isinstance(inner_key, str)
+                and isinstance(inner_value, (int, float))
+            }
+            if isinstance(value, dict)
+            else (
+                float(value or 0.0)
+                if isinstance(value, (int, float))
+                else value
+            )
+        )
+        for key, value in retrieval_default_strategy_summary.items()
+        if isinstance(key, str)
+        and (isinstance(value, dict) or isinstance(value, (int, float, str)))
+    }
+    if retrieval_default_strategy_snapshot:
+        summary["retrieval_default_strategy_summary"] = (
+            retrieval_default_strategy_snapshot
         )
     return summary
 
@@ -2585,6 +2616,135 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         ),
                     )
                 )
+            retrieval_default_strategy_summary_raw = validation_rich.get(
+                "retrieval_default_strategy_summary"
+            )
+            retrieval_default_strategy_summary = (
+                retrieval_default_strategy_summary_raw
+                if isinstance(retrieval_default_strategy_summary_raw, dict)
+                else {}
+            )
+            if retrieval_default_strategy_summary:
+                graph_weights_raw = retrieval_default_strategy_summary.get(
+                    "graph_lookup_weight_means"
+                )
+                graph_weights = (
+                    graph_weights_raw if isinstance(graph_weights_raw, dict) else {}
+                )
+                summary_case_count = max(
+                    0,
+                    int(retrieval_default_strategy_summary.get("case_count", 0) or 0),
+                )
+                lines.append(
+                    "- Q4 retrieval default strategy: retrieval_context={context_count}/{case_count} ({context_rate:.4f}), graph_lookup_enabled={graph_enabled}/{case_count} ({graph_rate:.4f}), guarded={guarded}/{case_count} ({guarded_rate:.4f}), normalization={normalization}, topological_mode={mode}".format(
+                        context_count=int(
+                            retrieval_default_strategy_summary.get(
+                                "retrieval_context_available_case_count", 0
+                            )
+                            or 0
+                        ),
+                        case_count=summary_case_count,
+                        context_rate=float(
+                            retrieval_default_strategy_summary.get(
+                                "retrieval_context_available_case_rate", 0.0
+                            )
+                            or 0.0
+                        ),
+                        graph_enabled=int(
+                            retrieval_default_strategy_summary.get(
+                                "graph_lookup_enabled_case_count", 0
+                            )
+                            or 0
+                        ),
+                        graph_rate=float(
+                            retrieval_default_strategy_summary.get(
+                                "graph_lookup_enabled_case_rate", 0.0
+                            )
+                            or 0.0
+                        ),
+                        guarded=int(
+                            retrieval_default_strategy_summary.get(
+                                "graph_lookup_guarded_case_count", 0
+                            )
+                            or 0
+                        ),
+                        guarded_rate=float(
+                            retrieval_default_strategy_summary.get(
+                                "graph_lookup_guarded_case_rate", 0.0
+                            )
+                            or 0.0
+                        ),
+                        normalization=str(
+                            retrieval_default_strategy_summary.get(
+                                "graph_lookup_dominant_normalization"
+                            )
+                            or "(none)"
+                        ),
+                        mode=str(
+                            retrieval_default_strategy_summary.get(
+                                "topological_shield_dominant_mode"
+                            )
+                            or "(none)"
+                        ),
+                    )
+                )
+                lines.append(
+                    "- Q4 retrieval default strategy guards: pool_size_mean={pool:.4f}, guard_max_candidates_mean={max_candidates:.4f}, guard_min_query_terms_mean={min_terms:.4f}, guard_max_query_terms_mean={max_terms:.4f}, topological_max_attenuation_mean={topo_max:.4f}, shared_parent_mean={shared:.4f}, adjacency_mean={adjacency:.4f}".format(
+                        pool=float(
+                            retrieval_default_strategy_summary.get(
+                                "graph_lookup_pool_size_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        max_candidates=float(
+                            retrieval_default_strategy_summary.get(
+                                "graph_lookup_guard_max_candidates_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        min_terms=float(
+                            retrieval_default_strategy_summary.get(
+                                "graph_lookup_guard_min_query_terms_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        max_terms=float(
+                            retrieval_default_strategy_summary.get(
+                                "graph_lookup_guard_max_query_terms_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        topo_max=float(
+                            retrieval_default_strategy_summary.get(
+                                "topological_shield_max_attenuation_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        shared=float(
+                            retrieval_default_strategy_summary.get(
+                                "topological_shield_shared_parent_attenuation_mean",
+                                0.0,
+                            )
+                            or 0.0
+                        ),
+                        adjacency=float(
+                            retrieval_default_strategy_summary.get(
+                                "topological_shield_adjacency_attenuation_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                    )
+                )
+                lines.append(
+                    "- Q4 retrieval default strategy weights: scip={scip:.4f}, xref={xref:.4f}, query_xref={query_xref:.4f}, symbol={symbol:.4f}, import={imports:.4f}, coverage={coverage:.4f}".format(
+                        scip=float(graph_weights.get("scip", 0.0) or 0.0),
+                        xref=float(graph_weights.get("xref", 0.0) or 0.0),
+                        query_xref=float(graph_weights.get("query_xref", 0.0) or 0.0),
+                        symbol=float(graph_weights.get("symbol", 0.0) or 0.0),
+                        imports=float(graph_weights.get("import", 0.0) or 0.0),
+                        coverage=float(graph_weights.get("coverage", 0.0) or 0.0),
+                    )
+                )
             previous_gate_summary_raw = validation_rich.get(
                 "previous_retrieval_control_plane_gate_summary"
             )
@@ -2773,6 +2933,148 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                                 "executed_test_count_mean", 0.0
                             )
                             or 0.0
+                        ),
+                    )
+                )
+            previous_retrieval_default_strategy_summary_raw = validation_rich.get(
+                "previous_retrieval_default_strategy_summary"
+            )
+            previous_retrieval_default_strategy_summary = (
+                previous_retrieval_default_strategy_summary_raw
+                if isinstance(previous_retrieval_default_strategy_summary_raw, dict)
+                else {}
+            )
+            if previous_retrieval_default_strategy_summary:
+                previous_graph_weights_raw = (
+                    previous_retrieval_default_strategy_summary.get(
+                        "graph_lookup_weight_means"
+                    )
+                )
+                previous_graph_weights = (
+                    previous_graph_weights_raw
+                    if isinstance(previous_graph_weights_raw, dict)
+                    else {}
+                )
+                previous_summary_case_count = max(
+                    0,
+                    int(
+                        previous_retrieval_default_strategy_summary.get(
+                            "case_count", 0
+                        )
+                        or 0
+                    ),
+                )
+                lines.append(
+                    "- Previous Q4 retrieval default strategy: retrieval_context={context_count}/{case_count} ({context_rate:.4f}), graph_lookup_enabled={graph_enabled}/{case_count} ({graph_rate:.4f}), guarded={guarded}/{case_count} ({guarded_rate:.4f}), normalization={normalization}, topological_mode={mode}".format(
+                        context_count=int(
+                            previous_retrieval_default_strategy_summary.get(
+                                "retrieval_context_available_case_count", 0
+                            )
+                            or 0
+                        ),
+                        case_count=previous_summary_case_count,
+                        context_rate=float(
+                            previous_retrieval_default_strategy_summary.get(
+                                "retrieval_context_available_case_rate", 0.0
+                            )
+                            or 0.0
+                        ),
+                        graph_enabled=int(
+                            previous_retrieval_default_strategy_summary.get(
+                                "graph_lookup_enabled_case_count", 0
+                            )
+                            or 0
+                        ),
+                        graph_rate=float(
+                            previous_retrieval_default_strategy_summary.get(
+                                "graph_lookup_enabled_case_rate", 0.0
+                            )
+                            or 0.0
+                        ),
+                        guarded=int(
+                            previous_retrieval_default_strategy_summary.get(
+                                "graph_lookup_guarded_case_count", 0
+                            )
+                            or 0
+                        ),
+                        guarded_rate=float(
+                            previous_retrieval_default_strategy_summary.get(
+                                "graph_lookup_guarded_case_rate", 0.0
+                            )
+                            or 0.0
+                        ),
+                        normalization=str(
+                            previous_retrieval_default_strategy_summary.get(
+                                "graph_lookup_dominant_normalization"
+                            )
+                            or "(none)"
+                        ),
+                        mode=str(
+                            previous_retrieval_default_strategy_summary.get(
+                                "topological_shield_dominant_mode"
+                            )
+                            or "(none)"
+                        ),
+                    )
+                )
+                lines.append(
+                    "- Previous Q4 retrieval default strategy guards: pool_size_mean={pool:.4f}, guard_max_candidates_mean={max_candidates:.4f}, guard_min_query_terms_mean={min_terms:.4f}, guard_max_query_terms_mean={max_terms:.4f}, topological_max_attenuation_mean={topo_max:.4f}, shared_parent_mean={shared:.4f}, adjacency_mean={adjacency:.4f}".format(
+                        pool=float(
+                            previous_retrieval_default_strategy_summary.get(
+                                "graph_lookup_pool_size_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        max_candidates=float(
+                            previous_retrieval_default_strategy_summary.get(
+                                "graph_lookup_guard_max_candidates_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        min_terms=float(
+                            previous_retrieval_default_strategy_summary.get(
+                                "graph_lookup_guard_min_query_terms_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        max_terms=float(
+                            previous_retrieval_default_strategy_summary.get(
+                                "graph_lookup_guard_max_query_terms_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        topo_max=float(
+                            previous_retrieval_default_strategy_summary.get(
+                                "topological_shield_max_attenuation_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                        shared=float(
+                            previous_retrieval_default_strategy_summary.get(
+                                "topological_shield_shared_parent_attenuation_mean",
+                                0.0,
+                            )
+                            or 0.0
+                        ),
+                        adjacency=float(
+                            previous_retrieval_default_strategy_summary.get(
+                                "topological_shield_adjacency_attenuation_mean", 0.0
+                            )
+                            or 0.0
+                        ),
+                    )
+                )
+                lines.append(
+                    "- Previous Q4 retrieval default strategy weights: scip={scip:.4f}, xref={xref:.4f}, query_xref={query_xref:.4f}, symbol={symbol:.4f}, import={imports:.4f}, coverage={coverage:.4f}".format(
+                        scip=float(previous_graph_weights.get("scip", 0.0) or 0.0),
+                        xref=float(previous_graph_weights.get("xref", 0.0) or 0.0),
+                        query_xref=float(
+                            previous_graph_weights.get("query_xref", 0.0) or 0.0
+                        ),
+                        symbol=float(previous_graph_weights.get("symbol", 0.0) or 0.0),
+                        imports=float(previous_graph_weights.get("import", 0.0) or 0.0),
+                        coverage=float(
+                            previous_graph_weights.get("coverage", 0.0) or 0.0
                         ),
                     )
                 )
@@ -4892,6 +5194,16 @@ def main() -> int:
                 )
                 else {}
             ),
+            "retrieval_default_strategy_summary": (
+                validation_rich_summary.get("retrieval_default_strategy_summary", {})
+                if isinstance(
+                    validation_rich_summary.get(
+                        "retrieval_default_strategy_summary", {}
+                    ),
+                    dict,
+                )
+                else {}
+            ),
             "previous_metrics": (
                 validation_rich_previous_summary.get("metrics", {})
                 if isinstance(validation_rich_previous_summary.get("metrics"), dict)
@@ -4966,6 +5278,18 @@ def main() -> int:
                 if isinstance(
                     validation_rich_previous_summary.get(
                         "source_plan_failure_signal_summary", {}
+                    ),
+                    dict,
+                )
+                else {}
+            ),
+            "previous_retrieval_default_strategy_summary": (
+                validation_rich_previous_summary.get(
+                    "retrieval_default_strategy_summary", {}
+                )
+                if isinstance(
+                    validation_rich_previous_summary.get(
+                        "retrieval_default_strategy_summary", {}
                     ),
                     dict,
                 )

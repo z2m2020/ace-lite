@@ -54,6 +54,10 @@ def test_controller_synthesizes_and_records_validation_driven_iteration() -> Non
     assert "Focus refinement" in incremental_query
     controller.record_iteration(
         action=selected,
+        retrieval_refinement=controller.build_retrieval_refinement(
+            action=selected,
+            iteration_index=1,
+        ),
         query=incremental_query,
         rerun_stages=["index", "source_plan", "validation"],
         source_plan_stage={"steps": [{"stage": "source_plan"}]},
@@ -83,6 +87,12 @@ def test_controller_synthesizes_and_records_validation_driven_iteration() -> Non
     assert summary["actions_executed"] == 1
     assert summary["iterations"][0]["validation_status"] == "passed"
     assert summary["iterations"][0]["diagnostic_count"] == 1
+    assert summary["iterations"][0]["retrieval_refinement"]["schema_version"] == (
+        "agent_loop_retrieval_refinement_v1"
+    )
+    assert summary["iterations"][0]["retrieval_refinement"]["focus_paths"] == [
+        "src/app.py"
+    ]
     assert summary["iterations"][0]["validation_branch_score"]["issue_delta"] == 1
     assert summary["iterations"][0]["validation_branch_score"]["passed"] is True
     assert summary["branch_batch"]["schema_version"] == "agent_loop_branch_batch_v1"
@@ -124,3 +134,29 @@ def test_controller_synthesizes_action_from_failed_validation_probes() -> None:
     assert selected["focus_paths"] == ["src/app.py"]
     assert selected["metadata"]["probe_issue_count"] == 1
     assert selected["metadata"]["probe_names"] == ["compile"]
+
+
+def test_controller_builds_structured_retrieval_refinement() -> None:
+    controller = BoundedLoopController(
+        enabled=True,
+        max_iterations=1,
+        max_focus_paths=2,
+        query_hint_max_chars=32,
+    )
+
+    payload = controller.build_retrieval_refinement(
+        action=build_agent_loop_action_v1(
+            action_type="request_more_context",
+            reason="validation_diagnostics",
+            query_hint="focus auth flow and syntax cleanup",
+            focus_paths=["src/app/auth.py", "src/app/auth.py", "src/app/session.py"],
+            metadata={"diagnostic_count": 2},
+        ).as_dict(),
+        iteration_index=3,
+    )
+
+    assert payload["schema_version"] == "agent_loop_retrieval_refinement_v1"
+    assert payload["iteration_index"] == 3
+    assert payload["focus_paths"] == ["src/app/auth.py", "src/app/session.py"]
+    assert payload["query_hint"] == "focus auth flow and syntax clean"
+    assert payload["metadata"] == {"diagnostic_count": 2}

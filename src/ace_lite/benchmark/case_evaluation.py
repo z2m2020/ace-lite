@@ -162,6 +162,23 @@ def evaluate_case_result(
     validation_probe_status = metrics.validation_probe_status
     validation_probe_executed_count = metrics.validation_probe_executed_count
     validation_probe_issue_count = metrics.validation_probe_issue_count
+    validation_branch_case = metrics.validation_branch_case
+    validation_branch_candidate_count = metrics.validation_branch_candidate_count
+    validation_branch_rejected_count = metrics.validation_branch_rejected_count
+    validation_branch_selection_present = (
+        metrics.validation_branch_selection_present
+    )
+    validation_branch_patch_artifact_present = (
+        metrics.validation_branch_patch_artifact_present
+    )
+    validation_branch_archive_present = metrics.validation_branch_archive_present
+    validation_branch_parallel = metrics.validation_branch_parallel
+    validation_branch_winner_passed = metrics.validation_branch_winner_passed
+    validation_branch_winner_regressed = metrics.validation_branch_winner_regressed
+    validation_branch_winner_score = metrics.validation_branch_winner_score
+    validation_branch_winner_after_issue_count = (
+        metrics.validation_branch_winner_after_issue_count
+    )
     source_plan_validation_feedback_present = (
         metrics.source_plan_validation_feedback_present
     )
@@ -357,7 +374,15 @@ def evaluate_case_result(
     graph_closure_support_edge_count = metrics.graph_closure_support_edge_count
     graph_closure_total = metrics.graph_closure_total
     topological_shield_enabled = metrics.topological_shield_enabled
+    topological_shield_mode = metrics.topological_shield_mode
     topological_shield_report_only = metrics.topological_shield_report_only
+    topological_shield_max_attenuation = metrics.topological_shield_max_attenuation
+    topological_shield_shared_parent_attenuation = (
+        metrics.topological_shield_shared_parent_attenuation
+    )
+    topological_shield_adjacency_attenuation = (
+        metrics.topological_shield_adjacency_attenuation
+    )
     topological_shield_attenuated_chunk_count = (
         metrics.topological_shield_attenuated_chunk_count
     )
@@ -541,7 +566,15 @@ def evaluate_case_result(
         graph_closure_support_edge_count=graph_closure_support_edge_count,
         graph_closure_total=graph_closure_total,
         topological_shield_enabled=topological_shield_enabled,
+        topological_shield_mode=topological_shield_mode,
         topological_shield_report_only=topological_shield_report_only,
+        topological_shield_max_attenuation=topological_shield_max_attenuation,
+        topological_shield_shared_parent_attenuation=(
+            topological_shield_shared_parent_attenuation
+        ),
+        topological_shield_adjacency_attenuation=(
+            topological_shield_adjacency_attenuation
+        ),
         topological_shield_attenuated_chunk_count=(
             topological_shield_attenuated_chunk_count
         ),
@@ -571,6 +604,21 @@ def evaluate_case_result(
         validation_probe_status=validation_probe_status,
         validation_probe_executed_count=validation_probe_executed_count,
         validation_probe_issue_count=validation_probe_issue_count,
+        validation_branch_case=validation_branch_case,
+        validation_branch_candidate_count=validation_branch_candidate_count,
+        validation_branch_rejected_count=validation_branch_rejected_count,
+        validation_branch_selection_present=validation_branch_selection_present,
+        validation_branch_patch_artifact_present=(
+            validation_branch_patch_artifact_present
+        ),
+        validation_branch_archive_present=validation_branch_archive_present,
+        validation_branch_parallel=validation_branch_parallel,
+        validation_branch_winner_passed=validation_branch_winner_passed,
+        validation_branch_winner_regressed=validation_branch_winner_regressed,
+        validation_branch_winner_score=validation_branch_winner_score,
+        validation_branch_winner_after_issue_count=(
+            validation_branch_winner_after_issue_count
+        ),
         source_plan_validation_feedback_present=(
             source_plan_validation_feedback_present
         ),
@@ -864,7 +912,15 @@ def evaluate_case_result(
                 graph_hub_suppressed_chunk_count=graph_hub_suppressed_chunk_count,
                 graph_hub_penalty_total=graph_hub_penalty_total,
                 topological_shield_enabled=topological_shield_enabled,
+                topological_shield_mode=topological_shield_mode,
                 topological_shield_report_only=topological_shield_report_only,
+                topological_shield_max_attenuation=topological_shield_max_attenuation,
+                topological_shield_shared_parent_attenuation=(
+                    topological_shield_shared_parent_attenuation
+                ),
+                topological_shield_adjacency_attenuation=(
+                    topological_shield_adjacency_attenuation
+                ),
                 topological_shield_attenuated_chunk_count=topological_shield_attenuated_chunk_count,
                 topological_shield_coverage_ratio=topological_shield_coverage_ratio,
                 topological_shield_attenuation_total=topological_shield_attenuation_total,

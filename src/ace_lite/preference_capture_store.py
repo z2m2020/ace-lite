@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sqlite3
@@ -64,6 +65,7 @@ def _normalize_preference_kind(value: Any) -> str:
         "retrieval": "retrieval_preference",
         "packing": "packing_preference",
         "validation": "validation_preference",
+        "branch_outcome": "branch_outcome_preference",
     }
     normalized = aliases.get(normalized, normalized)
     return normalized if normalized in PREFERENCE_CAPTURE_PREFERENCE_KINDS else normalized
@@ -90,6 +92,199 @@ def _decode_payload(value: Any) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return decoded if isinstance(decoded, dict) else {}
+
+
+def _normalize_text_list(value: Any, *, max_len: int = 255) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        text = _normalize_text(item, max_len=max_len)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        normalized.append(text)
+    return normalized
+
+
+def _normalize_mapping_list(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [dict(item) for item in value if isinstance(item, dict)]
+
+
+def _normalize_branch_outcome_capture_payload(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    selected_branch_id = _normalize_text(
+        value.get("selected_branch_id") or value.get("winner_branch_id"),
+        max_len=128,
+    )
+    candidate_count = max(0, int(value.get("candidate_count", 0) or 0))
+    rejected_count = max(0, int(value.get("rejected_count", 0) or 0))
+    if not selected_branch_id or candidate_count <= 1 or rejected_count <= 0:
+        return {}
+    return {
+        "schema_version": _normalize_text(
+            value.get("schema_version"), max_len=64
+        ) or "branch_outcome_preference_capture_v1",
+        "selected_branch_id": selected_branch_id,
+        "candidate_count": candidate_count,
+        "ranked_branch_ids": _normalize_text_list(
+            value.get("ranked_branch_ids"),
+            max_len=128,
+        ),
+        "rejected_count": rejected_count,
+        "rejected_reasons": _normalize_text_list(
+            value.get("rejected_reasons"),
+            max_len=128,
+        ),
+        "winner_patch_scope_lines": max(
+            0,
+            int(value.get("winner_patch_scope_lines", 0) or 0),
+        ),
+        "winner_status": _normalize_text(value.get("winner_status"), max_len=64),
+        "winner_artifact_present": bool(value.get("winner_artifact_present", False)),
+        "rejected_artifact_count": max(
+            0,
+            int(value.get("rejected_artifact_count", 0) or 0),
+        ),
+        "execution_mode": _normalize_text(value.get("execution_mode"), max_len=64),
+        "candidate_origin": _normalize_text(
+            value.get("candidate_origin"),
+            max_len=128,
+        ),
+        "source": _normalize_text(value.get("source"), max_len=64),
+        "target_file_manifest": _normalize_text_list(
+            value.get("target_file_manifest"),
+            max_len=255,
+        ),
+        "winner_validation_branch_score": (
+            dict(value.get("winner_validation_branch_score"))
+            if isinstance(value.get("winner_validation_branch_score"), dict)
+            else {}
+        ),
+        "rejected": _normalize_mapping_list(value.get("rejected")),
+    }
+
+
+def build_branch_outcome_preference_event(
+    *,
+    repo_key: str,
+    query: str,
+    branch_outcome_capture: dict[str, Any],
+    user_id: str | None = None,
+    profile_key: str | None = None,
+    signal_source: str = "runtime",
+    signal_key: str | None = None,
+    created_at: str | None = None,
+) -> PreferenceCaptureEvent | None:
+    normalized_repo = _normalize_text(repo_key)
+    normalized_query = _normalize_text(query, max_len=2048)
+    capture = _normalize_branch_outcome_capture_payload(branch_outcome_capture)
+    if not normalized_repo or not normalized_query or not capture:
+        return None
+
+    observed_at = _normalize_text(created_at, max_len=64) or _utc_now_iso()
+    selected_branch_id = str(capture.get("selected_branch_id") or "").strip()
+    target_manifest = capture.get("target_file_manifest")
+    target_path = ""
+    if isinstance(target_manifest, list) and target_manifest:
+        target_path = _normalize_target_path(target_manifest[0])
+    if not target_path:
+        target_path = "_validation/branch_outcome"
+    normalized_signal_key = _normalize_text(
+        signal_key,
+        max_len=255,
+    ) or (
+        f"validation.branch_outcome:{selected_branch_id}:{capture.get('candidate_count', 0)}"
+    )
+    event_seed = "|".join(
+        (
+            normalized_repo,
+            normalized_signal_key,
+            selected_branch_id,
+            observed_at,
+            target_path,
+        )
+    )
+    event_hash = hashlib.sha256(
+        event_seed.encode("utf-8", errors="ignore")
+    ).hexdigest()[:12]
+    event_id = (
+        "branch-outcome-preference:"
+        + _normalize_token(selected_branch_id, max_len=48)
+        + ":"
+        + event_hash
+    )
+    return normalize_preference_capture_event(
+        {
+            "event_id": event_id,
+            "user_id": _normalize_text(user_id),
+            "repo_key": normalized_repo,
+            "profile_key": _normalize_text(profile_key),
+            "preference_kind": "branch_outcome_preference",
+            "signal_source": signal_source,
+            "signal_key": normalized_signal_key,
+            "target_path": target_path,
+            "value_text": (
+                "selected_branch_id={branch} candidate_count={count} rejected_count={rejected} "
+                "winner_status={status}".format(
+                    branch=selected_branch_id,
+                    count=int(capture.get("candidate_count", 0) or 0),
+                    rejected=int(capture.get("rejected_count", 0) or 0),
+                    status=str(capture.get("winner_status") or "unknown"),
+                )
+            ),
+            "weight": 1.0,
+            "payload": {
+                "kind": "branch_outcome_preference",
+                "query": normalized_query,
+                "summary": capture,
+            },
+            "created_at": observed_at,
+        }
+    )
+
+
+def record_branch_outcome_preference_capture(
+    *,
+    store: DurablePreferenceCaptureStore,
+    repo_key: str,
+    query: str,
+    branch_outcome_capture: dict[str, Any],
+    user_id: str | None = None,
+    profile_key: str | None = None,
+    signal_source: str = "runtime",
+    signal_key: str | None = None,
+    created_at: str | None = None,
+) -> dict[str, Any]:
+    event = build_branch_outcome_preference_event(
+        repo_key=repo_key,
+        query=query,
+        branch_outcome_capture=branch_outcome_capture,
+        user_id=user_id,
+        profile_key=profile_key,
+        signal_source=signal_source,
+        signal_key=signal_key,
+        created_at=created_at,
+    )
+    if event is None:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "no_branch_outcome_signal",
+            "store_path": str(store.db_path),
+        }
+    recorded = store.record(event)
+    return {
+        "ok": True,
+        "skipped": False,
+        "reason": "",
+        "store_path": str(store.db_path),
+        "recorded": recorded.to_payload(),
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -446,7 +641,9 @@ class DurablePreferenceCaptureStore:
 
 
 __all__ = [
+    "build_branch_outcome_preference_event",
     "DurablePreferenceCaptureStore",
     "PreferenceCaptureEvent",
+    "record_branch_outcome_preference_capture",
     "normalize_preference_capture_event",
 ]

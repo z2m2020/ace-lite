@@ -24,6 +24,7 @@ from ace_lite.cli_app.runtime_stats_data_support import (
 )
 from ace_lite.cli_app.runtime_stats_enrichment_support import (
     build_runtime_memory_health_summary,
+    build_runtime_next_cycle_input_summary,
     build_runtime_top_pain_summary,
 )
 from ace_lite.runtime_paths import DEFAULT_USER_RUNTIME_DB_PATH, resolve_user_runtime_db_path
@@ -112,6 +113,10 @@ def load_runtime_stats_summary(
         runtime_scope_map=scope_map,
         top_pain_summary=top_pain_summary,
     )
+    next_cycle_input_summary = build_runtime_next_cycle_input_summary(
+        top_pain_summary=top_pain_summary,
+        memory_health_summary=memory_health_summary,
+    )
     filters = {
         "repo": normalized_repo,
         "profile": normalized_profile,
@@ -128,6 +133,7 @@ def load_runtime_stats_summary(
         "dev_feedback_summary": dev_feedback_summary,
         "top_pain_summary": top_pain_summary,
         "memory_health_summary": memory_health_summary,
+        "next_cycle_input_summary": next_cycle_input_summary,
     }
 
 def build_runtime_status_payload(
@@ -159,6 +165,19 @@ def build_runtime_status_payload(
         service_health=service_health,
         runtime_stats=runtime_stats,
     )
+    next_cycle_input_summary = build_runtime_next_cycle_input_summary(
+        top_pain_summary=(
+            runtime_stats.get("top_pain_summary", {})
+            if isinstance(runtime_stats.get("top_pain_summary"), dict)
+            else {}
+        ),
+        memory_health_summary=(
+            runtime_stats.get("memory_health_summary", {})
+            if isinstance(runtime_stats.get("memory_health_summary"), dict)
+            else {}
+        ),
+        degraded_services=degraded_services,
+    )
 
     return {
         "settings_fingerprint": fingerprint,
@@ -169,6 +188,7 @@ def build_runtime_status_payload(
         "cache_paths": cache_paths,
         "service_health": service_health,
         "degraded_services": degraded_services,
+        "next_cycle_input": next_cycle_input_summary,
         "latest_runtime": {
             "filters": runtime_stats.get("filters"),
             "latest_match": runtime_stats.get("latest_match"),
@@ -180,6 +200,7 @@ def build_runtime_status_payload(
             "dev_feedback_summary": runtime_stats.get("dev_feedback_summary"),
             "top_pain_summary": runtime_stats.get("top_pain_summary"),
             "memory_health_summary": runtime_stats.get("memory_health_summary"),
+            "next_cycle_input_summary": runtime_stats.get("next_cycle_input_summary"),
         },
     }
 

@@ -43,11 +43,43 @@ def test_capture_service_records_source_plan_and_validation_observations(
     )
 
     rows = store.search(query="validation", limit=10)
+    source_rows = store.fetch(handles=[source_payload["handle"]])
+    validation_rows = store.fetch(handles=[validation_payload["handle"]])
 
     assert source_payload["ok"] is True
     assert validation_payload["ok"] is True
+    assert source_payload["signal_count"] == 4
+    assert validation_payload["signal_count"] == 3
     assert len(rows) == 2
     assert {row.payload["kind"] for row in rows} == {"source_plan", "validation"}
+    assert source_rows[0].payload["metadata"]["capture_gate"] == "accepted"
+    assert source_rows[0].payload["metadata"]["attribution_scope"] == "stage_payload_only"
+    assert validation_rows[0].payload["metadata"]["signal_count"] == 3
+
+
+def test_capture_service_skips_low_signal_stage_observation(tmp_path: Path) -> None:
+    store = LongTermMemoryStore(db_path=tmp_path / "long-term.db")
+    service = LongTermMemoryCaptureService(store=store, enabled=True)
+
+    payload = service.capture_stage_observation(
+        stage_name="validation",
+        query="fix validation fallback",
+        repo="ace-lite",
+        root=str(tmp_path),
+        source_run_id="session-1",
+        stage_payload={"reason": "", "diagnostic_count": 0, "result": {}},
+    )
+
+    rows = store.search(query="validation", limit=10)
+
+    assert payload == {
+        "ok": True,
+        "skipped": True,
+        "reason": "no_capture_signal",
+        "stage": "validation",
+        "signal_count": 0,
+    }
+    assert rows == []
 
 
 def test_capture_service_records_selection_feedback_observation(tmp_path: Path) -> None:
@@ -69,9 +101,48 @@ def test_capture_service_records_selection_feedback_observation(tmp_path: Path) 
 
     assert payload["ok"] is True
     assert payload["stage"] == "selection_feedback"
+    assert payload["signal_count"] == 1
     assert len(rows) == 1
     assert rows[0].payload["kind"] == "selection_feedback"
     assert rows[0].payload["payload"]["selected_path"] == "src/app.py"
+    assert rows[0].payload["metadata"]["capture_gate"] == "accepted"
+    assert rows[0].payload["metadata"]["attribution_scope"] == "explicit_selection_only"
+
+
+def test_capture_service_skips_selection_feedback_without_query_or_path(
+    tmp_path: Path,
+) -> None:
+    store = LongTermMemoryStore(db_path=tmp_path / "long-term.db")
+    service = LongTermMemoryCaptureService(store=store, enabled=True)
+
+    missing_query = service.capture_selection_feedback(
+        query="  ",
+        repo="ace-lite",
+        root=str(tmp_path),
+        selected_path="src/app.py",
+    )
+    missing_path = service.capture_selection_feedback(
+        query="openmemory 405 dimension mismatch",
+        repo="ace-lite",
+        root=str(tmp_path),
+        selected_path=" ",
+    )
+
+    rows = store.search(query="openmemory", limit=10)
+
+    assert missing_query == {
+        "ok": True,
+        "skipped": True,
+        "reason": "missing_query",
+        "stage": "selection_feedback",
+    }
+    assert missing_path == {
+        "ok": True,
+        "skipped": True,
+        "reason": "missing_selected_path",
+        "stage": "selection_feedback",
+    }
+    assert rows == []
 
 
 def test_capture_service_records_dev_feedback_observations_and_resolution_fact(

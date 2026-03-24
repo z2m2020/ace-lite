@@ -81,6 +81,37 @@ lane from the same tree:
 Review `artifacts/benchmark/validation_rich/latest/results.json` and the paired
 report output to confirm `task_success_rate`, `precision_at_k`, `noise_rate`,
 and `validation_test_count` stay non-regressed on that validation-specific lane.
+If the release changes chunk selection, chunk semantic rerank, or contextual
+chunking behavior, also review the same summary/report pair for top-level
+`retrieval_context_observability_summary` and
+`retrieval_default_strategy_summary`, and confirm the retrieval-context /
+default-strategy surface remains interpretable and report-only:
+
+- `chunk_count_mean` and `coverage_ratio` are not regressing unexpectedly
+- `pool_chunk_count_mean` and `pool_coverage_ratio` still match the intended
+  chunk semantic rerank pool behavior
+- any rise in `char_count_mean` is explained by an intentional retrieval-context
+  expansion rather than silent sidecar bloat
+- `graph_lookup_dominant_normalization` and the guard means in
+  `retrieval_default_strategy_summary` still match the intended default
+  graph-aware retrieval policy
+- `topological_shield_dominant_mode` plus attenuation means still reflect the
+  intended default shield contract rather than an unreviewed threshold drift
+
+For the current graph-aware retrieval lane, use this rollback order if the
+default strategy or graph summaries drift unexpectedly:
+
+1. keep the checkpoint report-only and record the failing summary plus dated
+   artifact path instead of promoting a broader default change
+2. revert the candidate workload to the prior dated retrieval policy/profile,
+   or downgrade the experiment from `feature` / `refactor` back to `general`
+3. if the drift is dominated by repomap seed expansion, use a scoped config
+   rollback with `repomap.enabled: false`, rerun the same benchmark/freeze
+   evidence set, and only then consider a wider runtime revert
+
+Treat that rollback order as maintainer guidance for graph-aware retrieval
+changes; do not invent new release gates from it.
+
 When the release touches learning-router rollout evidence, also review the same
 summary/report pair for top-level `learning_router_rollout_summary` and confirm
 the rollout-readiness surface stays report-only and interpretable:
@@ -126,6 +157,12 @@ raw config:
 - gate result: passed / failed, plus rollback reason if `enforced` was reverted
 - Q3 frontier gate result: pass / fail from the same summary or freeze
   `validation_rich_benchmark.retrieval_frontier_gate_summary`
+- Q4 retrieval default strategy summary:
+  `retrieval_default_strategy_summary` from the same summary or freeze
+  `validation_rich_benchmark` section when checkpoint notes need a stable,
+  report-only description of retrieval-context availability, graph-lookup
+  normalization/guard means, graph signal weights, or topological-shield
+  attenuation means
 - Q4 validation summaries: `validation_probe_summary` and
   `source_plan_validation_feedback_summary` from the same summary or freeze
   `validation_rich_benchmark` section when checkpoint notes need stable probe
@@ -141,6 +178,23 @@ current lane:
 - they are intended to explain validation-test coverage and feedback drift
 - they do not add new blocking thresholds unless the gate contract is expanded
   explicitly in a future stream
+
+Treat `retrieval_default_strategy_summary` the same way in the current Q4
+retrieval-governance lane:
+- freeze and release reporting may copy it forward directly from the
+  validation-rich summaries
+- it is intended to explain the default retrieval-context, graph-lookup, and
+  topological-shield contract without reopening raw payload JSON
+- it does not add a new blocking threshold or promotion gate by itself
+
+Treat `branch_validation_archive` the same way in the current branch-validation
+stream:
+- it is a targeted runtime / orchestrator evidence surface, not a matrix or
+  freeze gate
+- use it to explain current winner selection, rejected reasons, and artifact
+  archive shape while runtime still executes a single real branch
+- do not cite it as proof of multi-candidate execution until a future stream
+  lands actual `N>1` candidate generation and concurrent sandbox validation
 
 Treat `learning_router_rollout_summary` the same way in the current `Y7504`
 lane:

@@ -124,6 +124,7 @@ Implemented in the current codebase:
 Current limitation:
 
 - the system is intentionally conservative and does not yet attempt a richer graph-evolution or advanced attribution model
+- attribution boundaries remain intentionally narrow: stage captures only describe explicit stage payload evidence, and selection feedback only attributes the explicit selected path rather than inferred downstream impact
 
 ### 5.2 User Issue Reporting
 
@@ -159,6 +160,7 @@ Partially implemented:
 
 - runtime degradation and fallback reasons already exist and can feed feedback surfaces
 - selection feedback can be written back into long-term memory
+- validation-stage multi-candidate branch runs now emit a minimal `branch_outcome_preference_capture` contract and can optionally persist a durable `branch_outcome_preference` event when the runtime feedback store is enabled
 - developer feedback can be linked to issue resolution and later benchmark conversion
 - developer feedback reason codes now pass through a shared normalization taxonomy with canonical reason codes, reason families, and capture classes
 - runtime status and top-pain summaries now expose the same normalized reason taxonomy fields
@@ -171,6 +173,7 @@ Partially implemented:
 Still missing:
 
 - a fully normalized auto-capture taxonomy for all planned cases
+- richer branch-outcome attribution beyond the explicit winner/loser validation payload; the current capture intentionally records only the selected branch, rejection reasons, winner patch scope, and explicit target-file manifest
 - a runtime-originated `manual_override` signal; current `manual_override` remains a normalization target for explicit human-recorded issue/fix flows rather than an automatically emitted runtime event
 - first-class metrics for manual override frequency, retry clustering, and end-to-end developer issue capture coverage
 - automatic exporter or case-generation coverage that stamps richer developer issue/fix lifecycle metadata into all feedback benchmark cases; issue-report benchmark export now carries `attachments` inside the exported `issue_report` payload and derives minimal `dev_feedback` metadata from resolved reports with `dev-fix://...` attachments, benchmark case loading now normalizes the same metadata through a shared contract before runner evaluation, the shared contract also restores `created_at` and `resolved_at` from `issue_report` for recognized issue-capture and issue-resolution lanes when explicit `dev_feedback` is absent, and benchmark row assembly still keeps the same derivation logic as a fail-open fallback, but broader generic case generation still lacks a universal derivation contract
@@ -275,6 +278,12 @@ Capture points already present or linked:
 - when a developer issue or developer fix is recorded
 - when a stored developer fix resolves an issue
 - when source-plan runtime evidence shows missing direct support, missing validation suggestions, or hint-heavy mixed support that should be surfaced as normalized degraded reasons
+
+Current write-gate and denoise boundaries:
+
+- stage-observation capture only writes when the normalized stage payload contains concrete retrieval or validation signals
+- selection-feedback capture requires normalized `repo`, `query`, and `selected_path`
+- accepted captures now record minimal `capture_gate`, `signal_count`, and `attribution_scope` metadata so later review can distinguish explicit signal-bearing writes from skipped low-signal events
 
 Still deferred:
 

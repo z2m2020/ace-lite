@@ -80,6 +80,10 @@ def _extract_quick_plan(*, selected_repo_payload: dict[str, Any]) -> dict[str, A
 def _extract_patch_artifacts(*, selected_repo_payload: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     patch_artifacts = selected_repo_payload.get("patch_artifacts")
     if not isinstance(patch_artifacts, list):
+        patch_artifact = selected_repo_payload.get("patch_artifact")
+        if isinstance(patch_artifact, dict):
+            patch_artifacts = [patch_artifact]
+    if not isinstance(patch_artifacts, list):
         quick_plan = _extract_quick_plan(selected_repo_payload=selected_repo_payload)
         patch_artifacts = quick_plan.get("patch_artifacts") if isinstance(quick_plan, dict) else []
     if not isinstance(patch_artifacts, list):

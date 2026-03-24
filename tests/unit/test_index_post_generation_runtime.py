@@ -27,6 +27,7 @@ def test_run_index_post_generation_runtime_wires_fusion_filter_and_chunk() -> No
             multi_channel_fusion_payload={"enabled": False},
             semantic_embedding_provider_impl=None,
             semantic_cross_encoder_provider=None,
+            retrieval_refinement_payload={"enabled": True, "focus_paths": ["src/alpha.py"]},
         )
 
     def fake_apply_benchmark_candidate_filters(
@@ -144,13 +145,16 @@ def test_run_index_post_generation_runtime_wires_fusion_filter_and_chunk() -> No
         mark_timing_fn=lambda label, started_at: None,
         rerank_rows_embeddings_with_time_budget_fn=lambda **kwargs: ([], None),
         rerank_rows_cross_encoder_with_time_budget_fn=lambda **kwargs: ([], None),
+        retrieval_refinement={"focus_paths": ["src/alpha.py"]},
     )
 
     assert isinstance(captured["fusion"], dict)
     assert isinstance(captured["benchmark"], dict)
     assert isinstance(captured["chunk"], dict)
     assert captured["fusion"]["selected_ranker"] == "bm25"  # type: ignore[index]
+    assert captured["fusion"]["retrieval_refinement"] == {"focus_paths": ["src/alpha.py"]}  # type: ignore[index]
     assert captured["chunk"]["chunk_top_k"] == 8  # type: ignore[index]
     assert result.candidates == [{"path": "src/alpha.py", "score": 8.0}]
     assert result.benchmark_filter_payload["applied"] is True
     assert result.candidate_chunks == [{"path": "src/alpha.py", "lineno": 12}]
+    assert result.retrieval_refinement_payload["enabled"] is True

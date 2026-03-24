@@ -29,11 +29,14 @@ from ace_lite.benchmark.scoring import (
     build_preference_observability_summary,
     build_repomap_seed_summary,
     build_retrieval_control_plane_gate_summary,
+    build_retrieval_default_strategy_summary,
     build_retrieval_frontier_gate_summary,
     build_retrieval_context_observability_summary,
     build_source_plan_card_summary,
     build_source_plan_failure_signal_summary,
     build_source_plan_validation_feedback_summary,
+    build_validation_branch_gate_summary,
+    build_validation_branch_summary,
     build_slo_budget_summary,
     build_stage_latency_summary,
     build_validation_probe_summary,
@@ -588,6 +591,9 @@ class BenchmarkRunner:
             "preference_observability_summary": (
                 build_preference_observability_summary(case_results)
             ),
+            "retrieval_default_strategy_summary": (
+                build_retrieval_default_strategy_summary(case_results)
+            ),
             "retrieval_context_observability_summary": (
                 build_retrieval_context_observability_summary(case_results)
             ),
@@ -632,6 +638,12 @@ class BenchmarkRunner:
         output["native_scip_summary"] = build_native_scip_summary(metrics=metrics)
         output["validation_probe_summary"] = build_validation_probe_summary(
             metrics=metrics
+        )
+        output["validation_branch_summary"] = build_validation_branch_summary(
+            metrics=metrics
+        )
+        output["validation_branch_gate_summary"] = (
+            build_validation_branch_gate_summary(metrics=metrics)
         )
         output["source_plan_card_summary"] = build_source_plan_card_summary(
             metrics=metrics

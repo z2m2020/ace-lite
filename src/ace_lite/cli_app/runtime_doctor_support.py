@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Any
 
 from ace_lite.cli_app.runtime_status_support import load_runtime_stats_summary
+from ace_lite.cli_app.runtime_stats_enrichment_support import (
+    build_runtime_next_cycle_input_summary,
+)
 from ace_lite.config import find_git_root
 from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
 from ace_lite.runtime_stats import RuntimeInvocationStats, utc_now_iso
@@ -402,6 +405,19 @@ def build_runtime_doctor_payload(
         git_payload=git_payload,
         version_sync=version_sync,
     )
+    next_cycle_input = build_runtime_next_cycle_input_summary(
+        top_pain_summary=(
+            runtime_stats.get("top_pain_summary", {})
+            if isinstance(runtime_stats.get("top_pain_summary"), dict)
+            else {}
+        ),
+        memory_health_summary=(
+            runtime_stats.get("memory_health_summary", {})
+            if isinstance(runtime_stats.get("memory_health_summary"), dict)
+            else {}
+        ),
+        doctor_reason_codes=degraded_reason_codes,
+    )
     return {
         "ok": (
             bool(integration.get("ok"))
@@ -413,6 +429,7 @@ def build_runtime_doctor_payload(
         "degraded_reason_codes": degraded_reason_codes,
         "settings": build_runtime_settings_payload(bundle),
         "stats": runtime_stats,
+        "next_cycle_input": next_cycle_input,
         "cache": cache_report,
         "git": git_payload,
         "version_sync": version_sync,

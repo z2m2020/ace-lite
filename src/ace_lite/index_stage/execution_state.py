@@ -44,6 +44,7 @@ class IndexStageExecutionState:
     embeddings_payload: dict[str, Any] = field(default_factory=dict)
     feedback_payload: dict[str, Any] = field(default_factory=dict)
     multi_channel_fusion_payload: dict[str, Any] = field(default_factory=dict)
+    retrieval_refinement_payload: dict[str, Any] = field(default_factory=dict)
     semantic_embedding_provider_impl: Any = None
     semantic_cross_encoder_provider: Any = None
     candidate_chunks: list[dict[str, Any]] = field(default_factory=list)
@@ -128,6 +129,9 @@ def apply_post_generation_runtime_to_state(
     state.feedback_payload = dict(post_generation_runtime.feedback_payload)
     state.multi_channel_fusion_payload = dict(
         post_generation_runtime.multi_channel_fusion_payload
+    )
+    state.retrieval_refinement_payload = dict(
+        post_generation_runtime.retrieval_refinement_payload
     )
     state.semantic_embedding_provider_impl = (
         post_generation_runtime.semantic_embedding_provider_impl

@@ -130,6 +130,7 @@ def test_run_index_candidate_fusion_builds_candidate_fusion_deps() -> None:
             fake_rerank_cross_encoder_with_time_budget
         ),
         mark_timing_fn=fake_mark_timing,
+        retrieval_refinement={"focus_paths": ["src/app.py"]},
     )
 
     assert result.candidates == [{"path": "src/app.py", "score": 1.0}]
@@ -137,6 +138,7 @@ def test_run_index_candidate_fusion_builds_candidate_fusion_deps() -> None:
     assert captured["candidate_relative_threshold"] == 0.25
     assert captured["embedding_dimension"] == 1024
     assert captured["multi_channel_rrf_k"] == 60
+    assert captured["retrieval_refinement"] == {"focus_paths": ["src/app.py"]}
     deps = captured["deps"]
     assert deps.postprocess_candidates is fake_postprocess_candidates
     assert deps.apply_structural_rerank is fake_apply_structural_rerank

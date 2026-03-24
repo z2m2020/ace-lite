@@ -358,6 +358,38 @@ def test_validate_stage_output_rejects_invalid_contract_container_types(
     assert exc.reason == expected_reason
 
 
+def test_validate_stage_output_rejects_invalid_source_plan_patch_artifacts_type() -> None:
+    with pytest.raises(StageContractError) as exc_info:
+        validate_stage_output(
+            "source_plan",
+            {
+                "repo": "r",
+                "root": "/tmp",
+                "query": "q",
+                "stages": [],
+                "constraints": [],
+                "diagnostics": [],
+                "xref": {},
+                "tests": {},
+                "validation_tests": [],
+                "candidate_chunks": [],
+                "chunk_steps": [],
+                "chunk_budget_used": 0,
+                "chunk_budget_limit": 0,
+                "chunk_disclosure": "refs",
+                "policy_name": "general",
+                "policy_version": "v1",
+                "steps": [],
+                "writeback_template": {},
+                "patch_artifacts": {},
+            },
+        )
+
+    exc = exc_info.value
+    assert exc.error_code == "stage_contract.invalid_type"
+    assert exc.reason == "source_plan.patch_artifacts"
+
+
 def test_orchestrator_plan_includes_contract_error_payload(tmp_path, monkeypatch) -> None:
     orchestrator = AceOrchestrator(config=OrchestratorConfig())
 

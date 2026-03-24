@@ -85,6 +85,17 @@ class CaseEvaluationMetrics:
     validation_probe_status: str
     validation_probe_executed_count: int
     validation_probe_issue_count: int
+    validation_branch_case: bool
+    validation_branch_candidate_count: int
+    validation_branch_rejected_count: int
+    validation_branch_selection_present: bool
+    validation_branch_patch_artifact_present: bool
+    validation_branch_archive_present: bool
+    validation_branch_parallel: bool
+    validation_branch_winner_passed: bool
+    validation_branch_winner_regressed: bool
+    validation_branch_winner_score: float
+    validation_branch_winner_after_issue_count: int
     source_plan_validation_feedback_present: bool
     source_plan_validation_feedback_status: str
     source_plan_validation_feedback_issue_count: int
@@ -247,7 +258,11 @@ class CaseEvaluationMetrics:
     graph_closure_support_edge_count: int
     graph_closure_total: float
     topological_shield_enabled: bool
+    topological_shield_mode: str
     topological_shield_report_only: bool
+    topological_shield_max_attenuation: float
+    topological_shield_shared_parent_attenuation: float
+    topological_shield_adjacency_attenuation: float
     topological_shield_attenuated_chunk_count: int
     topological_shield_coverage_ratio: float
     topological_shield_attenuation_total: float
@@ -327,6 +342,7 @@ def build_case_evaluation_metrics(
     candidate_ranking_payload = _as_dict(index_payload.get("candidate_ranking"))
     adaptive_router_payload = _as_dict(index_payload.get("adaptive_router"))
     graph_lookup_payload = _as_dict(index_payload.get("graph_lookup"))
+    graph_lookup_weights_payload = _as_dict(graph_lookup_payload.get("weights"))
     exact_search_payload = _as_dict(candidate_ranking_payload.get("exact_search"))
     second_pass_payload = _as_dict(candidate_ranking_payload.get("second_pass"))
     refine_pass_payload = _as_dict(candidate_ranking_payload.get("refine_pass"))
@@ -439,6 +455,53 @@ def build_case_evaluation_metrics(
             )
             or 0
         ),
+    )
+    validation_branch_batch = _as_dict(validation_payload.get("branch_batch"))
+    validation_branch_selection = _as_dict(validation_payload.get("branch_selection"))
+    validation_branch_candidates = _as_list(validation_branch_batch.get("candidates"))
+    validation_branch_candidate_count = max(
+        len(
+            [item for item in validation_branch_candidates if isinstance(item, dict)]
+        ),
+        max(0, int(validation_branch_batch.get("candidate_count", 0) or 0)),
+    )
+    validation_branch_rejected = _as_list(validation_branch_selection.get("rejected"))
+    validation_branch_rejected_count = len(
+        [item for item in validation_branch_rejected if isinstance(item, dict)]
+    )
+    validation_branch_case = validation_branch_candidate_count > 1
+    validation_branch_selection_present = bool(
+        str(validation_payload.get("selected_branch_id") or "").strip()
+        or str(validation_branch_selection.get("winner_branch_id") or "").strip()
+    )
+    validation_branch_patch_artifact_present = bool(
+        _as_dict(validation_payload.get("patch_artifact"))
+    )
+    validation_branch_archive_present = validation_branch_rejected_count > 0 and (
+        len(_as_list(validation_payload.get("rejected_patch_artifacts")))
+        >= validation_branch_rejected_count
+    )
+    validation_branch_parallel = (
+        str(_as_dict(validation_branch_batch.get("metadata")).get("execution_mode") or "")
+        .strip()
+        .lower()
+        == "parallel"
+    )
+    validation_branch_winner_score = _as_dict(
+        validation_branch_selection.get("winner_validation_branch_score")
+    )
+    validation_branch_winner_passed = bool(
+        validation_branch_winner_score.get("passed", False)
+    )
+    validation_branch_winner_regressed = bool(
+        validation_branch_winner_score.get("regressed", False)
+    )
+    validation_branch_winner_score_value = float(
+        validation_branch_winner_score.get("score", 0.0) or 0.0
+    )
+    validation_branch_winner_after_issue_count = max(
+        0,
+        int(validation_branch_winner_score.get("after_issue_count", 0) or 0),
     )
     source_plan_validation_feedback_present = bool(source_plan_validation_feedback)
     source_plan_validation_feedback_status = str(
@@ -679,44 +742,62 @@ def build_case_evaluation_metrics(
         ),
     )
     graph_lookup_weight_scip = float(
-        candidate_ranking_payload.get(
-            "graph_lookup_weight_scip",
-            index_metadata.get("graph_lookup_weight_scip", 0.0),
+        graph_lookup_weights_payload.get(
+            "scip",
+            candidate_ranking_payload.get(
+                "graph_lookup_weight_scip",
+                index_metadata.get("graph_lookup_weight_scip", 0.0),
+            ),
         )
         or 0.0
     )
     graph_lookup_weight_xref = float(
-        candidate_ranking_payload.get(
-            "graph_lookup_weight_xref",
-            index_metadata.get("graph_lookup_weight_xref", 0.0),
+        graph_lookup_weights_payload.get(
+            "xref",
+            candidate_ranking_payload.get(
+                "graph_lookup_weight_xref",
+                index_metadata.get("graph_lookup_weight_xref", 0.0),
+            ),
         )
         or 0.0
     )
     graph_lookup_weight_query_xref = float(
-        candidate_ranking_payload.get(
-            "graph_lookup_weight_query_xref",
-            index_metadata.get("graph_lookup_weight_query_xref", 0.0),
+        graph_lookup_weights_payload.get(
+            "query_xref",
+            candidate_ranking_payload.get(
+                "graph_lookup_weight_query_xref",
+                index_metadata.get("graph_lookup_weight_query_xref", 0.0),
+            ),
         )
         or 0.0
     )
     graph_lookup_weight_symbol = float(
-        candidate_ranking_payload.get(
-            "graph_lookup_weight_symbol",
-            index_metadata.get("graph_lookup_weight_symbol", 0.0),
+        graph_lookup_weights_payload.get(
+            "symbol",
+            candidate_ranking_payload.get(
+                "graph_lookup_weight_symbol",
+                index_metadata.get("graph_lookup_weight_symbol", 0.0),
+            ),
         )
         or 0.0
     )
     graph_lookup_weight_import = float(
-        candidate_ranking_payload.get(
-            "graph_lookup_weight_import",
-            index_metadata.get("graph_lookup_weight_import", 0.0),
+        graph_lookup_weights_payload.get(
+            "import",
+            candidate_ranking_payload.get(
+                "graph_lookup_weight_import",
+                index_metadata.get("graph_lookup_weight_import", 0.0),
+            ),
         )
         or 0.0
     )
     graph_lookup_weight_coverage = float(
-        candidate_ranking_payload.get(
-            "graph_lookup_weight_coverage",
-            index_metadata.get("graph_lookup_weight_coverage", 0.0),
+        graph_lookup_weights_payload.get(
+            "coverage",
+            candidate_ranking_payload.get(
+                "graph_lookup_weight_coverage",
+                index_metadata.get("graph_lookup_weight_coverage", 0.0),
+            ),
         )
         or 0.0
     )
@@ -1395,6 +1476,36 @@ def build_case_evaluation_metrics(
             chunk_metrics.get("topological_shield_report_only", 0.0),
         )
     )
+    topological_shield_mode = (
+        str(
+            topological_shield_payload.get(
+                "mode",
+                "report_only"
+                if topological_shield_enabled or topological_shield_report_only
+                else "off",
+            )
+            or "off"
+        ).strip().lower()
+        or "off"
+    )
+    topological_shield_max_attenuation = float(
+        topological_shield_payload.get(
+            "max_attenuation", 0.6 if topological_shield_enabled else 0.0
+        )
+        or 0.0
+    )
+    topological_shield_shared_parent_attenuation = float(
+        topological_shield_payload.get(
+            "shared_parent_attenuation", 0.2 if topological_shield_enabled else 0.0
+        )
+        or 0.0
+    )
+    topological_shield_adjacency_attenuation = float(
+        topological_shield_payload.get(
+            "adjacency_attenuation", 0.5 if topological_shield_enabled else 0.0
+        )
+        or 0.0
+    )
     topological_shield_attenuated_chunk_count = max(
         0,
         int(
@@ -1782,6 +1893,21 @@ def build_case_evaluation_metrics(
         validation_probe_status=validation_probe_status,
         validation_probe_executed_count=validation_probe_executed_count,
         validation_probe_issue_count=validation_probe_issue_count,
+        validation_branch_case=validation_branch_case,
+        validation_branch_candidate_count=validation_branch_candidate_count,
+        validation_branch_rejected_count=validation_branch_rejected_count,
+        validation_branch_selection_present=validation_branch_selection_present,
+        validation_branch_patch_artifact_present=(
+            validation_branch_patch_artifact_present
+        ),
+        validation_branch_archive_present=validation_branch_archive_present,
+        validation_branch_parallel=validation_branch_parallel,
+        validation_branch_winner_passed=validation_branch_winner_passed,
+        validation_branch_winner_regressed=validation_branch_winner_regressed,
+        validation_branch_winner_score=validation_branch_winner_score_value,
+        validation_branch_winner_after_issue_count=(
+            validation_branch_winner_after_issue_count
+        ),
         source_plan_validation_feedback_present=(
             source_plan_validation_feedback_present
         ),
@@ -1986,7 +2112,15 @@ def build_case_evaluation_metrics(
         graph_closure_support_edge_count=graph_closure_support_edge_count,
         graph_closure_total=graph_closure_total,
         topological_shield_enabled=topological_shield_enabled,
+        topological_shield_mode=topological_shield_mode,
         topological_shield_report_only=topological_shield_report_only,
+        topological_shield_max_attenuation=topological_shield_max_attenuation,
+        topological_shield_shared_parent_attenuation=(
+            topological_shield_shared_parent_attenuation
+        ),
+        topological_shield_adjacency_attenuation=(
+            topological_shield_adjacency_attenuation
+        ),
         topological_shield_attenuated_chunk_count=topological_shield_attenuated_chunk_count,
         topological_shield_coverage_ratio=topological_shield_coverage_ratio,
         topological_shield_attenuation_total=topological_shield_attenuation_total,

@@ -258,9 +258,156 @@ def build_runtime_memory_health_summary(
     }
 
 
+def _build_next_cycle_action_hint(
+    *,
+    reason_code: str,
+    reason_family: str,
+    capture_class: str,
+) -> str:
+    family = str(reason_family or "").strip().lower()
+    capture = str(capture_class or "").strip().lower()
+    if capture == "memory" or family == "memory":
+        return "Stabilize memory fallback and capture quality before expanding retrieval breadth."
+    if capture == "budget":
+        return "Tune budget and gating defaults before increasing candidate or skills scope."
+    if capture == "validation":
+        return "Prioritize validation feedback and branch diagnostics hardening in the next cycle."
+    if capture == "retrieval" or family == "retrieval":
+        return "Reduce retrieval misses/noise and keep structured refinement evidence stable."
+    if reason_code == "install_drift":
+        return "Resync editable install metadata before using runtime health as a release signal."
+    if reason_code == "git_unavailable":
+        return "Restore Git availability for runtime diagnostics before widening automation scope."
+    if reason_code == "stage_artifact_cache_corrupt":
+        return "Repair stage artifact cache integrity before relying on replay or branch evidence."
+    return "Prioritize the highest-frequency degraded reason as the next cycle maintenance stream."
+
+
+def build_runtime_next_cycle_input_summary(
+    *,
+    top_pain_summary: dict[str, Any],
+    memory_health_summary: dict[str, Any],
+    degraded_services: list[dict[str, Any]] | None = None,
+    doctor_reason_codes: list[str] | None = None,
+) -> dict[str, Any]:
+    top_pain_items_raw = top_pain_summary.get("items")
+    top_pain_items = top_pain_items_raw if isinstance(top_pain_items_raw, list) else []
+    priorities: list[dict[str, Any]] = []
+    seen_reason_codes: set[str] = set()
+    for item in top_pain_items:
+        if not isinstance(item, dict):
+            continue
+        reason_details = resolve_reason_details(item.get("reason_code"))
+        reason_code = str(reason_details.get("reason_code") or "").strip()
+        if not reason_code or reason_code in seen_reason_codes:
+            continue
+        total_count = int(item.get("total_count", 0) or 0)
+        runtime_event_count = int(item.get("runtime_event_count", 0) or 0)
+        manual_issue_count = int(item.get("manual_issue_count", 0) or 0)
+        open_issue_count = int(item.get("open_issue_count", 0) or 0)
+        if max(total_count, runtime_event_count, manual_issue_count, open_issue_count) <= 0:
+            continue
+        seen_reason_codes.add(reason_code)
+        reason_family = str(reason_details.get("reason_family") or "").strip()
+        capture_class = str(reason_details.get("capture_class") or "").strip()
+        priorities.append(
+            {
+                "reason_code": reason_code,
+                "reason_family": reason_family,
+                "capture_class": capture_class,
+                "total_count": total_count,
+                "runtime_event_count": runtime_event_count,
+                "manual_issue_count": manual_issue_count,
+                "open_issue_count": open_issue_count,
+                "fix_count": int(item.get("fix_count", 0) or 0),
+                "last_seen_at": str(item.get("last_seen_at") or "").strip(),
+                "action_hint": _build_next_cycle_action_hint(
+                    reason_code=reason_code,
+                    reason_family=reason_family,
+                    capture_class=capture_class,
+                ),
+            }
+        )
+        if len(priorities) >= 3:
+            break
+
+    degraded_service_names: list[str] = []
+    seen_services: set[str] = set()
+    for item in degraded_services if isinstance(degraded_services, list) else []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name or name in seen_services:
+            continue
+        seen_services.add(name)
+        degraded_service_names.append(name)
+
+    normalized_doctor_reasons: list[str] = []
+    seen_doctor_reasons: set[str] = set()
+    for item in doctor_reason_codes if isinstance(doctor_reason_codes, list) else []:
+        normalized = normalize_dev_feedback_reason_code(item, default="")
+        if not normalized or normalized in seen_doctor_reasons:
+            continue
+        seen_doctor_reasons.add(normalized)
+        normalized_doctor_reasons.append(normalized)
+
+    memory_focus = {
+        "reason_count": int(memory_health_summary.get("reason_count", 0) or 0),
+        "runtime_event_count": int(
+            memory_health_summary.get("runtime_event_count", 0) or 0
+        ),
+        "issue_count": int(memory_health_summary.get("issue_count", 0) or 0),
+        "open_issue_count": int(memory_health_summary.get("open_issue_count", 0) or 0),
+        "fix_count": int(memory_health_summary.get("fix_count", 0) or 0),
+        "resolution_rate": float(
+            memory_health_summary.get("resolution_rate", 0.0) or 0.0
+        ),
+        "action_hint": _build_next_cycle_action_hint(
+            reason_code="memory_fallback",
+            reason_family="memory",
+            capture_class="memory",
+        ),
+    }
+    memory_focus_enabled = any(
+        float(memory_focus.get(key, 0) or 0) > 0.0
+        for key in (
+            "reason_count",
+            "runtime_event_count",
+            "issue_count",
+            "open_issue_count",
+            "fix_count",
+        )
+    )
+
+    if not priorities and not memory_focus_enabled and not degraded_service_names and not normalized_doctor_reasons:
+        return {}
+
+    primary_stream = ""
+    if priorities:
+        primary_stream = str(priorities[0].get("capture_class") or "").strip()
+        if not primary_stream:
+            primary_stream = str(priorities[0].get("reason_family") or "").strip()
+    if not primary_stream and memory_focus_enabled:
+        primary_stream = "memory"
+    if not primary_stream and degraded_service_names:
+        primary_stream = degraded_service_names[0]
+    if not primary_stream and normalized_doctor_reasons:
+        primary_stream = normalized_doctor_reasons[0]
+
+    return {
+        "priority_count": len(priorities),
+        "primary_stream": primary_stream,
+        "priorities": priorities,
+        "memory_focus": memory_focus if memory_focus_enabled else {},
+        "degraded_service_names": degraded_service_names,
+        "doctor_reason_codes": normalized_doctor_reasons,
+    }
+
+
 __all__ = [
     "RUNTIME_MEMORY_REASON_CODES",
     "build_runtime_memory_health_summary",
+    "build_runtime_next_cycle_input_summary",
     "build_runtime_top_pain_summary",
     "resolve_reason_details",
 ]

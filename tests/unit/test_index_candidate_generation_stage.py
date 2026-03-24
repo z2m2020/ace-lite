@@ -117,6 +117,12 @@ def _stub_pipeline_after_generation(monkeypatch, index_stage) -> None:  # type: 
                 "candidate_count_after": 0,
                 "max_passes": 1,
             },
+            retrieval_refinement_payload={
+                "enabled": False,
+                "applied": False,
+                "reason": "disabled",
+                "selected_count": 0,
+            },
         )
 
     def fake_apply_structural_rerank(*, candidates, **kwargs):  # type: ignore[no-untyped-def]

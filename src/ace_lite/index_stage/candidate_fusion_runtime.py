@@ -77,6 +77,7 @@ def run_index_candidate_fusion(
         ..., tuple[list[dict[str, Any]], Any]
     ],
     mark_timing_fn: Callable[[str, float], None],
+    retrieval_refinement: dict[str, Any] | None = None,
 ) -> CandidateFusionResult:
     return refine_candidate_pool_fn(
         root=root,
@@ -129,6 +130,7 @@ def run_index_candidate_fusion(
         multi_channel_rrf_code_cap=int(multi_channel_rrf_code_cap),
         multi_channel_rrf_docs_cap=int(multi_channel_rrf_docs_cap),
         multi_channel_rrf_memory_cap=int(multi_channel_rrf_memory_cap),
+        retrieval_refinement=retrieval_refinement,
         deps=CandidateFusionDeps(
             postprocess_candidates=postprocess_candidates_fn,
             apply_structural_rerank=apply_structural_rerank_fn,

@@ -487,6 +487,253 @@ def build_retrieval_context_observability_summary(
     }
 
 
+def build_retrieval_default_strategy_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {
+            "case_count": 0,
+            "retrieval_context_available_case_count": 0,
+            "retrieval_context_available_case_rate": 0.0,
+            "parent_symbol_available_case_count": 0,
+            "parent_symbol_available_case_rate": 0.0,
+            "reference_hint_available_case_count": 0,
+            "reference_hint_available_case_rate": 0.0,
+            "graph_lookup_enabled_case_count": 0,
+            "graph_lookup_enabled_case_rate": 0.0,
+            "graph_lookup_guarded_case_count": 0,
+            "graph_lookup_guarded_case_rate": 0.0,
+            "graph_lookup_dominant_normalization": "",
+            "graph_lookup_pool_size_mean": 0.0,
+            "graph_lookup_guard_max_candidates_mean": 0.0,
+            "graph_lookup_guard_min_query_terms_mean": 0.0,
+            "graph_lookup_guard_max_query_terms_mean": 0.0,
+            "graph_lookup_weight_means": {
+                "scip": 0.0,
+                "xref": 0.0,
+                "query_xref": 0.0,
+                "symbol": 0.0,
+                "import": 0.0,
+                "coverage": 0.0,
+            },
+            "topological_shield_enabled_case_count": 0,
+            "topological_shield_enabled_case_rate": 0.0,
+            "topological_shield_report_only_case_count": 0,
+            "topological_shield_report_only_case_rate": 0.0,
+            "topological_shield_dominant_mode": "",
+            "topological_shield_max_attenuation_mean": 0.0,
+            "topological_shield_shared_parent_attenuation_mean": 0.0,
+            "topological_shield_adjacency_attenuation_mean": 0.0,
+        }
+
+    retrieval_context_available_case_count = 0
+    parent_symbol_available_case_count = 0
+    reference_hint_available_case_count = 0
+    graph_lookup_enabled_case_count = 0
+    graph_lookup_guarded_case_count = 0
+    graph_lookup_normalization_counts: dict[str, int] = {}
+    graph_lookup_pool_sizes: list[float] = []
+    graph_lookup_guard_max_candidates: list[float] = []
+    graph_lookup_guard_min_query_terms: list[float] = []
+    graph_lookup_guard_max_query_terms: list[float] = []
+    graph_lookup_weight_scip: list[float] = []
+    graph_lookup_weight_xref: list[float] = []
+    graph_lookup_weight_query_xref: list[float] = []
+    graph_lookup_weight_symbol: list[float] = []
+    graph_lookup_weight_import: list[float] = []
+    graph_lookup_weight_coverage: list[float] = []
+    topological_shield_enabled_case_count = 0
+    topological_shield_report_only_case_count = 0
+    topological_shield_mode_counts: dict[str, int] = {}
+    topological_shield_max_attenuations: list[float] = []
+    topological_shield_shared_parent_attenuations: list[float] = []
+    topological_shield_adjacency_attenuations: list[float] = []
+
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        if float(item.get("retrieval_context_chunk_count", 0.0) or 0.0) > 0.0:
+            retrieval_context_available_case_count += 1
+        if (
+            float(
+                item.get("contextual_sidecar_parent_symbol_chunk_count", 0.0) or 0.0
+            )
+            > 0.0
+        ):
+            parent_symbol_available_case_count += 1
+        if (
+            float(
+                item.get("contextual_sidecar_reference_hint_chunk_count", 0.0) or 0.0
+            )
+            > 0.0
+        ):
+            reference_hint_available_case_count += 1
+
+        if float(item.get("graph_lookup_enabled", 0.0) or 0.0) > 0.0:
+            graph_lookup_enabled_case_count += 1
+        if float(item.get("graph_lookup_guarded", 0.0) or 0.0) > 0.0:
+            graph_lookup_guarded_case_count += 1
+        normalization = str(item.get("graph_lookup_normalization") or "").strip().lower()
+        if normalization:
+            graph_lookup_normalization_counts[normalization] = (
+                graph_lookup_normalization_counts.get(normalization, 0) + 1
+            )
+        graph_lookup_pool_sizes.append(
+            float(item.get("graph_lookup_pool_size", 0.0) or 0.0)
+        )
+        graph_lookup_guard_max_candidates.append(
+            float(item.get("graph_lookup_guard_max_candidates", 0.0) or 0.0)
+        )
+        graph_lookup_guard_min_query_terms.append(
+            float(item.get("graph_lookup_guard_min_query_terms", 0.0) or 0.0)
+        )
+        graph_lookup_guard_max_query_terms.append(
+            float(item.get("graph_lookup_guard_max_query_terms", 0.0) or 0.0)
+        )
+        graph_lookup_weight_scip.append(
+            float(item.get("graph_lookup_weight_scip", 0.0) or 0.0)
+        )
+        graph_lookup_weight_xref.append(
+            float(item.get("graph_lookup_weight_xref", 0.0) or 0.0)
+        )
+        graph_lookup_weight_query_xref.append(
+            float(item.get("graph_lookup_weight_query_xref", 0.0) or 0.0)
+        )
+        graph_lookup_weight_symbol.append(
+            float(item.get("graph_lookup_weight_symbol", 0.0) or 0.0)
+        )
+        graph_lookup_weight_import.append(
+            float(item.get("graph_lookup_weight_import", 0.0) or 0.0)
+        )
+        graph_lookup_weight_coverage.append(
+            float(item.get("graph_lookup_weight_coverage", 0.0) or 0.0)
+        )
+
+        if float(item.get("topological_shield_enabled", 0.0) or 0.0) > 0.0:
+            topological_shield_enabled_case_count += 1
+        if float(item.get("topological_shield_report_only", 0.0) or 0.0) > 0.0:
+            topological_shield_report_only_case_count += 1
+        mode = str(item.get("topological_shield_mode") or "").strip().lower()
+        if mode:
+            topological_shield_mode_counts[mode] = (
+                topological_shield_mode_counts.get(mode, 0) + 1
+            )
+        topological_shield_max_attenuations.append(
+            float(item.get("topological_shield_max_attenuation", 0.0) or 0.0)
+        )
+        topological_shield_shared_parent_attenuations.append(
+            float(
+                item.get("topological_shield_shared_parent_attenuation", 0.0) or 0.0
+            )
+        )
+        topological_shield_adjacency_attenuations.append(
+            float(item.get("topological_shield_adjacency_attenuation", 0.0) or 0.0)
+        )
+
+    def _dominant_label(counts: dict[str, int]) -> str:
+        if not counts:
+            return ""
+        return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+    return {
+        "case_count": case_count,
+        "retrieval_context_available_case_count": retrieval_context_available_case_count,
+        "retrieval_context_available_case_rate": (
+            float(retrieval_context_available_case_count) / float(case_count)
+        ),
+        "parent_symbol_available_case_count": parent_symbol_available_case_count,
+        "parent_symbol_available_case_rate": (
+            float(parent_symbol_available_case_count) / float(case_count)
+        ),
+        "reference_hint_available_case_count": reference_hint_available_case_count,
+        "reference_hint_available_case_rate": (
+            float(reference_hint_available_case_count) / float(case_count)
+        ),
+        "graph_lookup_enabled_case_count": graph_lookup_enabled_case_count,
+        "graph_lookup_enabled_case_rate": (
+            float(graph_lookup_enabled_case_count) / float(case_count)
+        ),
+        "graph_lookup_guarded_case_count": graph_lookup_guarded_case_count,
+        "graph_lookup_guarded_case_rate": (
+            float(graph_lookup_guarded_case_count) / float(case_count)
+        ),
+        "graph_lookup_dominant_normalization": _dominant_label(
+            graph_lookup_normalization_counts
+        ),
+        "graph_lookup_pool_size_mean": (
+            mean(graph_lookup_pool_sizes) if graph_lookup_pool_sizes else 0.0
+        ),
+        "graph_lookup_guard_max_candidates_mean": (
+            mean(graph_lookup_guard_max_candidates)
+            if graph_lookup_guard_max_candidates
+            else 0.0
+        ),
+        "graph_lookup_guard_min_query_terms_mean": (
+            mean(graph_lookup_guard_min_query_terms)
+            if graph_lookup_guard_min_query_terms
+            else 0.0
+        ),
+        "graph_lookup_guard_max_query_terms_mean": (
+            mean(graph_lookup_guard_max_query_terms)
+            if graph_lookup_guard_max_query_terms
+            else 0.0
+        ),
+        "graph_lookup_weight_means": {
+            "scip": mean(graph_lookup_weight_scip) if graph_lookup_weight_scip else 0.0,
+            "xref": mean(graph_lookup_weight_xref) if graph_lookup_weight_xref else 0.0,
+            "query_xref": (
+                mean(graph_lookup_weight_query_xref)
+                if graph_lookup_weight_query_xref
+                else 0.0
+            ),
+            "symbol": (
+                mean(graph_lookup_weight_symbol)
+                if graph_lookup_weight_symbol
+                else 0.0
+            ),
+            "import": (
+                mean(graph_lookup_weight_import)
+                if graph_lookup_weight_import
+                else 0.0
+            ),
+            "coverage": (
+                mean(graph_lookup_weight_coverage)
+                if graph_lookup_weight_coverage
+                else 0.0
+            ),
+        },
+        "topological_shield_enabled_case_count": topological_shield_enabled_case_count,
+        "topological_shield_enabled_case_rate": (
+            float(topological_shield_enabled_case_count) / float(case_count)
+        ),
+        "topological_shield_report_only_case_count": (
+            topological_shield_report_only_case_count
+        ),
+        "topological_shield_report_only_case_rate": (
+            float(topological_shield_report_only_case_count) / float(case_count)
+        ),
+        "topological_shield_dominant_mode": _dominant_label(
+            topological_shield_mode_counts
+        ),
+        "topological_shield_max_attenuation_mean": (
+            mean(topological_shield_max_attenuations)
+            if topological_shield_max_attenuations
+            else 0.0
+        ),
+        "topological_shield_shared_parent_attenuation_mean": (
+            mean(topological_shield_shared_parent_attenuations)
+            if topological_shield_shared_parent_attenuations
+            else 0.0
+        ),
+        "topological_shield_adjacency_attenuation_mean": (
+            mean(topological_shield_adjacency_attenuations)
+            if topological_shield_adjacency_attenuations
+            else 0.0
+        ),
+    }
+
+
 def build_preference_observability_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -1048,6 +1295,7 @@ __all__ = [
     "build_feedback_loop_summary",
     "build_feedback_observability_summary",
     "build_preference_observability_summary",
+    "build_retrieval_default_strategy_summary",
     "build_retrieval_context_observability_summary",
     "build_slo_budget_summary",
     "build_stage_latency_summary",

@@ -2581,6 +2581,32 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
                     "selected_test_count_mean": 1.0,
                     "executed_test_count_mean": 0.75,
                 },
+                "retrieval_default_strategy_summary": {
+                    "case_count": 5,
+                    "retrieval_context_available_case_count": 5,
+                    "retrieval_context_available_case_rate": 1.0,
+                    "graph_lookup_enabled_case_count": 5,
+                    "graph_lookup_enabled_case_rate": 1.0,
+                    "graph_lookup_guarded_case_count": 4,
+                    "graph_lookup_guarded_case_rate": 0.8,
+                    "graph_lookup_dominant_normalization": "log1p",
+                    "graph_lookup_pool_size_mean": 12.4,
+                    "graph_lookup_guard_max_candidates_mean": 42.0,
+                    "graph_lookup_guard_min_query_terms_mean": 1.0,
+                    "graph_lookup_guard_max_query_terms_mean": 6.0,
+                    "graph_lookup_weight_means": {
+                        "scip": 0.6,
+                        "xref": 0.3,
+                        "query_xref": 0.2,
+                        "symbol": 0.4,
+                        "import": 0.1,
+                        "coverage": 0.5,
+                    },
+                    "topological_shield_dominant_mode": "report_only",
+                    "topological_shield_max_attenuation_mean": 0.6,
+                    "topological_shield_shared_parent_attenuation_mean": 0.2,
+                    "topological_shield_adjacency_attenuation_mean": 0.5,
+                },
                 "previous_metrics": {
                     "task_success_rate": 0.8,
                     "precision_at_k": 0.35,
@@ -2624,6 +2650,32 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
                     "probe_executed_count_mean": 1.0,
                     "selected_test_count_mean": 1.0,
                     "executed_test_count_mean": 0.5,
+                },
+                "previous_retrieval_default_strategy_summary": {
+                    "case_count": 5,
+                    "retrieval_context_available_case_count": 4,
+                    "retrieval_context_available_case_rate": 0.8,
+                    "graph_lookup_enabled_case_count": 5,
+                    "graph_lookup_enabled_case_rate": 1.0,
+                    "graph_lookup_guarded_case_count": 3,
+                    "graph_lookup_guarded_case_rate": 0.6,
+                    "graph_lookup_dominant_normalization": "linear",
+                    "graph_lookup_pool_size_mean": 10.0,
+                    "graph_lookup_guard_max_candidates_mean": 40.0,
+                    "graph_lookup_guard_min_query_terms_mean": 1.0,
+                    "graph_lookup_guard_max_query_terms_mean": 8.0,
+                    "graph_lookup_weight_means": {
+                        "scip": 0.55,
+                        "xref": 0.25,
+                        "query_xref": 0.15,
+                        "symbol": 0.35,
+                        "import": 0.1,
+                        "coverage": 0.45,
+                    },
+                    "topological_shield_dominant_mode": "off",
+                    "topological_shield_max_attenuation_mean": 0.0,
+                    "topological_shield_shared_parent_attenuation_mean": 0.0,
+                    "topological_shield_adjacency_attenuation_mean": 0.0,
                 },
                 "delta": {
                     "task_success_rate": {
@@ -2680,10 +2732,16 @@ def test_release_freeze_markdown_includes_validation_rich_summary() -> None:
     assert "Q3 retrieval frontier gate: passed=True, deep_symbol_case_recall=0.9200, native_scip_loaded_rate=0.7600, precision_at_k=0.4250, noise_rate=0.5750, failed_checks=(none)" in markdown
     assert "Q4 validation probe summary: validation_test_count=5.0000, probe_enabled_ratio=0.6700, probe_executed_count_mean=1.5000, probe_failure_rate=0.1000" in markdown
     assert "Q4 source-plan validation feedback: present_ratio=1.0000, failure_rate=0.2000, issue_count_mean=0.2500, probe_issue_count_mean=0.2500, probe_executed_count_mean=1.5000, selected_test_count_mean=1.0000, executed_test_count_mean=0.7500" in markdown
+    assert "Q4 retrieval default strategy: retrieval_context=5/5 (1.0000), graph_lookup_enabled=5/5 (1.0000), guarded=4/5 (0.8000), normalization=log1p, topological_mode=report_only" in markdown
+    assert "Q4 retrieval default strategy guards: pool_size_mean=12.4000, guard_max_candidates_mean=42.0000, guard_min_query_terms_mean=1.0000, guard_max_query_terms_mean=6.0000, topological_max_attenuation_mean=0.6000, shared_parent_mean=0.2000, adjacency_mean=0.5000" in markdown
+    assert "Q4 retrieval default strategy weights: scip=0.6000, xref=0.3000, query_xref=0.2000, symbol=0.4000, import=0.1000, coverage=0.5000" in markdown
     assert "Previous Q2 retrieval control plane gate: passed=False, regression_evaluated=True, regression_detected=True, shadow_coverage=0.7500, risk_upgrade_gain=-0.0100, latency_p95_ms=692.08, failed_checks=benchmark_regression_detected" in markdown
     assert "Previous Q3 retrieval frontier gate: passed=False, deep_symbol_case_recall=0.8100, native_scip_loaded_rate=0.6800, precision_at_k=0.3500, noise_rate=0.6500, failed_checks=deep_symbol_case_recall,native_scip_loaded_rate" in markdown
     assert "Previous Q4 validation probe summary: validation_test_count=4.0000, probe_enabled_ratio=0.5000, probe_executed_count_mean=1.0000, probe_failure_rate=0.2500" in markdown
     assert "Previous Q4 source-plan validation feedback: present_ratio=1.0000, failure_rate=0.5000, issue_count_mean=1.0000, probe_issue_count_mean=0.5000, probe_executed_count_mean=1.0000, selected_test_count_mean=1.0000, executed_test_count_mean=0.5000" in markdown
+    assert "Previous Q4 retrieval default strategy: retrieval_context=4/5 (0.8000), graph_lookup_enabled=5/5 (1.0000), guarded=3/5 (0.6000), normalization=linear, topological_mode=off" in markdown
+    assert "Previous Q4 retrieval default strategy guards: pool_size_mean=10.0000, guard_max_candidates_mean=40.0000, guard_min_query_terms_mean=1.0000, guard_max_query_terms_mean=8.0000, topological_max_attenuation_mean=0.0000, shared_parent_mean=0.0000, adjacency_mean=0.0000" in markdown
+    assert "Previous Q4 retrieval default strategy weights: scip=0.5500, xref=0.2500, query_xref=0.1500, symbol=0.3500, import=0.1000, coverage=0.4500" in markdown
     assert "Delta summary:" in markdown
     assert "precision_at_k: current=0.4250, previous=0.3500, delta=+0.0750" in markdown
     assert "latency_p95_ms: current=617.6600, previous=692.0800, delta=-74.4200" in markdown
@@ -3552,6 +3610,32 @@ def test_release_freeze_main_includes_validation_rich_summary(
                     "selected_test_count_mean": 1.0,
                     "executed_test_count_mean": 0.75,
                 },
+                "retrieval_default_strategy_summary": {
+                    "case_count": 5,
+                    "retrieval_context_available_case_count": 5,
+                    "retrieval_context_available_case_rate": 1.0,
+                    "graph_lookup_enabled_case_count": 5,
+                    "graph_lookup_enabled_case_rate": 1.0,
+                    "graph_lookup_guarded_case_count": 4,
+                    "graph_lookup_guarded_case_rate": 0.8,
+                    "graph_lookup_dominant_normalization": "log1p",
+                    "graph_lookup_pool_size_mean": 12.4,
+                    "graph_lookup_guard_max_candidates_mean": 42.0,
+                    "graph_lookup_guard_min_query_terms_mean": 1.0,
+                    "graph_lookup_guard_max_query_terms_mean": 6.0,
+                    "graph_lookup_weight_means": {
+                        "scip": 0.6,
+                        "xref": 0.3,
+                        "query_xref": 0.2,
+                        "symbol": 0.4,
+                        "import": 0.1,
+                        "coverage": 0.5,
+                    },
+                    "topological_shield_dominant_mode": "report_only",
+                    "topological_shield_max_attenuation_mean": 0.6,
+                    "topological_shield_shared_parent_attenuation_mean": 0.2,
+                    "topological_shield_adjacency_attenuation_mean": 0.5,
+                },
                 "source_plan_failure_signal_summary": {
                     "present_ratio": 1.0,
                     "failure_rate": 0.2,
@@ -3640,6 +3724,32 @@ def test_release_freeze_main_includes_validation_rich_summary(
                     "probe_executed_count_mean": 1.0,
                     "selected_test_count_mean": 1.0,
                     "executed_test_count_mean": 0.5,
+                },
+                "retrieval_default_strategy_summary": {
+                    "case_count": 5,
+                    "retrieval_context_available_case_count": 4,
+                    "retrieval_context_available_case_rate": 0.8,
+                    "graph_lookup_enabled_case_count": 5,
+                    "graph_lookup_enabled_case_rate": 1.0,
+                    "graph_lookup_guarded_case_count": 3,
+                    "graph_lookup_guarded_case_rate": 0.6,
+                    "graph_lookup_dominant_normalization": "linear",
+                    "graph_lookup_pool_size_mean": 10.0,
+                    "graph_lookup_guard_max_candidates_mean": 40.0,
+                    "graph_lookup_guard_min_query_terms_mean": 1.0,
+                    "graph_lookup_guard_max_query_terms_mean": 8.0,
+                    "graph_lookup_weight_means": {
+                        "scip": 0.55,
+                        "xref": 0.25,
+                        "query_xref": 0.15,
+                        "symbol": 0.35,
+                        "import": 0.1,
+                        "coverage": 0.45,
+                    },
+                    "topological_shield_dominant_mode": "off",
+                    "topological_shield_max_attenuation_mean": 0.0,
+                    "topological_shield_shared_parent_attenuation_mean": 0.0,
+                    "topological_shield_adjacency_attenuation_mean": 0.0,
                 },
                 "source_plan_failure_signal_summary": {
                     "present_ratio": 1.0,
@@ -3750,6 +3860,32 @@ def test_release_freeze_main_includes_validation_rich_summary(
         ]
         == 0.75
     )
+    assert validation_payload["retrieval_default_strategy_summary"] == {
+        "case_count": 5.0,
+        "retrieval_context_available_case_count": 5.0,
+        "retrieval_context_available_case_rate": 1.0,
+        "graph_lookup_enabled_case_count": 5.0,
+        "graph_lookup_enabled_case_rate": 1.0,
+        "graph_lookup_guarded_case_count": 4.0,
+        "graph_lookup_guarded_case_rate": 0.8,
+        "graph_lookup_dominant_normalization": "log1p",
+        "graph_lookup_pool_size_mean": 12.4,
+        "graph_lookup_guard_max_candidates_mean": 42.0,
+        "graph_lookup_guard_min_query_terms_mean": 1.0,
+        "graph_lookup_guard_max_query_terms_mean": 6.0,
+        "graph_lookup_weight_means": {
+            "scip": 0.6,
+            "xref": 0.3,
+            "query_xref": 0.2,
+            "symbol": 0.4,
+            "import": 0.1,
+            "coverage": 0.5,
+        },
+        "topological_shield_dominant_mode": "report_only",
+        "topological_shield_max_attenuation_mean": 0.6,
+        "topological_shield_shared_parent_attenuation_mean": 0.2,
+        "topological_shield_adjacency_attenuation_mean": 0.5,
+    }
     assert validation_payload["source_plan_failure_signal_summary"]["failure_rate"] == 0.2
     assert validation_payload["previous_metrics"] == {
         "task_success_rate": 0.8,
@@ -3787,6 +3923,32 @@ def test_release_freeze_main_includes_validation_rich_summary(
         ]
         == 0.5
     )
+    assert validation_payload["previous_retrieval_default_strategy_summary"] == {
+        "case_count": 5.0,
+        "retrieval_context_available_case_count": 4.0,
+        "retrieval_context_available_case_rate": 0.8,
+        "graph_lookup_enabled_case_count": 5.0,
+        "graph_lookup_enabled_case_rate": 1.0,
+        "graph_lookup_guarded_case_count": 3.0,
+        "graph_lookup_guarded_case_rate": 0.6,
+        "graph_lookup_dominant_normalization": "linear",
+        "graph_lookup_pool_size_mean": 10.0,
+        "graph_lookup_guard_max_candidates_mean": 40.0,
+        "graph_lookup_guard_min_query_terms_mean": 1.0,
+        "graph_lookup_guard_max_query_terms_mean": 8.0,
+        "graph_lookup_weight_means": {
+            "scip": 0.55,
+            "xref": 0.25,
+            "query_xref": 0.15,
+            "symbol": 0.35,
+            "import": 0.1,
+            "coverage": 0.45,
+        },
+        "topological_shield_dominant_mode": "off",
+        "topological_shield_max_attenuation_mean": 0.0,
+        "topological_shield_shared_parent_attenuation_mean": 0.0,
+        "topological_shield_adjacency_attenuation_mean": 0.0,
+    }
     assert validation_payload["delta"]["task_success_rate"] == {
         "current": 1.0,
         "previous": 0.8,

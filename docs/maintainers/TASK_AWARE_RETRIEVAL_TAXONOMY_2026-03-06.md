@@ -44,6 +44,22 @@
 - `explain` queries fall back to `general` when the actual user ask is "where is X defined/implemented" instead of a narrative explanation request.
 - `perf` stays manual and offline-only until the `perf_routing` benchmark lane compares `refactor` against `general` without worse latency or SLO downgrade evidence; no automatic promotion of a perf-specific route happens from this doc alone.
 
+## Graph-Aware Retrieval Governance
+
+- Treat `feature`, `refactor`, and `general` as the current graph-aware retrieval policies because they all pair `graph_seeded` repomap with `index.graph_lookup`; `bugfix_test` and `doc_intent` are the explicit non-graph comparison points in the current taxonomy.
+- Governance for graph-aware changes stays evidence-first in this checkpoint:
+  - benchmark review uses `Graph Lookup Summary` and `Retrieval Default Strategy Summary`
+  - freeze / release review reuses the same `retrieval_default_strategy_summary` contract from validation-rich benchmark artifacts
+  - policy-level release interpretation still goes through `benchmark/matrix/repos.yaml` `freeze.policy_guard`, which remains the maintainer-facing report-only surface for cross-policy regressions
+- Do not claim graph-aware promotion from raw `metrics`, single-case payloads, or one-off repo wins; use the stable summaries above plus the existing perturbation / dependency-recall slices when changes affect graph expansion, seed fan-out, or structural rerank behavior.
+
+## Graph-Aware Rollback Order
+
+- First rollback: keep the checkpoint report-only and record the exact failing graph-aware evidence in the dated review note or freeze artifact instead of promoting a broader policy change.
+- Second rollback: revert the candidate workload to the prior dated retrieval policy/profile, or downgrade an experiment from `feature` / `refactor` back to `general` if the regression is specific to graph-heavy expansion rather than the baseline fallback path.
+- Hard rollback: if the regression is dominated by repomap expansion or seed drift, set `repomap.enabled: false` in the scoped runtime/config used for that experiment or release candidate and rerun the same benchmark/freeze evidence set before reopening promotion discussion.
+- Always carry the rollback reason together with the exact dated benchmark or freeze artifact that motivated it; graph-aware rollback is a governance decision, not an untracked local tweak.
+
 ## Evidence Sources To Reuse
 
 - Policy semantics: `src/ace_lite/index_stage/policy.py`

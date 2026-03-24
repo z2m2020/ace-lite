@@ -235,6 +235,22 @@ def _validate_source_plan(output: dict[str, Any]) -> None:
             reason=f"{stage}.card_summary",
             context={"key": "card_summary", "type": type(output.get("card_summary")).__name__},
         )
+    if "patch_artifact" in output and not isinstance(output.get("patch_artifact"), dict):
+        raise StageContractError(
+            "stage output field must be a dictionary: patch_artifact",
+            stage=stage,
+            error_code="stage_contract.invalid_type",
+            reason=f"{stage}.patch_artifact",
+            context={"key": "patch_artifact", "type": type(output.get("patch_artifact")).__name__},
+        )
+    if "patch_artifacts" in output and not isinstance(output.get("patch_artifacts"), list):
+        raise StageContractError(
+            "stage output field must be a list: patch_artifacts",
+            stage=stage,
+            error_code="stage_contract.invalid_type",
+            reason=f"{stage}.patch_artifacts",
+            context={"key": "patch_artifacts", "type": type(output.get("patch_artifacts")).__name__},
+        )
 
 
 def _validate_validation(output: dict[str, Any]) -> None:

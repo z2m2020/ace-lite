@@ -13,6 +13,7 @@ from ace_lite.schema import (
     validate_context_plan,
     validate_validation_result_payload,
 )
+from ace_lite.validation.patch_artifact import build_patch_artifact_contract_v1
 from ace_lite.validation.result import build_validation_result_v1
 
 
@@ -90,6 +91,35 @@ def _valid_payload() -> dict[str, Any]:
     }
     payload["schema_version"] = SCHEMA_VERSION
     return payload
+
+
+def _sample_patch_artifact(*, path: str = "src/app.py") -> dict[str, Any]:
+    basename = path.split("/")[-1].replace(".py", "")
+    return build_patch_artifact_contract_v1(
+        operations=[
+            {
+                "op": "update",
+                "path": path,
+                "before_sha256": f"{basename}-before",
+                "after_sha256": f"{basename}-after",
+                "hunk_count": 1,
+            }
+        ],
+        rollback_anchors=[
+            {"path": path, "strategy": "git_restore", "anchor": "HEAD"}
+        ],
+        patch_text="\n".join(
+            [
+                f"diff --git a/{path} b/{path}",
+                f"--- a/{path}",
+                f"+++ b/{path}",
+                "@@ -1 +1 @@",
+                "-print('old')",
+                "+print('new')",
+                "",
+            ]
+        ),
+    ).as_dict()
 
 
 def _build_source_plan_payload_with_internal_sidecars() -> dict[str, Any]:
@@ -327,6 +357,17 @@ def test_validate_context_plan_accepts_optional_validation_result_payload() -> N
     validate_context_plan(payload)
 
 
+def test_validate_context_plan_accepts_source_plan_patch_artifacts() -> None:
+    payload = _valid_payload()
+    payload["source_plan"]["patch_artifact"] = _sample_patch_artifact(path="src/app.py")
+    payload["source_plan"]["patch_artifacts"] = [
+        _sample_patch_artifact(path="src/app.py"),
+        _sample_patch_artifact(path="src/worker.py"),
+    ]
+
+    validate_context_plan(payload)
+
+
 def test_validate_context_plan_accepts_source_plan_roundtrip_without_internal_sidecar_leaks() -> None:
     payload = _valid_payload()
     source_plan = _build_source_plan_payload_with_internal_sidecars()
@@ -362,6 +403,19 @@ def test_validate_context_plan_accepts_source_plan_roundtrip_without_internal_si
         assert forbidden_key not in candidate
         assert forbidden_key not in chunk_ref
         assert forbidden_key not in source_plan_step["candidate_chunks"][0]
+
+
+def test_validate_context_plan_rejects_invalid_source_plan_patch_artifact_entry() -> None:
+    payload = _valid_payload()
+    payload["source_plan"]["patch_artifacts"] = [
+        {"schema_version": "patch_artifact_v1", "patch_format": "unified_diff"}
+    ]
+
+    with pytest.raises(
+        ValueError,
+        match=r"source_plan\.patch_artifacts\[0\]\.target_file_manifest",
+    ):
+        validate_context_plan(payload)
 
 
 def test_validate_context_plan_rejects_invalid_source_plan_card_summary() -> None:

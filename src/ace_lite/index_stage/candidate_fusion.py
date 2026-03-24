@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -44,6 +44,7 @@ class CandidateFusionResult:
     multi_channel_fusion_payload: dict[str, Any]
     semantic_embedding_provider_impl: EmbeddingProvider | None
     semantic_cross_encoder_provider: CrossEncoderProvider | None
+    retrieval_refinement_payload: dict[str, Any] = field(default_factory=dict)
 
 
 def _candidate_granularity_score(entry: dict[str, Any]) -> float:
@@ -384,6 +385,7 @@ def refine_candidate_pool(
     multi_channel_rrf_docs_cap: int,
     multi_channel_rrf_memory_cap: int,
     deps: CandidateFusionDeps,
+    retrieval_refinement: dict[str, Any] | None = None,
 ) -> CandidateFusionResult:
     """Apply postprocess, rerank, feedback, and multi-channel fusion."""
 
@@ -395,12 +397,18 @@ def refine_candidate_pool(
         top_k_files=int(top_k_files),
         candidate_relative_threshold=float(candidate_relative_threshold),
         refine_enabled=bool(refine_enabled),
+        retrieval_refinement=retrieval_refinement,
         rank_candidates=rank_candidates,
         merge_candidate_lists=deps.merge_candidate_lists,
     )
     refined_candidates = list(candidate_postprocess_result.candidates)
     second_pass_payload = candidate_postprocess_result.second_pass_payload
     refine_pass_payload = candidate_postprocess_result.refine_pass_payload
+    retrieval_refinement_payload = (
+        dict(candidate_postprocess_result.retrieval_refinement_payload)
+        if bool(candidate_postprocess_result.retrieval_refinement_payload.get("enabled"))
+        else {}
+    )
     deps.mark_timing("candidate_postprocess", timing_started)
 
     structural_rerank = deps.apply_structural_rerank(
@@ -540,6 +548,7 @@ def refine_candidate_pool(
         multi_channel_fusion_payload=multi_channel_fusion_payload,
         semantic_embedding_provider_impl=semantic_embedding_provider_impl,
         semantic_cross_encoder_provider=semantic_cross_encoder_provider,
+        retrieval_refinement_payload=retrieval_refinement_payload,
     )
 
 

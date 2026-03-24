@@ -311,6 +311,13 @@ def apply_chunk_selection(
         "mode": normalized_topological_mode,
         "report_only": normalized_topological_mode == "report_only",
         "reason": "disabled" if not chunk_topological_shield_enabled else normalized_topological_mode,
+        "max_attenuation": float(chunk_topological_shield_max_attenuation),
+        "shared_parent_attenuation": float(
+            chunk_topological_shield_shared_parent_attenuation
+        ),
+        "adjacency_attenuation": float(
+            chunk_topological_shield_adjacency_attenuation
+        ),
         "attenuated_chunk_count": int(
             chunk_metrics.get("topological_shield_attenuated_chunk_count", 0) or 0
         ),

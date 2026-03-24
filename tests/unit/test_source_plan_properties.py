@@ -8,6 +8,7 @@ from ace_lite.chunking.skeleton import CHUNK_SKELETON_SCHEMA_VERSION
 from ace_lite.pipeline.stages.source_plan import run_source_plan
 from ace_lite.pipeline.types import StageContext
 from ace_lite.source_plan import pack_source_plan_chunks, rank_source_plan_chunks
+from ace_lite.validation.patch_artifact import build_patch_artifact_contract_v1
 from ace_lite.validation.result import build_validation_result_v1
 
 
@@ -225,6 +226,98 @@ def test_run_source_plan_emits_selected_ltm_constraints() -> None:
             "derived_from_observation_id": "obs-1",
             "graph_neighbor_count": 1,
         }
+    ]
+
+
+def test_run_source_plan_emits_patch_artifact_candidates() -> None:
+    primary_patch_artifact = build_patch_artifact_contract_v1(
+        operations=[
+            {
+                "op": "update",
+                "path": "src/app.py",
+                "before_sha256": "before-a",
+                "after_sha256": "after-a",
+                "hunk_count": 1,
+            }
+        ],
+        rollback_anchors=[
+            {"path": "src/app.py", "strategy": "git_restore", "anchor": "HEAD"}
+        ],
+        patch_text="\n".join(
+            [
+                "diff --git a/src/app.py b/src/app.py",
+                "--- a/src/app.py",
+                "+++ b/src/app.py",
+                "@@ -1 +1 @@",
+                "-print('old')",
+                "+print('new')",
+                "",
+            ]
+        ),
+    ).as_dict()
+    secondary_patch_artifact = build_patch_artifact_contract_v1(
+        operations=[
+            {
+                "op": "update",
+                "path": "src/worker.py",
+                "before_sha256": "before-b",
+                "after_sha256": "after-b",
+                "hunk_count": 1,
+            }
+        ],
+        rollback_anchors=[
+            {"path": "src/worker.py", "strategy": "git_restore", "anchor": "HEAD"}
+        ],
+        patch_text="\n".join(
+            [
+                "diff --git a/src/worker.py b/src/worker.py",
+                "--- a/src/worker.py",
+                "+++ b/src/worker.py",
+                "@@ -1 +1 @@",
+                "-print('worker-old')",
+                "+print('worker-new')",
+                "",
+            ]
+        ),
+    ).as_dict()
+
+    ctx = StageContext(query="carry forward patch candidates", repo="demo", root=".")
+    ctx.state = {
+        "memory": {},
+        "index": {
+            "candidate_files": [{"path": "src/app.py"}, {"path": "src/worker.py"}],
+            "candidate_chunks": [],
+            "chunk_metrics": {"chunk_budget_used": 0.0},
+        },
+        "repomap": {"focused_files": ["src/app.py", "src/worker.py"]},
+        "augment": {
+            "diagnostics": [],
+            "xref": {"count": 0, "results": []},
+            "tests": {"suspicious_chunks": [], "suggested_tests": []},
+        },
+        "skills": {"selected": []},
+        "_validation_patch_artifact": dict(primary_patch_artifact),
+        "_validation_patch_artifacts": [
+            dict(primary_patch_artifact),
+            dict(secondary_patch_artifact),
+        ],
+        "__policy": {"name": "general", "version": "v1", "test_signal_weight": 1.0},
+    }
+
+    result = run_source_plan(
+        ctx=ctx,
+        pipeline_order=["memory", "index", "repomap", "augment", "skills", "source_plan"],
+        chunk_top_k=4,
+        chunk_per_file_limit=2,
+        chunk_token_budget=256,
+        chunk_disclosure="refs",
+        policy_version="v1",
+    )
+
+    assert result["patch_artifact"] == primary_patch_artifact
+    assert result["patch_artifacts"] == [
+        primary_patch_artifact,
+        secondary_patch_artifact,
     ]
 
 

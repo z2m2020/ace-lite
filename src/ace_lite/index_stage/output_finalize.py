@@ -72,6 +72,7 @@ def finalize_index_stage_output(
     embeddings_payload: dict[str, Any],
     feedback_payload: dict[str, Any],
     multi_channel_fusion_payload: dict[str, Any],
+    retrieval_refinement_payload: dict[str, Any],
     second_pass_payload: dict[str, Any],
     refine_pass_payload: dict[str, Any],
     chunk_semantic_rerank_payload: dict[str, Any],
@@ -138,6 +139,8 @@ def finalize_index_stage_output(
         policy_version=str(policy_version),
         timings_ms=timings_ms,
     )
+    if bool(retrieval_refinement_payload.get("enabled")):
+        payload["retrieval_refinement"] = dict(retrieval_refinement_payload)
     if benchmark_filter_payload.get("requested"):
         payload["benchmark_filters"] = benchmark_filter_payload
     return _store_and_attach_index_candidate_cache(
@@ -210,6 +213,7 @@ def finalize_index_stage_output_from_state(
         embeddings_payload=state.embeddings_payload,
         feedback_payload=state.feedback_payload,
         multi_channel_fusion_payload=state.multi_channel_fusion_payload,
+        retrieval_refinement_payload=state.retrieval_refinement_payload,
         second_pass_payload=state.second_pass_payload,
         refine_pass_payload=state.refine_pass_payload,
         chunk_semantic_rerank_payload=state.chunk_semantic_rerank_payload,

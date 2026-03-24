@@ -821,6 +821,46 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
         "probe_executed_count_mean": 0.0,
         "probe_failure_rate": 0.0,
     }
+    assert results["validation_branch_summary"] == {
+        "case_count": 0.0,
+        "case_rate": 0.0,
+        "candidate_count_mean": 0.0,
+        "rejected_count_mean": 0.0,
+        "selection_present_ratio": 0.0,
+        "patch_artifact_present_ratio": 0.0,
+        "archive_present_ratio": 0.0,
+        "parallel_case_rate": 0.0,
+        "winner_pass_rate": 0.0,
+        "winner_regressed_rate": 0.0,
+        "winner_score_mean": 0.0,
+        "winner_after_issue_count_mean": 0.0,
+    }
+    assert results["validation_branch_gate_summary"] == {
+        "failed_checks": [
+            "validation_branch_case_count",
+            "validation_branch_selection_present_ratio",
+            "validation_branch_patch_artifact_present_ratio",
+            "validation_branch_archive_present_ratio",
+            "validation_branch_parallel_case_rate",
+        ],
+        "case_count": 0.0,
+        "case_rate": 0.0,
+        "case_count_threshold": 1.0,
+        "case_count_passed": False,
+        "selection_present_ratio": 0.0,
+        "selection_present_ratio_threshold": 1.0,
+        "selection_present_ratio_passed": False,
+        "patch_artifact_present_ratio": 0.0,
+        "patch_artifact_present_ratio_threshold": 1.0,
+        "patch_artifact_present_ratio_passed": False,
+        "archive_present_ratio": 0.0,
+        "archive_present_ratio_threshold": 1.0,
+        "archive_present_ratio_passed": False,
+        "parallel_case_rate": 0.0,
+        "parallel_case_rate_threshold": 1.0,
+        "parallel_case_rate_passed": False,
+        "gate_passed": False,
+    }
     assert results["source_plan_card_summary"] == {
         "evidence_card_count_mean": 0.0,
         "file_card_count_mean": 0.0,
@@ -1279,6 +1319,38 @@ class _RetrievalContextStubOrchestrator(_StubOrchestrator):
                     "retrieval_context_pool_chunk_count": 1.0,
                     "retrieval_context_pool_coverage_ratio": 0.5,
                 },
+                "graph_lookup": {
+                    "enabled": True,
+                    "reason": "candidate_count_guarded",
+                    "guarded": True,
+                    "boosted_count": 2,
+                    "weights": {
+                        "scip": 0.3,
+                        "xref": 0.2,
+                        "query_xref": 0.2,
+                        "symbol": 0.1,
+                        "import": 0.1,
+                        "coverage": 0.1,
+                    },
+                    "candidate_count": 6,
+                    "pool_size": 4,
+                    "query_terms_count": 3,
+                    "normalization": "log1p",
+                    "guard_max_candidates": 4,
+                    "guard_min_query_terms": 1,
+                    "guard_max_query_terms": 5,
+                },
+                "topological_shield": {
+                    "enabled": True,
+                    "mode": "report_only",
+                    "report_only": True,
+                    "max_attenuation": 0.6,
+                    "shared_parent_attenuation": 0.2,
+                    "adjacency_attenuation": 0.5,
+                    "attenuated_chunk_count": 1,
+                    "coverage_ratio": 0.5,
+                    "attenuation_total": 0.2,
+                },
             },
             "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
             "repomap": {"dependency_recall": {"hit_rate": 1.0}},
@@ -1312,6 +1384,51 @@ def test_benchmark_runner_aggregates_retrieval_context_observability_summary() -
         "reference_hint_coverage_ratio_mean": 0.5,
         "pool_chunk_count_mean": 1.0,
         "pool_coverage_ratio_mean": 0.5,
+    }
+
+
+def test_benchmark_runner_aggregates_retrieval_default_strategy_summary() -> None:
+    orchestrator = _RetrievalContextStubOrchestrator()
+    runner = BenchmarkRunner(orchestrator)
+    cases = [
+        {"case_id": "c1", "query": "find app", "expected_keys": ["app"], "top_k": 4},
+    ]
+
+    results = runner.run(cases=cases, repo="demo", root=".")
+
+    assert results["retrieval_default_strategy_summary"] == {
+        "case_count": 1,
+        "retrieval_context_available_case_count": 1,
+        "retrieval_context_available_case_rate": 1.0,
+        "parent_symbol_available_case_count": 1,
+        "parent_symbol_available_case_rate": 1.0,
+        "reference_hint_available_case_count": 1,
+        "reference_hint_available_case_rate": 1.0,
+        "graph_lookup_enabled_case_count": 1,
+        "graph_lookup_enabled_case_rate": 1.0,
+        "graph_lookup_guarded_case_count": 1,
+        "graph_lookup_guarded_case_rate": 1.0,
+        "graph_lookup_dominant_normalization": "log1p",
+        "graph_lookup_pool_size_mean": 4.0,
+        "graph_lookup_guard_max_candidates_mean": 4.0,
+        "graph_lookup_guard_min_query_terms_mean": 1.0,
+        "graph_lookup_guard_max_query_terms_mean": 5.0,
+        "graph_lookup_weight_means": {
+            "scip": 0.3,
+            "xref": 0.2,
+            "query_xref": 0.2,
+            "symbol": 0.1,
+            "import": 0.1,
+            "coverage": 0.1,
+        },
+        "topological_shield_enabled_case_count": 1,
+        "topological_shield_enabled_case_rate": 1.0,
+        "topological_shield_report_only_case_count": 1,
+        "topological_shield_report_only_case_rate": 1.0,
+        "topological_shield_dominant_mode": "report_only",
+        "topological_shield_max_attenuation_mean": 0.6,
+        "topological_shield_shared_parent_attenuation_mean": 0.2,
+        "topological_shield_adjacency_attenuation_mean": 0.5,
     }
 
 

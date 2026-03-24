@@ -401,6 +401,8 @@ def test_cli_runtime_doctor_groups_settings_stats_cache_and_integration(
     assert payload["version_sync"]["ok"] is True
     assert payload["cache"]["entry_count"] == 1
     assert payload["integration"]["event"] == "mcp_doctor"
+    assert "next_cycle_input" in payload
+    assert payload["next_cycle_input"] == {}
 
 
 def test_cli_runtime_doctor_can_record_synthetic_runtime_event(tmp_path: Path) -> None:
@@ -1713,6 +1715,12 @@ def test_cli_runtime_status_reports_service_health_and_cache_paths(tmp_path: Pat
     assert service_health["durable_stats"]["status"] == "ok"
     assert payload["latest_runtime"]["latest_match"]["session_id"] == "session-gamma"
     assert payload["latest_runtime"]["preference_capture_summary"]["event_count"] == 1
+    assert payload["next_cycle_input"]["primary_stream"]
+    assert (
+        payload["next_cycle_input"]["primary_stream"]
+        in payload["next_cycle_input"]["degraded_service_names"]
+    )
+    assert payload["latest_runtime"]["next_cycle_input_summary"] == {}
 
 
 def test_cli_runtime_status_scopes_preference_capture_to_selected_profile(

@@ -236,6 +236,7 @@ def test_execute_index_stage_runtime_wires_runtime_stages() -> None:
             chunk_semantic_rerank_payload={"enabled": False},
             topological_shield_payload={"enabled": False},
             chunk_guard_payload={"enabled": False},
+            retrieval_refinement_payload={"enabled": True, "focus_paths": ["src/app.py"]},
         )
 
     def fake_apply_post_generation_runtime_to_state(**kwargs):  # type: ignore[no-untyped-def]
@@ -247,7 +248,17 @@ def test_execute_index_stage_runtime_wires_runtime_stages() -> None:
         return {"ok": True, "timings_ms": dict(kwargs["timings_ms"])}
 
     result = execute_index_stage_runtime(
-        ctx=SimpleNamespace(root="/tmp/demo", query="router", repo="demo", state={}),
+        ctx=SimpleNamespace(
+            root="/tmp/demo",
+            query="router",
+            repo="demo",
+            state={
+                "_agent_loop_retrieval_refinement": {
+                    "enabled": True,
+                    "focus_paths": ["src/app.py"],
+                }
+            },
+        ),
         config=_make_config(),
         deps=_make_deps(
             bootstrap_index_runtime_fn=fake_bootstrap_index_runtime,
@@ -272,6 +283,10 @@ def test_execute_index_stage_runtime_wires_runtime_stages() -> None:
     assert captured["candidate_generation"]["parallel_requested"] is True
     assert captured["post_generation"]["refine_candidate_pool_fn"] is refine_token
     assert captured["post_generation"]["selected_ranker"] == "hybrid_re2"
+    assert captured["post_generation"]["retrieval_refinement"] == {
+        "enabled": True,
+        "focus_paths": ["src/app.py"],
+    }
     assert captured["finalize"]["build_index_stage_output_fn"] is build_output_token
     assert captured["finalize"]["policy_version"] == "v1"
     assert result["ok"] is True

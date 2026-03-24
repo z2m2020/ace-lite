@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ace_lite.validation.patch_artifact import validate_patch_artifact_contract_v1
 from ace_lite.validation.result import validate_validation_result_v1
 
 SCHEMA_VERSION = "3.3"
@@ -359,6 +360,29 @@ def _validate_source_plan_cards(cards: Any, *, prefix: str, kind: str) -> None:
         validator(item, prefix=f"{prefix}[{index}]")
 
 
+def _validate_patch_artifact_payload(payload: Any, *, prefix: str) -> None:
+    if not isinstance(payload, dict):
+        raise ValueError(f"{prefix} must be a dictionary")
+    result = validate_patch_artifact_contract_v1(
+        contract=payload,
+        strict=True,
+        fail_closed=True,
+    )
+    if result.get("ok", False):
+        return
+    violation_details = result.get("violation_details", [])
+    first = (
+        violation_details[0]
+        if isinstance(violation_details, list) and violation_details
+        else {}
+    )
+    field = str(first.get("field") or "").strip()
+    message = str(first.get("message") or "").strip() or "invalid patch artifact payload"
+    if field:
+        raise ValueError(f"{prefix}.{field} {message}")
+    raise ValueError(f"{prefix} {message}")
+
+
 def validate_validation_result_payload(payload: Any, *, prefix: str) -> None:
     if not isinstance(payload, dict):
         raise ValueError(f"{prefix} must be a dictionary")
@@ -447,6 +471,20 @@ def validate_context_plan(payload: dict[str, Any]) -> None:
                 source_plan.get("candidate_chunks"),
                 prefix="source_plan.candidate_chunks",
             )
+        if "patch_artifact" in source_plan:
+            _validate_patch_artifact_payload(
+                source_plan.get("patch_artifact"),
+                prefix="source_plan.patch_artifact",
+            )
+        if "patch_artifacts" in source_plan:
+            patch_artifacts = source_plan.get("patch_artifacts")
+            if not isinstance(patch_artifacts, list):
+                raise ValueError("source_plan.patch_artifacts must be a list")
+            for index, item in enumerate(patch_artifacts):
+                _validate_patch_artifact_payload(
+                    item,
+                    prefix=f"source_plan.patch_artifacts[{index}]",
+                )
         if "evidence_cards" in source_plan:
             _validate_source_plan_cards(
                 source_plan.get("evidence_cards"),

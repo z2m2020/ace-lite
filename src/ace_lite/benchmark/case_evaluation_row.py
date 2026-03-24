@@ -105,7 +105,11 @@ def build_case_evaluation_row(
     graph_closure_support_edge_count: int,
     graph_closure_total: float,
     topological_shield_enabled: bool,
+    topological_shield_mode: str,
     topological_shield_report_only: bool,
+    topological_shield_max_attenuation: float,
+    topological_shield_shared_parent_attenuation: float,
+    topological_shield_adjacency_attenuation: float,
     topological_shield_attenuated_chunk_count: int,
     topological_shield_coverage_ratio: float,
     topological_shield_attenuation_total: float,
@@ -129,6 +133,17 @@ def build_case_evaluation_row(
     validation_probe_status: str,
     validation_probe_executed_count: int,
     validation_probe_issue_count: int,
+    validation_branch_case: bool,
+    validation_branch_candidate_count: int,
+    validation_branch_rejected_count: int,
+    validation_branch_selection_present: bool,
+    validation_branch_patch_artifact_present: bool,
+    validation_branch_archive_present: bool,
+    validation_branch_parallel: bool,
+    validation_branch_winner_passed: bool,
+    validation_branch_winner_regressed: bool,
+    validation_branch_winner_score: float,
+    validation_branch_winner_after_issue_count: int,
     source_plan_validation_feedback_present: bool,
     source_plan_validation_feedback_status: str,
     source_plan_validation_feedback_issue_count: int,
@@ -400,8 +415,18 @@ def build_case_evaluation_row(
         "graph_closure_support_edge_count": float(graph_closure_support_edge_count),
         "graph_closure_total": float(graph_closure_total),
         "topological_shield_enabled": 1.0 if topological_shield_enabled else 0.0,
+        "topological_shield_mode": str(topological_shield_mode),
         "topological_shield_report_only": (
             1.0 if topological_shield_report_only else 0.0
+        ),
+        "topological_shield_max_attenuation": float(
+            topological_shield_max_attenuation
+        ),
+        "topological_shield_shared_parent_attenuation": float(
+            topological_shield_shared_parent_attenuation
+        ),
+        "topological_shield_adjacency_attenuation": float(
+            topological_shield_adjacency_attenuation
         ),
         "topological_shield_attenuated_chunk_count": float(
             topological_shield_attenuated_chunk_count
@@ -448,6 +473,44 @@ def build_case_evaluation_row(
             or int(validation_probe_issue_count or 0) > 0
             else 0.0
         ),
+        "validation_branch_case": 1.0 if validation_branch_case else 0.0,
+        "validation_branch_candidate_count": float(validation_branch_candidate_count),
+        "validation_branch_rejected_count": float(validation_branch_rejected_count),
+        "validation_branch_selection_present": (
+            1.0 if validation_branch_selection_present else 0.0
+        ),
+        "validation_branch_patch_artifact_present": (
+            1.0 if validation_branch_patch_artifact_present else 0.0
+        ),
+        "validation_branch_archive_present": (
+            1.0 if validation_branch_archive_present else 0.0
+        ),
+        "validation_branch_parallel": 1.0 if validation_branch_parallel else 0.0,
+        "validation_branch_winner_passed": (
+            1.0 if validation_branch_winner_passed else 0.0
+        ),
+        "validation_branch_winner_regressed": (
+            1.0 if validation_branch_winner_regressed else 0.0
+        ),
+        "validation_branch_winner_score": float(validation_branch_winner_score),
+        "validation_branch_winner_after_issue_count": float(
+            validation_branch_winner_after_issue_count
+        ),
+        "validation_branch": {
+            "applicable": bool(validation_branch_case),
+            "candidate_count": int(validation_branch_candidate_count),
+            "rejected_count": int(validation_branch_rejected_count),
+            "selection_present": bool(validation_branch_selection_present),
+            "patch_artifact_present": bool(validation_branch_patch_artifact_present),
+            "archive_present": bool(validation_branch_archive_present),
+            "parallel": bool(validation_branch_parallel),
+            "winner_passed": bool(validation_branch_winner_passed),
+            "winner_regressed": bool(validation_branch_winner_regressed),
+            "winner_score": float(validation_branch_winner_score),
+            "winner_after_issue_count": int(
+                validation_branch_winner_after_issue_count
+            ),
+        },
         "source_plan_validation_feedback_present": (
             1.0 if source_plan_validation_feedback_present else 0.0
         ),
@@ -705,6 +768,22 @@ def build_case_evaluation_row(
         "graph_lookup_max_query_coverage": float(graph_lookup_max_query_coverage),
         "graph_lookup_boosted_path_ratio": float(graph_lookup_boosted_path_ratio),
         "graph_lookup_query_hit_path_ratio": float(graph_lookup_query_hit_path_ratio),
+        "topological_shield": {
+            "enabled": bool(topological_shield_enabled),
+            "mode": str(topological_shield_mode),
+            "report_only": bool(topological_shield_report_only),
+            "max_attenuation": float(topological_shield_max_attenuation),
+            "shared_parent_attenuation": float(
+                topological_shield_shared_parent_attenuation
+            ),
+            "adjacency_attenuation": float(
+                topological_shield_adjacency_attenuation
+            ),
+            "attenuated_chunk_count": int(topological_shield_attenuated_chunk_count),
+            "coverage_ratio": float(topological_shield_coverage_ratio),
+            "attenuation_total": float(topological_shield_attenuation_total),
+            "attenuation_per_chunk": float(topological_shield_attenuation_per_chunk),
+        },
         "feedback_boost": {
             "enabled": bool(feedback_enabled),
             "reason": feedback_reason,

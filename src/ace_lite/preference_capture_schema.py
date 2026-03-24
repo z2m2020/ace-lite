@@ -18,6 +18,7 @@ PREFERENCE_CAPTURE_PREFERENCE_KINDS = (
     "retrieval_preference",
     "packing_preference",
     "validation_preference",
+    "branch_outcome_preference",
 )
 PREFERENCE_CAPTURE_SIGNAL_SOURCES = (
     "feedback_store",

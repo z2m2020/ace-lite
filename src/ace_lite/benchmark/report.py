@@ -475,6 +475,240 @@ def _append_validation_probe_summary(lines: list[str], results: dict[str, Any]) 
     lines.append("")
 
 
+def _append_validation_branch_summary(lines: list[str], results: dict[str, Any]) -> None:
+    summary_raw = results.get("validation_branch_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    metrics = _normalize_metrics(results.get("metrics"))
+
+    case_count = float(
+        summary.get("case_count", metrics.get("validation_branch_case_count", 0.0))
+        or 0.0
+    )
+    case_rate = float(
+        summary.get("case_rate", metrics.get("validation_branch_case_rate", 0.0))
+        or 0.0
+    )
+    candidate_count_mean = float(
+        summary.get(
+            "candidate_count_mean",
+            metrics.get("validation_branch_candidate_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    rejected_count_mean = float(
+        summary.get(
+            "rejected_count_mean",
+            metrics.get("validation_branch_rejected_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    selection_present_ratio = float(
+        summary.get(
+            "selection_present_ratio",
+            metrics.get("validation_branch_selection_present_ratio", 0.0),
+        )
+        or 0.0
+    )
+    patch_artifact_present_ratio = float(
+        summary.get(
+            "patch_artifact_present_ratio",
+            metrics.get("validation_branch_patch_artifact_present_ratio", 0.0),
+        )
+        or 0.0
+    )
+    archive_present_ratio = float(
+        summary.get(
+            "archive_present_ratio",
+            metrics.get("validation_branch_archive_present_ratio", 0.0),
+        )
+        or 0.0
+    )
+    parallel_case_rate = float(
+        summary.get(
+            "parallel_case_rate",
+            metrics.get("validation_branch_parallel_case_rate", 0.0),
+        )
+        or 0.0
+    )
+    winner_pass_rate = float(
+        summary.get(
+            "winner_pass_rate",
+            metrics.get("validation_branch_winner_pass_rate", 0.0),
+        )
+        or 0.0
+    )
+    winner_regressed_rate = float(
+        summary.get(
+            "winner_regressed_rate",
+            metrics.get("validation_branch_winner_regressed_rate", 0.0),
+        )
+        or 0.0
+    )
+    winner_score_mean = float(
+        summary.get(
+            "winner_score_mean",
+            metrics.get("validation_branch_winner_score_mean", 0.0),
+        )
+        or 0.0
+    )
+    winner_after_issue_count_mean = float(
+        summary.get(
+            "winner_after_issue_count_mean",
+            metrics.get("validation_branch_winner_after_issue_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    if (
+        case_count <= 0.0
+        and case_rate <= 0.0
+        and candidate_count_mean <= 0.0
+        and rejected_count_mean <= 0.0
+        and selection_present_ratio <= 0.0
+        and patch_artifact_present_ratio <= 0.0
+        and archive_present_ratio <= 0.0
+        and parallel_case_rate <= 0.0
+        and winner_pass_rate <= 0.0
+        and winner_regressed_rate <= 0.0
+        and winner_score_mean <= 0.0
+        and winner_after_issue_count_mean <= 0.0
+    ):
+        return
+
+    lines.append("## Validation Branch Summary")
+    lines.append("")
+    lines.append(
+        "- Applicable case count / rate: {count} / {rate}".format(
+            count=_format_metric("validation_branch_case_count", case_count),
+            rate=_format_metric("validation_branch_case_rate", case_rate),
+        )
+    )
+    lines.append(
+        "- Candidate / rejected count mean: {candidates} / {rejected}".format(
+            candidates=_format_metric(
+                "validation_branch_candidate_count_mean",
+                candidate_count_mean,
+            ),
+            rejected=_format_metric(
+                "validation_branch_rejected_count_mean",
+                rejected_count_mean,
+            ),
+        )
+    )
+    lines.append(
+        "- Selection / winner artifact / loser archive ratios: {selection} / {patch} / {archive}".format(
+            selection=_format_metric(
+                "validation_branch_selection_present_ratio",
+                selection_present_ratio,
+            ),
+            patch=_format_metric(
+                "validation_branch_patch_artifact_present_ratio",
+                patch_artifact_present_ratio,
+            ),
+            archive=_format_metric(
+                "validation_branch_archive_present_ratio",
+                archive_present_ratio,
+            ),
+        )
+    )
+    lines.append(
+        "- Parallel rate: {parallel}; winner pass / regressed rates: {passed} / {regressed}".format(
+            parallel=_format_metric(
+                "validation_branch_parallel_case_rate",
+                parallel_case_rate,
+            ),
+            passed=_format_metric(
+                "validation_branch_winner_pass_rate",
+                winner_pass_rate,
+            ),
+            regressed=_format_metric(
+                "validation_branch_winner_regressed_rate",
+                winner_regressed_rate,
+            ),
+        )
+    )
+    lines.append(
+        "- Winner score mean: {score}; after-issue count mean: {issues}".format(
+            score=_format_metric(
+                "validation_branch_winner_score_mean",
+                winner_score_mean,
+            ),
+            issues=_format_metric(
+                "validation_branch_winner_after_issue_count_mean",
+                winner_after_issue_count_mean,
+            ),
+        )
+    )
+    lines.append("")
+
+
+def _append_validation_branch_gate_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("validation_branch_gate_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    lines.append("## Validation Branch Gate Summary")
+    lines.append("")
+    lines.append(
+        "- Gate passed: {value}".format(
+            value="yes" if bool(summary.get("gate_passed", False)) else "no"
+        )
+    )
+    lines.append(
+        "- Applicable case count / threshold: {count} / {threshold}".format(
+            count=_format_metric(
+                "validation_branch_case_count",
+                summary.get("case_count", 0.0),
+            ),
+            threshold=_format_metric(
+                "validation_branch_case_count",
+                summary.get("case_count_threshold", 0.0),
+            ),
+        )
+    )
+    lines.append(
+        "- Selection / winner artifact / loser archive ratios: {selection} / {patch} / {archive}".format(
+            selection=_format_metric(
+                "validation_branch_selection_present_ratio",
+                summary.get("selection_present_ratio", 0.0),
+            ),
+            patch=_format_metric(
+                "validation_branch_patch_artifact_present_ratio",
+                summary.get("patch_artifact_present_ratio", 0.0),
+            ),
+            archive=_format_metric(
+                "validation_branch_archive_present_ratio",
+                summary.get("archive_present_ratio", 0.0),
+            ),
+        )
+    )
+    lines.append(
+        "- Parallel case rate / threshold: {rate} / {threshold}".format(
+            rate=_format_metric(
+                "validation_branch_parallel_case_rate",
+                summary.get("parallel_case_rate", 0.0),
+            ),
+            threshold=_format_metric(
+                "validation_branch_parallel_case_rate",
+                summary.get("parallel_case_rate_threshold", 0.0),
+            ),
+        )
+    )
+    failed_checks = summary.get("failed_checks", [])
+    if isinstance(failed_checks, list):
+        lines.append(
+            "- Failed checks: "
+            + (
+                ", ".join(str(item) for item in failed_checks if str(item).strip())
+                if failed_checks
+                else "(none)"
+            )
+        )
+    lines.append("")
+
+
 def _append_source_plan_card_summary(lines: list[str], results: dict[str, Any]) -> None:
     summary_raw = results.get("source_plan_card_summary")
     summary = summary_raw if isinstance(summary_raw, dict) else {}
@@ -1323,6 +1557,12 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
         if isinstance(memory_health_summary_raw, dict)
         else {}
     )
+    next_cycle_input_summary_raw = summary.get("next_cycle_input_summary")
+    next_cycle_input_summary: dict[str, Any] = (
+        next_cycle_input_summary_raw
+        if isinstance(next_cycle_input_summary_raw, dict)
+        else {}
+    )
 
     lines.append("## Runtime Stats Summary")
     lines.append("")
@@ -1427,6 +1667,76 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
                     f" | {int(item.get('fix_count', 0) or 0)}"
                     f" | {str(item.get('last_seen_at') or '').strip() or '-'} |"
                 )
+            lines.append("")
+    if next_cycle_input_summary:
+        lines.append("### Next Cycle Input")
+        lines.append("")
+        lines.append(
+            "- Primary stream: {value}".format(
+                value=str(next_cycle_input_summary.get("primary_stream") or "(none)")
+            )
+        )
+        lines.append(
+            "- Priority count: {value}".format(
+                value=int(next_cycle_input_summary.get("priority_count", 0) or 0)
+            )
+        )
+        degraded_service_names = next_cycle_input_summary.get("degraded_service_names")
+        if isinstance(degraded_service_names, list) and degraded_service_names:
+            lines.append(
+                "- Degraded services: {value}".format(
+                    value=", ".join(str(item) for item in degraded_service_names)
+                )
+            )
+        doctor_reason_codes = next_cycle_input_summary.get("doctor_reason_codes")
+        if isinstance(doctor_reason_codes, list) and doctor_reason_codes:
+            lines.append(
+                "- Doctor reasons: {value}".format(
+                    value=", ".join(str(item) for item in doctor_reason_codes)
+                )
+            )
+        lines.append("")
+        priority_rows = (
+            next_cycle_input_summary.get("priorities")
+            if isinstance(next_cycle_input_summary.get("priorities"), list)
+            else []
+        )
+        if priority_rows:
+            lines.append("| Reason | Family | Class | Total | Open | Fixes | Action |")
+            lines.append("| --- | --- | --- | ---: | ---: | ---: | --- |")
+            for item in priority_rows:
+                if not isinstance(item, dict):
+                    continue
+                lines.append(
+                    "| "
+                    f"{str(item.get('reason_code') or '').strip() or '(unknown)'}"
+                    f" | {str(item.get('reason_family') or '').strip() or '-'}"
+                    f" | {str(item.get('capture_class') or '').strip() or '-'}"
+                    f" | {int(item.get('total_count', 0) or 0)}"
+                    f" | {int(item.get('open_issue_count', 0) or 0)}"
+                    f" | {int(item.get('fix_count', 0) or 0)}"
+                    f" | {str(item.get('action_hint') or '').strip() or '-'} |"
+                )
+            lines.append("")
+        memory_focus_raw = next_cycle_input_summary.get("memory_focus")
+        memory_focus: dict[str, Any] = (
+            memory_focus_raw if isinstance(memory_focus_raw, dict) else {}
+        )
+        if memory_focus:
+            lines.append(
+                "- Memory focus: reasons={reasons} runtime_events={events} open_issues={open_issues} fixes={fixes} resolution_rate={rate:.4f}".format(
+                    reasons=int(memory_focus.get("reason_count", 0) or 0),
+                    events=int(memory_focus.get("runtime_event_count", 0) or 0),
+                    open_issues=int(memory_focus.get("open_issue_count", 0) or 0),
+                    fixes=int(memory_focus.get("fix_count", 0) or 0),
+                    rate=float(memory_focus.get("resolution_rate", 0.0) or 0.0),
+                )
+            )
+            lines.append(
+                "- Memory action: {value}".format(
+                    value=str(memory_focus.get("action_hint") or "-")
+                )
+            )
             lines.append("")
     if preference_snapshot:
         lines.append("### Preference Snapshot")
@@ -1938,6 +2248,120 @@ def _append_retrieval_context_observability_summary(
     lines.append(
         "| pool_coverage_ratio_mean | {value:.4f} |".format(
             value=float(summary.get("pool_coverage_ratio_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append("")
+
+
+def _append_retrieval_default_strategy_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("retrieval_default_strategy_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    case_count = int(summary.get("case_count", 0) or 0)
+    if case_count <= 0:
+        return
+
+    weights_raw = summary.get("graph_lookup_weight_means")
+    weights = weights_raw if isinstance(weights_raw, dict) else {}
+
+    lines.append("## Retrieval Default Strategy Summary")
+    lines.append("")
+    lines.append(
+        "- Retrieval-context cases: {count}/{total} ({rate:.4f}); parent-symbol: {parent_count}/{total} ({parent_rate:.4f}); reference-hint: {hint_count}/{total} ({hint_rate:.4f})".format(
+            count=int(summary.get("retrieval_context_available_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("retrieval_context_available_case_rate", 0.0) or 0.0),
+            parent_count=int(
+                summary.get("parent_symbol_available_case_count", 0) or 0
+            ),
+            parent_rate=float(
+                summary.get("parent_symbol_available_case_rate", 0.0) or 0.0
+            ),
+            hint_count=int(
+                summary.get("reference_hint_available_case_count", 0) or 0
+            ),
+            hint_rate=float(
+                summary.get("reference_hint_available_case_rate", 0.0) or 0.0
+            ),
+        )
+    )
+    lines.append(
+        "- Graph lookup default: enabled={enabled_count}/{total} ({enabled_rate:.4f}); guarded={guarded_count}/{total} ({guarded_rate:.4f}); normalization={normalization}".format(
+            enabled_count=int(summary.get("graph_lookup_enabled_case_count", 0) or 0),
+            total=case_count,
+            enabled_rate=float(
+                summary.get("graph_lookup_enabled_case_rate", 0.0) or 0.0
+            ),
+            guarded_count=int(summary.get("graph_lookup_guarded_case_count", 0) or 0),
+            guarded_rate=float(
+                summary.get("graph_lookup_guarded_case_rate", 0.0) or 0.0
+            ),
+            normalization=str(
+                summary.get("graph_lookup_dominant_normalization") or "(none)"
+            ),
+        )
+    )
+    lines.append(
+        "- Graph lookup guard means: pool={pool:.4f}; max_candidates={max_candidates:.4f}; min_query_terms={min_terms:.4f}; max_query_terms={max_terms:.4f}".format(
+            pool=float(summary.get("graph_lookup_pool_size_mean", 0.0) or 0.0),
+            max_candidates=float(
+                summary.get("graph_lookup_guard_max_candidates_mean", 0.0) or 0.0
+            ),
+            min_terms=float(
+                summary.get("graph_lookup_guard_min_query_terms_mean", 0.0) or 0.0
+            ),
+            max_terms=float(
+                summary.get("graph_lookup_guard_max_query_terms_mean", 0.0) or 0.0
+            ),
+        )
+    )
+    lines.append(
+        "- Graph lookup weight means: scip={scip:.4f}; xref={xref:.4f}; query_xref={query_xref:.4f}; symbol={symbol:.4f}; import={imports:.4f}; coverage={coverage:.4f}".format(
+            scip=float(weights.get("scip", 0.0) or 0.0),
+            xref=float(weights.get("xref", 0.0) or 0.0),
+            query_xref=float(weights.get("query_xref", 0.0) or 0.0),
+            symbol=float(weights.get("symbol", 0.0) or 0.0),
+            imports=float(weights.get("import", 0.0) or 0.0),
+            coverage=float(weights.get("coverage", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Topological shield default: enabled={enabled_count}/{total} ({enabled_rate:.4f}); report_only={report_only_count}/{total} ({report_only_rate:.4f}); mode={mode}".format(
+            enabled_count=int(
+                summary.get("topological_shield_enabled_case_count", 0) or 0
+            ),
+            total=case_count,
+            enabled_rate=float(
+                summary.get("topological_shield_enabled_case_rate", 0.0) or 0.0
+            ),
+            report_only_count=int(
+                summary.get("topological_shield_report_only_case_count", 0) or 0
+            ),
+            report_only_rate=float(
+                summary.get("topological_shield_report_only_case_rate", 0.0) or 0.0
+            ),
+            mode=str(summary.get("topological_shield_dominant_mode") or "(none)"),
+        )
+    )
+    lines.append(
+        "- Topological shield attenuation means: max={max_value:.4f}; shared_parent={shared_parent:.4f}; adjacency={adjacency:.4f}".format(
+            max_value=float(
+                summary.get("topological_shield_max_attenuation_mean", 0.0) or 0.0
+            ),
+            shared_parent=float(
+                summary.get(
+                    "topological_shield_shared_parent_attenuation_mean", 0.0
+                )
+                or 0.0
+            ),
+            adjacency=float(
+                summary.get("topological_shield_adjacency_attenuation_mean", 0.0)
+                or 0.0
+            ),
         )
     )
     lines.append("")
@@ -2945,6 +3369,8 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     _append_index_fusion_granularity_summary(lines, metrics)
     _append_graph_lookup_summary(lines, metrics)
     _append_validation_probe_summary(lines, results)
+    _append_validation_branch_summary(lines, results)
+    _append_validation_branch_gate_summary(lines, results)
     _append_source_plan_card_summary(lines, results)
     _append_source_plan_validation_feedback_summary(lines, results)
     _append_source_plan_failure_signal_summary(lines, results)
@@ -2994,6 +3420,7 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     _append_feedback_observability_summary(lines, results)
     _append_ltm_explainability_summary(lines, results)
     _append_preference_observability_summary(lines, results)
+    _append_retrieval_default_strategy_summary(lines, results)
     _append_retrieval_context_observability_summary(lines, results)
     _append_chunk_stage_miss_summary(lines, results)
     _append_decision_observability_summary(lines, results)

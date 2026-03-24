@@ -101,7 +101,11 @@ def build_case_detail_payload(
     graph_hub_suppressed_chunk_count: int,
     graph_hub_penalty_total: float,
     topological_shield_enabled: bool,
+    topological_shield_mode: str,
     topological_shield_report_only: bool,
+    topological_shield_max_attenuation: float,
+    topological_shield_shared_parent_attenuation: float,
+    topological_shield_adjacency_attenuation: float,
     topological_shield_attenuated_chunk_count: int,
     topological_shield_coverage_ratio: float,
     topological_shield_attenuation_total: float,
@@ -315,7 +319,15 @@ def build_case_detail_payload(
         },
         "topological_shield": {
             "enabled": topological_shield_enabled,
+            "mode": str(topological_shield_mode),
             "report_only": topological_shield_report_only,
+            "max_attenuation": round(topological_shield_max_attenuation, 6),
+            "shared_parent_attenuation": round(
+                topological_shield_shared_parent_attenuation, 6
+            ),
+            "adjacency_attenuation": round(
+                topological_shield_adjacency_attenuation, 6
+            ),
             "attenuated_chunk_count": topological_shield_attenuated_chunk_count,
             "coverage_ratio": round(topological_shield_coverage_ratio, 6),
             "attenuation_total": round(topological_shield_attenuation_total, 6),

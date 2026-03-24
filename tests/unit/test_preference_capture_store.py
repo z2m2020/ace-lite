@@ -4,7 +4,9 @@ from pathlib import Path
 
 from ace_lite.preference_capture_store import (
     DurablePreferenceCaptureStore,
+    build_branch_outcome_preference_event,
     normalize_preference_capture_event,
+    record_branch_outcome_preference_capture,
 )
 
 
@@ -217,3 +219,71 @@ def test_preference_capture_event_normalizes_taxonomy_aliases() -> None:
 
     assert event.preference_kind == "validation_preference"
     assert event.signal_source == "feedback_store"
+
+
+def test_build_branch_outcome_preference_event_skips_low_signal_payload() -> None:
+    event = build_branch_outcome_preference_event(
+        repo_key="ace-lite",
+        query="validate patch",
+        branch_outcome_capture={
+            "selected_branch_id": "candidate-1",
+            "candidate_count": 1,
+            "rejected_count": 0,
+        },
+    )
+
+    assert event is None
+
+
+def test_record_branch_outcome_preference_capture_records_event(tmp_path: Path) -> None:
+    store = DurablePreferenceCaptureStore(
+        db_path=tmp_path / "context-map" / "preference-capture.db"
+    )
+
+    payload = record_branch_outcome_preference_capture(
+        store=store,
+        repo_key="ace-lite",
+        query="validate candidate patches",
+        branch_outcome_capture={
+            "schema_version": "branch_outcome_preference_capture_v1",
+            "selected_branch_id": "candidate-2",
+            "candidate_count": 2,
+            "ranked_branch_ids": ["candidate-2", "candidate-1"],
+            "rejected_count": 1,
+            "rejected_reasons": ["lower_pass_status"],
+            "winner_patch_scope_lines": 1,
+            "winner_status": "passed",
+            "winner_artifact_present": True,
+            "rejected_artifact_count": 1,
+            "execution_mode": "parallel",
+            "candidate_origin": "source_plan.patch_artifacts",
+            "source": "validation_stage",
+            "target_file_manifest": ["src/app.py"],
+            "winner_validation_branch_score": {"after_passed": True},
+            "rejected": [
+                {
+                    "branch_id": "candidate-1",
+                    "rejected_reason": "lower_pass_status",
+                }
+            ],
+        },
+        profile_key="bugfix",
+    )
+
+    assert payload["ok"] is True
+    assert payload["skipped"] is False
+    assert payload["store_path"].endswith("preference-capture.db")
+    recorded = payload["recorded"]
+    assert recorded["preference_kind"] == "branch_outcome_preference"
+    assert recorded["signal_source"] == "runtime"
+    assert recorded["target_path"] == "src/app.py"
+
+    rows = store.list_events(
+        repo_key="ace-lite",
+        profile_key="bugfix",
+        preference_kind="branch_outcome_preference",
+        signal_source="runtime",
+        limit=10,
+    )
+    assert len(rows) == 1
+    assert rows[0].payload["summary"]["selected_branch_id"] == "candidate-2"

@@ -25,6 +25,7 @@ from ace_lite.source_plan import (
     select_validation_tests,
     summarize_source_plan_grounding,
 )
+from ace_lite.validation.patch_artifact import validate_patch_artifact_contract_v1
 
 
 def _coerce_list(value: Any) -> list[Any]:
@@ -216,6 +217,51 @@ def _resolve_focused_files(
         for item in candidates
         if isinstance(item, dict) and str(item.get("path") or "").strip()
     ]
+
+
+def _extract_patch_artifacts(state: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_candidates: list[dict[str, Any]] = []
+    single = state.get("_validation_patch_artifact")
+    if isinstance(single, dict):
+        raw_candidates.append(single)
+    multi = state.get("_validation_patch_artifacts")
+    if isinstance(multi, list):
+        raw_candidates.extend(item for item in multi if isinstance(item, dict))
+
+    selected: list[dict[str, Any]] = []
+    seen: set[tuple[str, tuple[str, ...], tuple[tuple[str, str], ...], str]] = set()
+    for item in raw_candidates:
+        validation = validate_patch_artifact_contract_v1(
+            contract=item,
+            strict=True,
+            fail_closed=True,
+        )
+        if not validation.get("ok", False):
+            continue
+        manifest = tuple(
+            str(path).strip().replace("\\", "/")
+            for path in item.get("target_file_manifest", [])
+            if isinstance(path, str) and str(path).strip()
+        )
+        operations = tuple(
+            (
+                str(entry.get("op") or "").strip(),
+                str(entry.get("path") or "").strip().replace("\\", "/"),
+            )
+            for entry in item.get("operations", [])
+            if isinstance(entry, dict)
+        )
+        identity = (
+            str(item.get("schema_version") or "").strip(),
+            manifest,
+            operations,
+            str(item.get("patch_text") or ""),
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        selected.append(dict(item))
+    return selected
 
 
 def run_source_plan(
@@ -435,6 +481,10 @@ def run_source_plan(
             },
         },
     }
+    patch_artifacts = _extract_patch_artifacts(ctx.state)
+    if patch_artifacts:
+        payload["patch_artifact"] = dict(patch_artifacts[0])
+        payload["patch_artifacts"] = [dict(item) for item in patch_artifacts]
     if isinstance(validation_result, dict) and validation_result:
         payload["validation_result"] = dict(validation_result)
     return payload

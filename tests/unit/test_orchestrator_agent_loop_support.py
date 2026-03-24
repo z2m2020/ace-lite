@@ -47,7 +47,11 @@ def test_run_post_source_plan_runtime_delegates_agent_loop_summary_to_ctx(monkey
     )
 
     assert contract_error is None
-    assert ctx.state["_agent_loop"] == {"enabled": True, "stop_reason": "completed"}
+    assert ctx.state["_agent_loop"]["enabled"] is True
+    assert ctx.state["_agent_loop"]["stop_reason"] == "completed"
+    assert ctx.state["_agent_loop"]["branch_validation_archive"]["schema_version"] == (
+        "branch_validation_archive_v1"
+    )
 
 
 def test_run_post_source_plan_agent_loop_returns_default_summary_when_no_action(monkeypatch) -> None:
@@ -120,6 +124,10 @@ def test_run_post_source_plan_agent_loop_appends_metric_for_max_iterations(monke
 
         def build_incremental_query(self, *, base_query: str, action: dict[str, object]) -> str:
             return base_query
+
+        def build_retrieval_refinement(self, **kwargs):
+            _ = kwargs
+            return {}
 
         def record_iteration(self, **kwargs) -> None:
             self._count += 1

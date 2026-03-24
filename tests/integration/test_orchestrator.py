@@ -1080,9 +1080,16 @@ def test_orchestrator_agent_loop_reruns_incremental_retrieval_after_validation_s
     assert loop_summary["iteration_count"] == 1
     assert loop_summary["actions_executed"] == 1
     assert loop_summary["stop_reason"] == "max_iterations"
+    assert loop_summary["iterations"][0]["retrieval_refinement"]["focus_paths"] == [
+        "src/app/auth.py"
+    ]
     assert len(index_queries) == 2
     assert index_queries[0] == "draft auth plan"
     assert "Focus refinement" in index_queries[1]
+    assert payload["index"]["retrieval_refinement"]["applied"] is True
+    assert payload["index"]["retrieval_refinement"]["focus_paths"] == [
+        "src/app/auth.py"
+    ]
 
     rerun_index_metrics = [
         item
@@ -1183,6 +1190,9 @@ def test_orchestrator_agent_loop_reruns_after_failed_validation_probe_without_di
     assert len(index_queries) == 2
     assert "Focus refinement" in index_queries[1]
     assert "compile probe failed" in index_queries[1]
+    assert loop_summary["iterations"][0]["retrieval_refinement"]["focus_paths"] == [
+        "src/app/auth.py"
+    ]
     assert loop_summary["iterations"][0]["validation_branch_score"]["issue_delta"] == 0
     assert loop_summary["iterations"][0]["validation_branch_score"]["after_status"] == "failed"
     assert loop_summary["branch_batch"]["schema_version"] == "agent_loop_branch_batch_v1"
@@ -1195,6 +1205,10 @@ def test_orchestrator_agent_loop_reruns_after_failed_validation_probe_without_di
     )
     assert loop_summary["branch_validation_archive"]["winner_branch_id"] == "iteration-1"
     assert loop_summary["branch_validation_archive"]["winner_artifact_refs"] == []
+    assert payload["index"]["retrieval_refinement"]["applied"] is True
+    assert payload["index"]["retrieval_refinement"]["focus_paths"] == [
+        "src/app/auth.py"
+    ]
 
     rerun_index_metrics = [
         item
