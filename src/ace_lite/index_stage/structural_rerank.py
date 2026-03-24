@@ -109,6 +109,7 @@ def apply_structural_rerank(
     scip_index_path: str,
     scip_provider: str,
     scip_generate_fallback: bool,
+    scip_base_weight: float = 0.5,
     mark_timing: Callable[[str, float], None],
     perf_counter_fn: Callable[[], float] = perf_counter,
     cochange_fn: Callable[..., tuple[list[dict[str, Any]], dict[str, Any]]] = apply_cochange_neighbors,
@@ -160,6 +161,7 @@ def apply_structural_rerank(
         "provider": str(scip_provider),
         "generate_fallback": bool(scip_generate_fallback),
         "fallback_generated": False,
+        "weights": {"base_weight": float(scip_base_weight)},
     }
     resolved_scip_index_path = resolve_repo_relative_path(
         root=root, configured_path=scip_index_path
@@ -173,6 +175,7 @@ def apply_structural_rerank(
             files_map=files_map,
             candidates=candidates,
             policy=policy,
+            scoring_config={"base_weight": float(scip_base_weight)},
         )
     mark_timing("scip_boost", timing_started)
 

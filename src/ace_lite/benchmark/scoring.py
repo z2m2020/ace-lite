@@ -11,6 +11,7 @@ from ace_lite.benchmark.regression_checks import (
 from ace_lite.benchmark.summaries import (
     PIPELINE_STAGE_ORDER,
     aggregate_metrics,
+    build_agent_loop_control_plane_summary,
     build_adaptive_router_arm_summary,
     build_learning_router_rollout_summary,
     build_adaptive_router_observability_summary,
@@ -46,6 +47,7 @@ __all__ = [
     "PIPELINE_STAGE_ORDER",
     "REGRESSION_THRESHOLD_PROFILES",
     "aggregate_metrics",
+    "build_agent_loop_control_plane_summary",
     "build_adaptive_router_arm_summary",
     "build_learning_router_rollout_summary",
     "build_adaptive_router_observability_summary",

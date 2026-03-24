@@ -18,3 +18,6 @@ def test_runtime_support_compat_rerun_stage_resolver_preserves_post_validation_s
     assert support._resolve_agent_loop_rerun_stages(
         action_type="request_validation_retry"
     ) == ["validation"]
+    assert support._resolve_agent_loop_rerun_stages(
+        action_type="request_source_plan_retry"
+    ) == ["source_plan", "validation"]

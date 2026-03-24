@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from ace_lite.chunking.builder import build_candidate_chunks
 from ace_lite.chunking.graph_prior import apply_query_aware_graph_prior
 
@@ -108,6 +111,201 @@ def test_apply_query_aware_graph_prior_boosts_graph_neighbor_chunk() -> None:
     assert helper["score"] > misc["score"]
     assert helper["score_breakdown"]["graph_prior"] > 0.0
     assert helper["score_breakdown"]["graph_transfer_count"] == 1.0
+
+
+def test_apply_query_aware_graph_prior_surfaces_graph_provider_fallback() -> None:
+    files_map = {
+        "src/use.py": {
+            "module": "src.use",
+            "language": "python",
+            "symbols": [
+                {
+                    "name": "handle_request",
+                    "qualified_name": "src.use.handle_request",
+                    "kind": "function",
+                    "lineno": 1,
+                    "end_lineno": 5,
+                },
+                {
+                    "name": "resolve_token",
+                    "qualified_name": "src.use.resolve_token",
+                    "kind": "function",
+                    "lineno": 7,
+                    "end_lineno": 12,
+                },
+            ],
+            "references": [
+                {
+                    "name": "resolve_token",
+                    "qualified_name": "src.use.resolve_token",
+                    "lineno": 3,
+                    "kind": "call",
+                }
+            ],
+            "imports": [],
+        }
+    }
+    ranked, payload = apply_query_aware_graph_prior(
+        candidate_chunks=[
+            {
+                "path": "src/use.py",
+                "qualified_name": "src.use.handle_request",
+                "name": "handle_request",
+                "kind": "function",
+                "lineno": 1,
+                "end_lineno": 5,
+                "score": 4.0,
+                "score_breakdown": {"file_prior": 1.4, "symbol": 2.5},
+            },
+            {
+                "path": "src/use.py",
+                "qualified_name": "src.use.resolve_token",
+                "name": "resolve_token",
+                "kind": "function",
+                "lineno": 7,
+                "end_lineno": 12,
+                "score": 0.6,
+                "score_breakdown": {"file_prior": 0.6},
+            },
+        ],
+        files_map=files_map,
+        policy={
+            "chunk_graph_prior_enabled": True,
+            "chunk_graph_seed_limit": 4,
+            "chunk_graph_neighbor_limit": 4,
+            "chunk_graph_edge_weight": 0.18,
+            "chunk_graph_prior_cap": 0.3,
+            "chunk_graph_seed_min_lexical": 1.0,
+            "chunk_graph_seed_min_file_prior": 2.0,
+            "chunk_graph_context_provider": "scip",
+        },
+        cache_key="graph-prior-provider-fallback",
+    )
+
+    helper = next(
+        item for item in ranked if item["qualified_name"] == "src.use.resolve_token"
+    )
+
+    assert payload["reason"] == "ok"
+    assert payload["graph_provider_requested"] == "scip"
+    assert payload["graph_provider_selected"] == "adjacency"
+    assert payload["graph_provider_fallback"] is True
+    assert payload["graph_fallback_reason"] == "scip_source_unavailable"
+    assert payload["graph_scope"] == "symbol"
+    assert helper["score_breakdown"]["graph_prior"] > 0.0
+
+
+def test_apply_query_aware_graph_prior_surfaces_loaded_scip_source_metadata(
+    tmp_path: Path,
+) -> None:
+    files_map = {
+        "src/use.py": {
+            "module": "src.use",
+            "language": "python",
+            "symbols": [
+                {
+                    "name": "handle_request",
+                    "qualified_name": "src.use.handle_request",
+                    "kind": "function",
+                    "lineno": 1,
+                    "end_lineno": 5,
+                },
+                {
+                    "name": "resolve_token",
+                    "qualified_name": "src.use.resolve_token",
+                    "kind": "function",
+                    "lineno": 7,
+                    "end_lineno": 12,
+                },
+            ],
+            "references": [
+                {
+                    "name": "resolve_token",
+                    "qualified_name": "src.use.resolve_token",
+                    "lineno": 3,
+                    "kind": "call",
+                }
+            ],
+            "imports": [],
+        }
+    }
+    scip_path = tmp_path / "context-map" / "scip" / "index.json"
+    scip_path.parent.mkdir(parents=True, exist_ok=True)
+    scip_path.write_text(
+        json.dumps(
+            {
+                "documents": [
+                    {
+                        "relative_path": "src/use.py",
+                        "occurrences": [
+                            {"symbol": "demo src/use.py Handle#", "symbol_roles": 1},
+                            {"symbol": "demo src/dep.py Dep#", "symbol_roles": 8},
+                        ],
+                    },
+                    {
+                        "relative_path": "src/dep.py",
+                        "occurrences": [
+                            {"symbol": "demo src/dep.py Dep#", "symbol_roles": 1},
+                        ],
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    ranked, payload = apply_query_aware_graph_prior(
+        root=str(tmp_path),
+        candidate_chunks=[
+            {
+                "path": "src/use.py",
+                "qualified_name": "src.use.handle_request",
+                "name": "handle_request",
+                "kind": "function",
+                "lineno": 1,
+                "end_lineno": 5,
+                "score": 4.0,
+                "score_breakdown": {"file_prior": 1.4, "symbol": 2.5},
+            },
+            {
+                "path": "src/use.py",
+                "qualified_name": "src.use.resolve_token",
+                "name": "resolve_token",
+                "kind": "function",
+                "lineno": 7,
+                "end_lineno": 12,
+                "score": 0.6,
+                "score_breakdown": {"file_prior": 0.6},
+            },
+        ],
+        files_map=files_map,
+        policy={
+            "chunk_graph_prior_enabled": True,
+            "chunk_graph_seed_limit": 4,
+            "chunk_graph_neighbor_limit": 4,
+            "chunk_graph_edge_weight": 0.18,
+            "chunk_graph_prior_cap": 0.3,
+            "chunk_graph_seed_min_lexical": 1.0,
+            "chunk_graph_seed_min_file_prior": 2.0,
+            "chunk_graph_context_provider": "scip",
+            "scip_index_path": "context-map/scip/index.json",
+        },
+        cache_key="graph-prior-loaded-scip-source",
+    )
+
+    helper = next(
+        item for item in ranked if item["qualified_name"] == "src.use.resolve_token"
+    )
+
+    assert payload["reason"] == "ok"
+    assert payload["graph_provider_selected"] == "adjacency"
+    assert payload["graph_fallback_reason"] == "file_scope_symbol_projection_pending"
+    assert payload["graph_source_provider_selected"] == "scip"
+    assert payload["graph_source_provider_loaded"] is True
+    assert payload["graph_source_graph_scope"] == "file"
+    assert payload["graph_source_edge_count"] == 1
+    assert payload["graph_source_projection_fallback"] is True
+    assert payload["graph_source_projection_reason"] == "file_scope_symbol_projection_pending"
+    assert helper["score_breakdown"]["graph_prior"] > 0.0
 
 
 def test_apply_query_aware_graph_prior_caps_and_suppresses_hubs() -> None:
@@ -403,3 +601,117 @@ def test_build_candidate_chunks_surfaces_graph_prior_metrics() -> None:
     assert metrics["graph_prior_coverage_ratio"] == 1.0 / 3.0
     assert metrics["graph_seeded_chunk_count"] == 1.0
     assert metrics["graph_transfer_count"] == 1.0
+
+
+def test_build_candidate_chunks_surfaces_graph_source_observability_metrics(
+    tmp_path: Path,
+) -> None:
+    scip_path = tmp_path / "context-map" / "scip" / "index.json"
+    scip_path.parent.mkdir(parents=True, exist_ok=True)
+    scip_path.write_text(
+        json.dumps(
+            {
+                "documents": [
+                    {
+                        "relative_path": "src/use.py",
+                        "occurrences": [
+                            {"symbol": "demo src/use.py handle_request#", "symbol_roles": 1},
+                            {"symbol": "demo src/use.py resolve_token#", "symbol_roles": 1},
+                            {"symbol": "demo src/use.py misc_helper#", "symbol_roles": 1},
+                        ],
+                    },
+                    {
+                        "relative_path": "src/dep.py",
+                        "occurrences": [
+                            {"symbol": "demo src/dep.py dep#", "symbol_roles": 1},
+                            {"symbol": "demo src/use.py handle_request#", "symbol_roles": 8},
+                            {"symbol": "demo src/use.py resolve_token#", "symbol_roles": 8},
+                        ],
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    files_map = {
+        "src/use.py": {
+            "module": "src.use",
+            "language": "python",
+            "symbols": [
+                {
+                    "kind": "function",
+                    "name": "handle_request",
+                    "qualified_name": "src.use.handle_request",
+                    "lineno": 1,
+                    "end_lineno": 5,
+                },
+                {
+                    "kind": "function",
+                    "name": "resolve_token",
+                    "qualified_name": "src.use.resolve_token",
+                    "lineno": 7,
+                    "end_lineno": 12,
+                },
+                {
+                    "kind": "function",
+                    "name": "misc_helper",
+                    "qualified_name": "src.use.misc_helper",
+                    "lineno": 14,
+                    "end_lineno": 18,
+                },
+            ],
+            "references": [
+                {
+                    "name": "resolve_token",
+                    "qualified_name": "src.use.resolve_token",
+                    "lineno": 3,
+                    "kind": "call",
+                }
+            ],
+            "imports": [],
+        }
+    }
+
+    _, metrics = build_candidate_chunks(
+        root=str(tmp_path),
+        files_map=files_map,
+        candidates=[{"path": "src/use.py", "score": 4.5, "module": "src.use"}],
+        terms=["handle_request"],
+        top_k_files=1,
+        top_k_chunks=3,
+        per_file_limit=3,
+        token_budget=512,
+        disclosure_mode="refs",
+        snippet_max_lines=6,
+        snippet_max_chars=240,
+        policy={
+            "chunk_weight": 1.0,
+            "chunk_graph_prior_enabled": True,
+            "chunk_graph_seed_limit": 4,
+            "chunk_graph_neighbor_limit": 4,
+            "chunk_graph_edge_weight": 0.18,
+            "chunk_graph_prior_cap": 0.3,
+            "chunk_graph_seed_min_lexical": 1.0,
+            "chunk_graph_seed_min_file_prior": 3.0,
+            "chunk_graph_context_provider": "scip",
+            "scip_index_path": "context-map/scip/index.json",
+        },
+        tokenizer_model="gpt-4o-mini",
+        diversity_enabled=False,
+        diversity_path_penalty=0.0,
+        diversity_symbol_family_penalty=0.0,
+        diversity_kind_penalty=0.0,
+        diversity_locality_penalty=0.0,
+        diversity_locality_window=24,
+        reference_hits_cache_key="graph-source-observability",
+    )
+
+    assert metrics["graph_source_provider_loaded"] == 1.0
+    assert metrics["graph_source_projection_fallback"] == 1.0
+    assert metrics["graph_source_edge_count"] == 1.0
+    assert metrics["graph_source_inbound_signal_chunk_count"] == 3.0
+    assert metrics["graph_source_inbound_signal_coverage_ratio"] == 1.0
+    assert metrics["graph_source_centrality_signal_chunk_count"] == 0.0
+    assert metrics["graph_source_centrality_signal_coverage_ratio"] == 0.0
+    assert metrics["graph_source_pagerank_signal_chunk_count"] == 0.0
+    assert metrics["graph_source_pagerank_signal_coverage_ratio"] == 0.0

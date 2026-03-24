@@ -63,6 +63,7 @@ def run_index_post_generation_runtime(
     scip_index_path: str,
     scip_provider: str,
     scip_generate_fallback: bool,
+    scip_base_weight: float,
     embedding_index_path: str,
     embedding_enabled: bool,
     embedding_provider: str,
@@ -104,6 +105,7 @@ def run_index_post_generation_runtime(
     chunk_topological_shield_max_attenuation: float,
     chunk_topological_shield_shared_parent_attenuation: float,
     chunk_topological_shield_adjacency_attenuation: float,
+    chunk_scoring_config: dict[str, Any],
     chunk_guard_enabled: bool,
     chunk_guard_mode: str,
     chunk_guard_lambda_penalty: float,
@@ -171,6 +173,7 @@ def run_index_post_generation_runtime(
         scip_index_path=str(scip_index_path),
         scip_provider=str(scip_provider),
         scip_generate_fallback=bool(scip_generate_fallback),
+        scip_base_weight=float(scip_base_weight),
         embedding_index_path=str(embedding_index_path),
         embedding_enabled=bool(embedding_enabled),
         embedding_provider=str(embedding_provider),
@@ -247,6 +250,7 @@ def run_index_post_generation_runtime(
         chunk_topological_shield_adjacency_attenuation=float(
             chunk_topological_shield_adjacency_attenuation
         ),
+        chunk_scoring_config=dict(chunk_scoring_config),
         chunk_guard_enabled=bool(chunk_guard_enabled),
         chunk_guard_mode=str(chunk_guard_mode),
         chunk_guard_lambda_penalty=float(chunk_guard_lambda_penalty),

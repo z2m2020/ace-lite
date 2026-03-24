@@ -2,18 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from ace_lite.explainability import build_selection_reason
 from ace_lite.scoring_config import (
-    CHUNK_FILE_PRIOR_WEIGHT,
-    CHUNK_MODULE_MATCH,
-    CHUNK_PATH_MATCH,
-    CHUNK_REFERENCE_CAP,
-    CHUNK_REFERENCE_FACTOR,
-    CHUNK_SIGNATURE_MATCH,
-    CHUNK_SYMBOL_EXACT,
-    CHUNK_SYMBOL_PARTIAL,
+    resolve_chunk_scoring_config,
 )
 
 
@@ -27,6 +21,7 @@ def score_chunk_candidate(
     terms: list[str],
     file_score: float,
     reference_hits: dict[str, int],
+    scoring_config: Mapping[str, Any] | None = None,
 ) -> tuple[float, dict[str, float]]:
     """Score a candidate chunk based on term matching and references.
 
@@ -43,7 +38,17 @@ def score_chunk_candidate(
     Returns:
         Tuple of (score, breakdown_dict).
     """
-    score = max(0.0, float(file_score) * CHUNK_FILE_PRIOR_WEIGHT)
+    scoring = resolve_chunk_scoring_config(scoring_config)
+    file_prior_weight = float(scoring["file_prior_weight"])
+    path_match = float(scoring["path_match"])
+    module_match = float(scoring["module_match"])
+    symbol_exact = float(scoring["symbol_exact"])
+    symbol_partial = float(scoring["symbol_partial"])
+    signature_match = float(scoring["signature_match"])
+    reference_factor = float(scoring["reference_factor"])
+    reference_cap = float(scoring["reference_cap"])
+
+    score = max(0.0, float(file_score) * file_prior_weight)
     breakdown = {
         "file_prior": round(score, 6),
         "path": 0.0,
@@ -62,26 +67,26 @@ def score_chunk_candidate(
     for term in [str(item).strip().lower() for item in terms if str(item).strip()]:
         # Path matching
         if term in path_lower:
-            score += CHUNK_PATH_MATCH
-            breakdown["path"] += CHUNK_PATH_MATCH
+            score += path_match
+            breakdown["path"] += path_match
 
         # Module matching
         if term and term in module_lower:
-            score += CHUNK_MODULE_MATCH
-            breakdown["module"] += CHUNK_MODULE_MATCH
+            score += module_match
+            breakdown["module"] += module_match
 
         # Symbol matching
         if term in (qualified_lower, name_lower):
-            score += CHUNK_SYMBOL_EXACT
-            breakdown["symbol"] += CHUNK_SYMBOL_EXACT
+            score += symbol_exact
+            breakdown["symbol"] += symbol_exact
         elif term in qualified_lower or term in name_lower:
-            score += CHUNK_SYMBOL_PARTIAL
-            breakdown["symbol"] += CHUNK_SYMBOL_PARTIAL
+            score += symbol_partial
+            breakdown["symbol"] += symbol_partial
 
         # Signature matching
         if signature_lower and term and term in signature_lower:
-            score += CHUNK_SIGNATURE_MATCH
-            breakdown["signature"] += CHUNK_SIGNATURE_MATCH
+            score += signature_match
+            breakdown["signature"] += signature_match
 
     # Reference-based scoring
     reference_score = max(
@@ -89,7 +94,7 @@ def score_chunk_candidate(
         float(reference_hits.get(name, 0)),
     )
     if reference_score > 0:
-        weight = min(CHUNK_REFERENCE_CAP, CHUNK_REFERENCE_FACTOR * reference_score)
+        weight = min(reference_cap, reference_factor * reference_score)
         score += weight
         breakdown["reference"] = round(weight, 6)
 

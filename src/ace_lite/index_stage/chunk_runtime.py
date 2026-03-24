@@ -42,6 +42,7 @@ def run_index_chunk_selection(
     chunk_topological_shield_max_attenuation: float,
     chunk_topological_shield_shared_parent_attenuation: float,
     chunk_topological_shield_adjacency_attenuation: float,
+    chunk_scoring_config: dict[str, Any],
     chunk_guard_enabled: bool,
     chunk_guard_mode: str,
     chunk_guard_lambda_penalty: float,
@@ -98,6 +99,7 @@ def run_index_chunk_selection(
             chunk_topological_shield_adjacency_attenuation=float(
                 chunk_topological_shield_adjacency_attenuation
             ),
+            chunk_scoring_config=dict(chunk_scoring_config),
             chunk_guard_enabled=bool(chunk_guard_enabled),
             chunk_guard_mode=str(chunk_guard_mode),
             chunk_guard_lambda_penalty=float(chunk_guard_lambda_penalty),

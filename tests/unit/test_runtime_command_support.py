@@ -1,13 +1,16 @@
 ﻿from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
 from ace_lite.cli_app.runtime_command_support import (
     RUNTIME_COMMAND_DOMAIN_REGISTRY,
     build_codex_mcp_setup_plan,
+    build_runtime_settings_governance_payload,
     build_runtime_status_payload,
     build_runtime_status_snapshot,
+    collect_runtime_settings_persist_payload,
     collect_runtime_settings_show_payload,
     collect_runtime_status_payload,
     execute_codex_mcp_setup_plan,
@@ -24,6 +27,7 @@ from ace_lite.runtime_stats import RuntimeInvocationStats
 from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.runtime_settings_store import (
     build_runtime_settings_record,
+    load_runtime_settings_record,
     persist_runtime_settings_record,
 )
 
@@ -43,6 +47,7 @@ def _seed_runtime_stats_with_degraded_reason(db_path: Path) -> None:
             degraded_reason_codes=("memory_fallback",),
             stage_latencies=(
                 {"stage_name": "memory", "elapsed_ms": 20.0},
+                {"stage_name": "agent_loop", "elapsed_ms": 12.0},
                 {"stage_name": "total", "elapsed_ms": 80.0},
             ),
         )
@@ -102,6 +107,10 @@ def test_resolve_runtime_settings_bundle_uses_last_known_good_selected_profile(
     assert bundle["selected_profile"] == "team-default"
     assert str(bundle["resolved_current_path"]) == str(current_path)
     assert str(bundle["resolved_lkg_path"]) == str(lkg_path)
+    assert bundle["governance"]["governance_state"] == "fallback_to_last_known_good"
+    assert bundle["governance"]["current_record"]["status"] == "invalid"
+    assert bundle["governance"]["last_known_good_record"]["status"] == "valid"
+    assert bundle["governance"]["persist_recommended"] is True
 
 
 def test_collect_runtime_settings_show_payload_matches_bundle_snapshot(
@@ -141,6 +150,83 @@ def test_collect_runtime_settings_show_payload_matches_bundle_snapshot(
     assert payload["persisted_source"] == bundle["persisted_source"]
     assert payload["stats_tags"] == resolved.metadata.get("stats_tags", {})
     assert payload["metadata"] == resolved.metadata
+    assert payload["governance"] == bundle["governance"]
+
+
+def test_build_runtime_settings_governance_payload_reports_current_and_lkg_state(
+    tmp_path: Path,
+) -> None:
+    current_path = tmp_path / "current-settings.json"
+    lkg_path = tmp_path / "last-known-good.json"
+    valid_payload = build_runtime_settings_record(
+        snapshot={"plan": {"retrieval": {"top_k_files": 12}}},
+        provenance={"plan": {"retrieval": {"top_k_files": "cli"}}},
+        metadata={"selected_profile": "team-default"},
+    )
+    persist_runtime_settings_record(
+        current_path=current_path,
+        last_known_good_path=lkg_path,
+        payload=valid_payload,
+        update_last_known_good=True,
+    )
+    current_path.write_text(
+        '{"schema_version": 1, "snapshot": {"broken": true}}',
+        encoding="utf-8",
+    )
+
+    bundle = resolve_runtime_settings_bundle(
+        root=str(tmp_path),
+        config_file=".ace-lite.yml",
+        mcp_name="ace-lite",
+        runtime_profile=None,
+        use_snapshot=False,
+        current_path=str(current_path),
+        last_known_good_path=str(lkg_path),
+    )
+    governance = build_runtime_settings_governance_payload(bundle)
+
+    assert governance["persisted_source"] == "last_known_good"
+    assert governance["current_record_valid"] is False
+    assert governance["last_known_good_record_valid"] is True
+    assert governance["resolved_matches_current"] is False
+    assert governance["persisted_selected_profile"] == "team-default"
+
+
+def test_collect_runtime_settings_persist_payload_writes_current_and_lkg(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        "plan:\n  retrieval:\n    top_k_files: 9\n",
+        encoding="utf-8",
+    )
+    current_path = tmp_path / "current-settings.json"
+    lkg_path = tmp_path / "last-known-good.json"
+
+    payload = collect_runtime_settings_persist_payload(
+        root=str(tmp_path),
+        config_file=".ace-lite.yml",
+        mcp_name="ace-lite",
+        runtime_profile=None,
+        use_snapshot=False,
+        current_path=str(current_path),
+        last_known_good_path=str(lkg_path),
+        update_last_known_good=True,
+    )
+    current_record = load_runtime_settings_record(current_path)
+    lkg_record = load_runtime_settings_record(lkg_path)
+
+    assert payload["ok"] is True
+    assert payload["event"] == "runtime_settings_persist"
+    assert payload["persisted_path"] == str(current_path)
+    assert payload["last_known_good_updated"] is True
+    assert payload["governance"]["persisted_source"] == "current"
+    assert payload["governance"]["resolved_matches_current"] is True
+    assert payload["governance"]["resolved_matches_last_known_good"] is True
+    assert current_record is not None
+    assert lkg_record is not None
+    assert current_record["fingerprint"] == payload["fingerprint"]
+    assert lkg_record["fingerprint"] == payload["fingerprint"]
+    assert json.loads(current_path.read_text(encoding="utf-8"))["fingerprint"] == payload["fingerprint"]
 
 
 def test_resolve_effective_runtime_skills_dir_prefers_explicit_override() -> None:
@@ -214,6 +300,8 @@ def test_build_runtime_status_snapshot_matches_collect_payload(tmp_path: Path) -
     assert {key: value for key, value in payload.items() if key not in {"ok", "event"}} == (
         expected_snapshot
     )
+    assert payload["settings_governance"] == bundle["governance"]
+    assert payload["settings_governance"]["resolved_fingerprint"] == bundle["resolved"].fingerprint
 
 
 def test_load_runtime_preference_capture_summary_reads_durable_feedback_store(
@@ -526,6 +614,29 @@ def test_load_runtime_stats_summary_canonicalizes_runtime_reason_aliases_in_top_
     assert payload["next_cycle_input_summary"]["priorities"][0]["action_hint"]
 
 
+def test_load_runtime_stats_summary_exposes_agent_loop_control_plane_readiness(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / ".ace-lite" / "runtime_state.db"
+    _seed_runtime_stats_with_degraded_reason(db_path)
+
+    payload = load_runtime_stats_summary(
+        db_path=db_path,
+        repo_key="repo-alpha",
+        profile_key="bugfix",
+        home_path=tmp_path,
+    )
+
+    summary = payload["agent_loop_control_plane_summary"]
+    assert summary["scope_kind"] == "repo_profile"
+    assert summary["source_plan_retry_supported"] is True
+    assert summary["rerun_policy_supported"] is True
+    assert summary["observed_stage"] is True
+    assert summary["agent_loop_stage_latency_ms_avg"] == 12.0
+    assert summary["preferred_execution_scope"] == "post_source_runtime"
+    assert summary["source_plan_retry_rerun_stages"] == ["source_plan", "validation"]
+
+
 def test_build_runtime_status_payload_canonicalizes_runtime_reason_aliases_in_degraded_services(
     tmp_path: Path,
 ) -> None:
@@ -567,6 +678,9 @@ def test_build_runtime_status_payload_canonicalizes_runtime_reason_aliases_in_de
     assert payload["latest_runtime"]["next_cycle_input_summary"]["priorities"][0][
         "reason_code"
     ] == "latency_budget_exceeded"
+    assert payload["latest_runtime"]["agent_loop_control_plane_summary"] == runtime_stats[
+        "agent_loop_control_plane_summary"
+    ]
 
 
 def test_execute_codex_mcp_setup_plan_dry_run_does_not_run_commands() -> None:
@@ -694,7 +808,9 @@ def test_runtime_command_domain_registry_covers_phase1_domains() -> None:
     assert domains == {
         "settings": (
             "resolve_runtime_settings_bundle",
+            "build_runtime_settings_governance_payload",
             "build_runtime_settings_payload",
+            "collect_runtime_settings_persist_payload",
             "collect_runtime_settings_show_payload",
         ),
         "doctor": (

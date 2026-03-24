@@ -134,6 +134,7 @@ def execute_index_stage_runtime(
         scip_index_path=str(config.scip_index_path),
         scip_provider=str(config.scip_provider),
         scip_generate_fallback=bool(config.scip_generate_fallback),
+        scip_base_weight=float(config.scip_base_weight),
         embedding_index_path=embedding_index_path,
         embedding_enabled=bool(config.embedding_enabled),
         embedding_provider=str(config.embedding_provider),
@@ -188,6 +189,16 @@ def execute_index_stage_runtime(
         chunk_topological_shield_adjacency_attenuation=float(
             topological_shield_cfg.adjacency_attenuation
         ),
+        chunk_scoring_config={
+            "file_prior_weight": float(chunking_cfg.file_prior_weight),
+            "path_match": float(chunking_cfg.path_match),
+            "module_match": float(chunking_cfg.module_match),
+            "symbol_exact": float(chunking_cfg.symbol_exact),
+            "symbol_partial": float(chunking_cfg.symbol_partial),
+            "signature_match": float(chunking_cfg.signature_match),
+            "reference_factor": float(chunking_cfg.reference_factor),
+            "reference_cap": float(chunking_cfg.reference_cap),
+        },
         chunk_guard_enabled=bool(chunk_guard_cfg.enabled),
         chunk_guard_mode=str(chunk_guard_cfg.mode),
         chunk_guard_lambda_penalty=float(chunk_guard_cfg.lambda_penalty),

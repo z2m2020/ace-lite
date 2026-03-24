@@ -172,6 +172,10 @@ def test_run_memory_exposes_ltm_selected_and_attribution_in_compact_mode(
             as_of="2026-03-19T09:44:00+08:00",
             valid_from="2026-03-19T09:44:00+08:00",
             derived_from_observation_id="obs-1",
+            metadata={
+                "feedback_signal": "helpful",
+                "attribution_scope": "explicit_selection_only",
+            },
         )
     )
     provider = LongTermMemoryProvider(store, limit=3, container_tag="repo/demo")
@@ -184,15 +188,27 @@ def test_run_memory_exposes_ltm_selected_and_attribution_in_compact_mode(
 
     assert payload["ltm"]["selected_count"] == 1
     assert payload["ltm"]["attribution_count"] == 1
+    assert payload["ltm"]["feedback_signal_counts"] == {
+        "helpful": 1,
+        "stale": 0,
+        "harmful": 0,
+    }
+    assert payload["ltm"]["attribution_scope_counts"] == {
+        "explicit_selection_only": 1
+    }
     selected = payload["ltm"]["selected"][0]
     assert selected["memory_kind"] == "fact"
     assert selected["fact_type"] == "repo_policy"
     assert selected["subject"] == "runtime.validation.git"
     assert selected["predicate"] == "fallback_policy"
     assert selected["object"] == "reuse_checkout_or_skip"
+    assert selected["feedback_signal"] == "helpful"
+    assert selected["attribution_scope"] == "explicit_selection_only"
     attribution = payload["ltm"]["attribution"][0]
     assert attribution["handle"] == selected["handle"]
-    assert attribution["signals"] == ["fact"]
+    assert attribution["signals"] == ["fact", "helpful"]
+    assert attribution["feedback_signal"] == "helpful"
+    assert attribution["attribution_scope"] == "explicit_selection_only"
     assert attribution["summary"] == "runtime.validation.git fallback_policy reuse_checkout_or_skip"
 
 

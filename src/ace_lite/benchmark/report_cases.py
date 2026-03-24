@@ -137,6 +137,42 @@ def _append_case_section(
         f"{float(case.get('graph_closure_total', 0.0)):.4f}"
     )
     lines.append(
+        "- graph_source_provider_loaded: "
+        f"{float(case.get('graph_source_provider_loaded', 0.0)):.4f}"
+    )
+    lines.append(
+        "- graph_source_projection_fallback: "
+        f"{float(case.get('graph_source_projection_fallback', 0.0)):.4f}"
+    )
+    lines.append(
+        "- graph_source_edge_count: "
+        f"{float(case.get('graph_source_edge_count', 0.0)):.4f}"
+    )
+    lines.append(
+        "- graph_source_inbound_signal_chunk_count: "
+        f"{float(case.get('graph_source_inbound_signal_chunk_count', 0.0)):.4f}"
+    )
+    lines.append(
+        "- graph_source_inbound_signal_coverage_ratio: "
+        f"{float(case.get('graph_source_inbound_signal_coverage_ratio', 0.0)):.4f}"
+    )
+    lines.append(
+        "- graph_source_centrality_signal_chunk_count: "
+        f"{float(case.get('graph_source_centrality_signal_chunk_count', 0.0)):.4f}"
+    )
+    lines.append(
+        "- graph_source_centrality_signal_coverage_ratio: "
+        f"{float(case.get('graph_source_centrality_signal_coverage_ratio', 0.0)):.4f}"
+    )
+    lines.append(
+        "- graph_source_pagerank_signal_chunk_count: "
+        f"{float(case.get('graph_source_pagerank_signal_chunk_count', 0.0)):.4f}"
+    )
+    lines.append(
+        "- graph_source_pagerank_signal_coverage_ratio: "
+        f"{float(case.get('graph_source_pagerank_signal_coverage_ratio', 0.0)):.4f}"
+    )
+    lines.append(
         "- source_plan_graph_closure_preference_enabled: "
         f"{float(case.get('source_plan_graph_closure_preference_enabled', 0.0)):.4f}"
     )
@@ -247,6 +283,7 @@ def _append_case_section(
     _append_repomap_seed_details(lines, case=case)
     _append_graph_prior_details(lines, case=case)
     _append_graph_closure_details(lines, case=case)
+    _append_graph_context_source_details(lines, case=case)
     _append_index_fusion_granularity_details(lines, case=case)
     _append_graph_lookup_details(lines, case=case)
     _append_source_plan_packing_details(lines, case=case)
@@ -451,6 +488,65 @@ def _append_graph_closure_details(lines: list[str], *, case: dict[str, Any]) -> 
                 ]
             )
         )
+
+
+def _append_graph_context_source_details(
+    lines: list[str], *, case: dict[str, Any]
+) -> None:
+    graph_context_source = case.get("graph_context_source")
+    if not isinstance(graph_context_source, dict) or not graph_context_source:
+        return
+    lines.append(
+        "- graph_context_source: "
+        + ", ".join(
+            [
+                "provider_loaded={value}".format(
+                    value=bool(graph_context_source.get("provider_loaded", False))
+                ),
+                "projection_fallback={value}".format(
+                    value=bool(
+                        graph_context_source.get("projection_fallback", False)
+                    )
+                ),
+                "edge_count={value}".format(
+                    value=int(graph_context_source.get("edge_count", 0) or 0)
+                ),
+                "inbound_signal_chunk_count={value}".format(
+                    value=int(
+                        graph_context_source.get(
+                            "inbound_signal_chunk_count", 0
+                        )
+                        or 0
+                    )
+                ),
+                "inbound_signal_coverage_ratio={value}".format(
+                    value=f"{float(graph_context_source.get('inbound_signal_coverage_ratio', 0.0) or 0.0):.4f}"
+                ),
+                "centrality_signal_chunk_count={value}".format(
+                    value=int(
+                        graph_context_source.get(
+                            "centrality_signal_chunk_count", 0
+                        )
+                        or 0
+                    )
+                ),
+                "centrality_signal_coverage_ratio={value}".format(
+                    value=f"{float(graph_context_source.get('centrality_signal_coverage_ratio', 0.0) or 0.0):.4f}"
+                ),
+                "pagerank_signal_chunk_count={value}".format(
+                    value=int(
+                        graph_context_source.get(
+                            "pagerank_signal_chunk_count", 0
+                        )
+                        or 0
+                    )
+                ),
+                "pagerank_signal_coverage_ratio={value}".format(
+                    value=f"{float(graph_context_source.get('pagerank_signal_coverage_ratio', 0.0) or 0.0):.4f}"
+                ),
+            ]
+        )
+    )
 
 
 def _append_index_fusion_granularity_details(

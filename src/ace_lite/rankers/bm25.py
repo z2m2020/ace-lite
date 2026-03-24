@@ -8,18 +8,11 @@ from __future__ import annotations
 
 import math
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from ace_lite.text_tokens import code_tokens
-from ace_lite.scoring_config import (
-    BM25_B,
-    BM25_K1,
-    BM25_PATH_PRIOR_FACTOR,
-    BM25_SCORE_SCALE,
-    BM25_SHORTLIST_FACTOR,
-    BM25_SHORTLIST_MIN,
-)
+from ace_lite.scoring_config import resolve_bm25_scoring_config
 
 
 def _tokenize_words(text: str) -> list[str]:
@@ -64,6 +57,7 @@ def rank_candidates_bm25(
     *,
     min_score: int = 1,
     index_hash: str | None = None,
+    bm25_config: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Rank candidates using BM25 scoring.
 
@@ -90,6 +84,7 @@ def rank_candidates_bm25(
     ]
     if not normalized_terms:
         return []
+    scoring = resolve_bm25_scoring_config(bm25_config)
 
     cache_key = _bm25_cache_key(index_hash)
     cached_docs = _get_cached_docs(cache_key)
@@ -182,8 +177,8 @@ def rank_candidates_bm25(
             if term_frequency.get(term, 0) > 0:
                 document_frequency[term] = document_frequency.get(term, 0) + 1
 
-    k1 = BM25_K1
-    b = BM25_B
+    k1 = float(scoring["k1"])
+    b = float(scoring["b"])
     threshold = max(0.0, float(min_score))
 
     ranked: list[dict[str, Any]] = []
@@ -215,9 +210,9 @@ def rank_candidates_bm25(
         # Path prior for source directories
         path_prior = 0.0
         if path.startswith(("src/", "api/", "ui/")):
-            path_prior = BM25_PATH_PRIOR_FACTOR * matched_terms
+            path_prior = float(scoring["path_prior_factor"]) * matched_terms
 
-        score = (raw_score * BM25_SCORE_SCALE) + path_prior
+        score = (raw_score * float(scoring["score_scale"])) + path_prior
         tier = str(doc.get("tier") or "")
         if tier == "dependency" and score > 0.0:
             score *= 0.35
@@ -233,7 +228,7 @@ def rank_candidates_bm25(
                 "symbol_count": int(doc.get("symbol_count", 0) or 0),
                 "import_count": int(doc.get("import_count", 0) or 0),
                 "score_breakdown": {
-                    "bm25": round(raw_score * BM25_SCORE_SCALE, 6),
+                    "bm25": round(raw_score * float(scoring["score_scale"]), 6),
                     "path_prior": round(path_prior, 6),
                     "matched_terms": matched_terms,
                     "ranker": "bm25_lite",
@@ -258,6 +253,8 @@ def rank_candidates_bm25_two_stage(
     top_k_files: int = 8,
     heuristic_ranker: Callable[..., list[dict[str, Any]]],
     index_hash: str | None = None,
+    bm25_config: Mapping[str, Any] | None = None,
+    heuristic_config: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Two-stage BM25 ranking with heuristic shortlist.
 
@@ -277,6 +274,7 @@ def rank_candidates_bm25_two_stage(
     """
     if not isinstance(files_map, dict):
         return []
+    scoring = resolve_bm25_scoring_config(bm25_config)
 
     def _call_bm25(
         corpus: dict[str, Any],
@@ -285,19 +283,38 @@ def rank_candidates_bm25_two_stage(
         index_hash: str | None,
     ) -> list[dict[str, Any]]:
         try:
-            return rank_candidates_bm25(corpus, terms, min_score=min_score, index_hash=index_hash)
+            return rank_candidates_bm25(
+                corpus,
+                terms,
+                min_score=min_score,
+                index_hash=index_hash,
+                bm25_config=scoring,
+            )
         except TypeError:
-            return rank_candidates_bm25(corpus, terms, min_score=min_score)
+            return rank_candidates_bm25(
+                corpus,
+                terms,
+                min_score=min_score,
+                bm25_config=scoring,
+            )
 
     # First stage: heuristic ranking
-    heuristic_ranked = heuristic_ranker(files_map, terms, min_score=0)
+    try:
+        heuristic_ranked = heuristic_ranker(
+            files_map,
+            terms,
+            min_score=0,
+            scoring_config=heuristic_config,
+        )
+    except TypeError:
+        heuristic_ranked = heuristic_ranker(files_map, terms, min_score=0)
     if not heuristic_ranked:
         return _call_bm25(files_map, min_score=min_score, index_hash=index_hash)
 
     # Compute shortlist size
     shortlist_limit = max(
-        max(1, int(top_k_files)) * BM25_SHORTLIST_FACTOR,
-        BM25_SHORTLIST_MIN,
+        max(1, int(top_k_files)) * int(scoring["shortlist_factor"]),
+        int(scoring["shortlist_min"]),
     )
     shortlist_paths = [
         str(item.get("path") or "").strip()

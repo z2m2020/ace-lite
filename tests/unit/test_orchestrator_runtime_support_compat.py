@@ -32,6 +32,9 @@ def test_runtime_support_compat_preserves_validation_retry_shortcut() -> None:
     assert compat.resolve_agent_loop_rerun_stages(
         action_type="request_validation_retry"
     ) == ["validation"]
+    assert compat.resolve_agent_loop_rerun_stages(
+        action_type="request_source_plan_retry"
+    ) == ["source_plan", "validation"]
     assert compat.resolve_agent_loop_rerun_stages(action_type="other") == [
         "index",
         "source_plan",

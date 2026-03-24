@@ -238,6 +238,66 @@ def test_benchmark_runner_can_omit_case_details() -> None:
     assert "validation_tests" not in case_payload
 
 
+def test_benchmark_runner_emits_agent_loop_control_plane_summary() -> None:
+    class _AgentLoopStubOrchestrator:
+        def plan(self, **kwargs) -> dict[str, object]:
+            return {
+                "index": {
+                    "candidate_files": [{"path": "src/app.py", "module": "src.app"}]
+                },
+                "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
+                "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+                "observability": {
+                    "agent_loop": {
+                        "enabled": True,
+                        "attempted": True,
+                        "actions_requested": 1,
+                        "actions_executed": 1,
+                        "stop_reason": "completed",
+                        "replay_safe": True,
+                        "last_rerun_policy": {"policy_id": "source_plan_refresh"},
+                        "action_type_counts": {"request_source_plan_retry": 1},
+                    }
+                },
+            }
+
+    runner = BenchmarkRunner(_AgentLoopStubOrchestrator())
+    results = runner.run(
+        cases=[
+            {
+                "case_id": "c1",
+                "query": "find app",
+                "expected_keys": ["app"],
+                "top_k": 4,
+            }
+        ],
+        repo="demo",
+        root=".",
+    )
+
+    assert results["agent_loop_control_plane_summary"] == {
+        "case_count": 1,
+        "observed_case_count": 1,
+        "observed_case_rate": 1.0,
+        "enabled_case_count": 1,
+        "enabled_case_rate": 1.0,
+        "attempted_case_count": 1,
+        "attempted_case_rate": 1.0,
+        "replay_safe_case_count": 1,
+        "replay_safe_case_rate": 1.0,
+        "actions_requested_mean": 1.0,
+        "actions_executed_mean": 1.0,
+        "request_more_context_case_count": 0,
+        "request_more_context_case_rate": 0.0,
+        "request_source_plan_retry_case_count": 1,
+        "request_source_plan_retry_case_rate": 1.0,
+        "request_validation_retry_case_count": 0,
+        "request_validation_retry_case_rate": 0.0,
+        "dominant_stop_reason": "completed",
+        "dominant_last_policy_id": "source_plan_refresh",
+    }
+
+
 def test_benchmark_runner_passes_case_filters_to_orchestrator() -> None:
     class _FilterAwareStub:
         def __init__(self) -> None:
@@ -1319,6 +1379,11 @@ class _RetrievalContextStubOrchestrator(_StubOrchestrator):
                     "retrieval_context_pool_chunk_count": 1.0,
                     "retrieval_context_pool_coverage_ratio": 0.5,
                 },
+                "embeddings": {
+                    "enabled": True,
+                    "runtime_provider": "hash_cross",
+                    "semantic_rerank_applied": True,
+                },
                 "graph_lookup": {
                     "enabled": True,
                     "reason": "candidate_count_guarded",
@@ -1404,6 +1469,17 @@ def test_benchmark_runner_aggregates_retrieval_default_strategy_summary() -> Non
         "parent_symbol_available_case_rate": 1.0,
         "reference_hint_available_case_count": 1,
         "reference_hint_available_case_rate": 1.0,
+        "semantic_rerank_configured_case_count": 1,
+        "semantic_rerank_configured_case_rate": 1.0,
+        "semantic_rerank_enabled_case_count": 1,
+        "semantic_rerank_enabled_case_rate": 1.0,
+        "semantic_rerank_applied_case_count": 1,
+        "semantic_rerank_applied_case_rate": 1.0,
+        "semantic_rerank_cross_encoder_case_count": 1,
+        "semantic_rerank_cross_encoder_case_rate": 1.0,
+        "semantic_rerank_dominant_provider": "hash_cross",
+        "semantic_rerank_dominant_mode": "cross_encoder",
+        "semantic_rerank_provider_case_counts": {"hash_cross": 1},
         "graph_lookup_enabled_case_count": 1,
         "graph_lookup_enabled_case_rate": 1.0,
         "graph_lookup_guarded_case_count": 1,

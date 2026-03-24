@@ -362,6 +362,7 @@ def refine_candidate_pool(
     scip_index_path: str,
     scip_provider: str,
     scip_generate_fallback: bool,
+    scip_base_weight: float,
     embedding_index_path: str | Path,
     embedding_enabled: bool,
     embedding_provider: str,
@@ -432,6 +433,7 @@ def refine_candidate_pool(
         scip_index_path=str(scip_index_path),
         scip_provider=str(scip_provider),
         scip_generate_fallback=bool(scip_generate_fallback),
+        scip_base_weight=float(scip_base_weight),
         mark_timing=deps.mark_timing,
     )
     refined_candidates = list(structural_rerank.candidates)

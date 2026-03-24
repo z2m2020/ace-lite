@@ -110,6 +110,15 @@ def build_case_detail_payload(
     topological_shield_coverage_ratio: float,
     topological_shield_attenuation_total: float,
     topological_shield_attenuation_per_chunk: float,
+    graph_source_provider_loaded: bool,
+    graph_source_projection_fallback: bool,
+    graph_source_edge_count: int,
+    graph_source_inbound_signal_chunk_count: int,
+    graph_source_inbound_signal_coverage_ratio: float,
+    graph_source_centrality_signal_chunk_count: int,
+    graph_source_centrality_signal_coverage_ratio: float,
+    graph_source_pagerank_signal_chunk_count: int,
+    graph_source_pagerank_signal_coverage_ratio: float,
     graph_closure_enabled: bool,
     graph_closure_boosted_chunk_count: int,
     graph_closure_coverage_ratio: float,
@@ -333,6 +342,30 @@ def build_case_detail_payload(
             "attenuation_total": round(topological_shield_attenuation_total, 6),
             "attenuation_per_chunk": round(
                 topological_shield_attenuation_per_chunk,
+                6,
+            ),
+        },
+        "graph_context_source": {
+            "provider_loaded": bool(graph_source_provider_loaded),
+            "projection_fallback": bool(graph_source_projection_fallback),
+            "edge_count": int(graph_source_edge_count),
+            "inbound_signal_chunk_count": int(graph_source_inbound_signal_chunk_count),
+            "inbound_signal_coverage_ratio": round(
+                graph_source_inbound_signal_coverage_ratio,
+                6,
+            ),
+            "centrality_signal_chunk_count": int(
+                graph_source_centrality_signal_chunk_count
+            ),
+            "centrality_signal_coverage_ratio": round(
+                graph_source_centrality_signal_coverage_ratio,
+                6,
+            ),
+            "pagerank_signal_chunk_count": int(
+                graph_source_pagerank_signal_chunk_count
+            ),
+            "pagerank_signal_coverage_ratio": round(
+                graph_source_pagerank_signal_coverage_ratio,
                 6,
             ),
         },

@@ -21,6 +21,9 @@ Usage:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 # ---------------------------------------------------------------------------
 # Chunk Scoring Weights
 # ---------------------------------------------------------------------------
@@ -203,14 +206,140 @@ MEMORY_STRATEGIES: tuple[str, ...] = ("semantic", "hybrid")
 SBFL_METRIC_CHOICES: tuple[str, ...] = ("ochiai", "dstar")
 
 
+CHUNK_SCORING_DEFAULTS: dict[str, float] = {
+    "file_prior_weight": CHUNK_FILE_PRIOR_WEIGHT,
+    "path_match": CHUNK_PATH_MATCH,
+    "module_match": CHUNK_MODULE_MATCH,
+    "symbol_exact": CHUNK_SYMBOL_EXACT,
+    "symbol_partial": CHUNK_SYMBOL_PARTIAL,
+    "signature_match": CHUNK_SIGNATURE_MATCH,
+    "reference_factor": CHUNK_REFERENCE_FACTOR,
+    "reference_cap": CHUNK_REFERENCE_CAP,
+}
+
+HEURISTIC_SCORING_DEFAULTS: dict[str, float] = {
+    "path_exact": HEUR_PATH_EXACT,
+    "path_contains": HEUR_PATH_CONTAINS,
+    "module_exact": HEUR_MODULE_EXACT,
+    "module_tail": HEUR_MODULE_TAIL,
+    "module_contains": HEUR_MODULE_CONTAINS,
+    "symbol_exact": HEUR_SYMBOL_EXACT,
+    "symbol_partial_factor": HEUR_SYMBOL_PARTIAL_FACTOR,
+    "symbol_partial_cap": HEUR_SYMBOL_PARTIAL_CAP,
+    "import_factor": HEUR_IMPORT_FACTOR,
+    "import_cap": HEUR_IMPORT_CAP,
+    "content_symbol_factor": HEUR_CONTENT_SYMBOL_FACTOR,
+    "content_import_factor": HEUR_CONTENT_IMPORT_FACTOR,
+    "content_cap": HEUR_CONTENT_CAP,
+    "depth_base": HEUR_DEPTH_BASE,
+    "depth_factor": HEUR_DEPTH_FACTOR,
+}
+
+BM25_SCORING_DEFAULTS: dict[str, float | int] = {
+    "k1": BM25_K1,
+    "b": BM25_B,
+    "score_scale": BM25_SCORE_SCALE,
+    "path_prior_factor": BM25_PATH_PRIOR_FACTOR,
+    "shortlist_min": BM25_SHORTLIST_MIN,
+    "shortlist_factor": BM25_SHORTLIST_FACTOR,
+}
+
+HYBRID_SCORING_DEFAULTS: dict[str, float | int] = {
+    "shortlist_min": HYBRID_SHORTLIST_MIN,
+    "shortlist_factor": HYBRID_SHORTLIST_FACTOR,
+}
+
+SCIP_SCORING_DEFAULTS: dict[str, float] = {
+    "base_weight": SCIP_BASE_WEIGHT,
+}
+
+
+def _resolve_scoring_mapping(
+    *,
+    defaults: Mapping[str, Any],
+    overrides: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    resolved = {str(key): value for key, value in defaults.items()}
+    if not isinstance(overrides, Mapping):
+        return resolved
+    for key, value in overrides.items():
+        normalized_key = str(key or "").strip()
+        if not normalized_key or normalized_key not in resolved:
+            continue
+        resolved[normalized_key] = value
+    return resolved
+
+
+def resolve_chunk_scoring_config(
+    overrides: Mapping[str, Any] | None = None,
+) -> dict[str, float]:
+    resolved = _resolve_scoring_mapping(
+        defaults=CHUNK_SCORING_DEFAULTS,
+        overrides=overrides,
+    )
+    return {key: float(resolved[key]) for key in CHUNK_SCORING_DEFAULTS}
+
+
+def resolve_heuristic_scoring_config(
+    overrides: Mapping[str, Any] | None = None,
+) -> dict[str, float]:
+    resolved = _resolve_scoring_mapping(
+        defaults=HEURISTIC_SCORING_DEFAULTS,
+        overrides=overrides,
+    )
+    return {key: float(resolved[key]) for key in HEURISTIC_SCORING_DEFAULTS}
+
+
+def resolve_bm25_scoring_config(
+    overrides: Mapping[str, Any] | None = None,
+) -> dict[str, float | int]:
+    resolved = _resolve_scoring_mapping(
+        defaults=BM25_SCORING_DEFAULTS,
+        overrides=overrides,
+    )
+    return {
+        "k1": float(resolved["k1"]),
+        "b": float(resolved["b"]),
+        "score_scale": float(resolved["score_scale"]),
+        "path_prior_factor": float(resolved["path_prior_factor"]),
+        "shortlist_min": int(resolved["shortlist_min"]),
+        "shortlist_factor": int(resolved["shortlist_factor"]),
+    }
+
+
+def resolve_hybrid_scoring_config(
+    overrides: Mapping[str, Any] | None = None,
+) -> dict[str, float | int]:
+    resolved = _resolve_scoring_mapping(
+        defaults=HYBRID_SCORING_DEFAULTS,
+        overrides=overrides,
+    )
+    return {
+        "shortlist_min": int(resolved["shortlist_min"]),
+        "shortlist_factor": int(resolved["shortlist_factor"]),
+    }
+
+
+def resolve_scip_scoring_config(
+    overrides: Mapping[str, Any] | None = None,
+) -> dict[str, float]:
+    resolved = _resolve_scoring_mapping(
+        defaults=SCIP_SCORING_DEFAULTS,
+        overrides=overrides,
+    )
+    return {"base_weight": float(resolved["base_weight"])}
+
+
 __all__ = [
     "BM25_B",
     "BM25_K1",
+    "BM25_SCORING_DEFAULTS",
     "BM25_PATH_PRIOR_FACTOR",
     "BM25_SCORE_SCALE",
     "BM25_SHORTLIST_FACTOR",
     "BM25_SHORTLIST_MIN",
     "CANDIDATE_RANKER_CHOICES",
+    "CHUNK_SCORING_DEFAULTS",
     "CHUNK_DIVERSITY_KIND_PENALTY",
     "CHUNK_DIVERSITY_LOCALITY_PENALTY",
     "CHUNK_DIVERSITY_LOCALITY_WINDOW",
@@ -230,6 +359,7 @@ __all__ = [
     "HEUR_CONTENT_SYMBOL_FACTOR",
     "HEUR_DEPTH_BASE",
     "HEUR_DEPTH_FACTOR",
+    "HEURISTIC_SCORING_DEFAULTS",
     "HEUR_IMPORT_CAP",
     "HEUR_IMPORT_FACTOR",
     "HEUR_MODULE_CONTAINS",
@@ -245,6 +375,7 @@ __all__ = [
     "HYBRID_COVERAGE_WEIGHT",
     "HYBRID_FUSION_MODES",
     "HYBRID_HEURISTIC_WEIGHT",
+    "HYBRID_SCORING_DEFAULTS",
     "HYBRID_RRF_K_DEFAULT",
     "HYBRID_SHORTLIST_FACTOR",
     "HYBRID_SHORTLIST_MIN",
@@ -252,4 +383,10 @@ __all__ = [
     "MEMORY_STRATEGIES",
     "SBFL_METRIC_CHOICES",
     "SCIP_BASE_WEIGHT",
+    "SCIP_SCORING_DEFAULTS",
+    "resolve_bm25_scoring_config",
+    "resolve_chunk_scoring_config",
+    "resolve_heuristic_scoring_config",
+    "resolve_hybrid_scoring_config",
+    "resolve_scip_scoring_config",
 ]

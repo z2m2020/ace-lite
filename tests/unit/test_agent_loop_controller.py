@@ -29,6 +29,31 @@ def test_controller_prefers_explicit_stage_action() -> None:
     )
 
 
+def test_controller_source_plan_retry_keeps_query_and_exposes_rerun_policy() -> None:
+    controller = BoundedLoopController(enabled=True, max_iterations=1)
+    action = build_agent_loop_action_v1(
+        action_type="request_source_plan_retry",
+        reason="repack_source_plan",
+        selected_tests=["pytest -q tests/unit/test_source_plan.py"],
+    ).as_dict()
+
+    assert controller.build_incremental_query(
+        base_query="draft auth plan",
+        action=action,
+    ) == "draft auth plan"
+
+    rerun_policy = controller.build_rerun_policy(
+        action=action,
+        rerun_stages=["source_plan", "validation"],
+        iteration_index=1,
+    )
+
+    assert rerun_policy["policy_id"] == "source_plan_refresh"
+    assert rerun_policy["action_category"] == "source_plan"
+    assert rerun_policy["query_mode"] == "reuse"
+    assert rerun_policy["rerun_stages"] == ["source_plan", "validation"]
+
+
 def test_controller_synthesizes_and_records_validation_driven_iteration() -> None:
     controller = BoundedLoopController(enabled=True, max_iterations=1)
 
@@ -54,6 +79,11 @@ def test_controller_synthesizes_and_records_validation_driven_iteration() -> Non
     assert "Focus refinement" in incremental_query
     controller.record_iteration(
         action=selected,
+        rerun_policy=controller.build_rerun_policy(
+            action=selected,
+            rerun_stages=["index", "source_plan", "validation"],
+            iteration_index=1,
+        ),
         retrieval_refinement=controller.build_retrieval_refinement(
             action=selected,
             iteration_index=1,
@@ -87,6 +117,7 @@ def test_controller_synthesizes_and_records_validation_driven_iteration() -> Non
     assert summary["actions_executed"] == 1
     assert summary["iterations"][0]["validation_status"] == "passed"
     assert summary["iterations"][0]["diagnostic_count"] == 1
+    assert summary["iterations"][0]["rerun_policy"]["policy_id"] == "retrieval_refresh"
     assert summary["iterations"][0]["retrieval_refinement"]["schema_version"] == (
         "agent_loop_retrieval_refinement_v1"
     )
@@ -100,6 +131,8 @@ def test_controller_synthesizes_and_records_validation_driven_iteration() -> Non
     assert summary["branch_batch"]["candidates"][0]["branch_id"] == "iteration-1"
     assert summary["branch_selection"]["winner_branch_id"] == "iteration-1"
     assert summary["branch_selection"]["ranked_branch_ids"] == ["iteration-1"]
+    assert summary["last_rerun_policy"]["policy_id"] == "retrieval_refresh"
+    assert summary["action_type_counts"] == {"request_more_context": 1}
 
 
 def test_controller_synthesizes_action_from_failed_validation_probes() -> None:

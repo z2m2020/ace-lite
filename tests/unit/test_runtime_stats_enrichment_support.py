@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ace_lite.cli_app.runtime_stats_enrichment_support import (
+    build_runtime_agent_loop_control_plane_summary,
     build_runtime_memory_health_summary,
     build_runtime_top_pain_summary,
 )
@@ -27,6 +28,12 @@ def test_runtime_stats_enrichment_support_builds_top_pain_and_memory_health() ->
                     "invocation_count": 2,
                     "latency_ms_sum": 40.0,
                     "latency_ms_avg": 20.0,
+                },
+                {
+                    "stage_name": "agent_loop",
+                    "invocation_count": 2,
+                    "latency_ms_sum": 24.0,
+                    "latency_ms_avg": 12.0,
                 }
             ],
         }
@@ -55,6 +62,9 @@ def test_runtime_stats_enrichment_support_builds_top_pain_and_memory_health() ->
         runtime_scope_map=runtime_scope_map,
         top_pain_summary=top_pain_summary,
     )
+    agent_loop_control_plane_summary = build_runtime_agent_loop_control_plane_summary(
+        runtime_scope_map=runtime_scope_map,
+    )
 
     assert top_pain_summary["count"] == 2
     assert top_pain_summary["items"][0]["reason_code"] == "memory_fallback"
@@ -64,3 +74,11 @@ def test_runtime_stats_enrichment_support_builds_top_pain_and_memory_health() ->
     assert memory_health_summary["reason_count"] == 1
     assert memory_health_summary["runtime_event_count"] == 2
     assert memory_health_summary["memory_stage_latency_ms_avg"] == 20.0
+    assert agent_loop_control_plane_summary["scope_kind"] == "repo_profile"
+    assert agent_loop_control_plane_summary["source_plan_retry_supported"] is True
+    assert agent_loop_control_plane_summary["observed_stage"] is True
+    assert agent_loop_control_plane_summary["agent_loop_stage_latency_ms_avg"] == 12.0
+    assert agent_loop_control_plane_summary["source_plan_retry_rerun_stages"] == [
+        "source_plan",
+        "validation",
+    ]

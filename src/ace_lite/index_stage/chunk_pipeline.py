@@ -31,6 +31,7 @@ class ChunkSelectionRuntimeConfig:
     chunk_topological_shield_max_attenuation: float
     chunk_topological_shield_shared_parent_attenuation: float
     chunk_topological_shield_adjacency_attenuation: float
+    chunk_scoring_config: dict[str, Any]
     chunk_guard_enabled: bool
     chunk_guard_mode: str
     chunk_guard_lambda_penalty: float
@@ -115,6 +116,7 @@ def select_index_chunks(
         chunk_topological_shield_adjacency_attenuation=float(
             runtime_config.chunk_topological_shield_adjacency_attenuation
         ),
+        chunk_scoring_config=dict(runtime_config.chunk_scoring_config),
         chunk_guard_enabled=bool(runtime_config.chunk_guard_enabled),
         chunk_guard_mode=str(runtime_config.chunk_guard_mode),
         chunk_guard_lambda_penalty=float(runtime_config.chunk_guard_lambda_penalty),

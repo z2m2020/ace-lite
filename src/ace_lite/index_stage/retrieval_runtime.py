@@ -32,6 +32,35 @@ def build_index_retrieval_runtime(
         "coverage_weight": float(retrieval_cfg.hybrid_re2_coverage_weight),
         "combined_scale": float(retrieval_cfg.hybrid_re2_combined_scale),
     }
+    bm25_config = {
+        "k1": float(retrieval_cfg.bm25_k1),
+        "b": float(retrieval_cfg.bm25_b),
+        "score_scale": float(retrieval_cfg.bm25_score_scale),
+        "path_prior_factor": float(retrieval_cfg.bm25_path_prior_factor),
+        "shortlist_min": int(retrieval_cfg.bm25_shortlist_min),
+        "shortlist_factor": int(retrieval_cfg.bm25_shortlist_factor),
+    }
+    heuristic_config = {
+        "path_exact": float(retrieval_cfg.heur_path_exact),
+        "path_contains": float(retrieval_cfg.heur_path_contains),
+        "module_exact": float(retrieval_cfg.heur_module_exact),
+        "module_tail": float(retrieval_cfg.heur_module_tail),
+        "module_contains": float(retrieval_cfg.heur_module_contains),
+        "symbol_exact": float(retrieval_cfg.heur_symbol_exact),
+        "symbol_partial_factor": float(retrieval_cfg.heur_symbol_partial_factor),
+        "symbol_partial_cap": float(retrieval_cfg.heur_symbol_partial_cap),
+        "import_factor": float(retrieval_cfg.heur_import_factor),
+        "import_cap": float(retrieval_cfg.heur_import_cap),
+        "content_symbol_factor": float(retrieval_cfg.heur_content_symbol_factor),
+        "content_import_factor": float(retrieval_cfg.heur_content_import_factor),
+        "content_cap": float(retrieval_cfg.heur_content_cap),
+        "depth_base": float(retrieval_cfg.heur_depth_base),
+        "depth_factor": float(retrieval_cfg.heur_depth_factor),
+    }
+    hybrid_config = {
+        "shortlist_min": int(retrieval_cfg.hybrid_re2_shortlist_min),
+        "shortlist_factor": int(retrieval_cfg.hybrid_re2_shortlist_factor),
+    }
     runtime_profile = build_retrieval_runtime_profile_fn(
         candidate_ranker=retrieval_cfg.candidate_ranker,
         min_candidate_score=int(retrieval_cfg.min_candidate_score),
@@ -39,6 +68,9 @@ def build_index_retrieval_runtime(
         hybrid_fusion_mode=fusion_mode,
         hybrid_rrf_k=int(retrieval_cfg.hybrid_re2_rrf_k),
         hybrid_weights=hybrid_weights,
+        bm25_config=bm25_config,
+        heuristic_config=heuristic_config,
+        hybrid_config=hybrid_config,
         index_hash=index_hash,
     )
     parallel_requested = bool(policy.get("index_parallel_enabled", False))

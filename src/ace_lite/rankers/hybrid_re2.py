@@ -6,6 +6,7 @@ combination or Reciprocal Rank Fusion (RRF), plus term coverage scoring.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from ace_lite.rankers.bm25 import rank_candidates_bm25
@@ -17,8 +18,7 @@ from ace_lite.scoring_config import (
     HYBRID_COVERAGE_WEIGHT,
     HYBRID_HEURISTIC_WEIGHT,
     HYBRID_RRF_K_DEFAULT,
-    HYBRID_SHORTLIST_FACTOR,
-    HYBRID_SHORTLIST_MIN,
+    resolve_hybrid_scoring_config,
 )
 from ace_lite.text_tokens import code_token_set
 
@@ -111,6 +111,9 @@ def rank_candidates_hybrid_re2(
     rrf_k: int = HYBRID_RRF_K_DEFAULT,
     weights: dict[str, float] | None = None,
     index_hash: str | None = None,
+    bm25_config: Mapping[str, Any] | None = None,
+    heuristic_config: Mapping[str, Any] | None = None,
+    hybrid_config: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Rank candidates using hybrid RE2 scoring.
 
@@ -140,6 +143,7 @@ def rank_candidates_hybrid_re2(
     ]
     if not normalized_terms:
         return []
+    hybrid_scoring = resolve_hybrid_scoring_config(hybrid_config)
 
     # Coarse BM25 ranking
     try:
@@ -148,15 +152,22 @@ def rank_candidates_hybrid_re2(
             normalized_terms,
             min_score=0,
             index_hash=index_hash,
+            bm25_config=bm25_config,
         )
     except TypeError:
-        coarse = rank_candidates_bm25(files_map, normalized_terms, min_score=0)
+        coarse = rank_candidates_bm25(
+            files_map,
+            normalized_terms,
+            min_score=0,
+            bm25_config=bm25_config,
+        )
     if not coarse:
         return []
 
     # Create shortlist
     shortlist_limit = max(
-        max(1, int(top_n)) * HYBRID_SHORTLIST_FACTOR, HYBRID_SHORTLIST_MIN
+        max(1, int(top_n)) * int(hybrid_scoring["shortlist_factor"]),
+        int(hybrid_scoring["shortlist_min"]),
     )
     shortlist = coarse[:shortlist_limit]
 
@@ -169,7 +180,10 @@ def rank_candidates_hybrid_re2(
 
     # Fine-grained heuristic ranking on shortlist
     heuristic_ranked = rank_candidates_heuristic(
-        shortlist_files, normalized_terms, min_score=0
+        shortlist_files,
+        normalized_terms,
+        min_score=0,
+        scoring_config=heuristic_config,
     )
     heuristic_scores = {
         str(item.get("path", "")): float(item.get("score") or 0.0)

@@ -175,6 +175,15 @@ class ChunkMetrics:
     topological_shield_shared_parent_evidence_count: int = 0
     topological_shield_graph_attested_chunk_count: int = 0
     topological_shield_attenuation_total: float = 0.0
+    graph_source_provider_loaded: bool = False
+    graph_source_projection_fallback: bool = False
+    graph_source_edge_count: int = 0
+    graph_source_inbound_signal_chunk_count: int = 0
+    graph_source_inbound_signal_coverage_ratio: float = 0.0
+    graph_source_centrality_signal_chunk_count: int = 0
+    graph_source_centrality_signal_coverage_ratio: float = 0.0
+    graph_source_pagerank_signal_chunk_count: int = 0
+    graph_source_pagerank_signal_coverage_ratio: float = 0.0
 
     def to_dict(self) -> dict[str, float]:
         return {
@@ -244,6 +253,31 @@ class ChunkMetrics:
             ),
             "topological_shield_attenuation_total": (
                 self.topological_shield_attenuation_total
+            ),
+            "graph_source_provider_loaded": (
+                1.0 if self.graph_source_provider_loaded else 0.0
+            ),
+            "graph_source_projection_fallback": (
+                1.0 if self.graph_source_projection_fallback else 0.0
+            ),
+            "graph_source_edge_count": float(self.graph_source_edge_count),
+            "graph_source_inbound_signal_chunk_count": float(
+                self.graph_source_inbound_signal_chunk_count
+            ),
+            "graph_source_inbound_signal_coverage_ratio": (
+                self.graph_source_inbound_signal_coverage_ratio
+            ),
+            "graph_source_centrality_signal_chunk_count": float(
+                self.graph_source_centrality_signal_chunk_count
+            ),
+            "graph_source_centrality_signal_coverage_ratio": (
+                self.graph_source_centrality_signal_coverage_ratio
+            ),
+            "graph_source_pagerank_signal_chunk_count": float(
+                self.graph_source_pagerank_signal_chunk_count
+            ),
+            "graph_source_pagerank_signal_coverage_ratio": (
+                self.graph_source_pagerank_signal_coverage_ratio
             ),
         }
 

@@ -133,10 +133,33 @@ class IndexRetrievalConfig:
     deterministic_refine_enabled: bool
     hybrid_re2_fusion_mode: str
     hybrid_re2_rrf_k: int
+    hybrid_re2_shortlist_min: int
+    hybrid_re2_shortlist_factor: int
     hybrid_re2_bm25_weight: float
     hybrid_re2_heuristic_weight: float
     hybrid_re2_coverage_weight: float
     hybrid_re2_combined_scale: float
+    bm25_k1: float
+    bm25_b: float
+    bm25_score_scale: float
+    bm25_path_prior_factor: float
+    bm25_shortlist_min: int
+    bm25_shortlist_factor: int
+    heur_path_exact: float
+    heur_path_contains: float
+    heur_module_exact: float
+    heur_module_tail: float
+    heur_module_contains: float
+    heur_symbol_exact: float
+    heur_symbol_partial_factor: float
+    heur_symbol_partial_cap: float
+    heur_import_factor: float
+    heur_import_cap: float
+    heur_content_symbol_factor: float
+    heur_content_import_factor: float
+    heur_content_cap: float
+    heur_depth_base: float
+    heur_depth_factor: float
     exact_search_enabled: bool
     exact_search_time_budget_ms: int
     exact_search_max_paths: int
@@ -189,6 +212,14 @@ class IndexChunkingConfig:
     diversity_kind_penalty: float
     diversity_locality_penalty: float
     diversity_locality_window: int
+    file_prior_weight: float
+    path_match: float
+    module_match: float
+    symbol_exact: float
+    symbol_partial: float
+    signature_match: float
+    reference_factor: float
+    reference_cap: float
     topological_shield: IndexTopologicalShieldConfig
     guard: IndexChunkGuardConfig
 
@@ -239,6 +270,7 @@ class IndexStageConfig:
     scip_index_path: str
     scip_provider: str
     scip_generate_fallback: bool
+    scip_base_weight: float
 
     @classmethod
     def from_orchestrator_config(

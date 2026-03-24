@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ace_lite.chunking.graph_prior import _chunk_symbol_id, _get_graph_context
+from ace_lite.chunking.graph_context import build_graph_context_payload, get_graph_context
+from ace_lite.chunking.graph_prior import _chunk_symbol_id
 
 
 def _parent_namespace(value: str) -> str:
@@ -34,6 +35,7 @@ def _has_graph_attestation(row: dict[str, Any]) -> bool:
 
 def compute_topological_shield(
     *,
+    root: str = ".",
     candidate: dict[str, Any],
     selected: list[dict[str, Any]],
     files_map: dict[str, dict[str, Any]],
@@ -45,6 +47,7 @@ def compute_topological_shield(
     max_attenuation: float,
     shared_parent_attenuation: float,
     adjacency_attenuation: float,
+    policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compute additive report-only topological shield diagnostics."""
 
@@ -64,6 +67,17 @@ def compute_topological_shield(
         "adjacency_evidence_count": 0,
         "shared_parent_evidence_count": 0,
         "graph_attested": False,
+        "graph_provider_requested": "auto",
+        "graph_provider_selected": "adjacency",
+        "graph_provider_fallback": False,
+        "graph_fallback_reason": "",
+        "graph_scope": "symbol",
+        "graph_source_provider_selected": "adjacency",
+        "graph_source_provider_loaded": False,
+        "graph_source_graph_scope": "symbol",
+        "graph_source_edge_count": 0,
+        "graph_source_projection_fallback": False,
+        "graph_source_projection_reason": "",
     }
     if not enabled or normalized_mode == "off":
         return payload
@@ -74,12 +88,18 @@ def compute_topological_shield(
     adjacency: dict[str, list[str]] = {}
     if isinstance(files_map, dict) and files_map:
         try:
-            context = _get_graph_context(files_map=files_map, cache_key=cache_key)
+            context = get_graph_context(
+                root=root,
+                files_map=files_map,
+                cache_key=cache_key,
+                policy=policy,
+            )
         except Exception:
             context = {}
         resolved_adjacency = context.get("adjacency", {})
         if isinstance(resolved_adjacency, dict):
             adjacency = resolved_adjacency
+        payload.update(build_graph_context_payload(context))
 
     candidate_id = _chunk_symbol_id(candidate)
     candidate_parent = _parent_namespace(str(candidate.get("qualified_name") or ""))

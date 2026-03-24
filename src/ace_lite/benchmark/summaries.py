@@ -12,6 +12,7 @@ from ace_lite.benchmark.report_metrics import (
 )
 from ace_lite.benchmark.summary_common import PIPELINE_STAGE_ORDER, p95 as _p95
 from ace_lite.benchmark.summary_quality import (
+    build_agent_loop_control_plane_summary as _build_agent_loop_control_plane_summary_impl,
     build_chunk_stage_miss_summary as _build_chunk_stage_miss_summary_impl,
     build_comparison_lane_summary as _build_comparison_lane_summary_impl,
     build_decision_observability_summary as _build_decision_observability_summary_impl,
@@ -217,6 +218,44 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     ]
     topological_shield_attenuation_totals = [
         float(item.get("topological_shield_attenuation_total", 0.0))
+        for item in case_results
+    ]
+    graph_source_provider_loaded = [
+        float(item.get("graph_source_provider_loaded", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_source_projection_fallback = [
+        float(item.get("graph_source_projection_fallback", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_source_edge_counts = [
+        float(item.get("graph_source_edge_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_source_inbound_signal_chunk_counts = [
+        float(item.get("graph_source_inbound_signal_chunk_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_source_inbound_signal_coverage = [
+        float(item.get("graph_source_inbound_signal_coverage_ratio", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_source_centrality_signal_chunk_counts = [
+        float(item.get("graph_source_centrality_signal_chunk_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_source_centrality_signal_coverage = [
+        float(
+            item.get("graph_source_centrality_signal_coverage_ratio", 0.0) or 0.0
+        )
+        for item in case_results
+    ]
+    graph_source_pagerank_signal_chunk_counts = [
+        float(item.get("graph_source_pagerank_signal_chunk_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    graph_source_pagerank_signal_coverage = [
+        float(item.get("graph_source_pagerank_signal_coverage_ratio", 0.0) or 0.0)
         for item in case_results
     ]
     chunk_guard_enabled = [
@@ -1109,6 +1148,29 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "topological_shield_coverage_ratio": mean(topological_shield_coverage),
         "topological_shield_attenuation_total_mean": mean(
             topological_shield_attenuation_totals
+        ),
+        "graph_source_provider_loaded_ratio": mean(graph_source_provider_loaded),
+        "graph_source_projection_fallback_ratio": mean(
+            graph_source_projection_fallback
+        ),
+        "graph_source_edge_count_mean": mean(graph_source_edge_counts),
+        "graph_source_inbound_signal_chunk_count_mean": mean(
+            graph_source_inbound_signal_chunk_counts
+        ),
+        "graph_source_inbound_signal_coverage_ratio": mean(
+            graph_source_inbound_signal_coverage
+        ),
+        "graph_source_centrality_signal_chunk_count_mean": mean(
+            graph_source_centrality_signal_chunk_counts
+        ),
+        "graph_source_centrality_signal_coverage_ratio": mean(
+            graph_source_centrality_signal_coverage
+        ),
+        "graph_source_pagerank_signal_chunk_count_mean": mean(
+            graph_source_pagerank_signal_chunk_counts
+        ),
+        "graph_source_pagerank_signal_coverage_ratio": mean(
+            graph_source_pagerank_signal_coverage
         ),
         "chunk_guard_enabled_ratio": mean(chunk_guard_enabled),
         "chunk_guard_report_only_ratio": mean(chunk_guard_report_only),
@@ -2085,6 +2147,12 @@ def build_retrieval_default_strategy_summary(
     return _build_retrieval_default_strategy_summary_impl(case_results)
 
 
+def build_agent_loop_control_plane_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return _build_agent_loop_control_plane_summary_impl(case_results)
+
+
 def build_preference_observability_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -2213,6 +2281,7 @@ __all__ = [
     "build_evidence_insufficiency_summary",
     "build_feedback_loop_summary",
     "build_feedback_observability_summary",
+    "build_agent_loop_control_plane_summary",
     "build_missing_context_risk_summary",
     "build_ltm_explainability_summary",
     "build_native_scip_summary",

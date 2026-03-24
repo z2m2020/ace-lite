@@ -96,16 +96,48 @@ from ace_lite.shared_plan_runtime_config import (
     resolve_trace_otlp_timeout_seconds,
 )
 from ace_lite.scoring_config import (
+    BM25_B,
+    BM25_K1,
+    BM25_PATH_PRIOR_FACTOR,
+    BM25_SCORE_SCALE,
+    BM25_SHORTLIST_FACTOR,
+    BM25_SHORTLIST_MIN,
+    CHUNK_FILE_PRIOR_WEIGHT,
+    CHUNK_MODULE_MATCH,
+    CHUNK_PATH_MATCH,
+    CHUNK_REFERENCE_CAP,
+    CHUNK_REFERENCE_FACTOR,
+    CHUNK_SIGNATURE_MATCH,
+    CHUNK_SYMBOL_EXACT,
+    CHUNK_SYMBOL_PARTIAL,
     CHUNK_DIVERSITY_KIND_PENALTY,
     CHUNK_DIVERSITY_LOCALITY_PENALTY,
     CHUNK_DIVERSITY_LOCALITY_WINDOW,
     CHUNK_DIVERSITY_PATH_PENALTY,
     CHUNK_DIVERSITY_SYMBOL_FAMILY_PENALTY,
+    HEUR_CONTENT_CAP,
+    HEUR_CONTENT_IMPORT_FACTOR,
+    HEUR_CONTENT_SYMBOL_FACTOR,
+    HEUR_DEPTH_BASE,
+    HEUR_DEPTH_FACTOR,
+    HEUR_IMPORT_CAP,
+    HEUR_IMPORT_FACTOR,
+    HEUR_MODULE_CONTAINS,
+    HEUR_MODULE_EXACT,
+    HEUR_MODULE_TAIL,
+    HEUR_PATH_CONTAINS,
+    HEUR_PATH_EXACT,
+    HEUR_SYMBOL_EXACT,
+    HEUR_SYMBOL_PARTIAL_CAP,
+    HEUR_SYMBOL_PARTIAL_FACTOR,
     HYBRID_BM25_WEIGHT,
     HYBRID_COMBINED_SCALE,
     HYBRID_COVERAGE_WEIGHT,
     HYBRID_HEURISTIC_WEIGHT,
     HYBRID_RRF_K_DEFAULT,
+    HYBRID_SHORTLIST_FACTOR,
+    HYBRID_SHORTLIST_MIN,
+    SCIP_BASE_WEIGHT,
 )
 from ace_lite.utils import to_float, to_lower_list
 
@@ -404,10 +436,33 @@ class RetrievalConfig(_StrictModel):
     candidate_ranker: str = "rrf_hybrid"
     hybrid_re2_fusion_mode: str = "linear"
     hybrid_re2_rrf_k: int = HYBRID_RRF_K_DEFAULT
+    hybrid_re2_shortlist_min: int = HYBRID_SHORTLIST_MIN
+    hybrid_re2_shortlist_factor: int = HYBRID_SHORTLIST_FACTOR
     hybrid_re2_bm25_weight: float = HYBRID_BM25_WEIGHT
     hybrid_re2_heuristic_weight: float = HYBRID_HEURISTIC_WEIGHT
     hybrid_re2_coverage_weight: float = HYBRID_COVERAGE_WEIGHT
     hybrid_re2_combined_scale: float = HYBRID_COMBINED_SCALE
+    bm25_k1: float = BM25_K1
+    bm25_b: float = BM25_B
+    bm25_score_scale: float = BM25_SCORE_SCALE
+    bm25_path_prior_factor: float = BM25_PATH_PRIOR_FACTOR
+    bm25_shortlist_min: int = BM25_SHORTLIST_MIN
+    bm25_shortlist_factor: int = BM25_SHORTLIST_FACTOR
+    heur_path_exact: float = HEUR_PATH_EXACT
+    heur_path_contains: float = HEUR_PATH_CONTAINS
+    heur_module_exact: float = HEUR_MODULE_EXACT
+    heur_module_tail: float = HEUR_MODULE_TAIL
+    heur_module_contains: float = HEUR_MODULE_CONTAINS
+    heur_symbol_exact: float = HEUR_SYMBOL_EXACT
+    heur_symbol_partial_factor: float = HEUR_SYMBOL_PARTIAL_FACTOR
+    heur_symbol_partial_cap: float = HEUR_SYMBOL_PARTIAL_CAP
+    heur_import_factor: float = HEUR_IMPORT_FACTOR
+    heur_import_cap: float = HEUR_IMPORT_CAP
+    heur_content_symbol_factor: float = HEUR_CONTENT_SYMBOL_FACTOR
+    heur_content_import_factor: float = HEUR_CONTENT_IMPORT_FACTOR
+    heur_content_cap: float = HEUR_CONTENT_CAP
+    heur_depth_base: float = HEUR_DEPTH_BASE
+    heur_depth_factor: float = HEUR_DEPTH_FACTOR
     exact_search_enabled: bool = False
     exact_search_time_budget_ms: int = 40
     exact_search_max_paths: int = 24
@@ -465,10 +520,40 @@ class RetrievalConfig(_StrictModel):
         return _normalize_positive_int(value, HYBRID_RRF_K_DEFAULT)
 
     @field_validator(
+        "hybrid_re2_shortlist_min",
+        "hybrid_re2_shortlist_factor",
+        "bm25_shortlist_min",
+        "bm25_shortlist_factor",
+        mode="before",
+    )
+    @classmethod
+    def _normalize_scoring_positive_int(cls, value: Any) -> int:
+        return _normalize_positive_int(value, 1)
+
+    @field_validator(
         "hybrid_re2_bm25_weight",
         "hybrid_re2_heuristic_weight",
         "hybrid_re2_coverage_weight",
         "hybrid_re2_combined_scale",
+        "bm25_k1",
+        "bm25_b",
+        "bm25_score_scale",
+        "bm25_path_prior_factor",
+        "heur_path_exact",
+        "heur_path_contains",
+        "heur_module_exact",
+        "heur_module_tail",
+        "heur_module_contains",
+        "heur_symbol_exact",
+        "heur_symbol_partial_factor",
+        "heur_symbol_partial_cap",
+        "heur_import_factor",
+        "heur_import_cap",
+        "heur_content_symbol_factor",
+        "heur_content_import_factor",
+        "heur_content_cap",
+        "heur_depth_base",
+        "heur_depth_factor",
         mode="before",
     )
     @classmethod
@@ -776,6 +861,14 @@ class ChunkingConfig(ChunkCoreSectionSpec):
     diversity_kind_penalty: float = CHUNK_DIVERSITY_KIND_PENALTY
     diversity_locality_penalty: float = CHUNK_DIVERSITY_LOCALITY_PENALTY
     diversity_locality_window: int = CHUNK_DIVERSITY_LOCALITY_WINDOW
+    file_prior_weight: float = CHUNK_FILE_PRIOR_WEIGHT
+    path_match: float = CHUNK_PATH_MATCH
+    module_match: float = CHUNK_MODULE_MATCH
+    symbol_exact: float = CHUNK_SYMBOL_EXACT
+    symbol_partial: float = CHUNK_SYMBOL_PARTIAL
+    signature_match: float = CHUNK_SIGNATURE_MATCH
+    reference_factor: float = CHUNK_REFERENCE_FACTOR
+    reference_cap: float = CHUNK_REFERENCE_CAP
     topological_shield: TopologicalShieldConfig = Field(
         default_factory=TopologicalShieldConfig
     )
@@ -791,6 +884,14 @@ class ChunkingConfig(ChunkCoreSectionSpec):
         "diversity_symbol_family_penalty",
         "diversity_kind_penalty",
         "diversity_locality_penalty",
+        "file_prior_weight",
+        "path_match",
+        "module_match",
+        "symbol_exact",
+        "symbol_partial",
+        "signature_match",
+        "reference_factor",
+        "reference_cap",
         mode="before",
     )
     @classmethod
@@ -890,6 +991,7 @@ class ScipConfig(ScipSectionSpec):
     index_path: str | Path = DEFAULT_SCIP_INDEX_PATH
     provider: str = "auto"
     generate_fallback: bool = True
+    base_weight: float = SCIP_BASE_WEIGHT
 
     @field_validator("index_path", mode="before")
     @classmethod
@@ -905,6 +1007,14 @@ class ScipConfig(ScipSectionSpec):
             field_name="scip.provider",
         )
         return str(normalized or "auto")
+
+    @field_validator("base_weight", mode="before")
+    @classmethod
+    def _normalize_base_weight(cls, value: Any) -> float:
+        try:
+            return max(0.0, float(value))
+        except Exception:
+            return SCIP_BASE_WEIGHT
 
 
 class EmbeddingsConfig(EmbeddingsSectionSpec):

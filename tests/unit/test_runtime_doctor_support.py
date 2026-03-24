@@ -125,7 +125,14 @@ def test_build_runtime_doctor_payload_exposes_canonical_doctor_reason_codes(
     monkeypatch.setattr(
         runtime_doctor_support,
         "load_runtime_stats_summary",
-        lambda **kwargs: {"latest_match": None, "summary": {}},
+        lambda **kwargs: {
+            "latest_match": None,
+            "summary": {},
+            "agent_loop_control_plane_summary": {
+                "source_plan_retry_supported": True,
+                "rerun_policy_supported": True,
+            },
+        },
     )
     monkeypatch.setattr(
         runtime_doctor_support,
@@ -169,6 +176,10 @@ def test_build_runtime_doctor_payload_exposes_canonical_doctor_reason_codes(
         "git_unavailable",
         "install_drift",
     ]
+    assert payload["stats"]["agent_loop_control_plane_summary"] == {
+        "source_plan_retry_supported": True,
+        "rerun_policy_supported": True,
+    }
     assert payload["next_cycle_input"]["doctor_reason_codes"] == [
         "stage_artifact_cache_corrupt",
         "git_unavailable",

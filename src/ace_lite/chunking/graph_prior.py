@@ -2,63 +2,24 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict
 from typing import Any
 
-from ace_lite.repomap.adjacency import (
-    _build_symbol_adjacency,
-    _build_symbol_graph_context,
-)
-
-_GRAPH_CONTEXT_CACHE: OrderedDict[str, dict[str, Any]] = OrderedDict()
-_GRAPH_CONTEXT_CACHE_CAP = 8
-
-
-def _build_graph_context(*, files_map: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    symbol_nodes_by_path, symbol_to_node_ids = _build_symbol_graph_context(files=files_map)
-    adjacency = _build_symbol_adjacency(
-        files=files_map,
-        nodes_by_path=symbol_nodes_by_path,
-        symbol_to_node_ids=symbol_to_node_ids,
-    )
-
-    inbound_degree: dict[str, int] = {}
-    for source_id, targets in adjacency.items():
-        if source_id not in inbound_degree:
-            inbound_degree[source_id] = 0
-        if not isinstance(targets, list):
-            continue
-        for target_id in targets:
-            normalized = str(target_id or "").strip()
-            if not normalized:
-                continue
-            inbound_degree[normalized] = inbound_degree.get(normalized, 0) + 1
-
-    return {
-        "adjacency": adjacency,
-        "inbound_degree": inbound_degree,
-    }
+from ace_lite.chunking.graph_context import build_graph_context_payload, get_graph_context
 
 
 def _get_graph_context(
     *,
+    root: str = ".",
     files_map: dict[str, dict[str, Any]],
     cache_key: str,
+    policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    normalized_key = str(cache_key or "").strip()
-    if normalized_key:
-        cached = _GRAPH_CONTEXT_CACHE.get(normalized_key)
-        if isinstance(cached, dict):
-            _GRAPH_CONTEXT_CACHE.move_to_end(normalized_key)
-            return cached
-
-    context = _build_graph_context(files_map=files_map)
-    if normalized_key:
-        _GRAPH_CONTEXT_CACHE[normalized_key] = context
-        _GRAPH_CONTEXT_CACHE.move_to_end(normalized_key)
-        while len(_GRAPH_CONTEXT_CACHE) > _GRAPH_CONTEXT_CACHE_CAP:
-            _GRAPH_CONTEXT_CACHE.popitem(last=False)
-    return context
+    return get_graph_context(
+        root=root,
+        files_map=files_map,
+        cache_key=cache_key,
+        policy=policy,
+    )
 
 
 def _chunk_symbol_id(chunk: dict[str, Any]) -> str:
@@ -108,6 +69,7 @@ def _seed_strength(
 
 def apply_query_aware_graph_prior(
     *,
+    root: str = ".",
     candidate_chunks: list[dict[str, Any]],
     files_map: dict[str, dict[str, Any]],
     policy: dict[str, Any],
@@ -157,9 +119,15 @@ def apply_query_aware_graph_prior(
         payload["reason"] = "candidate_count_guarded"
         return rows, payload
 
-    context = _get_graph_context(files_map=files_map, cache_key=cache_key)
+    context = _get_graph_context(
+        root=root,
+        files_map=files_map,
+        cache_key=cache_key,
+        policy=policy,
+    )
     adjacency = context.get("adjacency", {})
     inbound_degree = context.get("inbound_degree", {})
+    payload.update(build_graph_context_payload(context))
     if not isinstance(adjacency, dict) or not adjacency:
         payload["reason"] = "no_graph_context"
         return rows, payload
@@ -319,6 +287,17 @@ def _empty_payload(*, reason: str) -> dict[str, Any]:
         "graph_hub_penalty_total": 0.0,
         "graph_transfer_count": 0,
         "cache_key": "",
+        "graph_provider_requested": "auto",
+        "graph_provider_selected": "adjacency",
+        "graph_provider_fallback": False,
+        "graph_fallback_reason": "",
+        "graph_scope": "symbol",
+        "graph_source_provider_selected": "adjacency",
+        "graph_source_provider_loaded": False,
+        "graph_source_graph_scope": "symbol",
+        "graph_source_edge_count": 0,
+        "graph_source_projection_fallback": False,
+        "graph_source_projection_reason": "",
     }
 
 

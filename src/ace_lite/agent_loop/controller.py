@@ -5,6 +5,7 @@ from typing import Any
 
 from ace_lite.agent_loop.contracts import (
     build_agent_loop_action_v1,
+    build_agent_loop_rerun_policy_v1,
     validate_agent_loop_action_v1,
 )
 from ace_lite.orchestrator_replay import (
@@ -30,6 +31,7 @@ AGENT_LOOP_STOP_REASONS = (
 class AgentLoopIterationRecord:
     index: int
     action: dict[str, Any]
+    rerun_policy: dict[str, Any]
     retrieval_refinement: dict[str, Any]
     query: str
     rerun_stages: tuple[str, ...]
@@ -43,6 +45,7 @@ class AgentLoopIterationRecord:
         return {
             "index": self.index,
             "action": dict(self.action),
+            "rerun_policy": dict(self.rerun_policy),
             "retrieval_refinement": dict(self.retrieval_refinement),
             "query": self.query,
             "rerun_stages": list(self.rerun_stages),
@@ -67,6 +70,8 @@ class AgentLoopSummaryV1:
     branch_batch: dict[str, Any]
     branch_selection: dict[str, Any]
     last_action: dict[str, Any]
+    last_rerun_policy: dict[str, Any]
+    action_type_counts: dict[str, int]
     final_query: str
     replay_safe: bool
 
@@ -84,6 +89,8 @@ class AgentLoopSummaryV1:
             "branch_batch": dict(self.branch_batch),
             "branch_selection": dict(self.branch_selection),
             "last_action": dict(self.last_action),
+            "last_rerun_policy": dict(self.last_rerun_policy),
+            "action_type_counts": dict(self.action_type_counts),
             "final_query": self.final_query,
             "replay_safe": self.replay_safe,
         }
@@ -126,6 +133,8 @@ class BoundedLoopController:
             branch_batch={},
             branch_selection={},
             last_action={},
+            last_rerun_policy={},
+            action_type_counts={},
             final_query=str(final_query or ""),
             replay_safe=True,
         ).as_dict()
@@ -263,7 +272,7 @@ class BoundedLoopController:
         normalized = self._normalize_action(action)
         if normalized is None:
             return str(base_query or "").strip()
-        if normalized.get("action_type") == "request_validation_retry":
+        if normalized.get("action_type") != "request_more_context":
             return str(base_query or "").strip()
 
         parts = [str(base_query or "").strip()]
@@ -319,10 +328,32 @@ class BoundedLoopController:
             ),
         }
 
+    def build_rerun_policy(
+        self,
+        *,
+        action: dict[str, Any],
+        rerun_stages: list[str] | tuple[str, ...],
+        iteration_index: int,
+    ) -> dict[str, Any]:
+        normalized = self._normalize_action(action)
+        if normalized is None:
+            return {}
+        metadata = {
+            "iteration_index": max(1, int(iteration_index)),
+            "reason": str(normalized.get("reason") or "").strip(),
+        }
+        return build_agent_loop_rerun_policy_v1(
+            action_type=str(normalized.get("action_type") or ""),
+            rerun_stages=rerun_stages,
+            replay_safe=True,
+            metadata=metadata,
+        ).as_dict()
+
     def record_iteration(
         self,
         *,
         action: dict[str, Any],
+        rerun_policy: dict[str, Any] | None,
         retrieval_refinement: dict[str, Any] | None,
         query: str,
         rerun_stages: list[str] | tuple[str, ...],
@@ -367,6 +398,9 @@ class BoundedLoopController:
             AgentLoopIterationRecord(
                 index=len(self._iterations) + 1,
                 action=normalized,
+                rerun_policy=(
+                    dict(rerun_policy) if isinstance(rerun_policy, dict) else {}
+                ),
                 retrieval_refinement=(
                     dict(retrieval_refinement)
                     if isinstance(retrieval_refinement, dict)
@@ -422,6 +456,15 @@ class BoundedLoopController:
             if branch_candidates
             else {}
         )
+        action_type_counts: dict[str, int] = {}
+        for item in self._iterations:
+            action_type = str(item.action.get("action_type") or "").strip()
+            if not action_type:
+                continue
+            action_type_counts[action_type] = action_type_counts.get(action_type, 0) + 1
+        last_rerun_policy = (
+            dict(self._iterations[-1].rerun_policy) if self._iterations else {}
+        )
         return AgentLoopSummaryV1(
             enabled=self.enabled,
             attempted=self.iteration_count > 0,
@@ -434,6 +477,8 @@ class BoundedLoopController:
             branch_batch=branch_batch,
             branch_selection=branch_selection,
             last_action=dict(last_action) if isinstance(last_action, dict) else {},
+            last_rerun_policy=last_rerun_policy,
+            action_type_counts=action_type_counts,
             final_query=str(final_query or ""),
             replay_safe=True,
         ).as_dict()

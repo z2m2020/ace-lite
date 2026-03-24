@@ -27,7 +27,9 @@ from ace_lite.cli_app.runtime_status_support import (
     resolve_user_runtime_stats_path,
 )
 from ace_lite.cli_app.runtime_settings_support import (
+    build_runtime_settings_governance_payload,
     build_runtime_settings_payload,
+    collect_runtime_settings_persist_payload,
     collect_runtime_settings_show_payload,
     evaluate_runtime_memory_state,
     load_runtime_snapshot,
@@ -273,7 +275,9 @@ def _build_runtime_command_domain_registry() -> dict[str, RuntimeCommandDomainDe
             name="settings",
             handlers=(
                 "resolve_runtime_settings_bundle",
+                "build_runtime_settings_governance_payload",
                 "build_runtime_settings_payload",
+                "collect_runtime_settings_persist_payload",
                 "collect_runtime_settings_show_payload",
             ),
         ),
@@ -323,9 +327,11 @@ __all__ = [
     "build_codex_mcp_setup_plan",
     "build_runtime_doctor_payload",
     "build_runtime_git_doctor_payload",
+    "build_runtime_settings_governance_payload",
     "build_runtime_settings_payload",
     "build_runtime_status_snapshot",
     "build_runtime_version_sync_payload",
+    "collect_runtime_settings_persist_payload",
     "collect_runtime_settings_show_payload",
     "collect_runtime_mcp_self_test_payload",
     "collect_runtime_status_payload",

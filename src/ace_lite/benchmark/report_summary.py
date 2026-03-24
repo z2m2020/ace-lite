@@ -12,6 +12,7 @@ OPTIONAL_SUMMARY_MAPPING_KEYS = (
     "ltm_explainability_summary",
     "preference_observability_summary",
     "retrieval_default_strategy_summary",
+    "agent_loop_control_plane_summary",
     "retrieval_context_observability_summary",
     "chunk_stage_miss_summary",
     "decision_observability_summary",
@@ -35,6 +36,7 @@ OPTIONAL_SUMMARY_MAPPING_KEYS = (
     "slo_budget_summary",
     "reward_log_summary",
     "runtime_stats_summary",
+    "tuning_context_summary",
 )
 
 

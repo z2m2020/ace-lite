@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ace_lite.chunking.graph_prior import _chunk_symbol_id, _get_graph_context, _seed_strength
+from ace_lite.chunking.graph_context import build_graph_context_payload, get_graph_context
+from ace_lite.chunking.graph_prior import _chunk_symbol_id, _seed_strength
 
 
 def _parent_namespace(value: str) -> str:
@@ -22,6 +23,7 @@ def _parent_namespace(value: str) -> str:
 
 def apply_graph_closure_bonus(
     *,
+    root: str = ".",
     candidate_chunks: list[dict[str, Any]],
     files_map: dict[str, dict[str, Any]],
     policy: dict[str, Any],
@@ -101,8 +103,14 @@ def apply_graph_closure_bonus(
         payload["reason"] = "candidate_count_guarded"
         return rows, payload
 
-    context = _get_graph_context(files_map=files_map, cache_key=cache_key)
+    context = get_graph_context(
+        root=root,
+        files_map=files_map,
+        cache_key=cache_key,
+        policy=policy,
+    )
     adjacency = context.get("adjacency", {})
+    payload.update(build_graph_context_payload(context))
     if not isinstance(adjacency, dict) or not adjacency:
         payload["reason"] = "no_graph_context"
         return rows, payload
@@ -229,6 +237,17 @@ def _empty_payload(*, reason: str) -> dict[str, Any]:
         "boosted_chunk_count": 0,
         "support_edge_count": 0,
         "graph_closure_total": 0.0,
+        "graph_provider_requested": "auto",
+        "graph_provider_selected": "adjacency",
+        "graph_provider_fallback": False,
+        "graph_fallback_reason": "",
+        "graph_scope": "symbol",
+        "graph_source_provider_selected": "adjacency",
+        "graph_source_provider_loaded": False,
+        "graph_source_graph_scope": "symbol",
+        "graph_source_edge_count": 0,
+        "graph_source_projection_fallback": False,
+        "graph_source_projection_reason": "",
     }
 
 

@@ -13,6 +13,7 @@ def test_runtime_profile_catalog_contains_expected_first_party_profiles() -> Non
         "bugfix",
         "refactor",
         "docs",
+        "colbert_experiment",
         "benchmark",
         "wide_search",
         "fast_path",
@@ -59,3 +60,18 @@ def test_runtime_profiles_expose_explicit_retrieval_cache_and_budget_knobs() -> 
             or path.endswith("budget_tokens")
             for path in knob_paths["budget"]
         )
+
+
+def test_colbert_experiment_profile_enables_controlled_hash_colbert_rerank() -> None:
+    profile = get_runtime_profile("colbert_experiment")
+
+    assert profile is not None
+
+    validated = validate_cli_config({"plan": profile.plan_overrides()})
+    embeddings = validated["plan"]["embeddings"]
+
+    assert embeddings["enabled"] is True
+    assert embeddings["provider"] == "hash_colbert"
+    assert embeddings["model"] == "hash-colbert-v1"
+    assert embeddings["fail_open"] is True
+    assert embeddings["rerank_pool"] == 24

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ace_lite.scip import generate_scip_index, load_scip_edges
-from ace_lite.scoring_config import SCIP_BASE_WEIGHT
+from ace_lite.scoring_config import resolve_scip_scoring_config
 
 
 def apply_scip_boost(
@@ -17,10 +17,13 @@ def apply_scip_boost(
     files_map: dict[str, dict[str, Any]],
     candidates: list[dict[str, Any]],
     policy: dict[str, Any],
+    scoring_config: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Apply inbound-reference boosts from a SCIP edge index."""
     generated: dict[str, Any] | None = None
     fallback_generated = False
+    scip_scoring = resolve_scip_scoring_config(scoring_config)
+    base_weight = float(scip_scoring["base_weight"])
 
     loaded = load_scip_edges(index_path, provider=provider)
     if not bool(loaded.get("loaded", False)) and generate_fallback:
@@ -77,15 +80,15 @@ def apply_scip_boost(
     max_degree = max((float(value) for value in degree_centrality.values()), default=0.0)
 
     inbound_weight = max(
-        0.0, SCIP_BASE_WEIGHT * float(policy.get("scip_weight", 1.0) or 1.0)
+        0.0, base_weight * float(policy.get("scip_weight", 1.0) or 1.0)
     )
     pagerank_weight = max(
         0.0,
-        SCIP_BASE_WEIGHT * float(policy.get("scip_pagerank_weight", 0.0) or 0.0),
+        base_weight * float(policy.get("scip_pagerank_weight", 0.0) or 0.0),
     )
     centrality_weight = max(
         0.0,
-        SCIP_BASE_WEIGHT
+        base_weight
         * float(
             policy.get(
                 "scip_centrality_weight",
@@ -183,6 +186,7 @@ def apply_scip_boost(
         "generate_fallback": bool(generate_fallback),
         "fallback_generated": fallback_generated,
         "weights": {
+            "base_weight": base_weight,
             "inbound": float(inbound_weight),
             "pagerank": float(pagerank_weight),
             "centrality": float(centrality_weight),

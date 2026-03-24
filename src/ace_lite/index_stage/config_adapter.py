@@ -102,6 +102,12 @@ def build_index_stage_config_from_orchestrator(
             hybrid_re2_rrf_k=int(
                 getattr(retrieval_config, "hybrid_re2_rrf_k", 60)
             ),
+            hybrid_re2_shortlist_min=int(
+                getattr(retrieval_config, "hybrid_re2_shortlist_min", 12)
+            ),
+            hybrid_re2_shortlist_factor=int(
+                getattr(retrieval_config, "hybrid_re2_shortlist_factor", 4)
+            ),
             hybrid_re2_bm25_weight=float(
                 getattr(retrieval_config, "hybrid_re2_bm25_weight", 0.0) or 0.0
             ),
@@ -113,6 +119,66 @@ def build_index_stage_config_from_orchestrator(
             ),
             hybrid_re2_combined_scale=float(
                 getattr(retrieval_config, "hybrid_re2_combined_scale", 0.0) or 0.0
+            ),
+            bm25_k1=float(getattr(retrieval_config, "bm25_k1", 1.2) or 1.2),
+            bm25_b=float(getattr(retrieval_config, "bm25_b", 0.75) or 0.75),
+            bm25_score_scale=float(
+                getattr(retrieval_config, "bm25_score_scale", 4.0) or 4.0
+            ),
+            bm25_path_prior_factor=float(
+                getattr(retrieval_config, "bm25_path_prior_factor", 0.1) or 0.1
+            ),
+            bm25_shortlist_min=int(
+                getattr(retrieval_config, "bm25_shortlist_min", 16) or 16
+            ),
+            bm25_shortlist_factor=int(
+                getattr(retrieval_config, "bm25_shortlist_factor", 6) or 6
+            ),
+            heur_path_exact=float(
+                getattr(retrieval_config, "heur_path_exact", 3.0) or 3.0
+            ),
+            heur_path_contains=float(
+                getattr(retrieval_config, "heur_path_contains", 2.0) or 2.0
+            ),
+            heur_module_exact=float(
+                getattr(retrieval_config, "heur_module_exact", 3.0) or 3.0
+            ),
+            heur_module_tail=float(
+                getattr(retrieval_config, "heur_module_tail", 2.5) or 2.5
+            ),
+            heur_module_contains=float(
+                getattr(retrieval_config, "heur_module_contains", 1.5) or 1.5
+            ),
+            heur_symbol_exact=float(
+                getattr(retrieval_config, "heur_symbol_exact", 3.0) or 3.0
+            ),
+            heur_symbol_partial_factor=float(
+                getattr(retrieval_config, "heur_symbol_partial_factor", 0.75)
+                or 0.75
+            ),
+            heur_symbol_partial_cap=float(
+                getattr(retrieval_config, "heur_symbol_partial_cap", 2.0) or 2.0
+            ),
+            heur_import_factor=float(
+                getattr(retrieval_config, "heur_import_factor", 0.5) or 0.5
+            ),
+            heur_import_cap=float(
+                getattr(retrieval_config, "heur_import_cap", 1.5) or 1.5
+            ),
+            heur_content_symbol_factor=float(
+                getattr(retrieval_config, "heur_content_symbol_factor", 0.2) or 0.2
+            ),
+            heur_content_import_factor=float(
+                getattr(retrieval_config, "heur_content_import_factor", 0.1) or 0.1
+            ),
+            heur_content_cap=float(
+                getattr(retrieval_config, "heur_content_cap", 1.0) or 1.0
+            ),
+            heur_depth_base=float(
+                getattr(retrieval_config, "heur_depth_base", 1.4) or 1.4
+            ),
+            heur_depth_factor=float(
+                getattr(retrieval_config, "heur_depth_factor", 0.15) or 0.15
             ),
             exact_search_enabled=bool(
                 getattr(retrieval_config, "exact_search_enabled", False)
@@ -186,6 +252,28 @@ def build_index_stage_config_from_orchestrator(
             diversity_locality_window=int(
                 getattr(chunking_config, "diversity_locality_window", 24)
             ),
+            file_prior_weight=float(
+                getattr(chunking_config, "file_prior_weight", 0.35) or 0.35
+            ),
+            path_match=float(getattr(chunking_config, "path_match", 1.0) or 1.0),
+            module_match=float(
+                getattr(chunking_config, "module_match", 0.8) or 0.8
+            ),
+            symbol_exact=float(
+                getattr(chunking_config, "symbol_exact", 2.5) or 2.5
+            ),
+            symbol_partial=float(
+                getattr(chunking_config, "symbol_partial", 1.4) or 1.4
+            ),
+            signature_match=float(
+                getattr(chunking_config, "signature_match", 0.5) or 0.5
+            ),
+            reference_factor=float(
+                getattr(chunking_config, "reference_factor", 0.3) or 0.3
+            ),
+            reference_cap=float(
+                getattr(chunking_config, "reference_cap", 2.5) or 2.5
+            ),
             topological_shield=topological_shield_config_cls(
                 enabled=bool(
                     getattr(topological_shield_config, "enabled", False)
@@ -257,6 +345,7 @@ def build_index_stage_config_from_orchestrator(
         scip_generate_fallback=bool(
             getattr(scip_config, "generate_fallback", True)
         ),
+        scip_base_weight=float(getattr(scip_config, "base_weight", 0.5) or 0.5),
     )
 
 

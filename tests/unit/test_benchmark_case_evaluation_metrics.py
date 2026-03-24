@@ -65,6 +65,14 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
             "ltm": {
                 "selected_count": 2,
                 "attribution_count": 1,
+                "feedback_signal_counts": {
+                    "helpful": 1,
+                    "stale": 0,
+                    "harmful": 1,
+                },
+                "attribution_scope_counts": {
+                    "explicit_selection_only": 1,
+                },
                 "attribution": [
                     {
                         "handle": "fact-1",
@@ -74,6 +82,19 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
             },
         },
         "observability": {
+            "agent_loop": {
+                "enabled": True,
+                "attempted": True,
+                "actions_requested": 2,
+                "actions_executed": 1,
+                "stop_reason": "completed",
+                "replay_safe": True,
+                "last_rerun_policy": {"policy_id": "source_plan_refresh"},
+                "action_type_counts": {
+                    "request_more_context": 1,
+                    "request_source_plan_retry": 1,
+                },
+            },
             "plan_replay_cache": {
                 "enabled": True,
                 "hit": True,
@@ -107,12 +128,14 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
         },
         "embeddings": {
             "enabled": True,
+            "runtime_provider": "hash_colbert",
             "cache_hit": True,
             "similarity_mean": 0.42,
             "similarity_max": 0.88,
             "rerank_pool": 4,
             "reranked_count": 2,
             "fallback": False,
+            "semantic_rerank_applied": True,
         },
         "chunk_semantic_rerank": {
             "reason": "time_budget",
@@ -169,6 +192,15 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
             "topological_shield_attenuated_chunk_count": 1.0,
             "topological_shield_coverage_ratio": 0.5,
             "topological_shield_attenuation_total": 0.2,
+            "graph_source_provider_loaded": 1.0,
+            "graph_source_projection_fallback": 1.0,
+            "graph_source_edge_count": 7.0,
+            "graph_source_inbound_signal_chunk_count": 1.0,
+            "graph_source_inbound_signal_coverage_ratio": 1.0,
+            "graph_source_centrality_signal_chunk_count": 1.0,
+            "graph_source_centrality_signal_coverage_ratio": 1.0,
+            "graph_source_pagerank_signal_chunk_count": 1.0,
+            "graph_source_pagerank_signal_coverage_ratio": 1.0,
         },
         "policy_name": "doc_intent",
         "metadata": {
@@ -233,12 +265,43 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
     assert metrics.docs_enabled_flag is True
     assert metrics.docs_hit == 1.0
     assert metrics.hint_inject == 1.0
+    assert metrics.embedding_runtime_provider == "hash_colbert"
+    assert metrics.embedding_strategy_mode == "cross_encoder"
+    assert metrics.embedding_semantic_rerank_applied is True
     assert metrics.ltm_selected_count == 2
     assert metrics.ltm_attribution_count == 1
     assert metrics.ltm_graph_neighbor_count == 1
     assert metrics.ltm_plan_constraint_count == 1
+    assert metrics.ltm_feedback_signal_counts == {
+        "helpful": 1,
+        "stale": 0,
+        "harmful": 1,
+    }
+    assert metrics.ltm_attribution_scope_counts == {
+        "explicit_selection_only": 1,
+    }
     assert metrics.chunk_guard_mode == "strict"
     assert metrics.chunk_guard_filter_ratio == 0.25
+    assert metrics.graph_source_provider_loaded is True
+    assert metrics.graph_source_projection_fallback is True
+    assert metrics.graph_source_edge_count == 7
+    assert metrics.graph_source_inbound_signal_chunk_count == 1
+    assert metrics.graph_source_inbound_signal_coverage_ratio == 1.0
+    assert metrics.graph_source_centrality_signal_chunk_count == 1
+    assert metrics.graph_source_centrality_signal_coverage_ratio == 1.0
+    assert metrics.graph_source_pagerank_signal_chunk_count == 1
+    assert metrics.graph_source_pagerank_signal_coverage_ratio == 1.0
+    assert metrics.agent_loop_observed is True
+    assert metrics.agent_loop_enabled is True
+    assert metrics.agent_loop_attempted is True
+    assert metrics.agent_loop_actions_requested == 2
+    assert metrics.agent_loop_actions_executed == 1
+    assert metrics.agent_loop_stop_reason == "completed"
+    assert metrics.agent_loop_replay_safe is True
+    assert metrics.agent_loop_last_policy_id == "source_plan_refresh"
+    assert metrics.agent_loop_request_more_context_count == 1
+    assert metrics.agent_loop_request_source_plan_retry_count == 1
+    assert metrics.agent_loop_request_validation_retry_count == 0
     assert metrics.source_plan_evidence_summary == {
         "direct_count": 1.0,
         "neighbor_context_count": 1.0,

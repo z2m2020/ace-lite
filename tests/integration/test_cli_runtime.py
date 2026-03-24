@@ -74,6 +74,7 @@ def _seed_runtime_stats_db(db_path: Path) -> None:
             contract_error_code="contract_error",
             stage_latencies=(
                 {"stage_name": "skills", "elapsed_ms": 12.0},
+                {"stage_name": "agent_loop", "elapsed_ms": 7.0},
                 {"stage_name": "total", "elapsed_ms": 60.0},
             ),
         )
@@ -1207,6 +1208,57 @@ def test_cli_runtime_settings_show_uses_last_known_good_snapshot(tmp_path: Path)
     payload = json.loads(lines[-1])
     assert payload["persisted_source"] == "last_known_good"
     assert payload["selected_profile"] == "team-default"
+    assert payload["governance"]["governance_state"] == "fallback_to_last_known_good"
+    assert payload["governance"]["current_record"]["status"] == "invalid"
+    assert payload["governance"]["last_known_good_record"]["status"] == "valid"
+
+
+def test_cli_runtime_settings_persist_writes_current_and_last_known_good(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  retrieval:\n"
+            "    top_k_files: 9\n"
+        ),
+        encoding="utf-8",
+    )
+    current_path = tmp_path / "current-settings.json"
+    lkg_path = tmp_path / "last-known-good.json"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "settings",
+            "persist",
+            "--root",
+            str(tmp_path),
+            "--no-use-snapshot",
+            "--current-path",
+            str(current_path),
+            "--last-known-good-path",
+            str(lkg_path),
+            "--update-last-known-good",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    current_record = json.loads(current_path.read_text(encoding="utf-8"))
+    lkg_record = json.loads(lkg_path.read_text(encoding="utf-8"))
+    assert payload["event"] == "runtime_settings_persist"
+    assert payload["persisted_path"] == str(current_path)
+    assert payload["last_known_good_updated"] is True
+    assert payload["governance"]["governance_state"] == "aligned"
+    assert payload["governance"]["resolved_matches_current"] is True
+    assert payload["governance"]["resolved_matches_last_known_good"] is True
+    assert current_record["fingerprint"] == payload["fingerprint"]
+    assert lkg_record["fingerprint"] == payload["fingerprint"]
 
 
 def test_cli_runtime_settings_show_reports_resolved_runtime_profile_and_stats_tags(
@@ -1349,6 +1401,7 @@ def test_cli_runtime_settings_show_matches_runtime_settings_manager(tmp_path: Pa
     assert payload["provenance"] == expected.provenance
     assert payload["fingerprint"] == expected.fingerprint
     assert payload["selected_profile"] == "parity-profile"
+    assert payload["governance"]["resolved_fingerprint"] == expected.fingerprint
 
 
 def test_cli_runtime_stats_reports_latest_session_and_global_rollups(
@@ -1691,6 +1744,7 @@ def test_cli_runtime_status_reports_service_health_and_cache_paths(tmp_path: Pat
     service_health = {item["name"]: item for item in payload["service_health"]}
     assert payload["event"] == "runtime_status"
     assert len(payload["settings_fingerprint"]) == 64
+    assert payload["settings_governance"]["resolved_fingerprint"] == payload["settings_fingerprint"]
     assert {
         "memory",
         "skills",
@@ -1715,6 +1769,22 @@ def test_cli_runtime_status_reports_service_health_and_cache_paths(tmp_path: Pat
     assert service_health["durable_stats"]["status"] == "ok"
     assert payload["latest_runtime"]["latest_match"]["session_id"] == "session-gamma"
     assert payload["latest_runtime"]["preference_capture_summary"]["event_count"] == 1
+    assert (
+        payload["latest_runtime"]["agent_loop_control_plane_summary"][
+            "source_plan_retry_supported"
+        ]
+        is True
+    )
+    assert (
+        payload["latest_runtime"]["agent_loop_control_plane_summary"]["observed_stage"]
+        is True
+    )
+    assert (
+        payload["latest_runtime"]["agent_loop_control_plane_summary"][
+            "agent_loop_stage_latency_ms_avg"
+        ]
+        == 7.0
+    )
     assert payload["next_cycle_input"]["primary_stream"]
     assert (
         payload["next_cycle_input"]["primary_stream"]

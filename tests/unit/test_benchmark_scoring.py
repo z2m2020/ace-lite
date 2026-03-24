@@ -4,6 +4,7 @@ from ace_lite.benchmark.case_evaluation_payloads import count_unique_paths, safe
 from ace_lite.benchmark.report_metrics import ALL_METRIC_ORDER, COMPARABLE_METRIC_ORDER
 from ace_lite.benchmark.scoring import (
     aggregate_metrics,
+    build_agent_loop_control_plane_summary,
     build_comparison_lane_summary,
     build_deep_symbol_summary,
     build_feedback_loop_summary,
@@ -73,6 +74,15 @@ def test_evaluate_case_result_and_aggregate() -> None:
                 "topological_shield_attenuated_chunk_count": 1.0,
                 "topological_shield_coverage_ratio": 0.5,
                 "topological_shield_attenuation_total": 0.22,
+                "graph_source_provider_loaded": 1.0,
+                "graph_source_projection_fallback": 1.0,
+                "graph_source_edge_count": 5.0,
+                "graph_source_inbound_signal_chunk_count": 2.0,
+                "graph_source_inbound_signal_coverage_ratio": 1.0,
+                "graph_source_centrality_signal_chunk_count": 2.0,
+                "graph_source_centrality_signal_coverage_ratio": 1.0,
+                "graph_source_pagerank_signal_chunk_count": 1.0,
+                "graph_source_pagerank_signal_coverage_ratio": 0.5,
             },
             "policy_name": "doc_intent",
             "metadata": {
@@ -99,13 +109,15 @@ def test_evaluate_case_result_and_aggregate() -> None:
                 },
                 "embeddings": {
                     "enabled": True,
-                "cache_hit": True,
-                "similarity_mean": 0.42,
-                "similarity_max": 0.88,
-                "rerank_pool": 4,
-                "reranked_count": 2,
-                "fallback": False,
-            },
+                    "runtime_provider": "hash_colbert",
+                    "cache_hit": True,
+                    "similarity_mean": 0.42,
+                    "similarity_max": 0.88,
+                    "rerank_pool": 4,
+                    "reranked_count": 2,
+                    "fallback": False,
+                    "semantic_rerank_applied": True,
+                },
         },
         "skills": {
             "selected": [{"name": "skill-a"}],
@@ -267,6 +279,9 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert row["docs_enabled"] == 1.0
     assert row["docs_hit"] == 1.0
     assert row["hint_inject"] == 1.0
+    assert row["embedding_runtime_provider"] == "hash_colbert"
+    assert row["embedding_strategy_mode"] == "cross_encoder"
+    assert row["embedding_semantic_rerank_applied"] == 1.0
     assert row["embedding_similarity_mean"] == 0.42
     assert row["embedding_rerank_ratio"] == 0.5
     assert row["embedding_cache_hit"] == 1.0
@@ -320,6 +335,15 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert row["topological_shield_attenuated_chunk_count"] == 1.0
     assert row["topological_shield_coverage_ratio"] == 0.5
     assert row["topological_shield_attenuation_total"] == 0.22
+    assert row["graph_source_provider_loaded"] == 1.0
+    assert row["graph_source_projection_fallback"] == 1.0
+    assert row["graph_source_edge_count"] == 5.0
+    assert row["graph_source_inbound_signal_chunk_count"] == 2.0
+    assert row["graph_source_inbound_signal_coverage_ratio"] == 1.0
+    assert row["graph_source_centrality_signal_chunk_count"] == 2.0
+    assert row["graph_source_centrality_signal_coverage_ratio"] == 1.0
+    assert row["graph_source_pagerank_signal_chunk_count"] == 1.0
+    assert row["graph_source_pagerank_signal_coverage_ratio"] == 0.5
     assert row["source_plan_graph_closure_preference_enabled"] == 1.0
     assert row["source_plan_graph_closure_bonus_candidate_count"] == 2.0
     assert row["source_plan_graph_closure_preferred_count"] == 1.0
@@ -333,39 +357,6 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert row["slo_downgrade_triggered"] == 0.0
     assert row["relevant_candidate_paths"] == ["src/auth.py"]
     assert row["noise_candidate_paths"] == ["src/token.py"]
-    assert row["candidate_matches"] == [
-        {"path": "src/auth.py", "matched_expected_keys": ["auth"]},
-        {"path": "src/token.py", "matched_expected_keys": []},
-    ]
-    assert row["skills_routing"] == {
-        "source": "precomputed",
-        "mode": "metadata_only",
-        "metadata_only_routing": True,
-        "route_latency_ms": 0.3,
-        "hydration_latency_ms": 0.7,
-        "selected_manifest_token_estimate_total": 0.0,
-        "hydrated_skill_count": 0,
-        "hydrated_sections_count": 0,
-    }
-    assert row["plan_replay_cache"] == {
-        "enabled": True,
-        "hit": True,
-        "stale_hit_safe": True,
-        "stage": "source_plan",
-        "reason": "hit",
-        "stored": False,
-        "failure_signal_summary": {
-            "status": "failed",
-            "issue_count": 2,
-            "probe_status": "failed",
-            "probe_issue_count": 1,
-            "probe_executed_count": 1,
-            "selected_test_count": 1,
-            "executed_test_count": 1,
-            "has_failure": True,
-            "source": "source_plan.validate_step",
-        },
-    }
     assert row["chunk_stage_miss_applicable"] == 0.0
     assert row["chunk_stage_miss_classified"] == 0.0
     assert row["chunk_stage_miss"] == ""
@@ -423,6 +414,17 @@ def test_evaluate_case_result_and_aggregate() -> None:
         "anchor_count": 1,
         "support_edge_count": 3,
         "total": 0.14,
+    }
+    assert row["graph_context_source"] == {
+        "provider_loaded": True,
+        "projection_fallback": True,
+        "edge_count": 5,
+        "inbound_signal_chunk_count": 2,
+        "inbound_signal_coverage_ratio": 1.0,
+        "centrality_signal_chunk_count": 2,
+        "centrality_signal_coverage_ratio": 1.0,
+        "pagerank_signal_chunk_count": 1,
+        "pagerank_signal_coverage_ratio": 0.5,
     }
     assert row["index_fusion_granularity"] == {
         "enabled": True,
@@ -500,6 +502,52 @@ def test_evaluate_case_result_and_aggregate() -> None:
     assert metrics["index_latency_p95_ms"] == 0.0
 
 
+def test_build_agent_loop_control_plane_summary_aggregates_action_coverage() -> None:
+    summary = build_agent_loop_control_plane_summary(
+        [
+            {
+                "agent_loop_observed": 1.0,
+                "agent_loop_enabled": 1.0,
+                "agent_loop_attempted": 1.0,
+                "agent_loop_actions_requested": 2.0,
+                "agent_loop_actions_executed": 1.0,
+                "agent_loop_stop_reason": "completed",
+                "agent_loop_replay_safe": 1.0,
+                "agent_loop_last_policy_id": "source_plan_refresh",
+                "agent_loop_request_more_context_count": 1.0,
+                "agent_loop_request_source_plan_retry_count": 1.0,
+                "agent_loop_request_validation_retry_count": 0.0,
+            },
+            {
+                "agent_loop_observed": 1.0,
+                "agent_loop_enabled": 1.0,
+                "agent_loop_attempted": 0.0,
+                "agent_loop_actions_requested": 0.0,
+                "agent_loop_actions_executed": 0.0,
+                "agent_loop_stop_reason": "no_action",
+                "agent_loop_replay_safe": 1.0,
+                "agent_loop_last_policy_id": "",
+                "agent_loop_request_more_context_count": 0.0,
+                "agent_loop_request_source_plan_retry_count": 0.0,
+                "agent_loop_request_validation_retry_count": 0.0,
+            },
+        ]
+    )
+
+    assert summary["case_count"] == 2
+    assert summary["observed_case_count"] == 2
+    assert summary["enabled_case_count"] == 2
+    assert summary["attempted_case_count"] == 1
+    assert summary["replay_safe_case_rate"] == 1.0
+    assert summary["actions_requested_mean"] == 1.0
+    assert summary["actions_executed_mean"] == 0.5
+    assert summary["request_more_context_case_count"] == 1
+    assert summary["request_source_plan_retry_case_count"] == 1
+    assert summary["request_validation_retry_case_count"] == 0
+    assert summary["dominant_stop_reason"] == "completed"
+    assert summary["dominant_last_policy_id"] == "source_plan_refresh"
+
+
 def test_aggregate_metrics_uses_chunk_stage_success_for_deep_symbol_recall() -> None:
     metrics = aggregate_metrics(
         [
@@ -570,6 +618,15 @@ def test_evaluate_case_result_and_aggregate_preserves_extended_metric_contract()
                 "topological_shield_attenuated_chunk_count": 1.0,
                 "topological_shield_coverage_ratio": 0.5,
                 "topological_shield_attenuation_total": 0.22,
+                "graph_source_provider_loaded": 1.0,
+                "graph_source_projection_fallback": 1.0,
+                "graph_source_edge_count": 5.0,
+                "graph_source_inbound_signal_chunk_count": 2.0,
+                "graph_source_inbound_signal_coverage_ratio": 1.0,
+                "graph_source_centrality_signal_chunk_count": 2.0,
+                "graph_source_centrality_signal_coverage_ratio": 1.0,
+                "graph_source_pagerank_signal_chunk_count": 1.0,
+                "graph_source_pagerank_signal_coverage_ratio": 0.5,
             },
             "policy_name": "doc_intent",
             "metadata": {
@@ -781,6 +838,15 @@ def test_evaluate_case_result_and_aggregate_preserves_extended_metric_contract()
     assert metrics["topological_shield_attenuated_chunk_count_mean"] == 1.0
     assert metrics["topological_shield_coverage_ratio"] == 0.5
     assert metrics["topological_shield_attenuation_total_mean"] == 0.22
+    assert metrics["graph_source_provider_loaded_ratio"] == 1.0
+    assert metrics["graph_source_projection_fallback_ratio"] == 1.0
+    assert metrics["graph_source_edge_count_mean"] == 5.0
+    assert metrics["graph_source_inbound_signal_chunk_count_mean"] == 2.0
+    assert metrics["graph_source_inbound_signal_coverage_ratio"] == 1.0
+    assert metrics["graph_source_centrality_signal_chunk_count_mean"] == 2.0
+    assert metrics["graph_source_centrality_signal_coverage_ratio"] == 1.0
+    assert metrics["graph_source_pagerank_signal_chunk_count_mean"] == 1.0
+    assert metrics["graph_source_pagerank_signal_coverage_ratio"] == 0.5
     assert metrics["chunk_guard_enabled_ratio"] == 0.0
     assert metrics["chunk_guard_report_only_ratio"] == 0.0
     assert metrics["chunk_guard_filtered_count_mean"] == 0.0

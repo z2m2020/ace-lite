@@ -211,6 +211,7 @@ class LongTermMemoryCaptureService:
                 "selected_path": normalized_selected_path,
                 "capture_gate": "accepted",
                 "signal_count": 1,
+                "feedback_signal": "helpful",
                 "attribution_scope": "explicit_selection_only",
             },
         )
@@ -282,6 +283,7 @@ class LongTermMemoryCaptureService:
                 "stage": "dev_issue",
                 "reason_code": payload["reason_code"],
                 "issue_id": issue_id,
+                "feedback_signal": "harmful",
             },
         )
         entry = self._store.upsert_observation(contract)
@@ -346,6 +348,7 @@ class LongTermMemoryCaptureService:
                 "reason_code": payload["reason_code"],
                 "fix_id": fix_id,
                 "issue_id": payload["issue_id"],
+                "feedback_signal": "helpful",
             },
         )
         entry = self._store.upsert_observation(contract)
@@ -434,6 +437,7 @@ class LongTermMemoryCaptureService:
                 "reason_code": observation_payload["reason_code"],
                 "issue_id": issue_id,
                 "fix_id": fix_id,
+                "feedback_signal": "helpful",
             },
         )
         observation_entry = self._store.upsert_observation(observation_contract)
@@ -466,6 +470,7 @@ class LongTermMemoryCaptureService:
                 "issue_id": issue_id,
                 "fix_id": fix_id,
                 "resolution_note": resolution_note,
+                "feedback_signal": "helpful",
             },
         )
         fact_entry = self._store.upsert_fact(fact_contract)

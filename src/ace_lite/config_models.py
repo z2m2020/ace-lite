@@ -260,6 +260,14 @@ class ChunkConfig(ChunkCoreSectionSpec):
     snippet: ChunkSnippetConfig | None = None
     topological_shield: ChunkTopologicalShieldConfig | None = None
     guard: ChunkGuardConfig | None = None
+    file_prior_weight: float | None = None
+    path_match: float | None = None
+    module_match: float | None = None
+    symbol_exact: float | None = None
+    symbol_partial: float | None = None
+    signature_match: float | None = None
+    reference_factor: float | None = None
+    reference_cap: float | None = None
 
     @field_validator("disclosure")
     @classmethod
@@ -358,6 +366,7 @@ class PlanReplayCacheConfig(PlanReplayCacheSectionSpec):
 
 
 class ScipCliConfig(ScipSectionSpec):
+    base_weight: float | None = None
 
     @field_validator("index_path", mode="before")
     @classmethod
@@ -399,10 +408,33 @@ class RetrievalGroupConfig(_StrictModel):
     candidate_ranker: str | None = None
     hybrid_re2_fusion_mode: str | None = None
     hybrid_re2_rrf_k: int | None = None
+    hybrid_re2_shortlist_min: int | None = None
+    hybrid_re2_shortlist_factor: int | None = None
     hybrid_re2_bm25_weight: float | None = None
     hybrid_re2_heuristic_weight: float | None = None
     hybrid_re2_coverage_weight: float | None = None
     hybrid_re2_combined_scale: float | None = None
+    bm25_k1: float | None = None
+    bm25_b: float | None = None
+    bm25_score_scale: float | None = None
+    bm25_path_prior_factor: float | None = None
+    bm25_shortlist_min: int | None = None
+    bm25_shortlist_factor: int | None = None
+    heur_path_exact: float | None = None
+    heur_path_contains: float | None = None
+    heur_module_exact: float | None = None
+    heur_module_tail: float | None = None
+    heur_module_contains: float | None = None
+    heur_symbol_exact: float | None = None
+    heur_symbol_partial_factor: float | None = None
+    heur_symbol_partial_cap: float | None = None
+    heur_import_factor: float | None = None
+    heur_import_cap: float | None = None
+    heur_content_symbol_factor: float | None = None
+    heur_content_import_factor: float | None = None
+    heur_content_cap: float | None = None
+    heur_depth_base: float | None = None
+    heur_depth_factor: float | None = None
     exact_search_enabled: bool | None = None
     exact_search_time_budget_ms: int | None = None
     exact_search_max_paths: int | None = None
@@ -648,6 +680,14 @@ class SharedPlanConfig(_StrictModel):
     chunk_diversity_kind_penalty: float | None = None
     chunk_diversity_locality_penalty: float | None = None
     chunk_diversity_locality_window: int | None = None
+    chunk_file_prior_weight: float | None = None
+    chunk_path_match: float | None = None
+    chunk_module_match: float | None = None
+    chunk_symbol_exact: float | None = None
+    chunk_symbol_partial: float | None = None
+    chunk_signature_match: float | None = None
+    chunk_reference_factor: float | None = None
+    chunk_reference_cap: float | None = None
     chunk: ChunkConfig | None = None
 
     cochange_enabled: bool | None = None
@@ -685,6 +725,7 @@ class SharedPlanConfig(_StrictModel):
     scip_index_path: str | None = None
     scip_provider: str | None = None
     scip_generate_fallback: bool | None = None
+    scip_base_weight: float | None = None
     scip: ScipCliConfig | None = None
 
     trace_export_enabled: bool | None = None

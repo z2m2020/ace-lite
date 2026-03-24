@@ -7,6 +7,7 @@ budget-aware list of "chunk references" (function/class/method definitions).
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ from ace_lite.chunking.disclosure_policy import (
     normalize_chunk_disclosure,
     resolve_chunk_disclosure,
 )
+from ace_lite.chunking.graph_context import get_graph_context
 from ace_lite.chunking.graph_closure import apply_graph_closure_bonus
 from ace_lite.chunking.graph_prior import apply_query_aware_graph_prior
 from ace_lite.chunking.robust_signature import (
@@ -353,6 +355,31 @@ def _build_contextual_chunking_sidecar(
 
     return sidecar
 
+
+def _count_positive_graph_source_signals(
+    *,
+    selected: list[dict[str, Any]],
+    source_values: dict[str, Any],
+) -> int:
+    if not isinstance(source_values, dict) or not source_values:
+        return 0
+
+    count = 0
+    for item in selected:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path") or "").strip()
+        if not path:
+            continue
+        try:
+            signal = float(source_values.get(path, 0.0) or 0.0)
+        except Exception:
+            signal = 0.0
+        if signal > 0.0:
+            count += 1
+    return count
+
+
 def estimate_chunk_tokens(
     *,
     path: str,
@@ -412,6 +439,7 @@ def build_candidate_chunks(
     topological_shield_shared_parent_attenuation: float = 0.2,
     topological_shield_adjacency_attenuation: float = 0.5,
     reference_hits_cache_key: str = "",
+    chunk_scoring_config: Mapping[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, float]]:
     """Build chunk candidates for the index stage.
 
@@ -550,6 +578,7 @@ def build_candidate_chunks(
                 terms=terms,
                 file_score=float(file_candidate.get("score") or 0.0),
                 reference_hits=reference_hits,
+                scoring_config=chunk_scoring_config,
             )
             score *= policy_chunk_weight
             breakdown["policy_chunk_weight"] = round(policy_chunk_weight, 6)
@@ -606,12 +635,14 @@ def build_candidate_chunks(
         return [], metrics.to_dict()
 
     raw_chunk_candidates, graph_prior_payload = apply_query_aware_graph_prior(
+        root=root,
         candidate_chunks=raw_chunk_candidates,
         files_map=files_map,
         policy=policy,
         cache_key=reference_hits_cache_key,
     )
     raw_chunk_candidates, graph_closure_payload = apply_graph_closure_bonus(
+        root=root,
         candidate_chunks=raw_chunk_candidates,
         files_map=files_map,
         policy=policy,
@@ -760,6 +791,7 @@ def build_candidate_chunks(
             )
             adjusted_score = max(0.0, base_score - penalty)
             topological_shield = compute_topological_shield(
+                root=root,
                 candidate=item,
                 selected=selected,
                 files_map=files_map,
@@ -775,6 +807,7 @@ def build_candidate_chunks(
                 adjacency_attenuation=float(
                     topological_shield_adjacency_attenuation
                 ),
+                policy=policy,
             )
 
             sort_key = (
@@ -903,6 +936,12 @@ def build_candidate_chunks(
     topological_shield_shared_parent_evidence_count = 0
     topological_shield_graph_attested_chunk_count = 0
     topological_shield_attenuation_total = 0.0
+    graph_source_provider_loaded = False
+    graph_source_projection_fallback = False
+    graph_source_edge_count = 0
+    graph_source_inbound_signal_chunk_count = 0
+    graph_source_centrality_signal_chunk_count = 0
+    graph_source_pagerank_signal_chunk_count = 0
     for item in selected:
         if not isinstance(item, dict):
             continue
@@ -943,6 +982,51 @@ def build_candidate_chunks(
             topological_shield_graph_attested_chunk_count += 1
 
     selected_count = len(selected)
+    graph_context = (
+        get_graph_context(
+            root=root,
+            files_map=files_map,
+            cache_key=reference_hits_cache_key,
+            policy=policy,
+        )
+        if isinstance(files_map, dict) and files_map
+        else {}
+    )
+    graph_source_provider_loaded = bool(
+        graph_context.get("source_provider_loaded", False)
+    )
+    graph_source_projection_fallback = bool(
+        graph_context.get("source_projection_fallback", False)
+    )
+    graph_source_edge_count = max(
+        0, int(graph_context.get("source_edge_count", 0) or 0)
+    )
+    graph_source_inbound_signal_chunk_count = _count_positive_graph_source_signals(
+        selected=selected,
+        source_values=(
+            graph_context.get("file_inbound_degree", {})
+            if isinstance(graph_context, dict)
+            else {}
+        ),
+    )
+    graph_source_centrality_signal_chunk_count = (
+        _count_positive_graph_source_signals(
+            selected=selected,
+            source_values=(
+                graph_context.get("degree_centrality", {})
+                if isinstance(graph_context, dict)
+                else {}
+            ),
+        )
+    )
+    graph_source_pagerank_signal_chunk_count = _count_positive_graph_source_signals(
+        selected=selected,
+        source_values=(
+            graph_context.get("pagerank", {})
+            if isinstance(graph_context, dict)
+            else {}
+        ),
+    )
     dedup_ratio = (
         max(0.0, 1.0 - (selected_count / total_candidates))
         if total_candidates > 0
@@ -1090,6 +1174,33 @@ def build_candidate_chunks(
         ),
         topological_shield_attenuation_total=round(
             float(topological_shield_attenuation_total), 6
+        ),
+        graph_source_provider_loaded=bool(graph_source_provider_loaded),
+        graph_source_projection_fallback=bool(graph_source_projection_fallback),
+        graph_source_edge_count=int(graph_source_edge_count),
+        graph_source_inbound_signal_chunk_count=int(
+            graph_source_inbound_signal_chunk_count
+        ),
+        graph_source_inbound_signal_coverage_ratio=(
+            float(graph_source_inbound_signal_chunk_count) / float(selected_count)
+            if selected_count > 0
+            else 0.0
+        ),
+        graph_source_centrality_signal_chunk_count=int(
+            graph_source_centrality_signal_chunk_count
+        ),
+        graph_source_centrality_signal_coverage_ratio=(
+            float(graph_source_centrality_signal_chunk_count) / float(selected_count)
+            if selected_count > 0
+            else 0.0
+        ),
+        graph_source_pagerank_signal_chunk_count=int(
+            graph_source_pagerank_signal_chunk_count
+        ),
+        graph_source_pagerank_signal_coverage_ratio=(
+            float(graph_source_pagerank_signal_chunk_count) / float(selected_count)
+            if selected_count > 0
+            else 0.0
         ),
     )
 

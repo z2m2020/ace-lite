@@ -103,8 +103,14 @@ def execute_post_source_plan_agent_loop(
     last_action = dict(pending_action)
     while pending_action is not None and controller.can_continue():
         last_action = dict(pending_action)
+        iteration_index = controller.iteration_count + 1
         action_type = str(last_action.get("action_type") or "")
         rerun_stages = resolve_agent_loop_rerun_stages_fn(action_type=action_type)
+        rerun_policy = controller.build_rerun_policy(
+            action=last_action,
+            rerun_stages=rerun_stages,
+            iteration_index=iteration_index,
+        )
         previous_validation_stage = get_stage_state_fn(ctx=ctx, stage_name="validation")
         retrieval_refinement = controller.build_retrieval_refinement(
             action=last_action,
@@ -118,7 +124,6 @@ def execute_post_source_plan_agent_loop(
             base_query=current_query,
             action=last_action,
         )
-        iteration_index = controller.iteration_count + 1
         iteration_ctx = StageContext(
             query=current_query,
             repo=ctx.repo,
@@ -148,9 +153,16 @@ def execute_post_source_plan_agent_loop(
             if stage_metrics:
                 stage_metrics[-1].tags["agent_loop_iteration"] = iteration_index
                 stage_metrics[-1].tags["agent_loop_action"] = action_type
+                stage_metrics[-1].tags["agent_loop_policy_id"] = str(
+                    rerun_policy.get("policy_id") or ""
+                )
+                stage_metrics[-1].tags["agent_loop_action_category"] = str(
+                    rerun_policy.get("action_category") or ""
+                )
 
         controller.record_iteration(
             action=last_action,
+            rerun_policy=rerun_policy,
             retrieval_refinement=retrieval_refinement,
             query=current_query,
             rerun_stages=rerun_stages,

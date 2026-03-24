@@ -1,6 +1,8 @@
 from ace_lite.cli_app import runtime_settings_support
 from ace_lite.cli_app.runtime_command_support import (
+    build_runtime_settings_governance_payload,
     build_runtime_settings_payload,
+    collect_runtime_settings_persist_payload,
     collect_runtime_settings_show_payload,
     evaluate_runtime_memory_state,
     load_runtime_snapshot,
@@ -10,7 +12,15 @@ from ace_lite.cli_app.runtime_command_support import (
 
 
 def test_runtime_settings_support_facade_reexports_settings_helpers() -> None:
+    assert (
+        build_runtime_settings_governance_payload
+        is runtime_settings_support.build_runtime_settings_governance_payload
+    )
     assert build_runtime_settings_payload is runtime_settings_support.build_runtime_settings_payload
+    assert (
+        collect_runtime_settings_persist_payload
+        is runtime_settings_support.collect_runtime_settings_persist_payload
+    )
     assert (
         collect_runtime_settings_show_payload
         is runtime_settings_support.collect_runtime_settings_show_payload

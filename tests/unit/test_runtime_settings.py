@@ -9,6 +9,7 @@ from ace_lite.runtime_settings_store import (
     DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH,
     DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH,
     build_runtime_settings_record,
+    inspect_runtime_settings_record,
     load_runtime_settings_with_fallback,
     load_runtime_settings_record,
     persist_runtime_settings_record,
@@ -163,6 +164,77 @@ def test_runtime_settings_manager_applies_runtime_profile_and_exposes_stats_tags
     assert snapshot.metadata["stats_tags"]["settings_fingerprint"] == snapshot.fingerprint
 
 
+def test_runtime_settings_manager_resolves_scoring_overlay_sources(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    fake_home = tmp_path / "home"
+    repo_root = tmp_path / "repo"
+    cwd_dir = repo_root / "workspace"
+
+    fake_home.mkdir(parents=True, exist_ok=True)
+    cwd_dir.mkdir(parents=True, exist_ok=True)
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
+
+    (repo_root / ".ace-lite.yml").write_text(
+        yaml.safe_dump(
+            {
+                "plan": {
+                    "retrieval": {
+                        "bm25_k1": 1.7,
+                        "heur_path_exact": 4.5,
+                    },
+                    "chunk": {
+                        "file_prior_weight": 0.55,
+                    },
+                    "scip": {
+                        "base_weight": 0.9,
+                    },
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (cwd_dir / ".ace-lite.yml").write_text(
+        yaml.safe_dump(
+            {
+                "plan": {
+                    "retrieval": {
+                        "hybrid_re2_shortlist_min": 20,
+                    },
+                    "chunk": {
+                        "reference_cap": 3.5,
+                    },
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("USERPROFILE", str(fake_home))
+
+    snapshot = RuntimeSettingsManager().resolve(root=repo_root, cwd=cwd_dir)
+
+    assert snapshot.snapshot["plan"]["retrieval"]["bm25_k1"] == 1.7
+    assert snapshot.provenance["plan"]["retrieval"]["bm25_k1"] == "repo_config"
+    assert snapshot.snapshot["plan"]["retrieval"]["heur_path_exact"] == 4.5
+    assert snapshot.provenance["plan"]["retrieval"]["heur_path_exact"] == "repo_config"
+    assert snapshot.snapshot["plan"]["retrieval"]["hybrid_re2_shortlist_min"] == 20
+    assert (
+        snapshot.provenance["plan"]["retrieval"]["hybrid_re2_shortlist_min"]
+        == "cwd_config"
+    )
+    assert snapshot.snapshot["plan"]["chunking"]["file_prior_weight"] == 0.55
+    assert snapshot.provenance["plan"]["chunking"]["file_prior_weight"] == "repo_config"
+    assert snapshot.snapshot["plan"]["chunking"]["reference_cap"] == 3.5
+    assert snapshot.provenance["plan"]["chunking"]["reference_cap"] == "cwd_config"
+    assert snapshot.snapshot["plan"]["scip"]["base_weight"] == 0.9
+    assert snapshot.provenance["plan"]["scip"]["base_weight"] == "repo_config"
+
+
 def test_runtime_settings_store_round_trip(tmp_path: Path) -> None:
     payload = build_runtime_settings_record(
         snapshot={"plan": {"retrieval": {"top_k_files": 8}}},
@@ -215,3 +287,12 @@ def test_runtime_settings_store_paths_and_last_known_good_fallback(tmp_path: Pat
     assert source == "last_known_good"
     assert loaded is not None
     assert loaded["snapshot"]["plan"]["retrieval"]["top_k_files"] == 12
+
+    current_summary = inspect_runtime_settings_record(current_path)
+    lkg_summary = inspect_runtime_settings_record(lkg_path)
+
+    assert current_summary["status"] == "invalid"
+    assert current_summary["valid"] is False
+    assert lkg_summary["status"] == "valid"
+    assert lkg_summary["valid"] is True
+    assert lkg_summary["fingerprint"] == valid_payload["fingerprint"]

@@ -246,6 +246,59 @@ RUNTIME_PROFILES: tuple[RuntimeProfile, ...] = (
         },
     ),
     _profile(
+        name="colbert_experiment",
+        summary="Enable report-only hash_colbert semantic rerank for controlled benchmark experiments without changing default runtime behavior.",
+        retrieval={
+            "retrieval_policy": "general",
+            "retrieval": {
+                "candidate_ranker": "rrf_hybrid",
+                "exact_search_enabled": False,
+                "deterministic_refine_enabled": True,
+            },
+            "repomap": {
+                "enabled": True,
+                "ranking_profile": "graph",
+            },
+        },
+        cache={
+            "memory": {
+                "cache": {
+                    "enabled": True,
+                    "ttl_seconds": 1800,
+                    "max_entries": 64,
+                }
+            },
+            "plan_replay_cache": {
+                "enabled": True,
+            },
+        },
+        budget={
+            "retrieval": {
+                "top_k_files": 8,
+                "min_candidate_score": 2,
+            },
+            "repomap": {
+                "top_k": 6,
+                "neighbor_limit": 12,
+                "budget_tokens": 480,
+            },
+            "chunk": {
+                "top_k": 20,
+                "per_file_limit": 3,
+                "token_budget": 1100,
+            },
+        },
+        extras={
+            "embeddings": {
+                "enabled": True,
+                "provider": "hash_colbert",
+                "model": "hash-colbert-v1",
+                "fail_open": True,
+                "rerank_pool": 24,
+            }
+        },
+    ),
+    _profile(
         name="benchmark",
         summary="Reduce variance by using deterministic retrieval and disabling replay-style caches.",
         retrieval={

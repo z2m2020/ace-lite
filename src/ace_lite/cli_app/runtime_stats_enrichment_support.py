@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from ace_lite.agent_loop.contracts import (
+    AGENT_LOOP_ACTION_TYPES,
+    AGENT_LOOP_RERUN_POLICY_SCHEMA_VERSION,
+)
+from ace_lite.agent_loop.controller import AGENT_LOOP_STOP_REASONS
 from ace_lite.dev_feedback_taxonomy import describe_dev_feedback_reason
 from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
 
@@ -258,6 +263,66 @@ def build_runtime_memory_health_summary(
     }
 
 
+def build_runtime_agent_loop_control_plane_summary(
+    *,
+    runtime_scope_map: dict[str, dict[str, Any] | None],
+) -> dict[str, Any]:
+    preferred_scope_name = "all_time"
+    preferred_scope: dict[str, Any] | None = None
+    for scope_name in ("repo_profile", "repo", "profile", "session", "all_time"):
+        candidate = runtime_scope_map.get(scope_name)
+        if isinstance(candidate, dict):
+            preferred_scope_name = scope_name
+            preferred_scope = candidate
+            break
+
+    agent_loop_stage: dict[str, Any] = {}
+    if isinstance(preferred_scope, dict):
+        for item in preferred_scope.get("stage_latencies", []):
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("stage_name") or "").strip() != "agent_loop":
+                continue
+            agent_loop_stage = item
+            break
+
+    request_more_context_rerun_stages = [
+        "index",
+        "repomap",
+        "augment",
+        "skills",
+        "source_plan",
+        "validation",
+    ]
+    source_plan_retry_rerun_stages = ["source_plan", "validation"]
+    validation_retry_rerun_stages = ["validation"]
+
+    return {
+        "scope_kind": preferred_scope_name,
+        "supported_action_types": list(AGENT_LOOP_ACTION_TYPES),
+        "supported_stop_reasons": list(AGENT_LOOP_STOP_REASONS),
+        "rerun_policy_schema_version": AGENT_LOOP_RERUN_POLICY_SCHEMA_VERSION,
+        "rerun_policy_supported": True,
+        "preferred_execution_scope": "post_source_runtime",
+        "request_more_context_supported": "request_more_context"
+        in AGENT_LOOP_ACTION_TYPES,
+        "source_plan_retry_supported": "request_source_plan_retry"
+        in AGENT_LOOP_ACTION_TYPES,
+        "validation_retry_supported": "request_validation_retry"
+        in AGENT_LOOP_ACTION_TYPES,
+        "request_more_context_rerun_stages": request_more_context_rerun_stages,
+        "source_plan_retry_rerun_stages": source_plan_retry_rerun_stages,
+        "validation_retry_rerun_stages": validation_retry_rerun_stages,
+        "observed_stage": bool(agent_loop_stage),
+        "agent_loop_stage_invocation_count": int(
+            agent_loop_stage.get("invocation_count", 0) or 0
+        ),
+        "agent_loop_stage_latency_ms_avg": float(
+            agent_loop_stage.get("latency_ms_avg", 0.0) or 0.0
+        ),
+    }
+
+
 def _build_next_cycle_action_hint(
     *,
     reason_code: str,
@@ -406,6 +471,7 @@ def build_runtime_next_cycle_input_summary(
 
 __all__ = [
     "RUNTIME_MEMORY_REASON_CODES",
+    "build_runtime_agent_loop_control_plane_summary",
     "build_runtime_memory_health_summary",
     "build_runtime_next_cycle_input_summary",
     "build_runtime_top_pain_summary",

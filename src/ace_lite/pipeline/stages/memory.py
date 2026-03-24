@@ -21,6 +21,8 @@ from ace_lite.token_estimator import estimate_tokens
 
 logger = logging.getLogger(__name__)
 
+_LTM_FEEDBACK_SIGNALS = frozenset({"helpful", "stale", "harmful"})
+
 
 def memory_record_handle(record: MemoryRecord) -> str:
     """Generate a handle for a memory record.
@@ -368,6 +370,12 @@ def _build_ltm_selected_entry(hit: dict[str, Any]) -> dict[str, Any] | None:
             value = str(metadata.get(key) or "").strip()
             if value:
                 payload[key] = value
+    feedback_signal = str(metadata.get("feedback_signal") or "").strip().lower()
+    if feedback_signal in _LTM_FEEDBACK_SIGNALS:
+        payload["feedback_signal"] = feedback_signal
+    attribution_scope = str(metadata.get("attribution_scope") or "").strip().lower()
+    if attribution_scope:
+        payload["attribution_scope"] = attribution_scope
     return payload
 
 
@@ -408,6 +416,13 @@ def _build_ltm_attribution_entry(hit: dict[str, Any]) -> dict[str, Any] | None:
     }
     if summary:
         payload["summary"] = summary
+    feedback_signal = str(selected.get("feedback_signal") or "").strip().lower()
+    if feedback_signal in _LTM_FEEDBACK_SIGNALS:
+        payload["feedback_signal"] = feedback_signal
+        payload["signals"].append(feedback_signal)
+    attribution_scope = str(selected.get("attribution_scope") or "").strip().lower()
+    if attribution_scope:
+        payload["attribution_scope"] = attribution_scope
 
     neighborhood = metadata.get("neighborhood")
     if isinstance(neighborhood, dict):
@@ -447,6 +462,8 @@ def build_ltm_explainability(
 
     selected: list[dict[str, Any]] = []
     attribution: list[dict[str, Any]] = []
+    feedback_signal_counts = {signal: 0 for signal in sorted(_LTM_FEEDBACK_SIGNALS)}
+    attribution_scope_counts: dict[str, int] = {}
     for preview_hit in hits_preview:
         if not isinstance(preview_hit, dict):
             continue
@@ -456,15 +473,27 @@ def build_ltm_explainability(
         if selected_entry is None:
             continue
         selected.append(selected_entry)
+        feedback_signal = str(selected_entry.get("feedback_signal") or "").strip().lower()
+        if feedback_signal in feedback_signal_counts:
+            feedback_signal_counts[feedback_signal] += 1
         attribution_entry = _build_ltm_attribution_entry(effective_hit)
         if attribution_entry is not None:
             attribution.append(attribution_entry)
+            attribution_scope = str(
+                attribution_entry.get("attribution_scope") or ""
+            ).strip()
+            if attribution_scope:
+                attribution_scope_counts[attribution_scope] = (
+                    int(attribution_scope_counts.get(attribution_scope, 0) or 0) + 1
+                )
 
     return {
         "selected_count": len(selected),
         "attribution_count": len(attribution),
         "selected": selected,
         "attribution": attribution,
+        "feedback_signal_counts": feedback_signal_counts,
+        "attribution_scope_counts": attribution_scope_counts,
     }
 
 

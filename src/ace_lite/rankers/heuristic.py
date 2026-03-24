@@ -7,24 +7,11 @@ providing a reliable baseline for more sophisticated rankers.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from ace_lite.scoring_config import (
-    HEUR_CONTENT_CAP,
-    HEUR_CONTENT_IMPORT_FACTOR,
-    HEUR_CONTENT_SYMBOL_FACTOR,
-    HEUR_DEPTH_BASE,
-    HEUR_DEPTH_FACTOR,
-    HEUR_IMPORT_CAP,
-    HEUR_IMPORT_FACTOR,
-    HEUR_MODULE_CONTAINS,
-    HEUR_MODULE_EXACT,
-    HEUR_MODULE_TAIL,
-    HEUR_PATH_CONTAINS,
-    HEUR_PATH_EXACT,
-    HEUR_SYMBOL_EXACT,
-    HEUR_SYMBOL_PARTIAL_CAP,
-    HEUR_SYMBOL_PARTIAL_FACTOR,
+    resolve_heuristic_scoring_config,
 )
 
 # Default stopwords (same as orchestrator)
@@ -47,6 +34,7 @@ def rank_candidates_heuristic(
     terms: list[str],
     *,
     min_score: int = 1,
+    scoring_config: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Rank candidates using heuristic scoring.
 
@@ -72,6 +60,7 @@ def rank_candidates_heuristic(
     normalized_terms = [
         str(term).strip().lower() for term in terms if str(term).strip()
     ]
+    scoring = resolve_heuristic_scoring_config(scoring_config)
     threshold = max(0, int(min_score))
     ranked: list[dict[str, Any]] = []
 
@@ -148,28 +137,28 @@ def rank_candidates_heuristic(
 
                 # Path matching
                 if path_lower.startswith(term) or f"/{term}" in path_lower:
-                    path_score += HEUR_PATH_EXACT
+                    path_score += float(scoring["path_exact"])
                 elif not is_short and term in path_lower:
-                    path_score += HEUR_PATH_CONTAINS
+                    path_score += float(scoring["path_contains"])
 
                 # Module matching
                 if module_lower == term:
-                    path_score += HEUR_MODULE_EXACT
+                    path_score += float(scoring["module_exact"])
                 elif module_lower.endswith(f".{term}"):
-                    path_score += HEUR_MODULE_TAIL
+                    path_score += float(scoring["module_tail"])
                 elif not is_short and term in module_lower:
-                    path_score += HEUR_MODULE_CONTAINS
+                    path_score += float(scoring["module_contains"])
 
                 # Symbol matching
                 symbol_exact = term in exact_symbols
                 if symbol_exact:
-                    symbol_score += HEUR_SYMBOL_EXACT
+                    symbol_score += float(scoring["symbol_exact"])
                 elif not is_short:
                     symbol_hits = sum(1 for name in symbol_names if term in name)
                     if symbol_hits:
                         symbol_score += min(
-                            HEUR_SYMBOL_PARTIAL_CAP,
-                            symbol_hits * HEUR_SYMBOL_PARTIAL_FACTOR,
+                            float(scoring["symbol_partial_cap"]),
+                            symbol_hits * float(scoring["symbol_partial_factor"]),
                         )
 
                 # Import matching
@@ -177,7 +166,8 @@ def rank_candidates_heuristic(
                     import_hits = sum(1 for name in import_names if term in name)
                     if import_hits:
                         import_score += min(
-                            HEUR_IMPORT_CAP, import_hits * HEUR_IMPORT_FACTOR
+                            float(scoring["import_cap"]),
+                            import_hits * float(scoring["import_factor"]),
                         )
 
                 # Content matching (when no exact symbol match)
@@ -190,16 +180,26 @@ def rank_candidates_heuristic(
                     )
                     if symbol_blob_hits or import_blob_hits:
                         content_score += min(
-                            HEUR_CONTENT_CAP,
-                            (symbol_blob_hits * HEUR_CONTENT_SYMBOL_FACTOR)
-                            + (import_blob_hits * HEUR_CONTENT_IMPORT_FACTOR),
+                            float(scoring["content_cap"]),
+                            (
+                                symbol_blob_hits
+                                * float(scoring["content_symbol_factor"])
+                            )
+                            + (
+                                import_blob_hits
+                                * float(scoring["content_import_factor"])
+                            ),
                         )
 
             # Depth bonus for source directories
             depth = len([part for part in path.split("/") if part])
             base_score = path_score + symbol_score + import_score + content_score
             depth_bonus = (
-                max(0.0, HEUR_DEPTH_BASE - (depth * HEUR_DEPTH_FACTOR))
+                max(
+                    0.0,
+                    float(scoring["depth_base"])
+                    - (depth * float(scoring["depth_factor"])),
+                )
                 if base_score > 0.0 and path.startswith(("src/", "api/", "ui/"))
                 else 0.0
             )

@@ -4,8 +4,10 @@ import pytest
 
 from ace_lite.agent_loop.contracts import (
     AGENT_LOOP_BRANCH_BATCH_SCHEMA_VERSION,
+    AGENT_LOOP_RERUN_POLICY_SCHEMA_VERSION,
     build_agent_loop_branch_batch_v1,
     build_agent_loop_action_v1,
+    build_agent_loop_rerun_policy_v1,
     validate_agent_loop_branch_batch_v1,
     validate_agent_loop_action_v1,
 )
@@ -51,6 +53,33 @@ def test_request_more_context_requires_query_hint_or_focus_paths() -> None:
             action_type="request_more_context",
             reason="need more detail",
         )
+
+
+def test_build_agent_loop_action_v1_accepts_source_plan_retry_without_query_hint() -> None:
+    action = build_agent_loop_action_v1(
+        action_type="request_source_plan_retry",
+        reason="repack_source_plan",
+        selected_tests=["pytest -q tests/unit/test_source_plan.py"],
+    ).as_dict()
+
+    assert action["action_type"] == "request_source_plan_retry"
+    assert action["query_hint"] == ""
+    assert action["selected_tests"] == ["pytest -q tests/unit/test_source_plan.py"]
+
+
+def test_build_agent_loop_rerun_policy_v1_normalizes_source_plan_retry_scope() -> None:
+    policy = build_agent_loop_rerun_policy_v1(
+        action_type="request_source_plan_retry",
+        rerun_stages=["source_plan", "validation", "validation"],
+        metadata={"iteration_index": 1},
+    ).as_dict()
+
+    assert policy["schema_version"] == AGENT_LOOP_RERUN_POLICY_SCHEMA_VERSION
+    assert policy["action_category"] == "source_plan"
+    assert policy["policy_id"] == "source_plan_refresh"
+    assert policy["query_mode"] == "reuse"
+    assert policy["rerun_stages"] == ["source_plan", "validation"]
+    assert policy["metadata"]["iteration_index"] == 1
 
 
 def test_build_agent_loop_branch_batch_v1_normalizes_candidates() -> None:

@@ -30,6 +30,7 @@ from ace_lite.cli_app.runtime_command_support import (
     build_runtime_cache_vacuum_payload,
     build_runtime_doctor_payload,
     collect_runtime_mcp_self_test_payload,
+    collect_runtime_settings_persist_payload,
     collect_runtime_settings_show_payload,
     collect_runtime_status_payload,
     collect_runtime_mcp_doctor_payload,
@@ -159,6 +160,76 @@ def runtime_settings_show_command(
             use_snapshot=use_snapshot,
             current_path=current_path,
             last_known_good_path=last_known_good_path,
+            snapshot_path_fn=_mcp_env_snapshot_path,
+            load_snapshot_fn=_load_mcp_env_snapshot,
+        )
+    )
+
+
+@runtime_settings_group.command("persist")
+@click.option("--root", default=".", show_default=True, help="Repository root path.")
+@click.option(
+    "--config-file",
+    default=".ace-lite.yml",
+    show_default=True,
+    help="Config filename in layered lookup.",
+)
+@click.option(
+    "--mcp-name",
+    default="ace-lite",
+    show_default=True,
+    help="MCP server name for loading saved env snapshot.",
+)
+@click.option(
+    "--runtime-profile",
+    default=None,
+    type=click.Choice(list(RUNTIME_PROFILE_NAMES), case_sensitive=False),
+    help="Apply a first-party runtime profile before explicit runtime settings overrides.",
+)
+@click.option(
+    "--use-snapshot/--no-use-snapshot",
+    default=True,
+    show_default=True,
+    help="Load env snapshot from context-map/mcp/<name>.env.json when present.",
+)
+@click.option(
+    "--current-path",
+    default=DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH,
+    show_default=True,
+    help="User-scope persisted runtime settings snapshot path.",
+)
+@click.option(
+    "--last-known-good-path",
+    default=DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH,
+    show_default=True,
+    help="User-scope last-known-good runtime settings snapshot path.",
+)
+@click.option(
+    "--update-last-known-good/--no-update-last-known-good",
+    default=False,
+    show_default=True,
+    help="Also promote the resolved runtime settings snapshot to last-known-good.",
+)
+def runtime_settings_persist_command(
+    root: str,
+    config_file: str,
+    mcp_name: str,
+    runtime_profile: str | None,
+    use_snapshot: bool,
+    current_path: str,
+    last_known_good_path: str,
+    update_last_known_good: bool,
+) -> None:
+    echo_json(
+        collect_runtime_settings_persist_payload(
+            root=root,
+            config_file=config_file,
+            mcp_name=mcp_name,
+            runtime_profile=runtime_profile,
+            use_snapshot=use_snapshot,
+            current_path=current_path,
+            last_known_good_path=last_known_good_path,
+            update_last_known_good=update_last_known_good,
             snapshot_path_fn=_mcp_env_snapshot_path,
             load_snapshot_fn=_load_mcp_env_snapshot,
         )

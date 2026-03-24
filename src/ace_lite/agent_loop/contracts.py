@@ -4,8 +4,30 @@ from dataclasses import dataclass
 from typing import Any
 
 AGENT_LOOP_ACTION_SCHEMA_VERSION = "agent_loop_action_v1"
-AGENT_LOOP_ACTION_TYPES = ("request_more_context", "request_validation_retry")
+AGENT_LOOP_ACTION_TYPES = (
+    "request_more_context",
+    "request_source_plan_retry",
+    "request_validation_retry",
+)
+AGENT_LOOP_RERUN_POLICY_SCHEMA_VERSION = "agent_loop_rerun_policy_v1"
 AGENT_LOOP_BRANCH_BATCH_SCHEMA_VERSION = "agent_loop_branch_batch_v1"
+_ACTION_TAXONOMY: dict[str, dict[str, str]] = {
+    "request_more_context": {
+        "action_category": "retrieval",
+        "policy_id": "retrieval_refresh",
+        "query_mode": "incremental",
+    },
+    "request_source_plan_retry": {
+        "action_category": "source_plan",
+        "policy_id": "source_plan_refresh",
+        "query_mode": "reuse",
+    },
+    "request_validation_retry": {
+        "action_category": "validation",
+        "policy_id": "validation_retry",
+        "query_mode": "reuse",
+    },
+}
 
 
 def _normalize_text(value: Any, *, default: str = "") -> str:
@@ -47,6 +69,29 @@ class AgentLoopActionV1:
             "query_hint": self.query_hint,
             "focus_paths": list(self.focus_paths),
             "selected_tests": list(self.selected_tests),
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AgentLoopRerunPolicyV1:
+    action_type: str
+    action_category: str
+    policy_id: str
+    query_mode: str
+    rerun_stages: tuple[str, ...]
+    replay_safe: bool
+    metadata: dict[str, Any]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": AGENT_LOOP_RERUN_POLICY_SCHEMA_VERSION,
+            "action_type": self.action_type,
+            "action_category": self.action_category,
+            "policy_id": self.policy_id,
+            "query_mode": self.query_mode,
+            "rerun_stages": list(self.rerun_stages),
+            "replay_safe": self.replay_safe,
             "metadata": dict(self.metadata),
         }
 
@@ -164,6 +209,34 @@ def build_agent_loop_branch_batch_v1(
 
     return AgentLoopBranchBatchV1(
         candidates=tuple(normalized_candidates),
+        metadata=dict(metadata) if isinstance(metadata, dict) else {},
+    )
+
+
+def build_agent_loop_rerun_policy_v1(
+    *,
+    action_type: str,
+    rerun_stages: list[str] | tuple[str, ...],
+    replay_safe: bool = True,
+    metadata: dict[str, Any] | None = None,
+) -> AgentLoopRerunPolicyV1:
+    normalized_action_type = _normalize_text(action_type).lower()
+    if normalized_action_type not in AGENT_LOOP_ACTION_TYPES:
+        raise ValueError(
+            f"action_type must be one of: {', '.join(AGENT_LOOP_ACTION_TYPES)}"
+        )
+    normalized_rerun_stages = _normalize_text_list(
+        value=list(rerun_stages),
+        context="rerun_stages",
+    )
+    taxonomy = _ACTION_TAXONOMY[normalized_action_type]
+    return AgentLoopRerunPolicyV1(
+        action_type=normalized_action_type,
+        action_category=taxonomy["action_category"],
+        policy_id=taxonomy["policy_id"],
+        query_mode=taxonomy["query_mode"],
+        rerun_stages=normalized_rerun_stages,
+        replay_safe=bool(replay_safe),
         metadata=dict(metadata) if isinstance(metadata, dict) else {},
     )
 
@@ -416,12 +489,15 @@ def validate_agent_loop_branch_batch_v1(
 __all__ = [
     "AGENT_LOOP_BRANCH_BATCH_SCHEMA_VERSION",
     "AGENT_LOOP_ACTION_SCHEMA_VERSION",
+    "AGENT_LOOP_RERUN_POLICY_SCHEMA_VERSION",
     "AGENT_LOOP_ACTION_TYPES",
     "AgentLoopBranchBatchCandidateV1",
     "AgentLoopBranchBatchV1",
     "AgentLoopActionV1",
+    "AgentLoopRerunPolicyV1",
     "build_agent_loop_branch_batch_v1",
     "build_agent_loop_action_v1",
+    "build_agent_loop_rerun_policy_v1",
     "validate_agent_loop_branch_batch_v1",
     "validate_agent_loop_action_v1",
 ]

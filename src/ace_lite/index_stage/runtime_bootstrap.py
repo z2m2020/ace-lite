@@ -53,6 +53,10 @@ def _build_index_candidate_cache_settings_payload(
             "exact_search_max_paths": int(retrieval_cfg.exact_search_max_paths),
             "hybrid_re2_fusion_mode": str(retrieval_cfg.hybrid_re2_fusion_mode),
             "hybrid_re2_rrf_k": int(retrieval_cfg.hybrid_re2_rrf_k),
+            "hybrid_re2_shortlist_min": int(retrieval_cfg.hybrid_re2_shortlist_min),
+            "hybrid_re2_shortlist_factor": int(
+                retrieval_cfg.hybrid_re2_shortlist_factor
+            ),
             "hybrid_re2_bm25_weight": float(retrieval_cfg.hybrid_re2_bm25_weight),
             "hybrid_re2_heuristic_weight": float(
                 retrieval_cfg.hybrid_re2_heuristic_weight
@@ -63,6 +67,35 @@ def _build_index_candidate_cache_settings_payload(
             "hybrid_re2_combined_scale": float(
                 retrieval_cfg.hybrid_re2_combined_scale
             ),
+            "bm25_k1": float(retrieval_cfg.bm25_k1),
+            "bm25_b": float(retrieval_cfg.bm25_b),
+            "bm25_score_scale": float(retrieval_cfg.bm25_score_scale),
+            "bm25_path_prior_factor": float(
+                retrieval_cfg.bm25_path_prior_factor
+            ),
+            "bm25_shortlist_min": int(retrieval_cfg.bm25_shortlist_min),
+            "bm25_shortlist_factor": int(retrieval_cfg.bm25_shortlist_factor),
+            "heur_path_exact": float(retrieval_cfg.heur_path_exact),
+            "heur_path_contains": float(retrieval_cfg.heur_path_contains),
+            "heur_module_exact": float(retrieval_cfg.heur_module_exact),
+            "heur_module_tail": float(retrieval_cfg.heur_module_tail),
+            "heur_module_contains": float(retrieval_cfg.heur_module_contains),
+            "heur_symbol_exact": float(retrieval_cfg.heur_symbol_exact),
+            "heur_symbol_partial_factor": float(
+                retrieval_cfg.heur_symbol_partial_factor
+            ),
+            "heur_symbol_partial_cap": float(retrieval_cfg.heur_symbol_partial_cap),
+            "heur_import_factor": float(retrieval_cfg.heur_import_factor),
+            "heur_import_cap": float(retrieval_cfg.heur_import_cap),
+            "heur_content_symbol_factor": float(
+                retrieval_cfg.heur_content_symbol_factor
+            ),
+            "heur_content_import_factor": float(
+                retrieval_cfg.heur_content_import_factor
+            ),
+            "heur_content_cap": float(retrieval_cfg.heur_content_cap),
+            "heur_depth_base": float(retrieval_cfg.heur_depth_base),
+            "heur_depth_factor": float(retrieval_cfg.heur_depth_factor),
             "multi_channel_rrf_k": int(retrieval_cfg.multi_channel_rrf_k),
             "multi_channel_rrf_pool_cap": int(
                 retrieval_cfg.multi_channel_rrf_pool_cap
@@ -88,6 +121,14 @@ def _build_index_candidate_cache_settings_payload(
                 chunking_cfg.diversity_locality_penalty
             ),
             "diversity_locality_window": int(chunking_cfg.diversity_locality_window),
+            "file_prior_weight": float(chunking_cfg.file_prior_weight),
+            "path_match": float(chunking_cfg.path_match),
+            "module_match": float(chunking_cfg.module_match),
+            "symbol_exact": float(chunking_cfg.symbol_exact),
+            "symbol_partial": float(chunking_cfg.symbol_partial),
+            "signature_match": float(chunking_cfg.signature_match),
+            "reference_factor": float(chunking_cfg.reference_factor),
+            "reference_cap": float(chunking_cfg.reference_cap),
             "topological_max_attenuation": float(
                 topological_shield_cfg.max_attenuation
             ),
@@ -124,6 +165,7 @@ def _build_index_candidate_cache_settings_payload(
         "feature_flags": {
             "cochange_enabled": bool(config.cochange_enabled),
             "scip_enabled": bool(config.scip_enabled),
+            "scip_base_weight": float(config.scip_base_weight),
         },
         "adaptive_router": {
             "enabled": bool(router_cfg.enabled),

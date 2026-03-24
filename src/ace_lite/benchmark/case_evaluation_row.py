@@ -114,6 +114,15 @@ def build_case_evaluation_row(
     topological_shield_coverage_ratio: float,
     topological_shield_attenuation_total: float,
     topological_shield_attenuation_per_chunk: float,
+    graph_source_provider_loaded: bool,
+    graph_source_projection_fallback: bool,
+    graph_source_edge_count: int,
+    graph_source_inbound_signal_chunk_count: int,
+    graph_source_inbound_signal_coverage_ratio: float,
+    graph_source_centrality_signal_chunk_count: int,
+    graph_source_centrality_signal_coverage_ratio: float,
+    graph_source_pagerank_signal_chunk_count: int,
+    graph_source_pagerank_signal_coverage_ratio: float,
     skills_selected_count: float,
     skills_token_budget: float,
     skills_token_budget_used: float,
@@ -144,6 +153,17 @@ def build_case_evaluation_row(
     validation_branch_winner_regressed: bool,
     validation_branch_winner_score: float,
     validation_branch_winner_after_issue_count: int,
+    agent_loop_observed: bool,
+    agent_loop_enabled: bool,
+    agent_loop_attempted: bool,
+    agent_loop_actions_requested: int,
+    agent_loop_actions_executed: int,
+    agent_loop_stop_reason: str,
+    agent_loop_replay_safe: bool,
+    agent_loop_last_policy_id: str,
+    agent_loop_request_more_context_count: int,
+    agent_loop_request_source_plan_retry_count: int,
+    agent_loop_request_validation_retry_count: int,
     source_plan_validation_feedback_present: bool,
     source_plan_validation_feedback_status: str,
     source_plan_validation_feedback_issue_count: int,
@@ -182,6 +202,8 @@ def build_case_evaluation_row(
     ltm_attribution_count: int,
     ltm_graph_neighbor_count: int,
     ltm_plan_constraint_count: int,
+    ltm_feedback_signal_counts: dict[str, int],
+    ltm_attribution_scope_counts: dict[str, int],
     ltm_attribution_preview: list[str],
     feedback_enabled: bool,
     feedback_reason: str,
@@ -252,6 +274,9 @@ def build_case_evaluation_row(
     docs_hit: float,
     hint_inject: float,
     embedding_enabled: bool,
+    embedding_runtime_provider: str,
+    embedding_strategy_mode: str,
+    embedding_semantic_rerank_applied: bool,
     embedding_similarity_mean: float,
     embedding_similarity_max: float,
     embedding_rerank_ratio: float,
@@ -440,6 +465,31 @@ def build_case_evaluation_row(
         "topological_shield_attenuation_per_chunk": (
             topological_shield_attenuation_per_chunk
         ),
+        "graph_source_provider_loaded": (
+            1.0 if graph_source_provider_loaded else 0.0
+        ),
+        "graph_source_projection_fallback": (
+            1.0 if graph_source_projection_fallback else 0.0
+        ),
+        "graph_source_edge_count": float(graph_source_edge_count),
+        "graph_source_inbound_signal_chunk_count": float(
+            graph_source_inbound_signal_chunk_count
+        ),
+        "graph_source_inbound_signal_coverage_ratio": float(
+            graph_source_inbound_signal_coverage_ratio
+        ),
+        "graph_source_centrality_signal_chunk_count": float(
+            graph_source_centrality_signal_chunk_count
+        ),
+        "graph_source_centrality_signal_coverage_ratio": float(
+            graph_source_centrality_signal_coverage_ratio
+        ),
+        "graph_source_pagerank_signal_chunk_count": float(
+            graph_source_pagerank_signal_chunk_count
+        ),
+        "graph_source_pagerank_signal_coverage_ratio": float(
+            graph_source_pagerank_signal_coverage_ratio
+        ),
         "skills_selected_count": skills_selected_count,
         "skills_token_budget": skills_token_budget,
         "skills_token_budget_used": skills_token_budget_used,
@@ -496,6 +546,23 @@ def build_case_evaluation_row(
         "validation_branch_winner_after_issue_count": float(
             validation_branch_winner_after_issue_count
         ),
+        "agent_loop_observed": 1.0 if agent_loop_observed else 0.0,
+        "agent_loop_enabled": 1.0 if agent_loop_enabled else 0.0,
+        "agent_loop_attempted": 1.0 if agent_loop_attempted else 0.0,
+        "agent_loop_actions_requested": float(agent_loop_actions_requested),
+        "agent_loop_actions_executed": float(agent_loop_actions_executed),
+        "agent_loop_stop_reason": str(agent_loop_stop_reason or ""),
+        "agent_loop_replay_safe": 1.0 if agent_loop_replay_safe else 0.0,
+        "agent_loop_last_policy_id": str(agent_loop_last_policy_id or ""),
+        "agent_loop_request_more_context_count": float(
+            agent_loop_request_more_context_count
+        ),
+        "agent_loop_request_source_plan_retry_count": float(
+            agent_loop_request_source_plan_retry_count
+        ),
+        "agent_loop_request_validation_retry_count": float(
+            agent_loop_request_validation_retry_count
+        ),
         "validation_branch": {
             "applicable": bool(validation_branch_case),
             "candidate_count": int(validation_branch_candidate_count),
@@ -509,6 +576,23 @@ def build_case_evaluation_row(
             "winner_score": float(validation_branch_winner_score),
             "winner_after_issue_count": int(
                 validation_branch_winner_after_issue_count
+            ),
+        },
+        "agent_loop_control_plane": {
+            "observed": bool(agent_loop_observed),
+            "enabled": bool(agent_loop_enabled),
+            "attempted": bool(agent_loop_attempted),
+            "actions_requested": int(agent_loop_actions_requested),
+            "actions_executed": int(agent_loop_actions_executed),
+            "stop_reason": str(agent_loop_stop_reason or ""),
+            "replay_safe": bool(agent_loop_replay_safe),
+            "last_policy_id": str(agent_loop_last_policy_id or ""),
+            "request_more_context_count": int(agent_loop_request_more_context_count),
+            "request_source_plan_retry_count": int(
+                agent_loop_request_source_plan_retry_count
+            ),
+            "request_validation_retry_count": int(
+                agent_loop_request_validation_retry_count
             ),
         },
         "source_plan_validation_feedback_present": (
@@ -658,6 +742,16 @@ def build_case_evaluation_row(
             "attribution_count": int(ltm_attribution_count),
             "graph_neighbor_count": int(ltm_graph_neighbor_count),
             "plan_constraint_count": int(ltm_plan_constraint_count),
+            "feedback_signal_counts": {
+                "helpful": int(ltm_feedback_signal_counts.get("helpful", 0) or 0),
+                "stale": int(ltm_feedback_signal_counts.get("stale", 0) or 0),
+                "harmful": int(ltm_feedback_signal_counts.get("harmful", 0) or 0),
+            },
+            "attribution_scope_counts": {
+                str(key): int(value or 0)
+                for key, value in ltm_attribution_scope_counts.items()
+                if str(key).strip()
+            },
             "attribution_preview": [
                 str(item).strip()
                 for item in ltm_attribution_preview
@@ -784,6 +878,27 @@ def build_case_evaluation_row(
             "attenuation_total": float(topological_shield_attenuation_total),
             "attenuation_per_chunk": float(topological_shield_attenuation_per_chunk),
         },
+        "graph_context_source": {
+            "provider_loaded": bool(graph_source_provider_loaded),
+            "projection_fallback": bool(graph_source_projection_fallback),
+            "edge_count": int(graph_source_edge_count),
+            "inbound_signal_chunk_count": int(graph_source_inbound_signal_chunk_count),
+            "inbound_signal_coverage_ratio": float(
+                graph_source_inbound_signal_coverage_ratio
+            ),
+            "centrality_signal_chunk_count": int(
+                graph_source_centrality_signal_chunk_count
+            ),
+            "centrality_signal_coverage_ratio": float(
+                graph_source_centrality_signal_coverage_ratio
+            ),
+            "pagerank_signal_chunk_count": int(
+                graph_source_pagerank_signal_chunk_count
+            ),
+            "pagerank_signal_coverage_ratio": float(
+                graph_source_pagerank_signal_coverage_ratio
+            ),
+        },
         "feedback_boost": {
             "enabled": bool(feedback_enabled),
             "reason": feedback_reason,
@@ -880,6 +995,11 @@ def build_case_evaluation_row(
         "docs_hit": docs_hit,
         "hint_inject": hint_inject,
         "embedding_enabled": 1.0 if embedding_enabled else 0.0,
+        "embedding_runtime_provider": str(embedding_runtime_provider or ""),
+        "embedding_strategy_mode": str(embedding_strategy_mode or ""),
+        "embedding_semantic_rerank_applied": (
+            1.0 if embedding_semantic_rerank_applied else 0.0
+        ),
         "embedding_similarity_mean": embedding_similarity_mean,
         "embedding_similarity_max": embedding_similarity_max,
         "embedding_rerank_ratio": embedding_rerank_ratio,

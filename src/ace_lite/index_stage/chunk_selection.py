@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
+from collections.abc import Mapping
 from typing import Any, Callable
 
 from ace_lite.chunking.builder import build_candidate_chunks
@@ -56,6 +57,7 @@ def apply_chunk_selection(
     chunk_topological_shield_max_attenuation: float,
     chunk_topological_shield_shared_parent_attenuation: float,
     chunk_topological_shield_adjacency_attenuation: float,
+    chunk_scoring_config: Mapping[str, Any] | None,
     chunk_guard_enabled: bool,
     chunk_guard_mode: str,
     chunk_guard_lambda_penalty: float,
@@ -109,6 +111,7 @@ def apply_chunk_selection(
         topological_shield_adjacency_attenuation=float(
             chunk_topological_shield_adjacency_attenuation
         ),
+        chunk_scoring_config=chunk_scoring_config,
         reference_hits_cache_key=index_hash,
     )
     mark_timing("chunk_build", timing_started)

@@ -14,8 +14,10 @@ from ace_lite.benchmark.reward_replay import write_reward_replay_artifacts
 from ace_lite.benchmark.report import write_report_from_json, write_results
 from ace_lite.benchmark.runner import BenchmarkRunner, load_baseline_metrics, load_cases
 from ace_lite.benchmark.scoring import REGRESSION_THRESHOLD_PROFILES
+from ace_lite.benchmark.tuning_report import write_tuning_report
 from ace_lite.cli_app.commands.benchmark_support import (
     attach_benchmark_runtime_stats_summary,
+    build_benchmark_tuning_context_summary,
     build_threshold_overrides,
     resolve_benchmark_run_settings,
     resolve_benchmark_threshold_settings,
@@ -140,6 +142,45 @@ def benchmark_replay_rewards_command(input_path: str, output_dir: str) -> None:
         raise click.ClickException(f"reward log not found: {source}")
     outputs = write_reward_replay_artifacts(
         input_path=input_path,
+        output_dir=output_dir,
+    )
+    echo_json(outputs)
+
+
+@benchmark_group.command(
+    "tune-report",
+    help="Generate report-only offline tuning recommendations from benchmark results or summary artifacts.",
+)
+@click.option(
+    "--input",
+    "input_path",
+    required=True,
+    type=click.Path(path_type=str),
+    help="Path to benchmark results.json or summary.json input.",
+)
+@click.option(
+    "--baseline",
+    "baseline_path",
+    default=None,
+    type=click.Path(path_type=str),
+    help="Optional baseline benchmark results.json or summary.json input.",
+)
+@click.option(
+    "--output",
+    "output_dir",
+    default="artifacts/benchmark/tune-report/latest",
+    show_default=True,
+    type=click.Path(path_type=str),
+    help="Output directory for tune-report artifacts.",
+)
+def benchmark_tune_report_command(
+    input_path: str,
+    baseline_path: str | None,
+    output_dir: str,
+) -> None:
+    outputs = write_tuning_report(
+        input_path=input_path,
+        baseline_path=baseline_path,
         output_dir=output_dir,
     )
     echo_json(outputs)
@@ -720,6 +761,14 @@ def benchmark_run_command(
     )
 
     threshold_overrides = build_threshold_overrides(threshold_settings)
+    tuning_context_summary = build_benchmark_tuning_context_summary(
+        resolved=resolved,
+        threshold_profile=str(threshold_settings["benchmark_threshold_profile"]),
+        threshold_overrides=threshold_overrides,
+        warmup_runs=int(run_settings["warmup_runs"]),
+        include_plan_payload=bool(run_settings["include_plans"]),
+        include_case_details=bool(run_settings["include_case_details"]),
+    )
 
     baseline_metrics = load_baseline_metrics(baseline_path) if baseline_path else None
     results = run_benchmark_and_write_outputs(
@@ -736,6 +785,7 @@ def benchmark_run_command(
         warmup_runs=int(run_settings["warmup_runs"]),
         include_plan_payload=bool(run_settings["include_plans"]),
         include_case_details=bool(run_settings["include_case_details"]),
+        tuning_context_summary=tuning_context_summary,
         reward_log_enabled=bool(run_settings["reward_log_enabled"]),
         reward_log_path=str(run_settings["reward_log_path"]),
         runtime_stats_enabled=bool(run_settings["runtime_stats_enabled"]),

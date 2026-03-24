@@ -23,6 +23,7 @@ from ace_lite.cli_app.runtime_stats_data_support import (
     normalize_runtime_stats_filter_value,
 )
 from ace_lite.cli_app.runtime_stats_enrichment_support import (
+    build_runtime_agent_loop_control_plane_summary,
     build_runtime_memory_health_summary,
     build_runtime_next_cycle_input_summary,
     build_runtime_top_pain_summary,
@@ -113,6 +114,9 @@ def load_runtime_stats_summary(
         runtime_scope_map=scope_map,
         top_pain_summary=top_pain_summary,
     )
+    agent_loop_control_plane_summary = build_runtime_agent_loop_control_plane_summary(
+        runtime_scope_map=scope_map,
+    )
     next_cycle_input_summary = build_runtime_next_cycle_input_summary(
         top_pain_summary=top_pain_summary,
         memory_health_summary=memory_health_summary,
@@ -133,6 +137,7 @@ def load_runtime_stats_summary(
         "dev_feedback_summary": dev_feedback_summary,
         "top_pain_summary": top_pain_summary,
         "memory_health_summary": memory_health_summary,
+        "agent_loop_control_plane_summary": agent_loop_control_plane_summary,
         "next_cycle_input_summary": next_cycle_input_summary,
     }
 
@@ -200,6 +205,9 @@ def build_runtime_status_payload(
             "dev_feedback_summary": runtime_stats.get("dev_feedback_summary"),
             "top_pain_summary": runtime_stats.get("top_pain_summary"),
             "memory_health_summary": runtime_stats.get("memory_health_summary"),
+            "agent_loop_control_plane_summary": runtime_stats.get(
+                "agent_loop_control_plane_summary"
+            ),
             "next_cycle_input_summary": runtime_stats.get("next_cycle_input_summary"),
         },
     }
@@ -216,6 +224,7 @@ def build_runtime_status_snapshot(
     memory_config_recommendations_fn: Any,
 ) -> dict[str, Any]:
     from ace_lite.cli_app.runtime_settings_support import (
+        build_runtime_settings_governance_payload,
         evaluate_runtime_memory_state,
         resolve_effective_runtime_skills_dir,
     )
@@ -250,7 +259,7 @@ def build_runtime_status_snapshot(
         or os.environ.get("USERPROFILE")
         or Path.home(),
     )
-    return build_runtime_status_payload(
+    payload = build_runtime_status_payload(
         root=root,
         settings=settings,
         fingerprint=resolved.fingerprint,
@@ -261,6 +270,8 @@ def build_runtime_status_snapshot(
         memory_state=memory_state,
         runtime_stats=runtime_stats,
     )
+    payload["settings_governance"] = build_runtime_settings_governance_payload(bundle)
+    return payload
 
 
 __all__ = [

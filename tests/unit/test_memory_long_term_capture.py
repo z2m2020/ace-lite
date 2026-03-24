@@ -106,6 +106,7 @@ def test_capture_service_records_selection_feedback_observation(tmp_path: Path) 
     assert rows[0].payload["kind"] == "selection_feedback"
     assert rows[0].payload["payload"]["selected_path"] == "src/app.py"
     assert rows[0].payload["metadata"]["capture_gate"] == "accepted"
+    assert rows[0].payload["metadata"]["feedback_signal"] == "helpful"
     assert rows[0].payload["metadata"]["attribution_scope"] == "explicit_selection_only"
 
 

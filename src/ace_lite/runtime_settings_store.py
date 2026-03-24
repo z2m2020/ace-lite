@@ -167,6 +167,42 @@ def load_valid_runtime_settings_record(path: str | Path) -> dict[str, Any] | Non
     return validate_runtime_settings_record(payload)
 
 
+def inspect_runtime_settings_record(path: str | Path) -> dict[str, Any]:
+    target = Path(path).resolve()
+    exists = target.exists() and target.is_file()
+    payload = load_runtime_settings_record(target)
+    valid_payload = validate_runtime_settings_record(payload) if payload is not None else None
+    metadata = (
+        valid_payload.get("metadata", {})
+        if isinstance(valid_payload, dict) and isinstance(valid_payload.get("metadata"), dict)
+        else {}
+    )
+    selected_profile = metadata.get("selected_profile")
+    return {
+        "path": str(target),
+        "exists": bool(exists),
+        "valid": valid_payload is not None,
+        "status": (
+            "valid"
+            if valid_payload is not None
+            else ("invalid" if exists else "missing")
+        ),
+        "fingerprint": (
+            str(valid_payload.get("fingerprint") or "")
+            if valid_payload is not None
+            else ""
+        ),
+        "schema_version": (
+            int(valid_payload.get("schema_version", RUNTIME_SETTINGS_SCHEMA_VERSION))
+            if valid_payload is not None
+            else None
+        ),
+        "selected_profile": (
+            str(selected_profile) if selected_profile is not None else None
+        ),
+    }
+
+
 def load_runtime_settings_with_fallback(
     *,
     current_path: str | Path,
@@ -206,6 +242,7 @@ __all__ = [
     "load_runtime_settings_with_fallback",
     "load_runtime_settings_record",
     "load_valid_runtime_settings_record",
+    "inspect_runtime_settings_record",
     "persist_runtime_settings_record",
     "resolve_user_runtime_settings_last_known_good_path",
     "resolve_user_runtime_settings_path",

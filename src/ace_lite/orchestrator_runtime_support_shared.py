@@ -63,6 +63,11 @@ def resolve_agent_loop_rerun_stages(
     source_plan_stage_names: tuple[str, ...],
     post_stage_names: tuple[str, ...],
 ) -> list[str]:
+    if action_type == "request_source_plan_retry":
+        return [
+            *source_plan_stage_names,
+            *post_stage_names,
+        ]
     if action_type == "request_validation_retry":
         return list(post_stage_names)
     return [

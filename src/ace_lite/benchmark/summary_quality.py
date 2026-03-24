@@ -500,6 +500,17 @@ def build_retrieval_default_strategy_summary(
             "parent_symbol_available_case_rate": 0.0,
             "reference_hint_available_case_count": 0,
             "reference_hint_available_case_rate": 0.0,
+            "semantic_rerank_configured_case_count": 0,
+            "semantic_rerank_configured_case_rate": 0.0,
+            "semantic_rerank_enabled_case_count": 0,
+            "semantic_rerank_enabled_case_rate": 0.0,
+            "semantic_rerank_applied_case_count": 0,
+            "semantic_rerank_applied_case_rate": 0.0,
+            "semantic_rerank_cross_encoder_case_count": 0,
+            "semantic_rerank_cross_encoder_case_rate": 0.0,
+            "semantic_rerank_dominant_provider": "",
+            "semantic_rerank_dominant_mode": "",
+            "semantic_rerank_provider_case_counts": {},
             "graph_lookup_enabled_case_count": 0,
             "graph_lookup_enabled_case_rate": 0.0,
             "graph_lookup_guarded_case_count": 0,
@@ -530,6 +541,12 @@ def build_retrieval_default_strategy_summary(
     retrieval_context_available_case_count = 0
     parent_symbol_available_case_count = 0
     reference_hint_available_case_count = 0
+    semantic_rerank_configured_case_count = 0
+    semantic_rerank_enabled_case_count = 0
+    semantic_rerank_applied_case_count = 0
+    semantic_rerank_cross_encoder_case_count = 0
+    semantic_rerank_provider_case_counts: dict[str, int] = {}
+    semantic_rerank_mode_counts: dict[str, int] = {}
     graph_lookup_enabled_case_count = 0
     graph_lookup_guarded_case_count = 0
     graph_lookup_normalization_counts: dict[str, int] = {}
@@ -569,6 +586,29 @@ def build_retrieval_default_strategy_summary(
             > 0.0
         ):
             reference_hint_available_case_count += 1
+        provider = str(item.get("embedding_runtime_provider") or "").strip().lower()
+        mode = str(item.get("embedding_strategy_mode") or "").strip().lower()
+        semantic_rerank_enabled = (
+            float(item.get("embedding_enabled", 0.0) or 0.0) > 0.0
+        )
+        semantic_rerank_applied = (
+            float(item.get("embedding_semantic_rerank_applied", 0.0) or 0.0) > 0.0
+        )
+        if provider:
+            semantic_rerank_configured_case_count += 1
+            semantic_rerank_provider_case_counts[provider] = (
+                semantic_rerank_provider_case_counts.get(provider, 0) + 1
+            )
+        if semantic_rerank_enabled:
+            semantic_rerank_enabled_case_count += 1
+        if semantic_rerank_applied:
+            semantic_rerank_applied_case_count += 1
+        if mode == "cross_encoder":
+            semantic_rerank_cross_encoder_case_count += 1
+        if mode:
+            semantic_rerank_mode_counts[mode] = (
+                semantic_rerank_mode_counts.get(mode, 0) + 1
+            )
 
         if float(item.get("graph_lookup_enabled", 0.0) or 0.0) > 0.0:
             graph_lookup_enabled_case_count += 1
@@ -649,6 +689,33 @@ def build_retrieval_default_strategy_summary(
         "reference_hint_available_case_count": reference_hint_available_case_count,
         "reference_hint_available_case_rate": (
             float(reference_hint_available_case_count) / float(case_count)
+        ),
+        "semantic_rerank_configured_case_count": semantic_rerank_configured_case_count,
+        "semantic_rerank_configured_case_rate": (
+            float(semantic_rerank_configured_case_count) / float(case_count)
+        ),
+        "semantic_rerank_enabled_case_count": semantic_rerank_enabled_case_count,
+        "semantic_rerank_enabled_case_rate": (
+            float(semantic_rerank_enabled_case_count) / float(case_count)
+        ),
+        "semantic_rerank_applied_case_count": semantic_rerank_applied_case_count,
+        "semantic_rerank_applied_case_rate": (
+            float(semantic_rerank_applied_case_count) / float(case_count)
+        ),
+        "semantic_rerank_cross_encoder_case_count": (
+            semantic_rerank_cross_encoder_case_count
+        ),
+        "semantic_rerank_cross_encoder_case_rate": (
+            float(semantic_rerank_cross_encoder_case_count) / float(case_count)
+        ),
+        "semantic_rerank_dominant_provider": _dominant_label(
+            semantic_rerank_provider_case_counts
+        ),
+        "semantic_rerank_dominant_mode": _dominant_label(
+            semantic_rerank_mode_counts
+        ),
+        "semantic_rerank_provider_case_counts": dict(
+            sorted(semantic_rerank_provider_case_counts.items())
         ),
         "graph_lookup_enabled_case_count": graph_lookup_enabled_case_count,
         "graph_lookup_enabled_case_rate": (
@@ -731,6 +798,117 @@ def build_retrieval_default_strategy_summary(
             if topological_shield_adjacency_attenuations
             else 0.0
         ),
+    }
+
+
+def build_agent_loop_control_plane_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {
+            "case_count": 0,
+            "observed_case_count": 0,
+            "observed_case_rate": 0.0,
+            "enabled_case_count": 0,
+            "enabled_case_rate": 0.0,
+            "attempted_case_count": 0,
+            "attempted_case_rate": 0.0,
+            "replay_safe_case_count": 0,
+            "replay_safe_case_rate": 0.0,
+            "actions_requested_mean": 0.0,
+            "actions_executed_mean": 0.0,
+            "request_more_context_case_count": 0,
+            "request_more_context_case_rate": 0.0,
+            "request_source_plan_retry_case_count": 0,
+            "request_source_plan_retry_case_rate": 0.0,
+            "request_validation_retry_case_count": 0,
+            "request_validation_retry_case_rate": 0.0,
+            "dominant_stop_reason": "",
+            "dominant_last_policy_id": "",
+        }
+
+    observed_case_count = 0
+    enabled_case_count = 0
+    attempted_case_count = 0
+    replay_safe_case_count = 0
+    actions_requested: list[float] = []
+    actions_executed: list[float] = []
+    request_more_context_case_count = 0
+    request_source_plan_retry_case_count = 0
+    request_validation_retry_case_count = 0
+    stop_reason_counts: dict[str, int] = {}
+    policy_id_counts: dict[str, int] = {}
+
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        if float(item.get("agent_loop_observed", 0.0) or 0.0) > 0.0:
+            observed_case_count += 1
+        if float(item.get("agent_loop_enabled", 0.0) or 0.0) > 0.0:
+            enabled_case_count += 1
+        if float(item.get("agent_loop_attempted", 0.0) or 0.0) > 0.0:
+            attempted_case_count += 1
+        if float(item.get("agent_loop_replay_safe", 0.0) or 0.0) > 0.0:
+            replay_safe_case_count += 1
+        actions_requested.append(
+            float(item.get("agent_loop_actions_requested", 0.0) or 0.0)
+        )
+        actions_executed.append(
+            float(item.get("agent_loop_actions_executed", 0.0) or 0.0)
+        )
+        if float(item.get("agent_loop_request_more_context_count", 0.0) or 0.0) > 0.0:
+            request_more_context_case_count += 1
+        if (
+            float(item.get("agent_loop_request_source_plan_retry_count", 0.0) or 0.0)
+            > 0.0
+        ):
+            request_source_plan_retry_case_count += 1
+        if (
+            float(item.get("agent_loop_request_validation_retry_count", 0.0) or 0.0)
+            > 0.0
+        ):
+            request_validation_retry_case_count += 1
+        stop_reason = str(item.get("agent_loop_stop_reason") or "").strip().lower()
+        if stop_reason:
+            stop_reason_counts[stop_reason] = stop_reason_counts.get(stop_reason, 0) + 1
+        policy_id = str(item.get("agent_loop_last_policy_id") or "").strip().lower()
+        if policy_id:
+            policy_id_counts[policy_id] = policy_id_counts.get(policy_id, 0) + 1
+
+    def _dominant_label(counts: dict[str, int]) -> str:
+        if not counts:
+            return ""
+        return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+    return {
+        "case_count": case_count,
+        "observed_case_count": observed_case_count,
+        "observed_case_rate": float(observed_case_count) / float(case_count),
+        "enabled_case_count": enabled_case_count,
+        "enabled_case_rate": float(enabled_case_count) / float(case_count),
+        "attempted_case_count": attempted_case_count,
+        "attempted_case_rate": float(attempted_case_count) / float(case_count),
+        "replay_safe_case_count": replay_safe_case_count,
+        "replay_safe_case_rate": float(replay_safe_case_count) / float(case_count),
+        "actions_requested_mean": mean(actions_requested) if actions_requested else 0.0,
+        "actions_executed_mean": mean(actions_executed) if actions_executed else 0.0,
+        "request_more_context_case_count": request_more_context_case_count,
+        "request_more_context_case_rate": (
+            float(request_more_context_case_count) / float(case_count)
+        ),
+        "request_source_plan_retry_case_count": request_source_plan_retry_case_count,
+        "request_source_plan_retry_case_rate": (
+            float(request_source_plan_retry_case_count) / float(case_count)
+        ),
+        "request_validation_retry_case_count": (
+            request_validation_retry_case_count
+        ),
+        "request_validation_retry_case_rate": (
+            float(request_validation_retry_case_count) / float(case_count)
+        ),
+        "dominant_stop_reason": _dominant_label(stop_reason_counts),
+        "dominant_last_policy_id": _dominant_label(policy_id_counts),
     }
 
 
@@ -1294,6 +1472,7 @@ __all__ = [
     "build_evidence_insufficiency_summary",
     "build_feedback_loop_summary",
     "build_feedback_observability_summary",
+    "build_agent_loop_control_plane_summary",
     "build_preference_observability_summary",
     "build_retrieval_default_strategy_summary",
     "build_retrieval_context_observability_summary",

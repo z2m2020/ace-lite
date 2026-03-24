@@ -30,6 +30,31 @@ from ace_lite.cli_app.params import (
 )
 from ace_lite.config import config_get
 from ace_lite.parsers.languages import parse_language_csv
+from ace_lite.scoring_config import (
+    BM25_B,
+    BM25_K1,
+    BM25_PATH_PRIOR_FACTOR,
+    BM25_SCORE_SCALE,
+    BM25_SHORTLIST_FACTOR,
+    BM25_SHORTLIST_MIN,
+    HEUR_CONTENT_CAP,
+    HEUR_CONTENT_IMPORT_FACTOR,
+    HEUR_CONTENT_SYMBOL_FACTOR,
+    HEUR_DEPTH_BASE,
+    HEUR_DEPTH_FACTOR,
+    HEUR_IMPORT_CAP,
+    HEUR_IMPORT_FACTOR,
+    HEUR_MODULE_CONTAINS,
+    HEUR_MODULE_EXACT,
+    HEUR_MODULE_TAIL,
+    HEUR_PATH_CONTAINS,
+    HEUR_PATH_EXACT,
+    HEUR_SYMBOL_EXACT,
+    HEUR_SYMBOL_PARTIAL_CAP,
+    HEUR_SYMBOL_PARTIAL_FACTOR,
+    HYBRID_SHORTLIST_FACTOR,
+    HYBRID_SHORTLIST_MIN,
+)
 
 
 def resolve_retrieval_and_lsp_config(
@@ -318,6 +343,22 @@ def resolve_retrieval_and_lsp_config(
         paths=retrieval_paths("hybrid_re2_rrf_k"),
         transform=_to_int,
     )
+    hybrid_re2_shortlist_min = _resolve_from_config(
+        ctx=ctx,
+        param_name="hybrid_re2_shortlist_min",
+        current=HYBRID_SHORTLIST_MIN,
+        config=config,
+        paths=retrieval_paths("hybrid_re2_shortlist_min"),
+        transform=_to_int,
+    )
+    hybrid_re2_shortlist_factor = _resolve_from_config(
+        ctx=ctx,
+        param_name="hybrid_re2_shortlist_factor",
+        current=HYBRID_SHORTLIST_FACTOR,
+        config=config,
+        paths=retrieval_paths("hybrid_re2_shortlist_factor"),
+        transform=_to_int,
+    )
     hybrid_re2_bm25_weight = _resolve_from_config(
         ctx=ctx,
         param_name="hybrid_re2_bm25_weight",
@@ -348,6 +389,174 @@ def resolve_retrieval_and_lsp_config(
         current=hybrid_re2_combined_scale,
         config=config,
         paths=retrieval_paths("hybrid_re2_combined_scale"),
+        transform=_to_float,
+    )
+    bm25_k1 = _resolve_from_config(
+        ctx=ctx,
+        param_name="bm25_k1",
+        current=BM25_K1,
+        config=config,
+        paths=retrieval_paths("bm25_k1"),
+        transform=_to_float,
+    )
+    bm25_b = _resolve_from_config(
+        ctx=ctx,
+        param_name="bm25_b",
+        current=BM25_B,
+        config=config,
+        paths=retrieval_paths("bm25_b"),
+        transform=_to_float,
+    )
+    bm25_score_scale = _resolve_from_config(
+        ctx=ctx,
+        param_name="bm25_score_scale",
+        current=BM25_SCORE_SCALE,
+        config=config,
+        paths=retrieval_paths("bm25_score_scale"),
+        transform=_to_float,
+    )
+    bm25_path_prior_factor = _resolve_from_config(
+        ctx=ctx,
+        param_name="bm25_path_prior_factor",
+        current=BM25_PATH_PRIOR_FACTOR,
+        config=config,
+        paths=retrieval_paths("bm25_path_prior_factor"),
+        transform=_to_float,
+    )
+    bm25_shortlist_min = _resolve_from_config(
+        ctx=ctx,
+        param_name="bm25_shortlist_min",
+        current=BM25_SHORTLIST_MIN,
+        config=config,
+        paths=retrieval_paths("bm25_shortlist_min"),
+        transform=_to_int,
+    )
+    bm25_shortlist_factor = _resolve_from_config(
+        ctx=ctx,
+        param_name="bm25_shortlist_factor",
+        current=BM25_SHORTLIST_FACTOR,
+        config=config,
+        paths=retrieval_paths("bm25_shortlist_factor"),
+        transform=_to_int,
+    )
+    heur_path_exact = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_path_exact",
+        current=HEUR_PATH_EXACT,
+        config=config,
+        paths=retrieval_paths("heur_path_exact"),
+        transform=_to_float,
+    )
+    heur_path_contains = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_path_contains",
+        current=HEUR_PATH_CONTAINS,
+        config=config,
+        paths=retrieval_paths("heur_path_contains"),
+        transform=_to_float,
+    )
+    heur_module_exact = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_module_exact",
+        current=HEUR_MODULE_EXACT,
+        config=config,
+        paths=retrieval_paths("heur_module_exact"),
+        transform=_to_float,
+    )
+    heur_module_tail = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_module_tail",
+        current=HEUR_MODULE_TAIL,
+        config=config,
+        paths=retrieval_paths("heur_module_tail"),
+        transform=_to_float,
+    )
+    heur_module_contains = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_module_contains",
+        current=HEUR_MODULE_CONTAINS,
+        config=config,
+        paths=retrieval_paths("heur_module_contains"),
+        transform=_to_float,
+    )
+    heur_symbol_exact = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_symbol_exact",
+        current=HEUR_SYMBOL_EXACT,
+        config=config,
+        paths=retrieval_paths("heur_symbol_exact"),
+        transform=_to_float,
+    )
+    heur_symbol_partial_factor = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_symbol_partial_factor",
+        current=HEUR_SYMBOL_PARTIAL_FACTOR,
+        config=config,
+        paths=retrieval_paths("heur_symbol_partial_factor"),
+        transform=_to_float,
+    )
+    heur_symbol_partial_cap = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_symbol_partial_cap",
+        current=HEUR_SYMBOL_PARTIAL_CAP,
+        config=config,
+        paths=retrieval_paths("heur_symbol_partial_cap"),
+        transform=_to_float,
+    )
+    heur_import_factor = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_import_factor",
+        current=HEUR_IMPORT_FACTOR,
+        config=config,
+        paths=retrieval_paths("heur_import_factor"),
+        transform=_to_float,
+    )
+    heur_import_cap = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_import_cap",
+        current=HEUR_IMPORT_CAP,
+        config=config,
+        paths=retrieval_paths("heur_import_cap"),
+        transform=_to_float,
+    )
+    heur_content_symbol_factor = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_content_symbol_factor",
+        current=HEUR_CONTENT_SYMBOL_FACTOR,
+        config=config,
+        paths=retrieval_paths("heur_content_symbol_factor"),
+        transform=_to_float,
+    )
+    heur_content_import_factor = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_content_import_factor",
+        current=HEUR_CONTENT_IMPORT_FACTOR,
+        config=config,
+        paths=retrieval_paths("heur_content_import_factor"),
+        transform=_to_float,
+    )
+    heur_content_cap = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_content_cap",
+        current=HEUR_CONTENT_CAP,
+        config=config,
+        paths=retrieval_paths("heur_content_cap"),
+        transform=_to_float,
+    )
+    heur_depth_base = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_depth_base",
+        current=HEUR_DEPTH_BASE,
+        config=config,
+        paths=retrieval_paths("heur_depth_base"),
+        transform=_to_float,
+    )
+    heur_depth_factor = _resolve_from_config(
+        ctx=ctx,
+        param_name="heur_depth_factor",
+        current=HEUR_DEPTH_FACTOR,
+        config=config,
+        paths=retrieval_paths("heur_depth_factor"),
         transform=_to_float,
     )
     embedding_enabled = _resolve_from_config(
@@ -723,10 +932,33 @@ def resolve_retrieval_and_lsp_config(
         "exact_search_max_paths": max(0, int(exact_search_max_paths)),
         "hybrid_re2_fusion_mode": hybrid_re2_fusion_mode,
         "hybrid_re2_rrf_k": max(1, int(hybrid_re2_rrf_k)),
+        "hybrid_re2_shortlist_min": max(1, int(hybrid_re2_shortlist_min)),
+        "hybrid_re2_shortlist_factor": max(1, int(hybrid_re2_shortlist_factor)),
         "hybrid_re2_bm25_weight": max(0.0, float(hybrid_re2_bm25_weight)),
         "hybrid_re2_heuristic_weight": max(0.0, float(hybrid_re2_heuristic_weight)),
         "hybrid_re2_coverage_weight": max(0.0, float(hybrid_re2_coverage_weight)),
         "hybrid_re2_combined_scale": max(0.0, float(hybrid_re2_combined_scale)),
+        "bm25_k1": max(0.0, float(bm25_k1)),
+        "bm25_b": max(0.0, float(bm25_b)),
+        "bm25_score_scale": max(0.0, float(bm25_score_scale)),
+        "bm25_path_prior_factor": max(0.0, float(bm25_path_prior_factor)),
+        "bm25_shortlist_min": max(1, int(bm25_shortlist_min)),
+        "bm25_shortlist_factor": max(1, int(bm25_shortlist_factor)),
+        "heur_path_exact": max(0.0, float(heur_path_exact)),
+        "heur_path_contains": max(0.0, float(heur_path_contains)),
+        "heur_module_exact": max(0.0, float(heur_module_exact)),
+        "heur_module_tail": max(0.0, float(heur_module_tail)),
+        "heur_module_contains": max(0.0, float(heur_module_contains)),
+        "heur_symbol_exact": max(0.0, float(heur_symbol_exact)),
+        "heur_symbol_partial_factor": max(0.0, float(heur_symbol_partial_factor)),
+        "heur_symbol_partial_cap": max(0.0, float(heur_symbol_partial_cap)),
+        "heur_import_factor": max(0.0, float(heur_import_factor)),
+        "heur_import_cap": max(0.0, float(heur_import_cap)),
+        "heur_content_symbol_factor": max(0.0, float(heur_content_symbol_factor)),
+        "heur_content_import_factor": max(0.0, float(heur_content_import_factor)),
+        "heur_content_cap": max(0.0, float(heur_content_cap)),
+        "heur_depth_base": max(0.0, float(heur_depth_base)),
+        "heur_depth_factor": max(0.0, float(heur_depth_factor)),
         "adaptive_router": dict(adaptive_router_payload),
     }
     plugins_payload = {

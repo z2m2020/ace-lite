@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from ace_lite.chunking.builder import build_candidate_chunks
+from ace_lite.chunking.topological_shield import compute_topological_shield
 
 
 def _files_map() -> dict[str, dict[str, object]]:
@@ -150,3 +154,121 @@ def test_build_candidate_chunks_surfaces_report_only_topological_shield_metrics(
     assert report_only_metrics["topological_shield_attenuated_chunk_count"] == 1.0
     assert report_only_metrics["topological_shield_coverage_ratio"] == 1.0 / 3.0
     assert report_only_metrics["topological_shield_attenuation_total"] > 0.0
+
+
+def test_compute_topological_shield_surfaces_graph_provider_fallback() -> None:
+    payload = compute_topological_shield(
+        candidate={
+            "path": "src/service.py",
+            "qualified_name": "src.service.Service.resolve_token",
+            "name": "resolve_token",
+            "kind": "method",
+            "lineno": 7,
+            "end_lineno": 12,
+            "score_breakdown": {"graph_prior": 0.18},
+        },
+        selected=[
+            {
+                "path": "src/service.py",
+                "qualified_name": "src.service.Service.handle_request",
+                "name": "handle_request",
+                "kind": "method",
+                "lineno": 1,
+                "end_lineno": 5,
+                "score_breakdown": {"graph_seeded": 1.0},
+            }
+        ],
+        files_map=_files_map(),
+        cache_key="topological-shield-provider-fallback",
+        base_penalty=0.5,
+        base_score=1.0,
+        enabled=True,
+        mode="report_only",
+        max_attenuation=0.6,
+        shared_parent_attenuation=0.2,
+        adjacency_attenuation=0.5,
+        policy={"chunk_graph_context_provider": "scip"},
+    )
+
+    assert payload["reason"] == "ok"
+    assert payload["graph_provider_requested"] == "scip"
+    assert payload["graph_provider_selected"] == "adjacency"
+    assert payload["graph_provider_fallback"] is True
+    assert payload["graph_fallback_reason"] == "scip_source_unavailable"
+    assert payload["graph_scope"] == "symbol"
+
+
+def test_compute_topological_shield_surfaces_loaded_scip_source_metadata(
+    tmp_path: Path,
+) -> None:
+    scip_path = tmp_path / "context-map" / "scip" / "index.json"
+    scip_path.parent.mkdir(parents=True, exist_ok=True)
+    scip_path.write_text(
+        json.dumps(
+            {
+                "documents": [
+                    {
+                        "relative_path": "src/service.py",
+                        "occurrences": [
+                            {"symbol": "demo src/service.py Service#", "symbol_roles": 1},
+                            {"symbol": "demo src/dep.py Dep#", "symbol_roles": 8},
+                        ],
+                    },
+                    {
+                        "relative_path": "src/dep.py",
+                        "occurrences": [
+                            {"symbol": "demo src/dep.py Dep#", "symbol_roles": 1},
+                        ],
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = compute_topological_shield(
+        root=str(tmp_path),
+        candidate={
+            "path": "src/service.py",
+            "qualified_name": "src.service.Service.resolve_token",
+            "name": "resolve_token",
+            "kind": "method",
+            "lineno": 7,
+            "end_lineno": 12,
+            "score_breakdown": {"graph_prior": 0.18},
+        },
+        selected=[
+            {
+                "path": "src/service.py",
+                "qualified_name": "src.service.Service.handle_request",
+                "name": "handle_request",
+                "kind": "method",
+                "lineno": 1,
+                "end_lineno": 5,
+                "score_breakdown": {"graph_seeded": 1.0},
+            }
+        ],
+        files_map=_files_map(),
+        cache_key="topological-shield-loaded-scip-source",
+        base_penalty=0.5,
+        base_score=1.0,
+        enabled=True,
+        mode="report_only",
+        max_attenuation=0.6,
+        shared_parent_attenuation=0.2,
+        adjacency_attenuation=0.5,
+        policy={
+            "chunk_graph_context_provider": "scip",
+            "scip_index_path": "context-map/scip/index.json",
+        },
+    )
+
+    assert payload["reason"] == "ok"
+    assert payload["graph_provider_selected"] == "adjacency"
+    assert payload["graph_fallback_reason"] == "file_scope_symbol_projection_pending"
+    assert payload["graph_source_provider_selected"] == "scip"
+    assert payload["graph_source_provider_loaded"] is True
+    assert payload["graph_source_graph_scope"] == "file"
+    assert payload["graph_source_edge_count"] == 1
+    assert payload["graph_source_projection_fallback"] is True
+    assert payload["graph_source_projection_reason"] == "file_scope_symbol_projection_pending"

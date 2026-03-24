@@ -12,6 +12,7 @@ from ace_lite.benchmark.case_contracts import normalize_benchmark_case
 from ace_lite.benchmark.report_metrics import ALL_METRIC_ORDER, normalize_metrics
 from ace_lite.benchmark.scoring import (
     aggregate_metrics,
+    build_agent_loop_control_plane_summary,
     build_adaptive_router_arm_summary,
     build_learning_router_rollout_summary,
     build_adaptive_router_observability_summary,
@@ -593,6 +594,9 @@ class BenchmarkRunner:
             ),
             "retrieval_default_strategy_summary": (
                 build_retrieval_default_strategy_summary(case_results)
+            ),
+            "agent_loop_control_plane_summary": (
+                build_agent_loop_control_plane_summary(case_results)
             ),
             "retrieval_context_observability_summary": (
                 build_retrieval_context_observability_summary(case_results)

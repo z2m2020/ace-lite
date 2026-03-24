@@ -125,6 +125,14 @@ def test_run_post_source_plan_agent_loop_appends_metric_for_max_iterations(monke
         def build_incremental_query(self, *, base_query: str, action: dict[str, object]) -> str:
             return base_query
 
+        def build_rerun_policy(self, **kwargs):
+            _ = kwargs
+            return {
+                "schema_version": "agent_loop_rerun_policy_v1",
+                "policy_id": "retrieval_refresh",
+                "action_category": "retrieval",
+            }
+
         def build_retrieval_refinement(self, **kwargs):
             _ = kwargs
             return {}
@@ -180,3 +188,94 @@ def test_run_post_source_plan_agent_loop_appends_metric_for_max_iterations(monke
     assert stage_metrics[0].stage == "agent_loop"
     assert stage_metrics[0].tags["stop_reason"] == "max_iterations"
     assert stage_metrics[0].tags["iteration_count"] == 1
+
+
+def test_run_post_source_plan_agent_loop_respects_source_plan_retry_policy(monkeypatch) -> None:
+    executed_stages: list[str] = []
+
+    class FakeController:
+        def __init__(self, **kwargs) -> None:
+            self.enabled = True
+            self.max_iterations = 1
+            self._count = 0
+
+        @property
+        def iteration_count(self) -> int:
+            return self._count
+
+        def can_continue(self) -> bool:
+            return self._count < 1
+
+        def select_action(self, **kwargs):
+            if self._count == 0:
+                return {"action_type": "request_source_plan_retry", "reason": "repack"}
+            return None
+
+        def build_incremental_query(self, *, base_query: str, action: dict[str, object]) -> str:
+            _ = action
+            return base_query
+
+        def build_rerun_policy(self, **kwargs):
+            _ = kwargs
+            return {
+                "schema_version": "agent_loop_rerun_policy_v1",
+                "policy_id": "source_plan_refresh",
+                "action_category": "source_plan",
+            }
+
+        def build_retrieval_refinement(self, **kwargs):
+            _ = kwargs
+            return {}
+
+        def record_iteration(self, **kwargs) -> None:
+            self._count += 1
+
+        def finalize(self, *, stop_reason: str, last_action=None, final_query: str = "") -> dict[str, object]:
+            return {
+                "enabled": True,
+                "stop_reason": stop_reason,
+                "iteration_count": self._count,
+                "actions_executed": self._count,
+                "last_action": last_action or {},
+                "last_rerun_policy": {
+                    "policy_id": "source_plan_refresh",
+                    "action_category": "source_plan",
+                },
+                "final_query": final_query,
+            }
+
+    monkeypatch.setattr(
+        "ace_lite.orchestrator_runtime_support.BoundedLoopController",
+        FakeController,
+    )
+
+    orchestrator = SimpleNamespace(
+        _config=SimpleNamespace(
+            agent_loop=SimpleNamespace(
+                enabled=True,
+                max_iterations=1,
+                max_focus_paths=4,
+                query_hint_max_chars=160,
+            )
+        ),
+        _execute_stage=lambda **kwargs: executed_stages.append(str(kwargs["stage_name"])) or None,
+    )
+    stage_metrics = []
+
+    result = run_post_source_plan_agent_loop(
+        orchestrator=orchestrator,
+        query="draft auth plan",
+        repo="repo",
+        ctx=StageContext(
+            query="draft auth plan",
+            repo="repo",
+            root="/tmp",
+            state={"source_plan": {}, "validation": {}},
+        ),
+        registry=SimpleNamespace(),
+        hook_bus=SimpleNamespace(),
+        stage_metrics=stage_metrics,
+    )
+
+    assert result.contract_error is None
+    assert executed_stages == ["source_plan", "validation"]

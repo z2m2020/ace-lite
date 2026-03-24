@@ -104,6 +104,15 @@ def _base_row_kwargs() -> dict[str, object]:
         "topological_shield_coverage_ratio": 0.5,
         "topological_shield_attenuation_total": 0.2,
         "topological_shield_attenuation_per_chunk": 0.2,
+        "graph_source_provider_loaded": True,
+        "graph_source_projection_fallback": True,
+        "graph_source_edge_count": 5,
+        "graph_source_inbound_signal_chunk_count": 2,
+        "graph_source_inbound_signal_coverage_ratio": 1.0,
+        "graph_source_centrality_signal_chunk_count": 2,
+        "graph_source_centrality_signal_coverage_ratio": 1.0,
+        "graph_source_pagerank_signal_chunk_count": 1,
+        "graph_source_pagerank_signal_coverage_ratio": 0.5,
         "skills_selected_count": 2.0,
         "skills_token_budget": 500.0,
         "skills_token_budget_used": 200.0,
@@ -134,6 +143,17 @@ def _base_row_kwargs() -> dict[str, object]:
         "validation_branch_winner_regressed": False,
         "validation_branch_winner_score": 0.9,
         "validation_branch_winner_after_issue_count": 0,
+        "agent_loop_observed": True,
+        "agent_loop_enabled": True,
+        "agent_loop_attempted": True,
+        "agent_loop_actions_requested": 2,
+        "agent_loop_actions_executed": 1,
+        "agent_loop_stop_reason": "completed",
+        "agent_loop_replay_safe": True,
+        "agent_loop_last_policy_id": "source_plan_refresh",
+        "agent_loop_request_more_context_count": 1,
+        "agent_loop_request_source_plan_retry_count": 1,
+        "agent_loop_request_validation_retry_count": 0,
         "source_plan_validation_feedback_present": True,
         "source_plan_validation_feedback_status": "failed",
         "source_plan_validation_feedback_issue_count": 2,
@@ -176,6 +196,14 @@ def _base_row_kwargs() -> dict[str, object]:
         "ltm_attribution_count": 1,
         "ltm_graph_neighbor_count": 1,
         "ltm_plan_constraint_count": 1,
+        "ltm_feedback_signal_counts": {
+            "helpful": 1,
+            "stale": 0,
+            "harmful": 1,
+        },
+        "ltm_attribution_scope_counts": {
+            "explicit_selection_only": 1,
+        },
         "ltm_attribution_preview": [
             "runtime.validation.git fallback_policy reuse_checkout_or_skip | graph: reuse_checkout_or_skip recommended_for runtime.validation.git"
         ],
@@ -248,6 +276,9 @@ def _base_row_kwargs() -> dict[str, object]:
         "docs_hit": 1.0,
         "hint_inject": 1.0,
         "embedding_enabled": True,
+        "embedding_runtime_provider": "hash_cross",
+        "embedding_strategy_mode": "cross_encoder",
+        "embedding_semantic_rerank_applied": True,
         "embedding_similarity_mean": 0.44,
         "embedding_similarity_max": 0.91,
         "embedding_rerank_ratio": 0.5,
@@ -302,6 +333,14 @@ def test_build_case_evaluation_row_contract() -> None:
     assert row["source_plan_validation_feedback_present"] == 1.0
     assert row["source_plan_validation_feedback_status"] == "failed"
     assert row["source_plan_validation_feedback_issue_count"] == 2.0
+    assert row["agent_loop_observed"] == 1.0
+    assert row["agent_loop_enabled"] == 1.0
+    assert row["agent_loop_attempted"] == 1.0
+    assert row["agent_loop_actions_requested"] == 2.0
+    assert row["agent_loop_actions_executed"] == 1.0
+    assert row["agent_loop_stop_reason"] == "completed"
+    assert row["agent_loop_last_policy_id"] == "source_plan_refresh"
+    assert row["agent_loop_request_source_plan_retry_count"] == 1.0
     assert row["source_plan_validation_feedback_failed"] == 1.0
     assert row["source_plan_validation_feedback_probe_status"] == "failed"
     assert row["source_plan_validation_feedback_probe_issue_count"] == 1.0
@@ -331,7 +370,19 @@ def test_build_case_evaluation_row_contract() -> None:
     assert row["router_fallback_reason"] == "low_confidence"
     assert row["router_shadow_source"] == "model"
     assert row["docs_enabled"] == 1.0
+    assert row["embedding_runtime_provider"] == "hash_cross"
+    assert row["embedding_strategy_mode"] == "cross_encoder"
+    assert row["embedding_semantic_rerank_applied"] == 1.0
     assert row["chunk_guard_mode"] == "strict"
+    assert row["graph_source_provider_loaded"] == 1.0
+    assert row["graph_source_projection_fallback"] == 1.0
+    assert row["graph_source_edge_count"] == 5.0
+    assert row["graph_source_inbound_signal_chunk_count"] == 2.0
+    assert row["graph_source_inbound_signal_coverage_ratio"] == 1.0
+    assert row["graph_source_centrality_signal_chunk_count"] == 2.0
+    assert row["graph_source_centrality_signal_coverage_ratio"] == 1.0
+    assert row["graph_source_pagerank_signal_chunk_count"] == 1.0
+    assert row["graph_source_pagerank_signal_coverage_ratio"] == 0.5
     assert row["decision_trace_count"] == 1
     assert row["issue_report_issue_id"] == "iss_demo1234"
     assert row["issue_report_status"] == "resolved"
@@ -351,6 +402,14 @@ def test_build_case_evaluation_row_contract() -> None:
         "attribution_count": 1,
         "graph_neighbor_count": 1,
         "plan_constraint_count": 1,
+        "feedback_signal_counts": {
+            "helpful": 1,
+            "stale": 0,
+            "harmful": 1,
+        },
+        "attribution_scope_counts": {
+            "explicit_selection_only": 1,
+        },
         "attribution_preview": [
             "runtime.validation.git fallback_policy reuse_checkout_or_skip | graph: reuse_checkout_or_skip recommended_for runtime.validation.git"
         ],
@@ -379,6 +438,17 @@ def test_build_case_evaluation_row_contract() -> None:
         "granularity_count": 2,
         "pool_size": 4,
         "granularity_pool_ratio": 0.5,
+    }
+    assert row["graph_context_source"] == {
+        "provider_loaded": True,
+        "projection_fallback": True,
+        "edge_count": 5,
+        "inbound_signal_chunk_count": 2,
+        "inbound_signal_coverage_ratio": 1.0,
+        "centrality_signal_chunk_count": 2,
+        "centrality_signal_coverage_ratio": 1.0,
+        "pagerank_signal_chunk_count": 1,
+        "pagerank_signal_coverage_ratio": 0.5,
     }
     assert row["repomap_seed"] == {
         "worktree_seed_count": 1,
@@ -433,6 +503,19 @@ def test_build_case_evaluation_row_contract() -> None:
         "definition_occurrence_count": 7,
         "reference_occurrence_count": 11,
         "symbol_definition_count": 3,
+    }
+    assert row["agent_loop_control_plane"] == {
+        "observed": True,
+        "enabled": True,
+        "attempted": True,
+        "actions_requested": 2,
+        "actions_executed": 1,
+        "stop_reason": "completed",
+        "replay_safe": True,
+        "last_policy_id": "source_plan_refresh",
+        "request_more_context_count": 1,
+        "request_source_plan_retry_count": 1,
+        "request_validation_retry_count": 0,
     }
     assert row["feedback_loop"] == {
         "feedback_surface": "issue_report_export_cli",

@@ -177,6 +177,14 @@ def test_resolve_quality_config_reads_grouped_chunk_fields_and_emits_grouped_pay
             "min_marginal_utility": 0.1,
             "compatibility_min_overlap": 0.6,
         },
+        "file_prior_weight": 0.35,
+        "path_match": 1.0,
+        "module_match": 0.8,
+        "symbol_exact": 2.5,
+        "symbol_partial": 1.4,
+        "signature_match": 0.5,
+        "reference_factor": 0.3,
+        "reference_cap": 2.5,
     }
 
 
@@ -360,6 +368,7 @@ def test_resolve_quality_config_emits_grouped_cochange_tests_and_scip_payloads()
         "index_path": "context-map/scip/custom-index.json",
         "provider": "scip_lite",
         "generate_fallback": False,
+        "base_weight": 0.5,
     }
 
 

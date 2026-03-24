@@ -20,6 +20,17 @@ from ace_lite.cli_app.params import (
     _to_sbfl_metric,
     _to_scip_provider,
 )
+from ace_lite.scoring_config import (
+    CHUNK_FILE_PRIOR_WEIGHT,
+    CHUNK_MODULE_MATCH,
+    CHUNK_PATH_MATCH,
+    CHUNK_REFERENCE_CAP,
+    CHUNK_REFERENCE_FACTOR,
+    CHUNK_SIGNATURE_MATCH,
+    CHUNK_SYMBOL_EXACT,
+    CHUNK_SYMBOL_PARTIAL,
+    SCIP_BASE_WEIGHT,
+)
 
 
 def resolve_quality_config(
@@ -421,6 +432,70 @@ def resolve_quality_config(
         paths=list(scoped("chunk_diversity_locality_window")),
         transform=_to_int,
     )
+    chunk_file_prior_weight = _resolve_from_config(
+        ctx=ctx,
+        param_name="chunk_file_prior_weight",
+        current=CHUNK_FILE_PRIOR_WEIGHT,
+        config=config,
+        paths=section_paths("chunk", "file_prior_weight", flat_key="chunk_file_prior_weight"),
+        transform=_to_float,
+    )
+    chunk_path_match = _resolve_from_config(
+        ctx=ctx,
+        param_name="chunk_path_match",
+        current=CHUNK_PATH_MATCH,
+        config=config,
+        paths=section_paths("chunk", "path_match", flat_key="chunk_path_match"),
+        transform=_to_float,
+    )
+    chunk_module_match = _resolve_from_config(
+        ctx=ctx,
+        param_name="chunk_module_match",
+        current=CHUNK_MODULE_MATCH,
+        config=config,
+        paths=section_paths("chunk", "module_match", flat_key="chunk_module_match"),
+        transform=_to_float,
+    )
+    chunk_symbol_exact = _resolve_from_config(
+        ctx=ctx,
+        param_name="chunk_symbol_exact",
+        current=CHUNK_SYMBOL_EXACT,
+        config=config,
+        paths=section_paths("chunk", "symbol_exact", flat_key="chunk_symbol_exact"),
+        transform=_to_float,
+    )
+    chunk_symbol_partial = _resolve_from_config(
+        ctx=ctx,
+        param_name="chunk_symbol_partial",
+        current=CHUNK_SYMBOL_PARTIAL,
+        config=config,
+        paths=section_paths("chunk", "symbol_partial", flat_key="chunk_symbol_partial"),
+        transform=_to_float,
+    )
+    chunk_signature_match = _resolve_from_config(
+        ctx=ctx,
+        param_name="chunk_signature_match",
+        current=CHUNK_SIGNATURE_MATCH,
+        config=config,
+        paths=section_paths("chunk", "signature_match", flat_key="chunk_signature_match"),
+        transform=_to_float,
+    )
+    chunk_reference_factor = _resolve_from_config(
+        ctx=ctx,
+        param_name="chunk_reference_factor",
+        current=CHUNK_REFERENCE_FACTOR,
+        config=config,
+        paths=section_paths("chunk", "reference_factor", flat_key="chunk_reference_factor"),
+        transform=_to_float,
+    )
+    chunk_reference_cap = _resolve_from_config(
+        ctx=ctx,
+        param_name="chunk_reference_cap",
+        current=CHUNK_REFERENCE_CAP,
+        config=config,
+        paths=section_paths("chunk", "reference_cap", flat_key="chunk_reference_cap"),
+        transform=_to_float,
+    )
     cochange_enabled = _resolve_from_config(
         ctx=ctx,
         param_name="cochange_enabled",
@@ -598,6 +673,14 @@ def resolve_quality_config(
         ),
         transform=_to_bool,
     )
+    scip_base_weight = _resolve_from_config(
+        ctx=ctx,
+        param_name="scip_base_weight",
+        current=SCIP_BASE_WEIGHT,
+        config=config,
+        paths=section_paths("scip", "base_weight", flat_key="scip_base_weight"),
+        transform=_to_float,
+    )
     trace_export_enabled = _resolve_from_config(
         ctx=ctx,
         param_name="trace_export_enabled",
@@ -695,6 +778,14 @@ def resolve_quality_config(
             "min_marginal_utility": chunk_guard_min_marginal_utility,
             "compatibility_min_overlap": chunk_guard_compatibility_min_overlap,
         },
+        "file_prior_weight": max(0.0, float(chunk_file_prior_weight)),
+        "path_match": max(0.0, float(chunk_path_match)),
+        "module_match": max(0.0, float(chunk_module_match)),
+        "symbol_exact": max(0.0, float(chunk_symbol_exact)),
+        "symbol_partial": max(0.0, float(chunk_symbol_partial)),
+        "signature_match": max(0.0, float(chunk_signature_match)),
+        "reference_factor": max(0.0, float(chunk_reference_factor)),
+        "reference_cap": max(0.0, float(chunk_reference_cap)),
     }
     trace_payload = {
         "export_enabled": bool(trace_export_enabled),
@@ -722,6 +813,7 @@ def resolve_quality_config(
         "index_path": str(scip_index_path),
         "provider": str(scip_provider).strip().lower() or "auto",
         "generate_fallback": bool(scip_generate_fallback),
+        "base_weight": max(0.0, float(scip_base_weight)),
     }
 
     return {
@@ -748,6 +840,14 @@ def resolve_quality_config(
         "chunk_diversity_kind_penalty": chunk_diversity_kind_penalty,
         "chunk_diversity_locality_penalty": chunk_diversity_locality_penalty,
         "chunk_diversity_locality_window": max(1, int(chunk_diversity_locality_window)),
+        "chunk_file_prior_weight": normalized_chunk_payload["file_prior_weight"],
+        "chunk_path_match": normalized_chunk_payload["path_match"],
+        "chunk_module_match": normalized_chunk_payload["module_match"],
+        "chunk_symbol_exact": normalized_chunk_payload["symbol_exact"],
+        "chunk_symbol_partial": normalized_chunk_payload["symbol_partial"],
+        "chunk_signature_match": normalized_chunk_payload["signature_match"],
+        "chunk_reference_factor": normalized_chunk_payload["reference_factor"],
+        "chunk_reference_cap": normalized_chunk_payload["reference_cap"],
         "cochange_enabled": cochange_payload["enabled"],
         "cochange_cache_path": cochange_payload["cache_path"],
         "cochange_lookback_commits": cochange_payload["lookback_commits"],
@@ -766,6 +866,7 @@ def resolve_quality_config(
         "scip_index_path": scip_payload["index_path"],
         "scip_provider": scip_payload["provider"],
         "scip_generate_fallback": scip_payload["generate_fallback"],
+        "scip_base_weight": scip_payload["base_weight"],
         "scip": scip_payload,
         "trace_export_enabled": trace_payload["export_enabled"],
         "trace_export_path": trace_payload["export_path"],

@@ -179,6 +179,23 @@ def evaluate_case_result(
     validation_branch_winner_after_issue_count = (
         metrics.validation_branch_winner_after_issue_count
     )
+    agent_loop_observed = metrics.agent_loop_observed
+    agent_loop_enabled = metrics.agent_loop_enabled
+    agent_loop_attempted = metrics.agent_loop_attempted
+    agent_loop_actions_requested = metrics.agent_loop_actions_requested
+    agent_loop_actions_executed = metrics.agent_loop_actions_executed
+    agent_loop_stop_reason = metrics.agent_loop_stop_reason
+    agent_loop_replay_safe = metrics.agent_loop_replay_safe
+    agent_loop_last_policy_id = metrics.agent_loop_last_policy_id
+    agent_loop_request_more_context_count = (
+        metrics.agent_loop_request_more_context_count
+    )
+    agent_loop_request_source_plan_retry_count = (
+        metrics.agent_loop_request_source_plan_retry_count
+    )
+    agent_loop_request_validation_retry_count = (
+        metrics.agent_loop_request_validation_retry_count
+    )
     source_plan_validation_feedback_present = (
         metrics.source_plan_validation_feedback_present
     )
@@ -242,6 +259,8 @@ def evaluate_case_result(
     ltm_attribution_count = metrics.ltm_attribution_count
     ltm_graph_neighbor_count = metrics.ltm_graph_neighbor_count
     ltm_plan_constraint_count = metrics.ltm_plan_constraint_count
+    ltm_feedback_signal_counts = metrics.ltm_feedback_signal_counts
+    ltm_attribution_scope_counts = metrics.ltm_attribution_scope_counts
     ltm_attribution_preview = metrics.ltm_attribution_preview
     feedback_enabled = metrics.feedback_enabled
     feedback_reason = metrics.feedback_reason
@@ -301,6 +320,11 @@ def evaluate_case_result(
     embedding_enabled = metrics.embedding_enabled
     embedding_fallback = metrics.embedding_fallback
     embedding_cache_hit = metrics.embedding_cache_hit
+    embedding_runtime_provider = metrics.embedding_runtime_provider
+    embedding_strategy_mode = metrics.embedding_strategy_mode
+    embedding_semantic_rerank_applied = (
+        metrics.embedding_semantic_rerank_applied
+    )
     embedding_rerank_ratio = metrics.embedding_rerank_ratio
     embedding_similarity_mean = metrics.embedding_similarity_mean
     embedding_similarity_max = metrics.embedding_similarity_max
@@ -388,6 +412,27 @@ def evaluate_case_result(
     )
     topological_shield_coverage_ratio = metrics.topological_shield_coverage_ratio
     topological_shield_attenuation_total = metrics.topological_shield_attenuation_total
+    graph_source_provider_loaded = metrics.graph_source_provider_loaded
+    graph_source_projection_fallback = metrics.graph_source_projection_fallback
+    graph_source_edge_count = metrics.graph_source_edge_count
+    graph_source_inbound_signal_chunk_count = (
+        metrics.graph_source_inbound_signal_chunk_count
+    )
+    graph_source_inbound_signal_coverage_ratio = (
+        metrics.graph_source_inbound_signal_coverage_ratio
+    )
+    graph_source_centrality_signal_chunk_count = (
+        metrics.graph_source_centrality_signal_chunk_count
+    )
+    graph_source_centrality_signal_coverage_ratio = (
+        metrics.graph_source_centrality_signal_coverage_ratio
+    )
+    graph_source_pagerank_signal_chunk_count = (
+        metrics.graph_source_pagerank_signal_chunk_count
+    )
+    graph_source_pagerank_signal_coverage_ratio = (
+        metrics.graph_source_pagerank_signal_coverage_ratio
+    )
     skills_selected_count = metrics.skills_selected_count
     skills_skipped_for_budget_count = metrics.skills_skipped_for_budget_count
     skills_token_budget = metrics.skills_token_budget
@@ -583,6 +628,27 @@ def evaluate_case_result(
         topological_shield_attenuation_per_chunk=(
             topological_shield_attenuation_per_chunk
         ),
+        graph_source_provider_loaded=graph_source_provider_loaded,
+        graph_source_projection_fallback=graph_source_projection_fallback,
+        graph_source_edge_count=graph_source_edge_count,
+        graph_source_inbound_signal_chunk_count=(
+            graph_source_inbound_signal_chunk_count
+        ),
+        graph_source_inbound_signal_coverage_ratio=(
+            graph_source_inbound_signal_coverage_ratio
+        ),
+        graph_source_centrality_signal_chunk_count=(
+            graph_source_centrality_signal_chunk_count
+        ),
+        graph_source_centrality_signal_coverage_ratio=(
+            graph_source_centrality_signal_coverage_ratio
+        ),
+        graph_source_pagerank_signal_chunk_count=(
+            graph_source_pagerank_signal_chunk_count
+        ),
+        graph_source_pagerank_signal_coverage_ratio=(
+            graph_source_pagerank_signal_coverage_ratio
+        ),
         skills_selected_count=skills_selected_count,
         skills_token_budget=skills_token_budget,
         skills_token_budget_used=skills_token_budget_used,
@@ -618,6 +684,23 @@ def evaluate_case_result(
         validation_branch_winner_score=validation_branch_winner_score,
         validation_branch_winner_after_issue_count=(
             validation_branch_winner_after_issue_count
+        ),
+        agent_loop_observed=agent_loop_observed,
+        agent_loop_enabled=agent_loop_enabled,
+        agent_loop_attempted=agent_loop_attempted,
+        agent_loop_actions_requested=agent_loop_actions_requested,
+        agent_loop_actions_executed=agent_loop_actions_executed,
+        agent_loop_stop_reason=agent_loop_stop_reason,
+        agent_loop_replay_safe=agent_loop_replay_safe,
+        agent_loop_last_policy_id=agent_loop_last_policy_id,
+        agent_loop_request_more_context_count=(
+            agent_loop_request_more_context_count
+        ),
+        agent_loop_request_source_plan_retry_count=(
+            agent_loop_request_source_plan_retry_count
+        ),
+        agent_loop_request_validation_retry_count=(
+            agent_loop_request_validation_retry_count
         ),
         source_plan_validation_feedback_present=(
             source_plan_validation_feedback_present
@@ -697,6 +780,8 @@ def evaluate_case_result(
         ltm_attribution_count=ltm_attribution_count,
         ltm_graph_neighbor_count=ltm_graph_neighbor_count,
         ltm_plan_constraint_count=ltm_plan_constraint_count,
+        ltm_feedback_signal_counts=ltm_feedback_signal_counts,
+        ltm_attribution_scope_counts=ltm_attribution_scope_counts,
         ltm_attribution_preview=ltm_attribution_preview,
         feedback_enabled=feedback_enabled,
         feedback_reason=feedback_reason,
@@ -773,6 +858,9 @@ def evaluate_case_result(
         docs_hit=docs_hit,
         hint_inject=hint_inject,
         embedding_enabled=embedding_enabled,
+        embedding_runtime_provider=embedding_runtime_provider,
+        embedding_strategy_mode=embedding_strategy_mode,
+        embedding_semantic_rerank_applied=embedding_semantic_rerank_applied,
         embedding_similarity_mean=embedding_similarity_mean,
         embedding_similarity_max=embedding_similarity_max,
         embedding_rerank_ratio=embedding_rerank_ratio,
@@ -925,6 +1013,27 @@ def evaluate_case_result(
                 topological_shield_coverage_ratio=topological_shield_coverage_ratio,
                 topological_shield_attenuation_total=topological_shield_attenuation_total,
                 topological_shield_attenuation_per_chunk=topological_shield_attenuation_per_chunk,
+                graph_source_provider_loaded=graph_source_provider_loaded,
+                graph_source_projection_fallback=graph_source_projection_fallback,
+                graph_source_edge_count=graph_source_edge_count,
+                graph_source_inbound_signal_chunk_count=(
+                    graph_source_inbound_signal_chunk_count
+                ),
+                graph_source_inbound_signal_coverage_ratio=(
+                    graph_source_inbound_signal_coverage_ratio
+                ),
+                graph_source_centrality_signal_chunk_count=(
+                    graph_source_centrality_signal_chunk_count
+                ),
+                graph_source_centrality_signal_coverage_ratio=(
+                    graph_source_centrality_signal_coverage_ratio
+                ),
+                graph_source_pagerank_signal_chunk_count=(
+                    graph_source_pagerank_signal_chunk_count
+                ),
+                graph_source_pagerank_signal_coverage_ratio=(
+                    graph_source_pagerank_signal_coverage_ratio
+                ),
                 graph_closure_enabled=graph_closure_enabled,
                 graph_closure_boosted_chunk_count=graph_closure_boosted_chunk_count,
                 graph_closure_coverage_ratio=graph_closure_coverage_ratio,

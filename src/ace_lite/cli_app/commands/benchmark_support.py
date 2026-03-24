@@ -176,6 +176,49 @@ def build_threshold_overrides(settings: dict[str, Any]) -> dict[str, float]:
     }
 
 
+def build_benchmark_tuning_context_summary(
+    *,
+    resolved: dict[str, Any],
+    threshold_profile: str,
+    threshold_overrides: dict[str, float],
+    warmup_runs: int,
+    include_plan_payload: bool,
+    include_case_details: bool,
+) -> dict[str, Any]:
+    return {
+        "report_only": True,
+        "runtime_profile": str(resolved.get("runtime_profile") or "").strip() or None,
+        "threshold_profile": str(threshold_profile or "").strip() or "default",
+        "threshold_overrides": {
+            str(key): float(value)
+            for key, value in dict(threshold_overrides or {}).items()
+        },
+        "run_settings": {
+            "warmup_runs": max(0, int(warmup_runs)),
+            "include_plan_payload": bool(include_plan_payload),
+            "include_case_details": bool(include_case_details),
+        },
+        "retrieval": dict(resolved.get("retrieval", {}))
+        if isinstance(resolved.get("retrieval"), dict)
+        else {},
+        "chunk": dict(resolved.get("chunk", {}))
+        if isinstance(resolved.get("chunk"), dict)
+        else {},
+        "scip": dict(resolved.get("scip", {}))
+        if isinstance(resolved.get("scip"), dict)
+        else {},
+        "embeddings": dict(resolved.get("embeddings", {}))
+        if isinstance(resolved.get("embeddings"), dict)
+        else {},
+        "cochange": dict(resolved.get("cochange", {}))
+        if isinstance(resolved.get("cochange"), dict)
+        else {},
+        "adaptive_router": dict(resolved.get("adaptive_router", {}))
+        if isinstance(resolved.get("adaptive_router"), dict)
+        else {},
+    }
+
+
 def _resolve_feedback_configured_path(
     *,
     root: str | Path | None,
@@ -712,6 +755,7 @@ def run_benchmark_and_write_outputs(
     warmup_runs: int,
     include_plan_payload: bool,
     include_case_details: bool,
+    tuning_context_summary: dict[str, Any] | None,
     reward_log_enabled: bool,
     reward_log_path: str,
     runtime_stats_enabled: bool,
@@ -756,6 +800,9 @@ def run_benchmark_and_write_outputs(
         include_plan_payload=bool(include_plan_payload),
         include_case_details=bool(include_case_details),
     )
+    if isinstance(tuning_context_summary, dict) and tuning_context_summary:
+        results = dict(results)
+        results["tuning_context_summary"] = dict(tuning_context_summary)
     reward_log_summary = results.get("reward_log_summary")
     if reward_log_writer is not None:
         try:
@@ -788,6 +835,7 @@ def run_benchmark_and_write_outputs(
 
 __all__ = [
     "attach_benchmark_runtime_stats_summary",
+    "build_benchmark_tuning_context_summary",
     "build_threshold_overrides",
     "resolve_benchmark_run_settings",
     "resolve_benchmark_threshold_settings",

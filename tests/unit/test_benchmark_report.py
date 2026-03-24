@@ -1192,6 +1192,41 @@ def test_build_results_summary_preserves_validation_probe_summary() -> None:
     }
 
 
+def test_build_results_summary_preserves_agent_loop_control_plane_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "agent_loop_control_plane_summary": {
+                "case_count": 2,
+                "observed_case_count": 2,
+                "observed_case_rate": 1.0,
+                "enabled_case_count": 2,
+                "enabled_case_rate": 1.0,
+                "attempted_case_count": 1,
+                "attempted_case_rate": 0.5,
+                "replay_safe_case_count": 2,
+                "replay_safe_case_rate": 1.0,
+                "actions_requested_mean": 1.0,
+                "actions_executed_mean": 0.5,
+                "request_more_context_case_count": 1,
+                "request_more_context_case_rate": 0.5,
+                "request_source_plan_retry_case_count": 1,
+                "request_source_plan_retry_case_rate": 0.5,
+                "request_validation_retry_case_count": 0,
+                "request_validation_retry_case_rate": 0.0,
+                "dominant_stop_reason": "completed",
+                "dominant_last_policy_id": "source_plan_refresh",
+            },
+        }
+    )
+
+    assert summary["agent_loop_control_plane_summary"]["attempted_case_rate"] == 0.5
+    assert (
+        summary["agent_loop_control_plane_summary"]["dominant_last_policy_id"]
+        == "source_plan_refresh"
+    )
+
+
 def test_build_results_summary_preserves_validation_branch_summary() -> None:
     summary = build_results_summary(
         {
@@ -1486,6 +1521,131 @@ def test_build_report_markdown_prefers_top_level_validation_probe_summary() -> N
     assert "## Validation Probe Summary" in report
     assert "Validation tests mean: 1.5000; probe enabled ratio: 1.0000" in report
     assert "Probe executed count mean: 2.0000; failure rate: 0.5000" in report
+
+
+def test_build_report_markdown_includes_graph_context_source_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-24T00:00:00Z",
+            "repo": "demo",
+            "case_count": 1,
+            "include_plan_payload": False,
+            "include_case_details": True,
+            "metrics": {
+                "recall_at_k": 1.0,
+                "precision_at_k": 1.0,
+                "task_success_rate": 1.0,
+                "utility_rate": 1.0,
+                "noise_rate": 0.0,
+                "dependency_recall": 1.0,
+                "repomap_latency_p95_ms": 1.0,
+                "repomap_latency_median_ms": 1.0,
+                "latency_p95_ms": 1.0,
+                "latency_median_ms": 1.0,
+                "graph_source_provider_loaded_ratio": 1.0,
+                "graph_source_projection_fallback_ratio": 1.0,
+                "graph_source_edge_count_mean": 5.0,
+                "graph_source_inbound_signal_chunk_count_mean": 2.0,
+                "graph_source_inbound_signal_coverage_ratio": 1.0,
+                "graph_source_centrality_signal_chunk_count_mean": 2.0,
+                "graph_source_centrality_signal_coverage_ratio": 1.0,
+                "graph_source_pagerank_signal_chunk_count_mean": 1.0,
+                "graph_source_pagerank_signal_coverage_ratio": 0.5,
+            },
+            "cases": [
+                {
+                    "case_id": "c1",
+                    "query": "where graph source",
+                    "policy_profile": "graph",
+                    "docs_hit": 0.0,
+                    "hint_inject": 0.0,
+                    "recall_hit": 1.0,
+                    "first_hit_rank": 1,
+                    "hit_at_1": 1.0,
+                    "reciprocal_rank": 1.0,
+                    "task_success_hit": 1.0,
+                    "task_success_mode": "positive",
+                    "precision_at_k": 1.0,
+                    "noise_rate": 0.0,
+                    "notes_hit_ratio": 0.0,
+                    "profile_selected_count": 0.0,
+                    "capture_triggered": 0.0,
+                    "ltm_selected_count": 0.0,
+                    "ltm_attribution_count": 0.0,
+                    "ltm_graph_neighbor_count": 0.0,
+                    "ltm_plan_constraint_count": 0.0,
+                    "feedback_enabled": 0.0,
+                    "feedback_matched_event_count": 0.0,
+                    "feedback_boosted_count": 0.0,
+                    "multi_channel_rrf_applied": 0.0,
+                    "multi_channel_rrf_granularity_count": 0.0,
+                    "multi_channel_rrf_granularity_pool_ratio": 0.0,
+                    "graph_lookup_enabled": 0.0,
+                    "graph_lookup_boosted_count": 0.0,
+                    "graph_lookup_query_hit_paths": 0.0,
+                    "native_scip_loaded": 1.0,
+                    "source_plan_direct_evidence_ratio": 0.0,
+                    "source_plan_neighbor_context_ratio": 0.0,
+                    "source_plan_hint_only_ratio": 0.0,
+                    "graph_closure_enabled": 0.0,
+                    "graph_closure_boosted_chunk_count": 0.0,
+                    "graph_closure_coverage_ratio": 0.0,
+                    "graph_closure_anchor_count": 0.0,
+                    "graph_closure_support_edge_count": 0.0,
+                    "graph_closure_total": 0.0,
+                    "graph_source_provider_loaded": 1.0,
+                    "graph_source_projection_fallback": 1.0,
+                    "graph_source_edge_count": 5.0,
+                    "graph_source_inbound_signal_chunk_count": 2.0,
+                    "graph_source_inbound_signal_coverage_ratio": 1.0,
+                    "graph_source_centrality_signal_chunk_count": 2.0,
+                    "graph_source_centrality_signal_coverage_ratio": 1.0,
+                    "graph_source_pagerank_signal_chunk_count": 1.0,
+                    "graph_source_pagerank_signal_coverage_ratio": 0.5,
+                    "source_plan_graph_closure_preference_enabled": 0.0,
+                    "source_plan_graph_closure_bonus_candidate_count": 0.0,
+                    "source_plan_graph_closure_preferred_count": 0.0,
+                    "source_plan_focused_file_promoted_count": 0.0,
+                    "source_plan_packed_path_count": 0.0,
+                    "plan_replay_cache_enabled": 0.0,
+                    "plan_replay_cache_hit": 0.0,
+                    "plan_replay_cache_stale_hit_safe": 0.0,
+                    "chunk_guard_enabled": 0.0,
+                    "chunk_guard_report_only": 0.0,
+                    "chunk_guard_filtered_count": 0.0,
+                    "chunk_guard_filter_ratio": 0.0,
+                    "chunk_guard_pairwise_conflict_count": 0.0,
+                    "chunk_guard_fallback": 0.0,
+                    "robust_signature_count": 0.0,
+                    "robust_signature_coverage_ratio": 0.0,
+                    "retrieval_context_chunk_count": 0.0,
+                    "retrieval_context_coverage_ratio": 0.0,
+                    "dependency_recall": 1.0,
+                    "graph_context_source": {
+                        "provider_loaded": True,
+                        "projection_fallback": True,
+                        "edge_count": 5,
+                        "inbound_signal_chunk_count": 2,
+                        "inbound_signal_coverage_ratio": 1.0,
+                        "centrality_signal_chunk_count": 2,
+                        "centrality_signal_coverage_ratio": 1.0,
+                        "pagerank_signal_chunk_count": 1,
+                        "pagerank_signal_coverage_ratio": 0.5,
+                    },
+                    "latency_ms": 1.0,
+                }
+            ],
+        }
+    )
+
+    assert "## Graph Context Source Summary" in report
+    assert "Source loaded ratio: 1.0000; projection fallback ratio: 1.0000; edge count mean: 5.00" in report
+    assert "Inbound signal chunk count mean / coverage ratio: 2.00 / 1.0000" in report
+    assert "Centrality signal chunk count mean / coverage ratio: 2.00 / 1.0000" in report
+    assert "Pagerank signal chunk count mean / coverage ratio: 1.00 / 0.5000" in report
+    assert "graph_source_provider_loaded: 1.0000" in report
+    assert "graph_source_edge_count: 5.0000" in report
+    assert "graph_context_source: provider_loaded=True, projection_fallback=True, edge_count=5, inbound_signal_chunk_count=2, inbound_signal_coverage_ratio=1.0000, centrality_signal_chunk_count=2, centrality_signal_coverage_ratio=1.0000, pagerank_signal_chunk_count=1, pagerank_signal_coverage_ratio=0.5000" in report
 
 
 def test_build_report_markdown_prefers_top_level_validation_branch_summary() -> None:
@@ -1834,6 +1994,23 @@ def test_build_results_summary_preserves_reward_log_summary() -> None:
     assert summary["reward_log_summary"]["error_count"] == 1
 
 
+def test_build_results_summary_preserves_tuning_context_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "tuning_context_summary": {
+                "report_only": True,
+                "retrieval": {"top_k_files": 8},
+                "chunk": {"top_k": 10},
+            },
+        }
+    )
+
+    assert summary["tuning_context_summary"]["report_only"] is True
+    assert summary["tuning_context_summary"]["retrieval"]["top_k_files"] == 8
+    assert summary["tuning_context_summary"]["chunk"]["top_k"] == 10
+
+
 def test_build_results_summary_preserves_retrieval_context_observability_summary() -> None:
     summary = build_results_summary(
         {
@@ -1893,6 +2070,20 @@ def test_build_results_summary_preserves_retrieval_default_strategy_summary() ->
                 "parent_symbol_available_case_rate": 1.0,
                 "reference_hint_available_case_count": 1,
                 "reference_hint_available_case_rate": 0.5,
+                "semantic_rerank_configured_case_count": 2,
+                "semantic_rerank_configured_case_rate": 1.0,
+                "semantic_rerank_enabled_case_count": 2,
+                "semantic_rerank_enabled_case_rate": 1.0,
+                "semantic_rerank_applied_case_count": 1,
+                "semantic_rerank_applied_case_rate": 0.5,
+                "semantic_rerank_cross_encoder_case_count": 2,
+                "semantic_rerank_cross_encoder_case_rate": 1.0,
+                "semantic_rerank_dominant_provider": "hash_colbert",
+                "semantic_rerank_dominant_mode": "cross_encoder",
+                "semantic_rerank_provider_case_counts": {
+                    "hash_colbert": 1,
+                    "hash_cross": 1,
+                },
                 "graph_lookup_enabled_case_count": 2,
                 "graph_lookup_enabled_case_rate": 1.0,
                 "graph_lookup_guarded_case_count": 1,
@@ -1930,6 +2121,20 @@ def test_build_results_summary_preserves_retrieval_default_strategy_summary() ->
         "parent_symbol_available_case_rate": 1.0,
         "reference_hint_available_case_count": 1,
         "reference_hint_available_case_rate": 0.5,
+        "semantic_rerank_configured_case_count": 2,
+        "semantic_rerank_configured_case_rate": 1.0,
+        "semantic_rerank_enabled_case_count": 2,
+        "semantic_rerank_enabled_case_rate": 1.0,
+        "semantic_rerank_applied_case_count": 1,
+        "semantic_rerank_applied_case_rate": 0.5,
+        "semantic_rerank_cross_encoder_case_count": 2,
+        "semantic_rerank_cross_encoder_case_rate": 1.0,
+        "semantic_rerank_dominant_provider": "hash_colbert",
+        "semantic_rerank_dominant_mode": "cross_encoder",
+        "semantic_rerank_provider_case_counts": {
+            "hash_colbert": 1,
+            "hash_cross": 1,
+        },
         "graph_lookup_enabled_case_count": 2,
         "graph_lookup_enabled_case_rate": 1.0,
         "graph_lookup_guarded_case_count": 1,
@@ -2174,6 +2379,20 @@ def test_build_report_markdown_includes_retrieval_default_strategy_summary() -> 
                 "parent_symbol_available_case_rate": 1.0,
                 "reference_hint_available_case_count": 1,
                 "reference_hint_available_case_rate": 0.5,
+                "semantic_rerank_configured_case_count": 2,
+                "semantic_rerank_configured_case_rate": 1.0,
+                "semantic_rerank_enabled_case_count": 2,
+                "semantic_rerank_enabled_case_rate": 1.0,
+                "semantic_rerank_applied_case_count": 1,
+                "semantic_rerank_applied_case_rate": 0.5,
+                "semantic_rerank_cross_encoder_case_count": 2,
+                "semantic_rerank_cross_encoder_case_rate": 1.0,
+                "semantic_rerank_dominant_provider": "hash_colbert",
+                "semantic_rerank_dominant_mode": "cross_encoder",
+                "semantic_rerank_provider_case_counts": {
+                    "hash_colbert": 1,
+                    "hash_cross": 1,
+                },
                 "graph_lookup_enabled_case_count": 2,
                 "graph_lookup_enabled_case_rate": 1.0,
                 "graph_lookup_guarded_case_count": 1,
@@ -2205,6 +2424,8 @@ def test_build_report_markdown_includes_retrieval_default_strategy_summary() -> 
 
     assert "## Retrieval Default Strategy Summary" in report
     assert "- Retrieval-context cases: 2/2 (1.0000); parent-symbol: 2/2 (1.0000); reference-hint: 1/2 (0.5000)" in report
+    assert "- Semantic rerank default: configured=2/2 (1.0000); enabled=2/2 (1.0000); applied=1/2 (0.5000); mode=cross_encoder; provider=hash_colbert" in report
+    assert "- Semantic rerank providers: hash_colbert=1, hash_cross=1" in report
     assert "- Graph lookup default: enabled=2/2 (1.0000); guarded=1/2 (0.5000); normalization=log1p" in report
     assert "- Graph lookup guard means: pool=4.0000; max_candidates=4.0000; min_query_terms=1.0000; max_query_terms=5.0000" in report
     assert "- Topological shield default: enabled=2/2 (1.0000); report_only=2/2 (1.0000); mode=report_only" in report
@@ -2290,6 +2511,43 @@ def test_build_report_markdown_includes_retrieval_control_plane_gate_summary() -
     )
     assert "- Risk-upgrade precision gain: 0.1200 (threshold >= 0.0000, pass)" in report
     assert "- Latency p95 ms: 640.00 (threshold <= 850.00, pass)" in report
+
+
+def test_build_report_markdown_includes_agent_loop_control_plane_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-03-24T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {},
+            "agent_loop_control_plane_summary": {
+                "case_count": 2,
+                "observed_case_count": 2,
+                "observed_case_rate": 1.0,
+                "enabled_case_count": 2,
+                "enabled_case_rate": 1.0,
+                "attempted_case_count": 1,
+                "attempted_case_rate": 0.5,
+                "replay_safe_case_count": 2,
+                "replay_safe_case_rate": 1.0,
+                "actions_requested_mean": 1.0,
+                "actions_executed_mean": 0.5,
+                "request_more_context_case_count": 1,
+                "request_more_context_case_rate": 0.5,
+                "request_source_plan_retry_case_count": 1,
+                "request_source_plan_retry_case_rate": 0.5,
+                "request_validation_retry_case_count": 0,
+                "request_validation_retry_case_rate": 0.0,
+                "dominant_stop_reason": "completed",
+                "dominant_last_policy_id": "source_plan_refresh",
+            },
+        }
+    )
+
+    assert "## Agent Loop Control Plane Summary" in report
+    assert "Observed=2/2 (1.0000); enabled=2/2 (1.0000); attempted=1/2 (0.5000)" in report
+    assert "dominant_stop_reason=completed; dominant_policy=source_plan_refresh" in report
+    assert "source_plan_retry=1/2 (0.5000)" in report
 
 
 def test_build_report_markdown_includes_retrieval_control_plane_gate_failure_state() -> None:

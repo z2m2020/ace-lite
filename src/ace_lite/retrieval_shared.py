@@ -48,11 +48,14 @@ class RetrievalRuntimeProfile:
     hybrid_fusion_mode: str
     hybrid_rrf_k: int
     hybrid_weights: dict[str, float]
+    bm25_config: dict[str, Any]
+    heuristic_config: dict[str, Any]
+    hybrid_config: dict[str, Any]
     index_hash: str | None
     allow_empty_terms_fail_open: bool = True
 
     def selection_kwargs(self, *, corpus_size: int) -> dict[str, Any]:
-        return {
+        payload = {
             "candidate_ranker": self.candidate_ranker,
             "min_candidate_score": int(self.min_candidate_score),
             "top_k_files": int(self.top_k_files),
@@ -63,6 +66,13 @@ class RetrievalRuntimeProfile:
             "index_hash": self.index_hash,
             "allow_empty_terms_fail_open": bool(self.allow_empty_terms_fail_open),
         }
+        if self.bm25_config:
+            payload["bm25_config"] = dict(self.bm25_config)
+        if self.heuristic_config:
+            payload["heuristic_config"] = dict(self.heuristic_config)
+        if self.hybrid_config:
+            payload["hybrid_config"] = dict(self.hybrid_config)
+        return payload
 
     def rank_candidates(
         self,
@@ -73,19 +83,36 @@ class RetrievalRuntimeProfile:
         candidate_ranker: str | None = None,
     ) -> list[dict[str, Any]]:
         return rank_candidate_files(
-            files_map=files_map,
-            terms=terms,
-            candidate_ranker=str(candidate_ranker or self.candidate_ranker),
-            min_score=(
-                int(self.min_candidate_score)
-                if min_score is None
-                else max(1, int(min_score))
-            ),
-            top_k_files=int(self.top_k_files),
-            hybrid_fusion_mode=self.hybrid_fusion_mode,
-            hybrid_rrf_k=int(self.hybrid_rrf_k),
-            hybrid_weights=dict(self.hybrid_weights),
-            index_hash=self.index_hash,
+            **{
+                "files_map": files_map,
+                "terms": terms,
+                "candidate_ranker": str(candidate_ranker or self.candidate_ranker),
+                "min_score": (
+                    int(self.min_candidate_score)
+                    if min_score is None
+                    else max(1, int(min_score))
+                ),
+                "top_k_files": int(self.top_k_files),
+                "hybrid_fusion_mode": self.hybrid_fusion_mode,
+                "hybrid_rrf_k": int(self.hybrid_rrf_k),
+                "hybrid_weights": dict(self.hybrid_weights),
+                "index_hash": self.index_hash,
+                **(
+                    {"bm25_config": dict(self.bm25_config)}
+                    if self.bm25_config
+                    else {}
+                ),
+                **(
+                    {"heuristic_config": dict(self.heuristic_config)}
+                    if self.heuristic_config
+                    else {}
+                ),
+                **(
+                    {"hybrid_config": dict(self.hybrid_config)}
+                    if self.hybrid_config
+                    else {}
+                ),
+            },
         )
 
 
@@ -131,6 +158,9 @@ def build_retrieval_runtime_profile(
     hybrid_fusion_mode: str = "linear",
     hybrid_rrf_k: int = 60,
     hybrid_weights: dict[str, float] | None = None,
+    bm25_config: dict[str, Any] | None = None,
+    heuristic_config: dict[str, Any] | None = None,
+    hybrid_config: dict[str, Any] | None = None,
     index_hash: str | None = None,
     allow_empty_terms_fail_open: bool = True,
 ) -> RetrievalRuntimeProfile:
@@ -145,6 +175,9 @@ def build_retrieval_runtime_profile(
         hybrid_fusion_mode=normalized_fusion_mode,
         hybrid_rrf_k=max(1, int(hybrid_rrf_k)),
         hybrid_weights=_normalize_hybrid_weights(hybrid_weights),
+        bm25_config=dict(bm25_config or {}),
+        heuristic_config=dict(heuristic_config or {}),
+        hybrid_config=dict(hybrid_config or {}),
         index_hash=normalized_index_hash,
         allow_empty_terms_fail_open=bool(allow_empty_terms_fail_open),
     )
@@ -235,32 +268,81 @@ def rank_candidate_files(
     hybrid_fusion_mode: str = "linear",
     hybrid_rrf_k: int = 60,
     hybrid_weights: dict[str, float] | None = None,
+    bm25_config: dict[str, Any] | None = None,
+    heuristic_config: dict[str, Any] | None = None,
+    hybrid_config: dict[str, Any] | None = None,
     index_hash: str | None = None,
 ) -> list[dict[str, Any]]:
     strategy = normalize_candidate_ranker(candidate_ranker)
     candidate_limit = max(1, int(top_k_files))
     threshold = int(min_score)
     if strategy == "bm25_lite":
-        return rank_candidates_bm25_two_stage(
-            files_map,
-            terms,
-            min_score=threshold,
-            top_k_files=candidate_limit,
-            heuristic_ranker=rank_candidates_heuristic,
-            index_hash=index_hash,
-        )
+        bm25_kwargs = {
+            "min_score": threshold,
+            "top_k_files": candidate_limit,
+            "heuristic_ranker": rank_candidates_heuristic,
+            "index_hash": index_hash,
+        }
+        if bm25_config:
+            bm25_kwargs["bm25_config"] = bm25_config
+        if heuristic_config:
+            bm25_kwargs["heuristic_config"] = heuristic_config
+        try:
+            return rank_candidates_bm25_two_stage(
+                files_map,
+                terms,
+                **bm25_kwargs,
+            )
+        except TypeError:
+            return rank_candidates_bm25_two_stage(
+                files_map,
+                terms,
+                min_score=threshold,
+                top_k_files=candidate_limit,
+                heuristic_ranker=rank_candidates_heuristic,
+                index_hash=index_hash,
+            )
     if strategy in {"hybrid_re2", "rrf_hybrid"}:
-        return rank_candidates_hybrid_re2(
+        hybrid_kwargs = {
+            "min_score": threshold,
+            "top_n": candidate_limit,
+            "fusion_mode": "rrf" if strategy == "rrf_hybrid" else hybrid_fusion_mode,
+            "rrf_k": int(hybrid_rrf_k),
+            "weights": hybrid_weights,
+            "index_hash": index_hash,
+        }
+        if bm25_config:
+            hybrid_kwargs["bm25_config"] = bm25_config
+        if heuristic_config:
+            hybrid_kwargs["heuristic_config"] = heuristic_config
+        if hybrid_config:
+            hybrid_kwargs["hybrid_config"] = hybrid_config
+        try:
+            return rank_candidates_hybrid_re2(
+                files_map,
+                terms,
+                **hybrid_kwargs,
+            )
+        except TypeError:
+            return rank_candidates_hybrid_re2(
+                files_map,
+                terms,
+                min_score=threshold,
+                top_n=candidate_limit,
+                fusion_mode="rrf" if strategy == "rrf_hybrid" else hybrid_fusion_mode,
+                rrf_k=int(hybrid_rrf_k),
+                weights=hybrid_weights,
+                index_hash=index_hash,
+            )
+    try:
+        return rank_candidates_heuristic(
             files_map,
             terms,
             min_score=threshold,
-            top_n=candidate_limit,
-            fusion_mode="rrf" if strategy == "rrf_hybrid" else hybrid_fusion_mode,
-            rrf_k=int(hybrid_rrf_k),
-            weights=hybrid_weights,
-            index_hash=index_hash,
+            scoring_config=heuristic_config,
         )
-    return rank_candidates_heuristic(files_map, terms, min_score=threshold)
+    except TypeError:
+        return rank_candidates_heuristic(files_map, terms, min_score=threshold)
 
 
 def _compute_index_hash(
@@ -357,6 +439,9 @@ def select_initial_candidates(
     hybrid_fusion_mode: str,
     hybrid_rrf_k: int,
     hybrid_weights: dict[str, float],
+    bm25_config: dict[str, Any] | None = None,
+    heuristic_config: dict[str, Any] | None = None,
+    hybrid_config: dict[str, Any] | None = None,
     index_hash: str | None,
     allow_empty_terms_fail_open: bool = True,
 ) -> CandidateSelectionResult:
@@ -371,16 +456,25 @@ def select_initial_candidates(
         fallback_reasons.append("tiny_corpus")
 
     def rank(*, ranker: str, min_score: int, ranked_terms: list[str]) -> list[dict[str, Any]]:
+        rank_kwargs: dict[str, Any] = {
+            "files_map": files_map,
+            "terms": ranked_terms,
+            "candidate_ranker": ranker,
+            "min_score": min_score,
+            "top_k_files": int(top_k_files),
+            "hybrid_fusion_mode": hybrid_fusion_mode,
+            "hybrid_rrf_k": int(hybrid_rrf_k),
+            "hybrid_weights": hybrid_weights,
+            "index_hash": index_hash,
+        }
+        if bm25_config:
+            rank_kwargs["bm25_config"] = bm25_config
+        if heuristic_config:
+            rank_kwargs["heuristic_config"] = heuristic_config
+        if hybrid_config:
+            rank_kwargs["hybrid_config"] = hybrid_config
         return rank_candidate_files(
-            files_map=files_map,
-            terms=ranked_terms,
-            candidate_ranker=ranker,
-            min_score=min_score,
-            top_k_files=int(top_k_files),
-            hybrid_fusion_mode=hybrid_fusion_mode,
-            hybrid_rrf_k=int(hybrid_rrf_k),
-            hybrid_weights=hybrid_weights,
-            index_hash=index_hash,
+            **rank_kwargs,
         )
 
     min_score_used = int(min_candidate_score)

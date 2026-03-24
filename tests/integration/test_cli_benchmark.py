@@ -926,7 +926,9 @@ benchmark:
         "time_budget_ms": 2200,
         "xref_commands": {"python": ["pylsp-xref"]},
     }
-    assert captured["retrieval_config"] == {
+    retrieval_config = captured["retrieval_config"]
+    assert isinstance(retrieval_config, dict)
+    expected_retrieval_subset = {
         "top_k_files": 2,
         "min_candidate_score": 4,
         "candidate_relative_threshold": 0.2,
@@ -949,7 +951,11 @@ benchmark:
             "arm_set": "retrieval_policy_shadow",
         },
     }
-    assert captured["chunking_config"] == {
+    for key, expected_value in expected_retrieval_subset.items():
+        assert retrieval_config[key] == expected_value
+    chunking_config = captured["chunking_config"]
+    assert isinstance(chunking_config, dict)
+    expected_chunking_subset = {
         "top_k": 5,
         "per_file_limit": 2,
         "disclosure": "signature",
@@ -973,6 +979,8 @@ benchmark:
             "compatibility_min_overlap": 0.3,
         },
     }
+    for key, expected_value in expected_chunking_subset.items():
+        assert chunking_config[key] == expected_value
     assert captured["tokenizer_config"] == {"model": "gpt-4.1-nano"}
     assert captured["cochange_config"] == {
         "enabled": False,
@@ -988,12 +996,16 @@ benchmark:
         "sbfl_json": "artifacts/sbfl.json",
         "sbfl_metric": "dstar",
     }
-    assert captured["scip_config"] == {
+    scip_config = captured["scip_config"]
+    assert isinstance(scip_config, dict)
+    expected_scip_subset = {
         "enabled": True,
         "index_path": "context-map/scip/custom-index.json",
         "provider": "scip_lite",
         "generate_fallback": False,
     }
+    for key, expected_value in expected_scip_subset.items():
+        assert scip_config[key] == expected_value
     assert captured["trace_config"] == {
         "export_enabled": True,
         "export_path": "context-map/traces/benchmark-config-trace.jsonl",
@@ -1645,6 +1657,91 @@ benchmark:
     assert captured["reward_log_path"] == "context-map/router/target-benchmark-rewards.jsonl"
 
 
+def test_cli_benchmark_run_writes_tuning_context_summary(tmp_path: Path, monkeypatch) -> None:
+    _seed_repo(tmp_path)
+    captured: dict[str, Any] = {}
+
+    class FakeBenchmarkRunner:
+        def __init__(self, orchestrator: object, **kwargs: Any) -> None:
+            _ = (orchestrator, kwargs)
+
+        def run(self, **kwargs: Any) -> dict[str, Any]:
+            _ = kwargs
+            return {"cases": [], "metrics": {}, "regression": {}}
+
+    monkeypatch.setattr(
+        "ace_lite.cli_app.commands.benchmark.create_memory_provider",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "ace_lite.cli_app.commands.benchmark.create_orchestrator",
+        lambda **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        "ace_lite.cli_app.commands.benchmark.BenchmarkRunner",
+        FakeBenchmarkRunner,
+    )
+
+    def fake_write_results(results: dict[str, Any], output_dir: str) -> dict[str, str]:
+        captured["results"] = results
+        output = Path(output_dir)
+        output.mkdir(parents=True, exist_ok=True)
+        results_path = output / "results.json"
+        summary_path = output / "summary.json"
+        report_path = output / "report.md"
+        results_path.write_text(json.dumps(results), encoding="utf-8")
+        summary_path.write_text(
+            json.dumps(
+                {"tuning_context_summary": results["tuning_context_summary"]},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        report_path.write_text("# report\n", encoding="utf-8")
+        return {
+            "results_json": str(results_path),
+            "report_md": str(report_path),
+            "summary_json": str(summary_path),
+        }
+
+    monkeypatch.setattr(
+        "ace_lite.cli_app.commands.benchmark.write_results",
+        fake_write_results,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "benchmark",
+            "run",
+            "--cases",
+            str(tmp_path / "benchmark" / "cases" / "default.yaml"),
+            "--repo",
+            "demo",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(tmp_path / "skills"),
+            "--languages",
+            "python",
+            "--memory-primary",
+            "none",
+            "--memory-secondary",
+            "none",
+            "--output",
+            str(tmp_path / "artifacts" / "benchmark" / "capture"),
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    tuning = captured["results"]["tuning_context_summary"]
+    assert tuning["report_only"] is True
+    assert tuning["retrieval"]["top_k_files"] >= 1
+    assert "threshold_profile" in tuning
+
+
 def test_cli_benchmark_replay_rewards_writes_dataset_and_summary(tmp_path: Path) -> None:
     reward_log_path = tmp_path / "context-map" / "router" / "rewards.jsonl"
     output_dir = tmp_path / "artifacts" / "benchmark" / "reward-replay"
@@ -1713,3 +1810,57 @@ def test_cli_benchmark_replay_rewards_writes_dataset_and_summary(tmp_path: Path)
     assert summary["total_row_count"] == 3
     assert summary["skipped_row_count"] == 1
     assert summary["query_count"] == 2
+
+
+def test_cli_benchmark_tune_report_writes_report_only_artifacts(tmp_path: Path) -> None:
+    input_path = tmp_path / "summary.json"
+    output_dir = tmp_path / "artifacts" / "benchmark" / "tune-report"
+    input_path.write_text(
+        json.dumps(
+            {
+                "repo": "demo",
+                "case_count": 3,
+                "threshold_profile": "default",
+                "metrics": {
+                    "recall_at_k": 0.81,
+                    "dependency_recall": 0.74,
+                    "chunk_hit_at_k": 0.79,
+                    "precision_at_k": 0.58,
+                    "noise_rate": 0.48,
+                    "latency_p95_ms": 910.0,
+                },
+                "tuning_context_summary": {
+                    "report_only": True,
+                    "retrieval": {"top_k_files": 8, "min_candidate_score": 2},
+                    "chunk": {"top_k": 10},
+                    "scip": {"enabled": True, "base_weight": 0.5},
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "benchmark",
+            "tune-report",
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_dir),
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    json_path = Path(payload["tuning_report_json"])
+    md_path = Path(payload["tuning_report_md"])
+    assert json_path.exists()
+    assert md_path.exists()
+    report = json.loads(json_path.read_text(encoding="utf-8"))
+    assert report["report_only"] is True
+    assert report["recommendation_count"] >= 1

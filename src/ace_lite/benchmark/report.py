@@ -411,6 +411,102 @@ def _append_graph_lookup_summary(lines: list[str], metrics: dict[str, Any]) -> N
     lines.append("")
 
 
+def _append_graph_context_source_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    metrics = _normalize_metrics(results.get("metrics"))
+    provider_loaded_ratio = float(
+        metrics.get("graph_source_provider_loaded_ratio", 0.0) or 0.0
+    )
+    projection_fallback_ratio = float(
+        metrics.get("graph_source_projection_fallback_ratio", 0.0) or 0.0
+    )
+    edge_count_mean = float(metrics.get("graph_source_edge_count_mean", 0.0) or 0.0)
+    inbound_count_mean = float(
+        metrics.get("graph_source_inbound_signal_chunk_count_mean", 0.0) or 0.0
+    )
+    inbound_coverage_ratio = float(
+        metrics.get("graph_source_inbound_signal_coverage_ratio", 0.0) or 0.0
+    )
+    centrality_count_mean = float(
+        metrics.get("graph_source_centrality_signal_chunk_count_mean", 0.0) or 0.0
+    )
+    centrality_coverage_ratio = float(
+        metrics.get("graph_source_centrality_signal_coverage_ratio", 0.0) or 0.0
+    )
+    pagerank_count_mean = float(
+        metrics.get("graph_source_pagerank_signal_chunk_count_mean", 0.0) or 0.0
+    )
+    pagerank_coverage_ratio = float(
+        metrics.get("graph_source_pagerank_signal_coverage_ratio", 0.0) or 0.0
+    )
+    if (
+        provider_loaded_ratio <= 0.0
+        and projection_fallback_ratio <= 0.0
+        and edge_count_mean <= 0.0
+        and inbound_count_mean <= 0.0
+        and inbound_coverage_ratio <= 0.0
+        and centrality_count_mean <= 0.0
+        and centrality_coverage_ratio <= 0.0
+        and pagerank_count_mean <= 0.0
+        and pagerank_coverage_ratio <= 0.0
+    ):
+        return
+
+    lines.append("## Graph Context Source Summary")
+    lines.append("")
+    lines.append(
+        "- Source loaded ratio: {loaded}; projection fallback ratio: {fallback}; edge count mean: {edges}".format(
+            loaded=_format_metric(
+                "graph_source_provider_loaded_ratio",
+                provider_loaded_ratio,
+            ),
+            fallback=_format_metric(
+                "graph_source_projection_fallback_ratio",
+                projection_fallback_ratio,
+            ),
+            edges=_format_metric("graph_source_edge_count_mean", edge_count_mean),
+        )
+    )
+    lines.append(
+        "- Inbound signal chunk count mean / coverage ratio: {count} / {ratio}".format(
+            count=_format_metric(
+                "graph_source_inbound_signal_chunk_count_mean",
+                inbound_count_mean,
+            ),
+            ratio=_format_metric(
+                "graph_source_inbound_signal_coverage_ratio",
+                inbound_coverage_ratio,
+            ),
+        )
+    )
+    lines.append(
+        "- Centrality signal chunk count mean / coverage ratio: {count} / {ratio}".format(
+            count=_format_metric(
+                "graph_source_centrality_signal_chunk_count_mean",
+                centrality_count_mean,
+            ),
+            ratio=_format_metric(
+                "graph_source_centrality_signal_coverage_ratio",
+                centrality_coverage_ratio,
+            ),
+        )
+    )
+    lines.append(
+        "- Pagerank signal chunk count mean / coverage ratio: {count} / {ratio}".format(
+            count=_format_metric(
+                "graph_source_pagerank_signal_chunk_count_mean",
+                pagerank_count_mean,
+            ),
+            ratio=_format_metric(
+                "graph_source_pagerank_signal_coverage_ratio",
+                pagerank_coverage_ratio,
+            ),
+        )
+    )
+    lines.append("")
+
+
 def _append_validation_probe_summary(lines: list[str], results: dict[str, Any]) -> None:
     summary_raw = results.get("validation_probe_summary")
     summary = summary_raw if isinstance(summary_raw, dict) else {}
@@ -2290,6 +2386,43 @@ def _append_retrieval_default_strategy_summary(
         )
     )
     lines.append(
+        "- Semantic rerank default: configured={configured_count}/{total} ({configured_rate:.4f}); enabled={enabled_count}/{total} ({enabled_rate:.4f}); applied={applied_count}/{total} ({applied_rate:.4f}); mode={mode}; provider={provider}".format(
+            configured_count=int(
+                summary.get("semantic_rerank_configured_case_count", 0) or 0
+            ),
+            total=case_count,
+            configured_rate=float(
+                summary.get("semantic_rerank_configured_case_rate", 0.0) or 0.0
+            ),
+            enabled_count=int(
+                summary.get("semantic_rerank_enabled_case_count", 0) or 0
+            ),
+            enabled_rate=float(
+                summary.get("semantic_rerank_enabled_case_rate", 0.0) or 0.0
+            ),
+            applied_count=int(
+                summary.get("semantic_rerank_applied_case_count", 0) or 0
+            ),
+            applied_rate=float(
+                summary.get("semantic_rerank_applied_case_rate", 0.0) or 0.0
+            ),
+            mode=str(summary.get("semantic_rerank_dominant_mode") or "(none)"),
+            provider=str(
+                summary.get("semantic_rerank_dominant_provider") or "(none)"
+            ),
+        )
+    )
+    provider_case_counts_raw = summary.get("semantic_rerank_provider_case_counts")
+    provider_case_counts = (
+        provider_case_counts_raw if isinstance(provider_case_counts_raw, dict) else {}
+    )
+    if provider_case_counts:
+        distribution = ", ".join(
+            f"{str(provider)}={int(count or 0)}"
+            for provider, count in sorted(provider_case_counts.items())
+        )
+        lines.append(f"- Semantic rerank providers: {distribution}")
+    lines.append(
         "- Graph lookup default: enabled={enabled_count}/{total} ({enabled_rate:.4f}); guarded={guarded_count}/{total} ({guarded_rate:.4f}); normalization={normalization}".format(
             enabled_count=int(summary.get("graph_lookup_enabled_case_count", 0) or 0),
             total=case_count,
@@ -2361,6 +2494,65 @@ def _append_retrieval_default_strategy_summary(
             adjacency=float(
                 summary.get("topological_shield_adjacency_attenuation_mean", 0.0)
                 or 0.0
+            ),
+        )
+    )
+    lines.append("")
+
+
+def _append_agent_loop_control_plane_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("agent_loop_control_plane_summary")
+    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    if not summary:
+        return
+
+    case_count = int(summary.get("case_count", 0) or 0)
+    if case_count <= 0:
+        return
+
+    lines.append("## Agent Loop Control Plane Summary")
+    lines.append("")
+    lines.append(
+        "- Observed={observed}/{total} ({observed_rate:.4f}); enabled={enabled}/{total} ({enabled_rate:.4f}); attempted={attempted}/{total} ({attempted_rate:.4f}); replay_safe={replay_safe}/{total} ({replay_safe_rate:.4f})".format(
+            observed=int(summary.get("observed_case_count", 0) or 0),
+            total=case_count,
+            observed_rate=float(summary.get("observed_case_rate", 0.0) or 0.0),
+            enabled=int(summary.get("enabled_case_count", 0) or 0),
+            enabled_rate=float(summary.get("enabled_case_rate", 0.0) or 0.0),
+            attempted=int(summary.get("attempted_case_count", 0) or 0),
+            attempted_rate=float(summary.get("attempted_case_rate", 0.0) or 0.0),
+            replay_safe=int(summary.get("replay_safe_case_count", 0) or 0),
+            replay_safe_rate=float(summary.get("replay_safe_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Actions mean: requested={requested:.4f}; executed={executed:.4f}; dominant_stop_reason={stop_reason}; dominant_policy={policy_id}".format(
+            requested=float(summary.get("actions_requested_mean", 0.0) or 0.0),
+            executed=float(summary.get("actions_executed_mean", 0.0) or 0.0),
+            stop_reason=str(summary.get("dominant_stop_reason") or "(none)"),
+            policy_id=str(summary.get("dominant_last_policy_id") or "(none)"),
+        )
+    )
+    lines.append(
+        "- Action coverage: more_context={more_context}/{total} ({more_context_rate:.4f}); source_plan_retry={source_plan_retry}/{total} ({source_plan_retry_rate:.4f}); validation_retry={validation_retry}/{total} ({validation_retry_rate:.4f})".format(
+            more_context=int(summary.get("request_more_context_case_count", 0) or 0),
+            total=case_count,
+            more_context_rate=float(
+                summary.get("request_more_context_case_rate", 0.0) or 0.0
+            ),
+            source_plan_retry=int(
+                summary.get("request_source_plan_retry_case_count", 0) or 0
+            ),
+            source_plan_retry_rate=float(
+                summary.get("request_source_plan_retry_case_rate", 0.0) or 0.0
+            ),
+            validation_retry=int(
+                summary.get("request_validation_retry_case_count", 0) or 0
+            ),
+            validation_retry_rate=float(
+                summary.get("request_validation_retry_case_rate", 0.0) or 0.0
             ),
         )
     )
@@ -3378,8 +3570,10 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     _append_repomap_seed_summary(lines, results)
     _append_deep_symbol_summary(lines, results)
     _append_native_scip_summary(lines, results)
+    _append_graph_context_source_summary(lines, results)
     _append_retrieval_control_plane_gate_summary(lines, results)
     _append_retrieval_frontier_gate_summary(lines, results)
+    _append_agent_loop_control_plane_summary(lines, results)
 
     if policy_profiles:
         lines.append("## Policy Profile Distribution")

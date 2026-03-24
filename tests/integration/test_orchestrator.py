@@ -16,6 +16,7 @@ from ace_lite.memory_long_term import (
     LongTermMemoryStore,
     build_long_term_fact_contract_v1,
 )
+from ace_lite.agent_loop.contracts import build_agent_loop_action_v1
 from ace_lite.orchestrator import AceOrchestrator
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.rankers.bm25 import rank_candidates_bm25_two_stage
@@ -1217,6 +1218,101 @@ def test_orchestrator_agent_loop_reruns_after_failed_validation_probe_without_di
     ]
     assert len(rerun_index_metrics) == 1
     assert rerun_index_metrics[0]["tags"]["agent_loop_action"] == "request_more_context"
+
+
+def test_orchestrator_agent_loop_source_plan_retry_skips_index_rerun(
+    tmp_path: Path,
+    fake_skill_manifest: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_repo(tmp_path)
+    config = OrchestratorConfig(
+        skills={"manifest": fake_skill_manifest},
+        index={
+            "languages": ["python"],
+            "cache_path": tmp_path / "context-map" / "index.json",
+        },
+        repomap={"enabled": False},
+        agent_loop={"enabled": True, "max_iterations": 1},
+    )
+    orchestrator = AceOrchestrator(memory_provider=None, config=config)
+
+    index_queries: list[str] = []
+    source_plan_queries: list[str] = []
+    original_run_index = orchestrator._run_index
+    original_run_source_plan = orchestrator._run_source_plan
+
+    def wrapped_run_index(*, ctx):
+        index_queries.append(ctx.query)
+        return original_run_index(ctx=ctx)
+
+    def wrapped_run_source_plan(*, ctx):
+        source_plan_queries.append(ctx.query)
+        payload = original_run_source_plan(ctx=ctx)
+        if len(source_plan_queries) == 1:
+            payload["loop_action"] = build_agent_loop_action_v1(
+                action_type="request_source_plan_retry",
+                reason="repack_source_plan",
+                selected_tests=["pytest -q tests/unit/test_source_plan.py"],
+            ).as_dict()
+        return payload
+
+    def fake_run_validation(*, ctx):
+        _ = ctx
+        validation_result = build_validation_result_v1(
+            replay_key="",
+            status="passed",
+        ).as_dict()
+        return {
+            "enabled": True,
+            "reason": "ok",
+            "sandbox": {
+                "enabled": True,
+                "sandbox_root": str(tmp_path / "sandbox"),
+                "patch_applied": True,
+                "cleanup_ok": True,
+                "restore_ok": True,
+                "apply_result": {"ok": True, "reason": "ok"},
+            },
+            "diagnostics": [],
+            "diagnostic_count": 0,
+            "xref_enabled": False,
+            "xref": {
+                "count": 0,
+                "results": [],
+                "errors": [],
+                "budget_exhausted": False,
+                "elapsed_ms": 0.0,
+                "time_budget_ms": 0,
+            },
+            "probes": dict(validation_result.get("probes", {})),
+            "result": validation_result,
+            "patch_artifact_present": False,
+            "policy_name": "general",
+            "policy_version": "v1",
+        }
+
+    monkeypatch.setattr(orchestrator, "_run_index", wrapped_run_index)
+    monkeypatch.setattr(orchestrator, "_run_source_plan", wrapped_run_source_plan)
+    monkeypatch.setattr(orchestrator, "_run_validation", fake_run_validation)
+
+    payload = orchestrator.plan(
+        query="draft auth plan",
+        repo="ace-lite-engine",
+        root=str(tmp_path),
+    )
+
+    loop_summary = payload["observability"]["agent_loop"]
+    assert loop_summary["enabled"] is True
+    assert loop_summary["iteration_count"] == 1
+    assert loop_summary["actions_executed"] == 1
+    assert loop_summary["stop_reason"] == "completed"
+    assert loop_summary["last_action"]["action_type"] == "request_source_plan_retry"
+    assert loop_summary["last_rerun_policy"]["policy_id"] == "source_plan_refresh"
+    assert loop_summary["last_rerun_policy"]["action_category"] == "source_plan"
+    assert loop_summary["action_type_counts"] == {"request_source_plan_retry": 1}
+    assert index_queries == ["draft auth plan"]
+    assert source_plan_queries == ["draft auth plan", "draft auth plan"]
 
 
 def test_multi_channel_rrf_fusion_promotes_memory_paths(

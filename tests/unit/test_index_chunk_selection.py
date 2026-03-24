@@ -96,6 +96,15 @@ def _build_chunks_with_topological_shield(
             "chunk_count": 1,
             "robust_signature_count": 1.0,
             "robust_signature_coverage_ratio": 1.0,
+            "graph_source_provider_loaded": 1.0,
+            "graph_source_projection_fallback": 1.0,
+            "graph_source_edge_count": 2.0,
+            "graph_source_inbound_signal_chunk_count": 1.0,
+            "graph_source_inbound_signal_coverage_ratio": 1.0,
+            "graph_source_centrality_signal_chunk_count": 1.0,
+            "graph_source_centrality_signal_coverage_ratio": 1.0,
+            "graph_source_pagerank_signal_chunk_count": 1.0,
+            "graph_source_pagerank_signal_coverage_ratio": 1.0,
             "topological_shield_enabled": 1.0,
             "topological_shield_report_only": 1.0,
             "topological_shield_attenuated_chunk_count": 1.0,
@@ -301,6 +310,12 @@ def test_apply_chunk_selection_surfaces_topological_shield_payload() -> None:
     assert result.topological_shield_payload["report_only"] is True
     assert result.topological_shield_payload["attenuated_chunk_count"] == 1
     assert result.topological_shield_payload["attenuation_total"] == 0.4
+    assert result.chunk_metrics["graph_source_provider_loaded"] == 1.0
+    assert result.chunk_metrics["graph_source_projection_fallback"] == 1.0
+    assert result.chunk_metrics["graph_source_edge_count"] == 2.0
+    assert result.chunk_metrics["graph_source_inbound_signal_chunk_count"] == 1.0
+    assert result.chunk_metrics["graph_source_centrality_signal_chunk_count"] == 1.0
+    assert result.chunk_metrics["graph_source_pagerank_signal_chunk_count"] == 1.0
     assert result.chunk_guard_payload["mode"] == "off"
 
 
