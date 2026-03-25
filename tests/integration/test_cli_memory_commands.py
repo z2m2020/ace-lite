@@ -6,6 +6,8 @@ from pathlib import Path
 from click.testing import CliRunner
 
 import ace_lite.cli as cli_module
+from ace_lite.memory_long_term.contracts import build_long_term_fact_contract_v1
+from ace_lite.memory_long_term.store import LongTermMemoryStore
 
 
 def _cli_env(root: Path) -> dict[str, str]:
@@ -171,3 +173,65 @@ def test_cli_memory_vacuum_prunes_expired_notes_idempotent(tmp_path: Path) -> No
     search_payload = json.loads(search.output)
     assert search_payload["count"] == 1
     assert search_payload["items"][0]["text"] == "fresh"
+
+
+def test_cli_memory_graph_outputs_read_only_ltm_view(tmp_path: Path) -> None:
+    runner = CliRunner()
+    db_path = tmp_path / "context-map" / "long_term_memory.db"
+    store = LongTermMemoryStore(db_path=db_path)
+    store.upsert_fact(
+        build_long_term_fact_contract_v1(
+            fact_id="fact-1",
+            fact_type="repo_policy",
+            subject="runtime.validation.git",
+            predicate="fallback_policy",
+            object_value="reuse_checkout_or_skip",
+            repo="ace-lite",
+            namespace="repo/ace-lite",
+            user_id="tester",
+            profile_key="bugfix",
+            as_of="2026-03-19T09:44:00+08:00",
+            valid_from="2026-03-19T09:44:00+08:00",
+            derived_from_observation_id="obs-1",
+        )
+    )
+    store.upsert_fact(
+        build_long_term_fact_contract_v1(
+            fact_id="fact-2",
+            fact_type="repo_policy",
+            subject="reuse_checkout_or_skip",
+            predicate="recommended_for",
+            object_value="runtime.validation.git",
+            repo="ace-lite",
+            namespace="repo/ace-lite",
+            user_id="tester",
+            profile_key="bugfix",
+            as_of="2026-03-19T09:43:00+08:00",
+            valid_from="2026-03-19T09:43:00+08:00",
+            derived_from_observation_id="obs-2",
+        )
+    )
+
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "memory",
+            "graph",
+            "--db-path",
+            str(db_path),
+            "--fact-handle",
+            "fact-1",
+            "--max-hops",
+            "2",
+            "--limit",
+            "8",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "ltm_graph_view_v1"
+    assert payload["focus"]["handle"] == "fact-1"
+    assert payload["summary"]["triple_count"] == 2
+    assert payload["edges"][0]["is_focus"] is True

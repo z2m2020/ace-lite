@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ace_lite.memory_long_term.graph_view import build_long_term_graph_view
+from ace_lite.memory_long_term.store import LongTermMemoryStore
+
 
 def handle_memory_search(
     *,
@@ -117,7 +120,35 @@ def handle_memory_wipe(
     }
 
 
+def handle_memory_graph_view(
+    *,
+    db_path: Path,
+    fact_handle: str | None,
+    seeds: list[str] | tuple[str, ...],
+    repo: str | None,
+    namespace: str | None,
+    user_id: str | None,
+    profile_key: str | None,
+    as_of: str | None,
+    max_hops: int,
+    limit: int,
+) -> dict[str, Any]:
+    return build_long_term_graph_view(
+        store=LongTermMemoryStore(db_path=db_path),
+        fact_handle=fact_handle,
+        seeds=tuple(seeds),
+        repo=str(repo or ""),
+        namespace=str(namespace or ""),
+        user_id=str(user_id or ""),
+        profile_key=str(profile_key or ""),
+        as_of=as_of,
+        max_hops=max_hops,
+        limit=limit,
+    )
+
+
 __all__ = [
+    "handle_memory_graph_view",
     "handle_memory_search",
     "handle_memory_store",
     "handle_memory_wipe",

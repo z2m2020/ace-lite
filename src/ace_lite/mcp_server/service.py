@@ -7,12 +7,13 @@ It can also run in a self-test mode for health validation.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from time import perf_counter
-from typing import Any, Callable
+from typing import Any
 
 from ace_lite.cli_app.orchestrator_factory import create_memory_provider, run_plan
 from ace_lite.indexer import build_index
@@ -27,37 +28,38 @@ from ace_lite.mcp_server.file_support import (
     resolve_skills_dir,
     save_notes,
 )
-from ace_lite.mcp_server.service_health import build_health_response_payload
+from ace_lite.mcp_server.plan_request import resolve_plan_request_options
+from ace_lite.mcp_server.service_dev_feedback_handlers import (
+    handle_dev_feedback_summary_request,
+    handle_dev_fix_record_request,
+    handle_dev_issue_apply_fix_request,
+    handle_dev_issue_from_runtime_request,
+    handle_dev_issue_record_request,
+)
 from ace_lite.mcp_server.service_feedback_handlers import (
     handle_feedback_record_request,
     handle_feedback_stats_request,
 )
-from ace_lite.mcp_server.service_dev_feedback_handlers import (
-    handle_dev_feedback_summary_request,
-    handle_dev_issue_apply_fix_request,
-    handle_dev_issue_from_runtime_request,
-    handle_dev_fix_record_request,
-    handle_dev_issue_record_request,
-)
+from ace_lite.mcp_server.service_health import build_health_response_payload
+from ace_lite.mcp_server.service_index_handlers import handle_index_request
 from ace_lite.mcp_server.service_issue_report_handlers import (
     handle_issue_report_apply_fix_request,
     handle_issue_report_export_case_request,
     handle_issue_report_list_request,
     handle_issue_report_record_request,
 )
-from ace_lite.mcp_server.service_index_handlers import handle_index_request
 from ace_lite.mcp_server.service_memory_handlers import (
+    handle_memory_graph_view,
     handle_memory_search,
     handle_memory_store,
     handle_memory_wipe,
 )
-from ace_lite.mcp_server.service_plan_runtime import execute_mcp_plan_payload
-from ace_lite.mcp_server.service_repomap_handlers import handle_repomap_build_request
 from ace_lite.mcp_server.service_plan_handlers import (
     handle_plan_quick_request,
     handle_plan_request,
 )
-from ace_lite.mcp_server.plan_request import resolve_plan_request_options
+from ace_lite.mcp_server.service_plan_runtime import execute_mcp_plan_payload
+from ace_lite.mcp_server.service_repomap_handlers import handle_repomap_build_request
 from ace_lite.parsers.languages import parse_language_csv
 from ace_lite.plan_quick import build_plan_quick
 from ace_lite.repomap.builder import build_repo_map
@@ -357,6 +359,44 @@ class AceLiteMcpService:
             )
 
         return self._run_tracked("ace_memory_search", _operation)
+
+    def memory_graph_view(
+        self,
+        *,
+        db_path: str | None = None,
+        fact_handle: str | None = None,
+        seeds: list[str] | tuple[str, ...] | None = None,
+        repo: str | None = None,
+        namespace: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
+        as_of: str | None = None,
+        max_hops: int = 1,
+        limit: int = 8,
+        root: str | None = None,
+    ) -> dict[str, Any]:
+        def _operation() -> dict[str, Any]:
+            root_path = self._resolve_root(root)
+            resolved_db_path = Path(
+                str(db_path or "context-map/long_term_memory.db").strip()
+                or "context-map/long_term_memory.db"
+            ).expanduser()
+            if not resolved_db_path.is_absolute():
+                resolved_db_path = (root_path / resolved_db_path).resolve()
+            return handle_memory_graph_view(
+                db_path=resolved_db_path,
+                fact_handle=fact_handle,
+                seeds=tuple(seeds or ()),
+                repo=repo,
+                namespace=namespace,
+                user_id=user_id,
+                profile_key=profile_key,
+                as_of=as_of,
+                max_hops=max_hops,
+                limit=limit,
+            )
+
+        return self._run_tracked("ace_memory_graph_view", _operation)
 
     def memory_store(
         self,

@@ -11,6 +11,8 @@ import click
 
 from ace_lite.cli_app.output import echo_json
 from ace_lite.memory import prune_memory_notes_rows
+from ace_lite.memory_long_term.graph_view import build_long_term_graph_view
+from ace_lite.memory_long_term.store import LongTermMemoryStore
 
 
 def _parse_tags(values: tuple[str, ...]) -> dict[str, str]:
@@ -268,6 +270,49 @@ def memory_vacuum_command(
             "notes_path": str(path),
         }
     )
+
+
+@memory_group.command("graph")
+@click.option(
+    "--db-path",
+    default="context-map/long_term_memory.db",
+    show_default=True,
+    help="Long-term memory SQLite path.",
+)
+@click.option("--fact-handle", default="", help="Optional fact handle to center the graph view.")
+@click.option("--seed", "seeds", multiple=True, help="Seed subject/object value for neighborhood expansion.")
+@click.option("--repo", default="", help="Repository scope. Required when --fact-handle is not set.")
+@click.option("--namespace", default="", help="Optional namespace scope.")
+@click.option("--user-id", default="", help="Optional user scope.")
+@click.option("--profile-key", default="", help="Optional profile scope.")
+@click.option("--as-of", default="", help="Optional ISO-8601 time boundary.")
+@click.option("--max-hops", default=1, show_default=True, type=int, help="Neighborhood hops (1-2).")
+@click.option("--limit", default=8, show_default=True, type=int, help="Maximum triples returned.")
+def memory_graph_command(
+    db_path: str,
+    fact_handle: str,
+    seeds: tuple[str, ...],
+    repo: str,
+    namespace: str,
+    user_id: str,
+    profile_key: str,
+    as_of: str,
+    max_hops: int,
+    limit: int,
+) -> None:
+    payload = build_long_term_graph_view(
+        store=LongTermMemoryStore(db_path=Path(db_path).expanduser()),
+        fact_handle=fact_handle or None,
+        seeds=seeds,
+        repo=repo,
+        namespace=namespace,
+        user_id=user_id,
+        profile_key=profile_key,
+        as_of=as_of or None,
+        max_hops=max_hops,
+        limit=limit,
+    )
+    echo_json(payload)
 
 
 __all__ = ["memory_group"]

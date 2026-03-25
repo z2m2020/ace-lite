@@ -6,7 +6,6 @@ from mcp.server.fastmcp import FastMCP
 
 from ace_lite.mcp_server.service import AceLiteMcpService
 
-
 MCP_TOOL_DESCRIPTIONS: dict[str, str] = {
     "ace_health": "Return ACE-Lite MCP server health and default runtime settings.",
     "ace_index": "Build repository distilled index and persist it under context-map.",
@@ -14,6 +13,7 @@ MCP_TOOL_DESCRIPTIONS: dict[str, str] = {
     "ace_plan_quick": "Fast candidate-file plan from index + repomap (for low-latency first pass).",
     "ace_plan": "Run ACE-Lite deterministic pipeline and return source plan payload.",
     "ace_memory_search": "Search local ACE-Lite notes memory by lexical matching.",
+    "ace_memory_graph_view": "Build a read-only long-term memory graph view payload for CLI/MCP/UI.",
     "ace_memory_store": "Store a memory note into local ACE-Lite JSONL memory.",
     "ace_memory_wipe": "Wipe local ACE-Lite memory notes (optionally by namespace).",
     "ace_feedback_record": "Record a selection feedback event into local profile storage.",
@@ -181,6 +181,34 @@ def _register_memory_tools(*, server: FastMCP, service: AceLiteMcpService) -> No
             limit=limit,
             namespace=namespace,
             notes_path=notes_path,
+        )
+
+    @_tool(server, "ace_memory_graph_view")
+    def ace_memory_graph_view(
+        db_path: str | None = None,
+        fact_handle: str | None = None,
+        seeds: list[str] | None = None,
+        repo: str | None = None,
+        namespace: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
+        as_of: str | None = None,
+        max_hops: int = 1,
+        limit: int = 8,
+        root: str | None = None,
+    ) -> dict[str, Any]:
+        return service.memory_graph_view(
+            db_path=db_path,
+            fact_handle=fact_handle,
+            seeds=seeds or [],
+            repo=repo,
+            namespace=namespace,
+            user_id=user_id,
+            profile_key=profile_key,
+            as_of=as_of,
+            max_hops=max_hops,
+            limit=limit,
+            root=root,
         )
 
     @_tool(server, "ace_memory_store")
