@@ -233,6 +233,26 @@ def _append_case_section(
         "- retrieval_context_coverage_ratio: "
         f"{float(case.get('retrieval_context_coverage_ratio', 0.0)):.4f}"
     )
+    lines.append(
+        "- chunk_cache_contract_present: "
+        f"{float(case.get('chunk_cache_contract_present', 0.0)):.4f}"
+    )
+    lines.append(
+        "- chunk_cache_contract_fingerprint_present: "
+        f"{float(case.get('chunk_cache_contract_fingerprint_present', 0.0)):.4f}"
+    )
+    lines.append(
+        "- chunk_cache_contract_metadata_aligned: "
+        f"{float(case.get('chunk_cache_contract_metadata_aligned', 0.0)):.4f}"
+    )
+    lines.append(
+        "- chunk_cache_contract_file_count: "
+        f"{float(case.get('chunk_cache_contract_file_count', 0.0)):.4f}"
+    )
+    lines.append(
+        "- chunk_cache_contract_chunk_count: "
+        f"{float(case.get('chunk_cache_contract_chunk_count', 0.0)):.4f}"
+    )
     chunk_stage_miss = str(case.get("chunk_stage_miss") or "").strip()
     if chunk_stage_miss:
         lines.append(f"- chunk_stage_miss: {chunk_stage_miss}")

@@ -14,6 +14,7 @@ OPTIONAL_SUMMARY_MAPPING_KEYS = (
     "retrieval_default_strategy_summary",
     "agent_loop_control_plane_summary",
     "retrieval_context_observability_summary",
+    "chunk_cache_contract_summary",
     "chunk_stage_miss_summary",
     "decision_observability_summary",
     "adaptive_router_arm_summary",

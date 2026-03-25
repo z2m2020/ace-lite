@@ -105,6 +105,24 @@ def _compute_selection_fingerprint(
     return hashlib.sha256(source).hexdigest()[:16]
 
 
+def _build_index_chunk_cache_contract(index_data: dict[str, Any]) -> dict[str, Any]:
+    raw = (
+        index_data.get("chunk_cache_contract", {})
+        if isinstance(index_data.get("chunk_cache_contract"), dict)
+        else {}
+    )
+    files = raw.get("files")
+    file_count = int(
+        raw.get("file_count", len(files) if isinstance(files, dict) else 0) or 0
+    )
+    return {
+        "schema_version": str(raw.get("schema_version") or ""),
+        "fingerprint": str(raw.get("fingerprint") or ""),
+        "file_count": file_count,
+        "chunk_count": int(raw.get("chunk_count", 0) or 0),
+    }
+
+
 def _build_targets(
     *,
     memory_paths: list[str],
@@ -232,6 +250,7 @@ def build_index_stage_result(
         candidate_chunks=candidate_chunks_with_why,
         graph_lookup_payload=graph_lookup_payload,
     )
+    index_chunk_cache_contract = _build_index_chunk_cache_contract(index_data)
     context_budget = _build_context_budget(
         top_k_files=top_k_files,
         min_candidate_score=min_score_used,
@@ -311,6 +330,18 @@ def build_index_stage_result(
     metadata["subgraph_seed_path_count"] = len(
         subgraph_payload.get("seed_paths", [])
     )
+    metadata["chunk_cache_contract_schema_version"] = str(
+        index_chunk_cache_contract.get("schema_version") or ""
+    )
+    metadata["chunk_cache_contract_fingerprint"] = str(
+        index_chunk_cache_contract.get("fingerprint") or ""
+    )
+    metadata["chunk_cache_contract_file_count"] = int(
+        index_chunk_cache_contract.get("file_count", 0) or 0
+    )
+    metadata["chunk_cache_contract_chunk_count"] = int(
+        index_chunk_cache_contract.get("chunk_count", 0) or 0
+    )
 
     return {
         "repo": repo,
@@ -329,6 +360,7 @@ def build_index_stage_result(
         "candidate_files": limited_candidate_files_with_why,
         "candidate_chunks": candidate_chunks_with_why,
         "chunk_contract": chunk_contract,
+        "chunk_cache_contract": index_chunk_cache_contract,
         "subgraph_payload": subgraph_payload,
         "chunk_metrics": chunk_metrics,
         "context_budget": context_budget,

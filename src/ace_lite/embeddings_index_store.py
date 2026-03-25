@@ -5,6 +5,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ace_lite.chunk_cache_contract import (
+    build_chunk_cache_contract,
+    diff_chunk_cache_contract_paths,
+)
 from ace_lite.embeddings_providers import EmbeddingProvider, _coerce_vector
 from ace_lite.sqlite_mirror import resolve_mirror_db_path, write_embeddings_mirror
 
@@ -33,20 +37,39 @@ def build_or_load_embedding_index(
     ]
     desired_hashes: dict[str, str] = {}
     desired_texts: dict[str, str] = {}
-    for path in paths:
-        entry = files_map.get(path, {})
-        text = _build_file_embedding_text(
-            path=path,
-            entry=entry if isinstance(entry, dict) else {},
-        )
-        desired_texts[path] = text
-        desired_hashes[path] = _sha256_text(text)
+    desired_chunk_contract = build_chunk_cache_contract(files_map)
 
     if cached_payload is not None:
         cached_vectors = dict(cached_payload.get("vectors") or {})
         cached_hashes = dict(cached_payload.get("file_hashes") or {})
         cached_fingerprint = str(cached_payload.get("fingerprint") or "").strip()
         cached_index_hash = str(cached_payload.get("index_hash") or "").strip().lower()
+        cached_chunk_contract = cached_payload.get("chunk_cache_contract")
+        chunk_contract_matches = (
+            isinstance(cached_chunk_contract, dict)
+            and str(cached_chunk_contract.get("schema_version") or "").strip()
+            == str(desired_chunk_contract.get("schema_version") or "").strip()
+            and str(cached_chunk_contract.get("fingerprint") or "").strip()
+            == str(desired_chunk_contract.get("fingerprint") or "").strip()
+        )
+        contract_diff = diff_chunk_cache_contract_paths(
+            previous=cached_chunk_contract if isinstance(cached_chunk_contract, dict) else {},
+            current=desired_chunk_contract,
+        )
+        candidate_rebuild_paths = set(contract_diff.get("changed_paths", []))
+        if not candidate_rebuild_paths:
+            candidate_rebuild_paths = set(paths)
+        for path in paths:
+            if path not in candidate_rebuild_paths and path in cached_hashes:
+                desired_hashes[path] = cached_hashes[path]
+                continue
+            entry = files_map.get(path, {})
+            text = _build_file_embedding_text(
+                path=path,
+                entry=entry if isinstance(entry, dict) else {},
+            )
+            desired_texts[path] = text
+            desired_hashes[path] = _sha256_text(text)
         if not cached_hashes and cached_fingerprint:
             fingerprint = _compute_files_fingerprint(files_map)
             index_hash_match = (
@@ -54,7 +77,7 @@ def build_or_load_embedding_index(
                 or not cached_index_hash
                 or cached_index_hash == normalized_index_hash
             )
-            if fingerprint == cached_fingerprint and index_hash_match:
+            if fingerprint == cached_fingerprint and index_hash_match and chunk_contract_matches:
                 return cached_vectors, True
 
         changed_paths: list[str] = []
@@ -75,7 +98,7 @@ def build_or_load_embedding_index(
                 not normalized_index_hash
                 or not cached_index_hash
                 or cached_index_hash == normalized_index_hash
-            ):
+            ) and chunk_contract_matches:
                 return cached_vectors, True
             _write_embedding_index(
                 path=target,
@@ -83,6 +106,7 @@ def build_or_load_embedding_index(
                 file_hashes=desired_hashes,
                 vectors=cached_vectors,
                 index_hash=normalized_index_hash,
+                chunk_cache_contract=desired_chunk_contract,
             )
             return cached_vectors, False
 
@@ -100,8 +124,18 @@ def build_or_load_embedding_index(
             file_hashes=desired_hashes,
             vectors=cached_vectors,
             index_hash=normalized_index_hash,
+            chunk_cache_contract=desired_chunk_contract,
         )
         return cached_vectors, False
+
+    for path in paths:
+        entry = files_map.get(path, {})
+        text = _build_file_embedding_text(
+            path=path,
+            entry=entry if isinstance(entry, dict) else {},
+        )
+        desired_texts[path] = text
+        desired_hashes[path] = _sha256_text(text)
 
     vectors: dict[str, list[float]] = {}
     if paths:
@@ -116,6 +150,7 @@ def build_or_load_embedding_index(
         file_hashes=desired_hashes,
         vectors=vectors,
         index_hash=normalized_index_hash,
+        chunk_cache_contract=desired_chunk_contract,
     )
     return vectors, False
 
@@ -258,6 +293,11 @@ def _load_embedding_index_payload(
         "file_hashes": file_hashes,
         "fingerprint": str(meta.get("fingerprint") or "").strip(),
         "index_hash": str(meta.get("index_hash") or "").strip().lower(),
+        "chunk_cache_contract": (
+            dict(meta.get("chunk_cache_contract", {}))
+            if isinstance(meta.get("chunk_cache_contract"), dict)
+            else {}
+        ),
     }
 
 
@@ -280,6 +320,7 @@ def _write_embedding_index(
     file_hashes: dict[str, str],
     vectors: dict[str, list[float]],
     index_hash: str = "",
+    chunk_cache_contract: dict[str, Any] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -289,6 +330,11 @@ def _write_embedding_index(
             "dimension": provider.dimension,
             "file_hashes": dict(file_hashes),
             "index_hash": str(index_hash or "").strip().lower(),
+            "chunk_cache_contract": (
+                dict(chunk_cache_contract)
+                if isinstance(chunk_cache_contract, dict)
+                else {}
+            ),
         },
         "vectors": vectors,
     }

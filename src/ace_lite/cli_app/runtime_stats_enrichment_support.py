@@ -17,6 +17,7 @@ RUNTIME_MEMORY_REASON_CODES = frozenset(
         "memory_namespace_fallback",
     }
 )
+RUNTIME_MEMORY_LTM_FEEDBACK_SIGNALS = ("helpful", "stale", "harmful")
 
 
 def resolve_reason_details(reason_code: Any) -> dict[str, str]:
@@ -263,6 +264,114 @@ def build_runtime_memory_health_summary(
     }
 
 
+def build_runtime_memory_ltm_signal_summary(
+    *,
+    ltm_explainability_summary: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(ltm_explainability_summary, dict) or not ltm_explainability_summary:
+        return {}
+
+    case_count = max(0, int(ltm_explainability_summary.get("case_count", 0) or 0))
+    feedback_rows_raw = ltm_explainability_summary.get("feedback_signals")
+    feedback_rows_input = feedback_rows_raw if isinstance(feedback_rows_raw, list) else []
+    feedback_rows: list[dict[str, Any]] = []
+    for signal in RUNTIME_MEMORY_LTM_FEEDBACK_SIGNALS:
+        candidate = next(
+            (
+                item
+                for item in feedback_rows_input
+                if isinstance(item, dict)
+                and str(item.get("feedback_signal") or "").strip().lower() == signal
+            ),
+            {},
+        )
+        feedback_rows.append(
+            {
+                "feedback_signal": signal,
+                "case_count": max(0, int(candidate.get("case_count", 0) or 0)),
+                "case_rate": float(candidate.get("case_rate", 0.0) or 0.0),
+                "total_count": max(0, int(candidate.get("total_count", 0) or 0)),
+                "count_mean": float(candidate.get("count_mean", 0.0) or 0.0),
+            }
+        )
+
+    attribution_rows_raw = ltm_explainability_summary.get("attribution_scopes")
+    attribution_rows_input = (
+        attribution_rows_raw if isinstance(attribution_rows_raw, list) else []
+    )
+    attribution_rows: list[dict[str, Any]] = []
+    for item in attribution_rows_input:
+        if not isinstance(item, dict):
+            continue
+        scope = str(item.get("attribution_scope") or "").strip()
+        if not scope:
+            continue
+        attribution_rows.append(
+            {
+                "attribution_scope": scope,
+                "case_count": max(0, int(item.get("case_count", 0) or 0)),
+                "case_rate": float(item.get("case_rate", 0.0) or 0.0),
+                "total_count": max(0, int(item.get("total_count", 0) or 0)),
+                "count_mean": float(item.get("count_mean", 0.0) or 0.0),
+            }
+        )
+
+    observed_feedback_case_count = max(
+        0,
+        int(ltm_explainability_summary.get("feedback_signal_observed_case_count", 0) or 0),
+    )
+    observed_attribution_case_count = max(
+        0,
+        int(
+            ltm_explainability_summary.get("attribution_scope_observed_case_count", 0)
+            or 0
+        ),
+    )
+    if (
+        case_count <= 0
+        and observed_feedback_case_count <= 0
+        and observed_attribution_case_count <= 0
+        and not any(int(item.get("total_count", 0) or 0) > 0 for item in feedback_rows)
+        and not attribution_rows
+    ):
+        return {}
+
+    return {
+        "case_count": case_count,
+        "feedback_signal_observed_case_count": observed_feedback_case_count,
+        "feedback_signal_observed_case_rate": float(
+            ltm_explainability_summary.get("feedback_signal_observed_case_rate", 0.0)
+            or 0.0
+        ),
+        "feedback_signals": feedback_rows,
+        "attribution_scope_count": max(
+            0, int(ltm_explainability_summary.get("attribution_scope_count", 0) or 0)
+        ),
+        "attribution_scope_observed_case_count": observed_attribution_case_count,
+        "attribution_scope_observed_case_rate": float(
+            ltm_explainability_summary.get("attribution_scope_observed_case_rate", 0.0)
+            or 0.0
+        ),
+        "attribution_scopes": attribution_rows,
+    }
+
+
+def attach_runtime_memory_ltm_signal_summary(
+    *,
+    memory_health_summary: dict[str, Any],
+    ltm_explainability_summary: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(memory_health_summary, dict) or not memory_health_summary:
+        return {}
+    payload = dict(memory_health_summary)
+    ltm_signal_summary = build_runtime_memory_ltm_signal_summary(
+        ltm_explainability_summary=ltm_explainability_summary,
+    )
+    if ltm_signal_summary:
+        payload["ltm_signal_summary"] = ltm_signal_summary
+    return payload
+
+
 def build_runtime_agent_loop_control_plane_summary(
     *,
     runtime_scope_map: dict[str, dict[str, Any] | None],
@@ -471,9 +580,12 @@ def build_runtime_next_cycle_input_summary(
 
 __all__ = [
     "RUNTIME_MEMORY_REASON_CODES",
+    "RUNTIME_MEMORY_LTM_FEEDBACK_SIGNALS",
     "build_runtime_agent_loop_control_plane_summary",
     "build_runtime_memory_health_summary",
+    "build_runtime_memory_ltm_signal_summary",
     "build_runtime_next_cycle_input_summary",
     "build_runtime_top_pain_summary",
+    "attach_runtime_memory_ltm_signal_summary",
     "resolve_reason_details",
 ]

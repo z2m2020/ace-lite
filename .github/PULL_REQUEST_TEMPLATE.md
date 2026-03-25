@@ -1,7 +1,13 @@
-﻿## Summary
+## Summary
 
 - What changed?
 - Why was it needed?
+
+## Evidence Chain
+
+- Key evidence (`file:line`):
+- Secondary evidence (`file:line`):
+- If ACE-Lite influenced the change, which query or shortlist was used?
 
 ## Changes
 
@@ -16,6 +22,7 @@
 - [ ] pytest -q
 - [ ] Smoke checks (if relevant)
 - [ ] Benchmark evidence (if retrieval/ranking changed)
+- [ ] Evidence chain reviewed and anchored with `file:line`
 
 ## Compatibility and risk
 

@@ -43,10 +43,21 @@ def build_index_replay_fingerprint(*, index_payload: dict[str, Any]) -> str:
         if isinstance(index_payload.get("metadata"), dict)
         else {}
     )
+    chunk_cache_contract = (
+        index_payload.get("chunk_cache_contract", {})
+        if isinstance(index_payload.get("chunk_cache_contract"), dict)
+        else {}
+    )
     stable_payload = {
         "candidate_files": index_payload.get("candidate_files", []),
         "candidate_chunks": index_payload.get("candidate_chunks", []),
         "chunk_contract": index_payload.get("chunk_contract", {}),
+        "chunk_cache_contract": {
+            "schema_version": str(chunk_cache_contract.get("schema_version") or ""),
+            "fingerprint": str(chunk_cache_contract.get("fingerprint") or ""),
+            "file_count": int(chunk_cache_contract.get("file_count", 0) or 0),
+            "chunk_count": int(chunk_cache_contract.get("chunk_count", 0) or 0),
+        },
         "subgraph_payload": index_payload.get("subgraph_payload", {}),
         "module_hint": str(index_payload.get("module_hint", "")),
         "policy_name": str(index_payload.get("policy_name", "")),

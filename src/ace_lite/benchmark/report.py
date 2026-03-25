@@ -16,6 +16,9 @@ from ace_lite.benchmark.report_metrics import (
     normalize_metrics as _normalize_metrics,
 )
 from ace_lite.benchmark.report_summary import copy_optional_summary_sections
+from ace_lite.cli_app.runtime_stats_enrichment_support import (
+    attach_runtime_memory_ltm_signal_summary,
+)
 
 
 def _append_metrics_table(
@@ -501,6 +504,90 @@ def _append_graph_context_source_summary(
             ratio=_format_metric(
                 "graph_source_pagerank_signal_coverage_ratio",
                 pagerank_coverage_ratio,
+            ),
+        )
+    )
+    lines.append("")
+
+
+def _append_chunk_cache_contract_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary_raw = results.get("chunk_cache_contract_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    metrics = _normalize_metrics(results.get("metrics"))
+
+    present_ratio = float(
+        summary.get(
+            "present_case_rate",
+            metrics.get("chunk_cache_contract_present_ratio", 0.0),
+        )
+        or 0.0
+    )
+    fingerprint_present_ratio = float(
+        summary.get(
+            "fingerprint_present_case_rate",
+            metrics.get("chunk_cache_contract_fingerprint_present_ratio", 0.0),
+        )
+        or 0.0
+    )
+    metadata_aligned_ratio = float(
+        summary.get(
+            "metadata_aligned_case_rate",
+            metrics.get("chunk_cache_contract_metadata_aligned_ratio", 0.0),
+        )
+        or 0.0
+    )
+    file_count_mean = float(
+        summary.get(
+            "file_count_mean",
+            metrics.get("chunk_cache_contract_file_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    chunk_count_mean = float(
+        summary.get(
+            "chunk_count_mean",
+            metrics.get("chunk_cache_contract_chunk_count_mean", 0.0),
+        )
+        or 0.0
+    )
+    if (
+        present_ratio <= 0.0
+        and fingerprint_present_ratio <= 0.0
+        and metadata_aligned_ratio <= 0.0
+        and file_count_mean <= 0.0
+        and chunk_count_mean <= 0.0
+    ):
+        return
+
+    lines.append("## Chunk Cache Contract Summary")
+    lines.append("")
+    lines.append(
+        "- Present ratio: {present}; fingerprint present ratio: {fingerprint}; metadata aligned ratio: {aligned}".format(
+            present=_format_metric(
+                "chunk_cache_contract_present_ratio",
+                present_ratio,
+            ),
+            fingerprint=_format_metric(
+                "chunk_cache_contract_fingerprint_present_ratio",
+                fingerprint_present_ratio,
+            ),
+            aligned=_format_metric(
+                "chunk_cache_contract_metadata_aligned_ratio",
+                metadata_aligned_ratio,
+            ),
+        )
+    )
+    lines.append(
+        "- File count mean: {files}; chunk count mean: {chunks}".format(
+            files=_format_metric(
+                "chunk_cache_contract_file_count_mean",
+                file_count_mean,
+            ),
+            chunks=_format_metric(
+                "chunk_cache_contract_chunk_count_mean",
+                chunk_count_mean,
             ),
         )
     )
@@ -1653,6 +1740,12 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
         if isinstance(memory_health_summary_raw, dict)
         else {}
     )
+    ltm_explainability_summary_raw = results.get("ltm_explainability_summary")
+    if memory_health_summary and isinstance(ltm_explainability_summary_raw, dict):
+        memory_health_summary = attach_runtime_memory_ltm_signal_summary(
+            memory_health_summary=memory_health_summary,
+            ltm_explainability_summary=ltm_explainability_summary_raw,
+        )
     next_cycle_input_summary_raw = summary.get("next_cycle_input_summary")
     next_cycle_input_summary: dict[str, Any] = (
         next_cycle_input_summary_raw
@@ -1718,6 +1811,39 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
                 )
             )
         )
+        ltm_signal_summary_raw = memory_health_summary.get("ltm_signal_summary")
+        ltm_signal_summary: dict[str, Any] = (
+            ltm_signal_summary_raw
+            if isinstance(ltm_signal_summary_raw, dict)
+            else {}
+        )
+        if ltm_signal_summary:
+            case_count = int(ltm_signal_summary.get("case_count", 0) or 0)
+            lines.append(
+                "- LTM signal coverage: feedback_cases={feedback_cases}/{total} ({feedback_rate:.4f}); attribution_cases={attribution_cases}/{total} ({attribution_rate:.4f})".format(
+                    feedback_cases=int(
+                        ltm_signal_summary.get("feedback_signal_observed_case_count", 0)
+                        or 0
+                    ),
+                    total=case_count,
+                    feedback_rate=float(
+                        ltm_signal_summary.get("feedback_signal_observed_case_rate", 0.0)
+                        or 0.0
+                    ),
+                    attribution_cases=int(
+                        ltm_signal_summary.get(
+                            "attribution_scope_observed_case_count", 0
+                        )
+                        or 0
+                    ),
+                    attribution_rate=float(
+                        ltm_signal_summary.get(
+                            "attribution_scope_observed_case_rate", 0.0
+                        )
+                        or 0.0
+                    ),
+                )
+            )
         alignment_summary = _build_ltm_latency_alignment_summary(results=results)
         if alignment_summary:
             lines.append(
@@ -1744,6 +1870,44 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
                 "- Alignment note: runtime memory stage latency is an operational reference, not the primary benchmark aggregation source"
             )
         lines.append("")
+        if ltm_signal_summary:
+            feedback_rows_raw = ltm_signal_summary.get("feedback_signals")
+            feedback_rows = feedback_rows_raw if isinstance(feedback_rows_raw, list) else []
+            lines.append("| LTM Signal | Cases | Case Rate | Total Count | Count Mean |")
+            lines.append("| --- | ---: | ---: | ---: | ---: |")
+            for item in feedback_rows:
+                if not isinstance(item, dict):
+                    continue
+                lines.append(
+                    "| "
+                    f"{str(item.get('feedback_signal') or '').strip() or '(unknown)'}"
+                    f" | {int(item.get('case_count', 0) or 0)}"
+                    f" | {float(item.get('case_rate', 0.0) or 0.0):.4f}"
+                    f" | {int(item.get('total_count', 0) or 0)}"
+                    f" | {float(item.get('count_mean', 0.0) or 0.0):.4f} |"
+                )
+            lines.append("")
+            attribution_rows_raw = ltm_signal_summary.get("attribution_scopes")
+            attribution_rows = (
+                attribution_rows_raw if isinstance(attribution_rows_raw, list) else []
+            )
+            if attribution_rows:
+                lines.append(
+                    "| Attribution Scope | Cases | Case Rate | Total Count | Count Mean |"
+                )
+                lines.append("| --- | ---: | ---: | ---: | ---: |")
+                for item in attribution_rows:
+                    if not isinstance(item, dict):
+                        continue
+                    lines.append(
+                        "| "
+                        f"{str(item.get('attribution_scope') or '').strip() or '(unknown)'}"
+                        f" | {int(item.get('case_count', 0) or 0)}"
+                        f" | {float(item.get('case_rate', 0.0) or 0.0):.4f}"
+                        f" | {int(item.get('total_count', 0) or 0)}"
+                        f" | {float(item.get('count_mean', 0.0) or 0.0):.4f} |"
+                    )
+                lines.append("")
         reason_rows_raw = memory_health_summary.get("reasons")
         reason_rows = reason_rows_raw if isinstance(reason_rows_raw, list) else []
         if reason_rows:
@@ -2725,6 +2889,24 @@ def _append_ltm_explainability_summary(
             rate=float(summary.get("plan_constraint_case_rate", 0.0) or 0.0),
         )
     )
+    lines.append(
+        "- Feedback-signal observed cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("feedback_signal_observed_case_count", 0) or 0),
+            total=case_count,
+            rate=float(
+                summary.get("feedback_signal_observed_case_rate", 0.0) or 0.0
+            ),
+        )
+    )
+    lines.append(
+        "- Attribution-scope observed cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("attribution_scope_observed_case_count", 0) or 0),
+            total=case_count,
+            rate=float(
+                summary.get("attribution_scope_observed_case_rate", 0.0) or 0.0
+            ),
+        )
+    )
     lines.append("")
     lines.append("| Metric | Value |")
     lines.append("| --- | ---: |")
@@ -2749,6 +2931,44 @@ def _append_ltm_explainability_summary(
         )
     )
     lines.append("")
+    feedback_rows_raw = summary.get("feedback_signals")
+    feedback_rows = feedback_rows_raw if isinstance(feedback_rows_raw, list) else []
+    if feedback_rows:
+        lines.append("| Feedback Signal | Cases | Case Rate | Total Count | Count Mean |")
+        lines.append("| --- | ---: | ---: | ---: | ---: |")
+        for item in feedback_rows:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                "| "
+                f"{str(item.get('feedback_signal') or '').strip() or '(unknown)'}"
+                f" | {int(item.get('case_count', 0) or 0)}"
+                f" | {float(item.get('case_rate', 0.0) or 0.0):.4f}"
+                f" | {int(item.get('total_count', 0) or 0)}"
+                f" | {float(item.get('count_mean', 0.0) or 0.0):.4f} |"
+            )
+        lines.append("")
+    attribution_rows_raw = summary.get("attribution_scopes")
+    attribution_rows = (
+        attribution_rows_raw if isinstance(attribution_rows_raw, list) else []
+    )
+    if attribution_rows:
+        lines.append(
+            "| Attribution Scope | Cases | Case Rate | Total Count | Count Mean |"
+        )
+        lines.append("| --- | ---: | ---: | ---: | ---: |")
+        for item in attribution_rows:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                "| "
+                f"{str(item.get('attribution_scope') or '').strip() or '(unknown)'}"
+                f" | {int(item.get('case_count', 0) or 0)}"
+                f" | {float(item.get('case_rate', 0.0) or 0.0):.4f}"
+                f" | {int(item.get('total_count', 0) or 0)}"
+                f" | {float(item.get('count_mean', 0.0) or 0.0):.4f} |"
+            )
+        lines.append("")
 
 
 def _append_feedback_loop_summary(lines: list[str], results: dict[str, Any]) -> None:
@@ -3522,6 +3742,24 @@ def build_results_summary(results: dict[str, Any]) -> dict[str, Any]:
         "metrics": metric_snapshot,
     }
     summary.update(copy_optional_summary_sections(results=results))
+    runtime_stats_summary_raw = summary.get("runtime_stats_summary")
+    ltm_explainability_summary_raw = summary.get("ltm_explainability_summary")
+    if isinstance(runtime_stats_summary_raw, dict):
+        runtime_stats_summary = dict(runtime_stats_summary_raw)
+        memory_health_summary_raw = runtime_stats_summary.get("memory_health_summary")
+        memory_health_summary = (
+            memory_health_summary_raw
+            if isinstance(memory_health_summary_raw, dict)
+            else {}
+        )
+        if memory_health_summary and isinstance(ltm_explainability_summary_raw, dict):
+            runtime_stats_summary["memory_health_summary"] = (
+                attach_runtime_memory_ltm_signal_summary(
+                    memory_health_summary=memory_health_summary,
+                    ltm_explainability_summary=ltm_explainability_summary_raw,
+                )
+            )
+        summary["runtime_stats_summary"] = runtime_stats_summary
     latency_alignment_summary = _build_ltm_latency_alignment_summary(results=results)
     if latency_alignment_summary:
         summary["ltm_latency_alignment_summary"] = latency_alignment_summary
@@ -3571,6 +3809,7 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     _append_deep_symbol_summary(lines, results)
     _append_native_scip_summary(lines, results)
     _append_graph_context_source_summary(lines, results)
+    _append_chunk_cache_contract_summary(lines, results)
     _append_retrieval_control_plane_gate_summary(lines, results)
     _append_retrieval_frontier_gate_summary(lines, results)
     _append_agent_loop_control_plane_summary(lines, results)

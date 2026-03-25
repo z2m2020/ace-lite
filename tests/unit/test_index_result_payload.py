@@ -282,6 +282,10 @@ def test_build_index_stage_result_limits_files_and_attaches_why() -> None:
     assert payload["candidate_ranking"]["topological_shield"]["mode"] == "report_only"
     assert payload["chunk_guard"]["mode"] == "report_only"
     assert payload["metadata"]["selection_fingerprint"]
+    assert payload["metadata"]["chunk_cache_contract_schema_version"] == ""
+    assert payload["metadata"]["chunk_cache_contract_fingerprint"] == ""
+    assert payload["metadata"]["chunk_cache_contract_file_count"] == 0
+    assert payload["metadata"]["chunk_cache_contract_chunk_count"] == 0
     assert payload["metadata"]["multi_channel_rrf_granularity_count"] == 2
     assert payload["metadata"]["multi_channel_rrf_pool_size"] == 4
     assert payload["metadata"]["multi_channel_rrf_granularity_pool_ratio"] == 0.5
@@ -367,6 +371,42 @@ def test_build_index_stage_result_fingerprint_changes_when_chunk_contract_change
     assert baseline["metadata"]["selection_fingerprint"] != changed["metadata"][
         "selection_fingerprint"
     ]
+
+
+def test_build_index_stage_result_attaches_chunk_cache_contract_summary() -> None:
+    payload = build_index_stage_result(
+        **{
+            **_base_inputs(),
+            "index_data": {
+                **_base_inputs()["index_data"],
+                "chunk_cache_contract": {
+                    "schema_version": "chunk-cache-contract-v1",
+                    "fingerprint": "chunk-contract-fp",
+                    "file_count": 2,
+                    "chunk_count": 5,
+                    "files": {
+                        "src/auth.py": {
+                            "fingerprint": "auth-fp",
+                            "chunk_count": 3,
+                        }
+                    },
+                },
+            },
+        }
+    )
+
+    assert payload["chunk_cache_contract"] == {
+        "schema_version": "chunk-cache-contract-v1",
+        "fingerprint": "chunk-contract-fp",
+        "file_count": 2,
+        "chunk_count": 5,
+    }
+    assert payload["metadata"]["chunk_cache_contract_schema_version"] == (
+        "chunk-cache-contract-v1"
+    )
+    assert payload["metadata"]["chunk_cache_contract_fingerprint"] == "chunk-contract-fp"
+    assert payload["metadata"]["chunk_cache_contract_file_count"] == 2
+    assert payload["metadata"]["chunk_cache_contract_chunk_count"] == 5
 
 
 def test_build_index_stage_result_fingerprint_changes_when_subgraph_contract_changes() -> None:

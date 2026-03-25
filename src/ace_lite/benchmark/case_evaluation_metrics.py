@@ -256,6 +256,11 @@ class CaseEvaluationMetrics:
     chunk_contract_skeleton_chunk_count: int
     chunk_contract_fallback_ratio: float
     chunk_contract_skeleton_ratio: float
+    chunk_cache_contract_present: bool
+    chunk_cache_contract_fingerprint_present: bool
+    chunk_cache_contract_metadata_aligned: bool
+    chunk_cache_contract_file_count: int
+    chunk_cache_contract_chunk_count: int
     unsupported_language_fallback_count: int
     unsupported_language_fallback_ratio: float
     robust_signature_count: int
@@ -367,6 +372,7 @@ def build_case_evaluation_metrics(
     topological_shield_payload = _as_dict(index_payload.get("topological_shield"))
     chunk_guard_payload = _as_dict(index_payload.get("chunk_guard"))
     chunk_contract_payload = _as_dict(index_payload.get("chunk_contract"))
+    chunk_cache_contract_payload = _as_dict(index_payload.get("chunk_cache_contract"))
     scip_payload = _as_dict(index_payload.get("scip"))
     parallel_payload = _as_dict(index_payload.get("parallel"))
     parallel_docs_payload = _as_dict(parallel_payload.get("docs"))
@@ -1372,6 +1378,28 @@ def build_case_evaluation_metrics(
         chunk_contract_skeleton_chunk_count,
         raw_candidate_chunk_count,
     )
+    chunk_cache_contract_present = bool(chunk_cache_contract_payload)
+    chunk_cache_contract_fingerprint = str(
+        chunk_cache_contract_payload.get("fingerprint") or ""
+    ).strip()
+    chunk_cache_contract_fingerprint_present = bool(chunk_cache_contract_fingerprint)
+    chunk_cache_contract_metadata_fingerprint = str(
+        index_metadata.get("chunk_cache_contract_fingerprint") or ""
+    ).strip()
+    chunk_cache_contract_metadata_aligned = bool(
+        chunk_cache_contract_fingerprint
+        and chunk_cache_contract_metadata_fingerprint
+        and chunk_cache_contract_fingerprint
+        == chunk_cache_contract_metadata_fingerprint
+    )
+    chunk_cache_contract_file_count = max(
+        0,
+        int(chunk_cache_contract_payload.get("file_count", 0) or 0),
+    )
+    chunk_cache_contract_chunk_count = max(
+        0,
+        int(chunk_cache_contract_payload.get("chunk_count", 0) or 0),
+    )
     unsupported_language_fallback_count = sum(
         1
         for item in raw_candidate_chunks
@@ -2293,6 +2321,15 @@ def build_case_evaluation_metrics(
         chunk_contract_skeleton_chunk_count=chunk_contract_skeleton_chunk_count,
         chunk_contract_fallback_ratio=chunk_contract_fallback_ratio,
         chunk_contract_skeleton_ratio=chunk_contract_skeleton_ratio,
+        chunk_cache_contract_present=chunk_cache_contract_present,
+        chunk_cache_contract_fingerprint_present=(
+            chunk_cache_contract_fingerprint_present
+        ),
+        chunk_cache_contract_metadata_aligned=(
+            chunk_cache_contract_metadata_aligned
+        ),
+        chunk_cache_contract_file_count=chunk_cache_contract_file_count,
+        chunk_cache_contract_chunk_count=chunk_cache_contract_chunk_count,
         unsupported_language_fallback_count=unsupported_language_fallback_count,
         unsupported_language_fallback_ratio=unsupported_language_fallback_ratio,
         robust_signature_count=robust_signature_count,

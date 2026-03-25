@@ -147,6 +147,15 @@ def evaluate_case_result(
     chunk_contract_skeleton_chunk_count = metrics.chunk_contract_skeleton_chunk_count
     chunk_contract_fallback_ratio = metrics.chunk_contract_fallback_ratio
     chunk_contract_skeleton_ratio = metrics.chunk_contract_skeleton_ratio
+    chunk_cache_contract_present = metrics.chunk_cache_contract_present
+    chunk_cache_contract_fingerprint_present = (
+        metrics.chunk_cache_contract_fingerprint_present
+    )
+    chunk_cache_contract_metadata_aligned = (
+        metrics.chunk_cache_contract_metadata_aligned
+    )
+    chunk_cache_contract_file_count = metrics.chunk_cache_contract_file_count
+    chunk_cache_contract_chunk_count = metrics.chunk_cache_contract_chunk_count
     unsupported_language_fallback_count = metrics.unsupported_language_fallback_count
     unsupported_language_fallback_ratio = metrics.unsupported_language_fallback_ratio
 
@@ -589,6 +598,15 @@ def evaluate_case_result(
         chunk_contract_skeleton_chunk_count=chunk_contract_skeleton_chunk_count,
         chunk_contract_fallback_ratio=chunk_contract_fallback_ratio,
         chunk_contract_skeleton_ratio=chunk_contract_skeleton_ratio,
+        chunk_cache_contract_present=chunk_cache_contract_present,
+        chunk_cache_contract_fingerprint_present=(
+            chunk_cache_contract_fingerprint_present
+        ),
+        chunk_cache_contract_metadata_aligned=(
+            chunk_cache_contract_metadata_aligned
+        ),
+        chunk_cache_contract_file_count=chunk_cache_contract_file_count,
+        chunk_cache_contract_chunk_count=chunk_cache_contract_chunk_count,
         unsupported_language_fallback_count=unsupported_language_fallback_count,
         unsupported_language_fallback_ratio=unsupported_language_fallback_ratio,
         subgraph_payload_enabled=subgraph_payload_enabled,
@@ -947,6 +965,15 @@ def evaluate_case_result(
                 chunk_contract_skeleton_chunk_count=chunk_contract_skeleton_chunk_count,
                 chunk_contract_fallback_ratio=chunk_contract_fallback_ratio,
                 chunk_contract_skeleton_ratio=chunk_contract_skeleton_ratio,
+                chunk_cache_contract_present=chunk_cache_contract_present,
+                chunk_cache_contract_fingerprint_present=(
+                    chunk_cache_contract_fingerprint_present
+                ),
+                chunk_cache_contract_metadata_aligned=(
+                    chunk_cache_contract_metadata_aligned
+                ),
+                chunk_cache_contract_file_count=chunk_cache_contract_file_count,
+                chunk_cache_contract_chunk_count=chunk_cache_contract_chunk_count,
                 unsupported_language_fallback_count=unsupported_language_fallback_count,
                 unsupported_language_fallback_ratio=unsupported_language_fallback_ratio,
                 subgraph_payload_enabled=subgraph_payload_enabled,

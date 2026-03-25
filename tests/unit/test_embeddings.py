@@ -118,6 +118,75 @@ def test_build_or_load_embedding_index_refreshes_meta_on_index_hash_change(
     assert meta.get("index_hash") == "index-hash-b"
 
 
+def test_build_or_load_embedding_index_persists_chunk_cache_contract(
+    tmp_path: Path,
+) -> None:
+    files_map = _files_map()
+    provider = HashEmbeddingProvider(model_name="hash-v1", dim=64)
+    index_path = tmp_path / "context-map" / "embeddings" / "index.json"
+
+    build_or_load_embedding_index(
+        files_map=files_map,
+        provider=provider,
+        index_path=index_path,
+        index_hash="index-hash-a",
+    )
+
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    contract = payload.get("meta", {}).get("chunk_cache_contract", {})
+
+    assert contract.get("schema_version") == "chunk-cache-contract-v1"
+    assert contract.get("file_count") == 2
+    assert contract.get("chunk_count") == 2
+    assert contract.get("fingerprint")
+    assert contract.get("files", {}).get("src/auth.py", {}).get("fingerprint")
+
+
+def test_build_or_load_embedding_index_only_recomputes_changed_contract_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import ace_lite.embeddings_index_store as embeddings_store_mod
+
+    files_map = _files_map()
+    provider = HashEmbeddingProvider(model_name="hash-v1", dim=64)
+    index_path = tmp_path / "context-map" / "embeddings" / "index.json"
+
+    build_or_load_embedding_index(
+        files_map=files_map,
+        provider=provider,
+        index_path=index_path,
+        index_hash="index-hash-a",
+    )
+
+    changed_files_map = _files_map()
+    changed_files_map["src/auth.py"]["references"] = [
+        {"qualified_name": "token.rotate"}
+    ]
+
+    calls: list[str] = []
+    original = embeddings_store_mod._build_file_embedding_text
+
+    def counting_build_file_embedding_text(*, path: str, entry: dict[str, object]) -> str:
+        calls.append(path)
+        return original(path=path, entry=entry)
+
+    monkeypatch.setattr(
+        embeddings_store_mod,
+        "_build_file_embedding_text",
+        counting_build_file_embedding_text,
+    )
+
+    build_or_load_embedding_index(
+        files_map=changed_files_map,
+        provider=provider,
+        index_path=index_path,
+        index_hash="index-hash-b",
+    )
+
+    assert calls == ["src/auth.py"]
+
+
 def test_build_or_load_embedding_index_mirror_fail_open(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

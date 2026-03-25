@@ -83,6 +83,11 @@ def build_case_evaluation_row(
     chunk_contract_skeleton_chunk_count: int,
     chunk_contract_fallback_ratio: float,
     chunk_contract_skeleton_ratio: float,
+    chunk_cache_contract_present: bool,
+    chunk_cache_contract_fingerprint_present: bool,
+    chunk_cache_contract_metadata_aligned: bool,
+    chunk_cache_contract_file_count: int,
+    chunk_cache_contract_chunk_count: int,
     unsupported_language_fallback_count: int,
     unsupported_language_fallback_ratio: float,
     subgraph_payload_enabled: bool,
@@ -409,10 +414,26 @@ def build_case_evaluation_row(
         ),
         "chunk_contract_fallback_ratio": chunk_contract_fallback_ratio,
         "chunk_contract_skeleton_ratio": chunk_contract_skeleton_ratio,
+        "chunk_cache_contract_present": 1.0 if chunk_cache_contract_present else 0.0,
+        "chunk_cache_contract_fingerprint_present": (
+            1.0 if chunk_cache_contract_fingerprint_present else 0.0
+        ),
+        "chunk_cache_contract_metadata_aligned": (
+            1.0 if chunk_cache_contract_metadata_aligned else 0.0
+        ),
+        "chunk_cache_contract_file_count": float(chunk_cache_contract_file_count),
+        "chunk_cache_contract_chunk_count": float(chunk_cache_contract_chunk_count),
         "unsupported_language_fallback_count": float(
             unsupported_language_fallback_count
         ),
         "unsupported_language_fallback_ratio": unsupported_language_fallback_ratio,
+        "chunk_cache_contract": {
+            "present": bool(chunk_cache_contract_present),
+            "fingerprint_present": bool(chunk_cache_contract_fingerprint_present),
+            "metadata_aligned": bool(chunk_cache_contract_metadata_aligned),
+            "file_count": int(chunk_cache_contract_file_count),
+            "chunk_count": int(chunk_cache_contract_chunk_count),
+        },
         "subgraph_payload_enabled": 1.0 if subgraph_payload_enabled else 0.0,
         "subgraph_seed_path_count": float(subgraph_seed_path_count),
         "subgraph_edge_type_count": float(subgraph_edge_type_count),

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from ace_lite.cli_app.runtime_stats_enrichment_support import (
+    attach_runtime_memory_ltm_signal_summary,
     build_runtime_agent_loop_control_plane_summary,
     build_runtime_memory_health_summary,
+    build_runtime_memory_ltm_signal_summary,
     build_runtime_top_pain_summary,
 )
 
@@ -82,3 +84,71 @@ def test_runtime_stats_enrichment_support_builds_top_pain_and_memory_health() ->
         "source_plan",
         "validation",
     ]
+
+
+def test_runtime_stats_enrichment_support_builds_memory_ltm_signal_summary() -> None:
+    ltm_explainability_summary = {
+        "case_count": 3,
+        "feedback_signal_observed_case_count": 2,
+        "feedback_signal_observed_case_rate": 2.0 / 3.0,
+        "feedback_signals": [
+            {
+                "feedback_signal": "helpful",
+                "case_count": 1,
+                "case_rate": 1.0 / 3.0,
+                "total_count": 2,
+                "count_mean": 2.0 / 3.0,
+            },
+            {
+                "feedback_signal": "stale",
+                "case_count": 1,
+                "case_rate": 1.0 / 3.0,
+                "total_count": 1,
+                "count_mean": 1.0 / 3.0,
+            },
+            {
+                "feedback_signal": "harmful",
+                "case_count": 1,
+                "case_rate": 1.0 / 3.0,
+                "total_count": 1,
+                "count_mean": 1.0 / 3.0,
+            },
+        ],
+        "attribution_scope_count": 2,
+        "attribution_scope_observed_case_count": 2,
+        "attribution_scope_observed_case_rate": 2.0 / 3.0,
+        "attribution_scopes": [
+            {
+                "attribution_scope": "selected",
+                "case_count": 2,
+                "case_rate": 2.0 / 3.0,
+                "total_count": 2,
+                "count_mean": 2.0 / 3.0,
+            },
+            {
+                "attribution_scope": "graph",
+                "case_count": 1,
+                "case_rate": 1.0 / 3.0,
+                "total_count": 1,
+                "count_mean": 1.0 / 3.0,
+            },
+        ],
+    }
+
+    ltm_signal_summary = build_runtime_memory_ltm_signal_summary(
+        ltm_explainability_summary=ltm_explainability_summary,
+    )
+
+    assert ltm_signal_summary["case_count"] == 3
+    assert ltm_signal_summary["feedback_signal_observed_case_count"] == 2
+    assert ltm_signal_summary["feedback_signals"][0]["feedback_signal"] == "helpful"
+    assert ltm_signal_summary["feedback_signals"][0]["total_count"] == 2
+    assert ltm_signal_summary["attribution_scope_count"] == 2
+    assert ltm_signal_summary["attribution_scopes"][0]["attribution_scope"] == "selected"
+
+    attached = attach_runtime_memory_ltm_signal_summary(
+        memory_health_summary={"scope_kind": "repo_profile", "reason_count": 1},
+        ltm_explainability_summary=ltm_explainability_summary,
+    )
+    assert attached["scope_kind"] == "repo_profile"
+    assert attached["ltm_signal_summary"] == ltm_signal_summary

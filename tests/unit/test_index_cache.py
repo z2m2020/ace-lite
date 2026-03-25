@@ -89,6 +89,12 @@ def test_refresh_cached_index_candidate_payload_updates_live_metadata() -> None:
             "indexed_at": "2026-03-14T00:00:00+00:00",
             "languages_covered": ["python", "markdown"],
             "parser": {"tree_sitter": True},
+            "chunk_cache_contract": {
+                "schema_version": "chunk-cache-contract-v1",
+                "fingerprint": "chunk-fp",
+                "file_count": 2,
+                "chunk_count": 4,
+            },
         },
         cache_info={"cache_hit": True, "mode": "cache_only"},
         index_hash="new-hash",
@@ -99,6 +105,12 @@ def test_refresh_cached_index_candidate_payload_updates_live_metadata() -> None:
     assert refreshed["index_hash"] == "new-hash"
     assert refreshed["file_count"] == 2
     assert refreshed["cache"] == {"cache_hit": True, "mode": "cache_only"}
+    assert refreshed["chunk_cache_contract"] == {
+        "schema_version": "chunk-cache-contract-v1",
+        "fingerprint": "chunk-fp",
+        "file_count": 2,
+        "chunk_count": 4,
+    }
     assert refreshed["metadata"]["cached_payload_timings_ms"] == {"initial": 1.0}
     assert refreshed["metadata"]["timings_ms"] == {"index_cache_load": 2.5}
     assert refreshed["metadata"]["candidate_cache_reused"] is True

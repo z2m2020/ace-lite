@@ -45,11 +45,26 @@ Notes:
 Typical sequence for an agent:
 
 1. `ace_health` to validate memory, embeddings, and skills wiring
-2. `ace_index` on first run or after large repo changes
-3. `ace_plan_quick` for a fast shortlist
-4. `ace_plan` when you need the full planning payload
-5. `ace_feedback_record` after the correct targets are confirmed
-6. `ace_memory_store` for durable project rules when needed
+2. `ace_memory_search` to recover prior project rules, pitfalls, and naming conventions
+3. `ace_index` on first run or after large repo changes
+4. `ace_plan_quick` for a fast shortlist
+5. Read the top candidate files before treating the shortlist as evidence
+6. `ace_plan` only when the quick shortlist is still insufficient
+7. `ace_feedback_record` after the correct targets are confirmed
+8. `ace_memory_store` for durable project rules when needed
+
+Discipline rules:
+
+- Do not use file names as the main query when the real question is behavioral.
+- Prefer behavior + symptom + module boundary in the query text.
+- Final conclusions should cite `file:line`, not just tool output.
+- If `ace_plan` is too large or noisy, fall back to `ace_plan_quick` and manual read-based evidence closure.
+
+Recommended query shape:
+
+```text
+[target behavior] in [module boundary] shows [observable symptom]; locate implementation path, error handling, observability, and weak test coverage.
+```
 
 ## 5) Optional: global Codex MCP config pack sample
 
@@ -109,4 +124,5 @@ ace-lite runtime setup-codex-mcp --root . --skills-dir skills --enable-memory --
 ## 6) Next steps
 
 - MCP setup templates (Windows/WSL, OpenMemory, Ollama, Codex CLI): `docs/guides/MCP_SETUP.md`
+- Team workflow, query discipline, evidence gates, and fallback ladder: `docs/guides/ACE_LITE_TEAM_PLAYBOOK.md`
 - Architecture overview: `docs/design/ARCHITECTURE_OVERVIEW.md`

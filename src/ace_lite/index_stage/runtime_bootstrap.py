@@ -34,6 +34,20 @@ class IndexRuntimeBootstrapResult:
     cache_hit_payload: dict[str, Any] | None
 
 
+def _build_chunk_cache_required_meta(index_data: dict[str, Any]) -> dict[str, Any]:
+    contract = (
+        index_data.get("chunk_cache_contract", {})
+        if isinstance(index_data.get("chunk_cache_contract"), dict)
+        else {}
+    )
+    return {
+        "chunk_cache_contract_schema_version": str(
+            contract.get("schema_version") or ""
+        ),
+        "chunk_cache_contract_fingerprint": str(contract.get("fingerprint") or ""),
+    }
+
+
 def _build_index_candidate_cache_settings_payload(
     *,
     retrieval_cfg: Any,
@@ -343,6 +357,7 @@ def bootstrap_index_runtime(
         "policy_version": str(policy.get("version", retrieval_cfg.policy_version)),
         "index_hash": str(index_hash or ""),
         "content_version": content_version,
+        **_build_chunk_cache_required_meta(index_data),
     }
     index_candidate_cache_key = build_index_candidate_cache_key_fn(
         query=ctx.query,

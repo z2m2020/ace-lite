@@ -7,6 +7,7 @@ from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from ace_lite.chunk_cache_contract import build_chunk_cache_contract
 from ace_lite.parsers.languages import (
     detect_language,
     normalize_languages,
@@ -415,6 +416,7 @@ def _finalize_index(index: dict[str, Any]) -> dict[str, Any]:
 
     index["file_count"] = len(files)
     index["languages_covered"] = languages_covered
+    index["chunk_cache_contract"] = build_chunk_cache_contract(files)
     index["indexed_at"] = datetime.now(timezone.utc).isoformat()
     return index
 

@@ -14,6 +14,7 @@ from ace_lite.benchmark.scoring import (
     aggregate_metrics,
     build_agent_loop_control_plane_summary,
     build_adaptive_router_arm_summary,
+    build_chunk_cache_contract_summary,
     build_learning_router_rollout_summary,
     build_adaptive_router_observability_summary,
     build_adaptive_router_pair_summary,
@@ -600,6 +601,9 @@ class BenchmarkRunner:
             ),
             "retrieval_context_observability_summary": (
                 build_retrieval_context_observability_summary(case_results)
+            ),
+            "chunk_cache_contract_summary": build_chunk_cache_contract_summary(
+                case_results
             ),
             "chunk_stage_miss_summary": build_chunk_stage_miss_summary(case_results),
             "cases": case_results,

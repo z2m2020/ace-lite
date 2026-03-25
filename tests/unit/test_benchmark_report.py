@@ -394,6 +394,50 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
                 "plan_constraint_case_count": 1,
                 "plan_constraint_case_rate": 1.0,
                 "plan_constraint_count_mean": 1.0,
+                "feedback_signal_observed_case_count": 1,
+                "feedback_signal_observed_case_rate": 1.0,
+                "feedback_signals": [
+                    {
+                        "feedback_signal": "helpful",
+                        "case_count": 1,
+                        "case_rate": 1.0,
+                        "total_count": 1,
+                        "count_mean": 1.0,
+                    },
+                    {
+                        "feedback_signal": "stale",
+                        "case_count": 0,
+                        "case_rate": 0.0,
+                        "total_count": 0,
+                        "count_mean": 0.0,
+                    },
+                    {
+                        "feedback_signal": "harmful",
+                        "case_count": 0,
+                        "case_rate": 0.0,
+                        "total_count": 0,
+                        "count_mean": 0.0,
+                    },
+                ],
+                "attribution_scope_count": 2,
+                "attribution_scope_observed_case_count": 1,
+                "attribution_scope_observed_case_rate": 1.0,
+                "attribution_scopes": [
+                    {
+                        "attribution_scope": "selected",
+                        "case_count": 1,
+                        "case_rate": 1.0,
+                        "total_count": 1,
+                        "count_mean": 1.0,
+                    },
+                    {
+                        "attribution_scope": "graph",
+                        "case_count": 1,
+                        "case_rate": 1.0,
+                        "total_count": 1,
+                        "count_mean": 1.0,
+                    },
+                ],
             },
             "stage_latency_summary": {
                 "memory": {"mean_ms": 3.0, "p95_ms": 3.0},
@@ -740,10 +784,14 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "Attribution cases: 1/1 (1.0000)" in report
     assert "Graph-neighbor cases: 1/1 (1.0000)" in report
     assert "Plan-constraint cases: 1/1 (1.0000)" in report
+    assert "Feedback-signal observed cases: 1/1 (1.0000)" in report
+    assert "Attribution-scope observed cases: 1/1 (1.0000)" in report
     assert "| selected_count_mean | 2.0000 |" in report
     assert "| attribution_count_mean | 1.0000 |" in report
     assert "| graph_neighbor_count_mean | 1.0000 |" in report
     assert "| plan_constraint_count_mean | 1.0000 |" in report
+    assert "| helpful | 1 | 1.0000 | 1 | 1.0000 |" in report
+    assert "| selected | 1 | 1.0000 | 1 | 1.0000 |" in report
     assert "chunk_stage_miss: source_plan_pack_miss" in report
     assert "decision_event: index | retry | candidate_postprocess | reason=low_candidate_count | outcome=applied" in report
     assert "decision_event: skills | skip | skills_hydration | reason=token_budget_exhausted" in report
@@ -947,6 +995,50 @@ def test_write_results_emits_summary_sidecar(tmp_path: Path) -> None:
             "plan_constraint_case_count": 1,
             "plan_constraint_case_rate": 1.0,
             "plan_constraint_count_mean": 1.0,
+            "feedback_signal_observed_case_count": 1,
+            "feedback_signal_observed_case_rate": 1.0,
+            "feedback_signals": [
+                {
+                    "feedback_signal": "helpful",
+                    "case_count": 1,
+                    "case_rate": 1.0,
+                    "total_count": 1,
+                    "count_mean": 1.0,
+                },
+                {
+                    "feedback_signal": "stale",
+                    "case_count": 0,
+                    "case_rate": 0.0,
+                    "total_count": 0,
+                    "count_mean": 0.0,
+                },
+                {
+                    "feedback_signal": "harmful",
+                    "case_count": 0,
+                    "case_rate": 0.0,
+                    "total_count": 0,
+                    "count_mean": 0.0,
+                },
+            ],
+            "attribution_scope_count": 2,
+            "attribution_scope_observed_case_count": 1,
+            "attribution_scope_observed_case_rate": 1.0,
+            "attribution_scopes": [
+                {
+                    "attribution_scope": "selected",
+                    "case_count": 1,
+                    "case_rate": 1.0,
+                    "total_count": 1,
+                    "count_mean": 1.0,
+                },
+                {
+                    "attribution_scope": "graph",
+                    "case_count": 1,
+                    "case_rate": 1.0,
+                    "total_count": 1,
+                    "count_mean": 1.0,
+                },
+            ],
         },
         "cases": [],
     }
@@ -978,6 +1070,9 @@ def test_write_results_emits_summary_sidecar(tmp_path: Path) -> None:
     assert summary["decision_observability_summary"]["decision_event_count"] == 1
     assert summary["ltm_explainability_summary"]["selected_count_mean"] == 2.0
     assert summary["ltm_explainability_summary"]["plan_constraint_case_count"] == 1
+    assert summary["ltm_explainability_summary"]["feedback_signal_observed_case_count"] == 1
+    assert summary["ltm_explainability_summary"]["feedback_signals"][0]["feedback_signal"] == "helpful"
+    assert summary["ltm_explainability_summary"]["attribution_scopes"][0]["attribution_scope"] == "selected"
 
 
 def test_build_results_summary_defaults_missing_fields() -> None:
@@ -2058,6 +2153,37 @@ def test_build_results_summary_preserves_retrieval_context_observability_summary
     }
 
 
+def test_build_results_summary_preserves_chunk_cache_contract_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "chunk_cache_contract_summary": {
+                "case_count": 2,
+                "present_case_count": 2,
+                "present_case_rate": 1.0,
+                "fingerprint_present_case_count": 2,
+                "fingerprint_present_case_rate": 1.0,
+                "metadata_aligned_case_count": 1,
+                "metadata_aligned_case_rate": 0.5,
+                "file_count_mean": 12.0,
+                "chunk_count_mean": 40.0,
+            },
+        }
+    )
+
+    assert summary["chunk_cache_contract_summary"] == {
+        "case_count": 2,
+        "present_case_count": 2,
+        "present_case_rate": 1.0,
+        "fingerprint_present_case_count": 2,
+        "fingerprint_present_case_rate": 1.0,
+        "metadata_aligned_case_count": 1,
+        "metadata_aligned_case_rate": 0.5,
+        "file_count_mean": 12.0,
+        "chunk_count_mean": 40.0,
+    }
+
+
 def test_build_results_summary_preserves_retrieval_default_strategy_summary() -> None:
     summary = build_results_summary(
         {
@@ -2362,6 +2488,40 @@ def test_build_report_markdown_includes_retrieval_context_observability_summary(
     assert "| parent_symbol_chunk_count_mean | 2.0000 |" in report
     assert "| reference_hint_coverage_ratio_mean | 0.5000 |" in report
     assert "| pool_coverage_ratio_mean | 0.5000 |" in report
+
+
+def test_build_report_markdown_includes_chunk_cache_contract_summary() -> None:
+    report = build_report_markdown(
+        {
+            "repo": "demo",
+            "metrics": {
+                "task_success_rate": 1.0,
+                "chunk_cache_contract_present_ratio": 1.0,
+                "chunk_cache_contract_fingerprint_present_ratio": 1.0,
+                "chunk_cache_contract_metadata_aligned_ratio": 0.5,
+                "chunk_cache_contract_file_count_mean": 12.0,
+                "chunk_cache_contract_chunk_count_mean": 40.0,
+            },
+            "chunk_cache_contract_summary": {
+                "case_count": 2,
+                "present_case_count": 2,
+                "present_case_rate": 1.0,
+                "fingerprint_present_case_count": 2,
+                "fingerprint_present_case_rate": 1.0,
+                "metadata_aligned_case_count": 1,
+                "metadata_aligned_case_rate": 0.5,
+                "file_count_mean": 12.0,
+                "chunk_count_mean": 40.0,
+            },
+        }
+    )
+
+    assert "## Chunk Cache Contract Summary" in report
+    assert (
+        "Present ratio: 1.0000; fingerprint present ratio: 1.0000; metadata aligned ratio: 0.5000"
+        in report
+    )
+    assert "File count mean: 12.00; chunk count mean: 40.00" in report
 
 
 def test_build_report_markdown_includes_retrieval_default_strategy_summary() -> None:
@@ -2969,6 +3129,58 @@ def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> N
                     },
                 },
             },
+            "ltm_explainability_summary": {
+                "case_count": 2,
+                "selected_case_count": 1,
+                "selected_case_rate": 0.5,
+                "selected_count_mean": 1.0,
+                "attribution_case_count": 1,
+                "attribution_case_rate": 0.5,
+                "attribution_count_mean": 0.5,
+                "graph_neighbor_case_count": 0,
+                "graph_neighbor_case_rate": 0.0,
+                "graph_neighbor_count_mean": 0.0,
+                "plan_constraint_case_count": 1,
+                "plan_constraint_case_rate": 0.5,
+                "plan_constraint_count_mean": 0.5,
+                "feedback_signal_observed_case_count": 1,
+                "feedback_signal_observed_case_rate": 0.5,
+                "feedback_signals": [
+                    {
+                        "feedback_signal": "helpful",
+                        "case_count": 1,
+                        "case_rate": 0.5,
+                        "total_count": 1,
+                        "count_mean": 0.5,
+                    },
+                    {
+                        "feedback_signal": "stale",
+                        "case_count": 0,
+                        "case_rate": 0.0,
+                        "total_count": 0,
+                        "count_mean": 0.0,
+                    },
+                    {
+                        "feedback_signal": "harmful",
+                        "case_count": 0,
+                        "case_rate": 0.0,
+                        "total_count": 0,
+                        "count_mean": 0.0,
+                    },
+                ],
+                "attribution_scope_count": 1,
+                "attribution_scope_observed_case_count": 1,
+                "attribution_scope_observed_case_rate": 0.5,
+                "attribution_scopes": [
+                    {
+                        "attribution_scope": "selected",
+                        "case_count": 1,
+                        "case_rate": 0.5,
+                        "total_count": 1,
+                        "count_mean": 0.5,
+                    }
+                ],
+            },
         }
     )
 
@@ -2978,9 +3190,12 @@ def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> N
     assert "Runtime memory events: 1" in report
     assert "Developer issues: 1 open=1 fixes=1 resolution_rate=1.0000" in report
     assert "Memory stage latency avg: 5.00 ms" in report
+    assert "LTM signal coverage: feedback_cases=1/2 (0.5000); attribution_cases=1/2 (0.5000)" in report
     assert "Benchmark LTM latency overhead: 3.50 ms" in report
     assert "Benchmark/runtime alignment gap: 1.50 ms" in report
     assert "Benchmark/runtime ratio: 0.7000" in report
+    assert "| helpful | 1 | 0.5000 | 1 | 0.5000 |" in report
+    assert "| selected | 1 | 0.5000 | 1 | 0.5000 |" in report
     assert "| memory_fallback | 1 | 1 | 1 | 1 | 2026-03-17T00:00:00Z |" in report
     assert "### Next Cycle Input" in report
     assert "Primary stream: memory" in report
@@ -3098,6 +3313,58 @@ def test_build_results_summary_includes_ltm_latency_alignment_summary() -> None:
                     "memory_stage_latency_ms_avg": 5.0,
                 }
             },
+            "ltm_explainability_summary": {
+                "case_count": 1,
+                "selected_case_count": 1,
+                "selected_case_rate": 1.0,
+                "selected_count_mean": 1.0,
+                "attribution_case_count": 1,
+                "attribution_case_rate": 1.0,
+                "attribution_count_mean": 1.0,
+                "graph_neighbor_case_count": 0,
+                "graph_neighbor_case_rate": 0.0,
+                "graph_neighbor_count_mean": 0.0,
+                "plan_constraint_case_count": 1,
+                "plan_constraint_case_rate": 1.0,
+                "plan_constraint_count_mean": 1.0,
+                "feedback_signal_observed_case_count": 1,
+                "feedback_signal_observed_case_rate": 1.0,
+                "feedback_signals": [
+                    {
+                        "feedback_signal": "helpful",
+                        "case_count": 1,
+                        "case_rate": 1.0,
+                        "total_count": 1,
+                        "count_mean": 1.0,
+                    },
+                    {
+                        "feedback_signal": "stale",
+                        "case_count": 0,
+                        "case_rate": 0.0,
+                        "total_count": 0,
+                        "count_mean": 0.0,
+                    },
+                    {
+                        "feedback_signal": "harmful",
+                        "case_count": 0,
+                        "case_rate": 0.0,
+                        "total_count": 0,
+                        "count_mean": 0.0,
+                    },
+                ],
+                "attribution_scope_count": 1,
+                "attribution_scope_observed_case_count": 1,
+                "attribution_scope_observed_case_rate": 1.0,
+                "attribution_scopes": [
+                    {
+                        "attribution_scope": "selected",
+                        "case_count": 1,
+                        "case_rate": 1.0,
+                        "total_count": 1,
+                        "count_mean": 1.0,
+                    }
+                ],
+            },
         }
     )
 
@@ -3110,3 +3377,9 @@ def test_build_results_summary_includes_ltm_latency_alignment_summary() -> None:
         "has_benchmark_signal": True,
         "comparable": True,
     }
+    assert (
+        summary["runtime_stats_summary"]["memory_health_summary"]["ltm_signal_summary"][
+            "feedback_signals"
+        ][0]["feedback_signal"]
+        == "helpful"
+    )

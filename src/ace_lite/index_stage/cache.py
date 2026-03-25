@@ -111,10 +111,22 @@ def refresh_cached_index_candidate_payload(
     benchmark_filter_payload: dict[str, Any],
 ) -> dict[str, Any]:
     materialized = clone_index_candidate_payload(payload)
+    index_chunk_cache_contract = (
+        dict(index_data.get("chunk_cache_contract", {}))
+        if isinstance(index_data.get("chunk_cache_contract"), dict)
+        else {}
+    )
     materialized["index_hash"] = str(index_hash or "")
     materialized["file_count"] = int(index_data.get("file_count", 0) or 0)
     materialized["indexed_at"] = index_data.get("indexed_at")
     materialized["languages_covered"] = list(index_data.get("languages_covered", []))
+    if index_chunk_cache_contract:
+        materialized["chunk_cache_contract"] = {
+            "schema_version": str(index_chunk_cache_contract.get("schema_version") or ""),
+            "fingerprint": str(index_chunk_cache_contract.get("fingerprint") or ""),
+            "file_count": int(index_chunk_cache_contract.get("file_count", 0) or 0),
+            "chunk_count": int(index_chunk_cache_contract.get("chunk_count", 0) or 0),
+        }
     materialized["parser"] = (
         dict(index_data.get("parser", {}))
         if isinstance(index_data.get("parser"), dict)

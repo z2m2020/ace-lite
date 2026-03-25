@@ -5,6 +5,7 @@ from ace_lite.benchmark.report_metrics import ALL_METRIC_ORDER, COMPARABLE_METRI
 from ace_lite.benchmark.scoring import (
     aggregate_metrics,
     build_agent_loop_control_plane_summary,
+    build_chunk_cache_contract_summary,
     build_comparison_lane_summary,
     build_deep_symbol_summary,
     build_feedback_loop_summary,
@@ -1075,6 +1076,17 @@ def test_build_ltm_explainability_summary_aggregates_case_level_signals() -> Non
                 "ltm_attribution_count": 1.0,
                 "ltm_graph_neighbor_count": 1.0,
                 "ltm_plan_constraint_count": 1.0,
+                "ltm_explainability": {
+                    "feedback_signal_counts": {
+                        "helpful": 2,
+                        "stale": 0,
+                        "harmful": 0,
+                    },
+                    "attribution_scope_counts": {
+                        "selected": 1,
+                        "graph": 1,
+                    },
+                },
             },
             {
                 "case_id": "case-b",
@@ -1082,6 +1094,14 @@ def test_build_ltm_explainability_summary_aggregates_case_level_signals() -> Non
                 "ltm_attribution_count": 0.0,
                 "ltm_graph_neighbor_count": 0.0,
                 "ltm_plan_constraint_count": 0.0,
+                "ltm_explainability": {
+                    "feedback_signal_counts": {
+                        "helpful": 0,
+                        "stale": 0,
+                        "harmful": 0,
+                    },
+                    "attribution_scope_counts": {},
+                },
             },
             {
                 "case_id": "case-c",
@@ -1089,6 +1109,17 @@ def test_build_ltm_explainability_summary_aggregates_case_level_signals() -> Non
                 "ltm_attribution_count": 1.0,
                 "ltm_graph_neighbor_count": 0.0,
                 "ltm_plan_constraint_count": 1.0,
+                "ltm_explainability": {
+                    "feedback_signal_counts": {
+                        "helpful": 0,
+                        "stale": 1,
+                        "harmful": 1,
+                    },
+                    "attribution_scope_counts": {
+                        "selected": 1,
+                        "plan": 1,
+                    },
+                },
             },
         ]
     )
@@ -1107,6 +1138,57 @@ def test_build_ltm_explainability_summary_aggregates_case_level_signals() -> Non
         "plan_constraint_case_count": 2,
         "plan_constraint_case_rate": 2.0 / 3.0,
         "plan_constraint_count_mean": 2.0 / 3.0,
+        "feedback_signal_observed_case_count": 2,
+        "feedback_signal_observed_case_rate": 2.0 / 3.0,
+        "feedback_signals": [
+            {
+                "feedback_signal": "helpful",
+                "case_count": 1,
+                "case_rate": 1.0 / 3.0,
+                "total_count": 2,
+                "count_mean": 2.0 / 3.0,
+            },
+            {
+                "feedback_signal": "stale",
+                "case_count": 1,
+                "case_rate": 1.0 / 3.0,
+                "total_count": 1,
+                "count_mean": 1.0 / 3.0,
+            },
+            {
+                "feedback_signal": "harmful",
+                "case_count": 1,
+                "case_rate": 1.0 / 3.0,
+                "total_count": 1,
+                "count_mean": 1.0 / 3.0,
+            },
+        ],
+        "attribution_scope_count": 3,
+        "attribution_scope_observed_case_count": 2,
+        "attribution_scope_observed_case_rate": 2.0 / 3.0,
+        "attribution_scopes": [
+            {
+                "attribution_scope": "selected",
+                "case_count": 2,
+                "case_rate": 2.0 / 3.0,
+                "total_count": 2,
+                "count_mean": 2.0 / 3.0,
+            },
+            {
+                "attribution_scope": "graph",
+                "case_count": 1,
+                "case_rate": 1.0 / 3.0,
+                "total_count": 1,
+                "count_mean": 1.0 / 3.0,
+            },
+            {
+                "attribution_scope": "plan",
+                "case_count": 1,
+                "case_rate": 1.0 / 3.0,
+                "total_count": 1,
+                "count_mean": 1.0 / 3.0,
+            },
+        ],
     }
 
 
@@ -2585,6 +2667,74 @@ def test_evaluate_case_result_reports_chunk_contract_fallback_kpis() -> None:
     assert metrics["chunk_contract_skeleton_ratio"] == 0.25
     assert metrics["unsupported_language_fallback_count_mean"] == 2.0
     assert metrics["unsupported_language_fallback_ratio"] == 0.5
+
+
+def test_evaluate_case_result_reports_chunk_cache_contract_kpis() -> None:
+    case = {
+        "case_id": "c-chunk-cache-contract",
+        "query": "trace changed chunk cache boundary",
+        "expected_keys": ["auth", "token"],
+        "top_k": 2,
+    }
+    fingerprint = "abc123"
+    payload = {
+        "index": {
+            "candidate_files": [{"path": "src/auth.py", "module": "src.auth"}],
+            "candidate_chunks": [
+                {
+                    "path": "src/auth.py",
+                    "qualified_name": "validate_token",
+                    "signature": "def validate_token",
+                }
+            ],
+            "metadata": {
+                "chunk_cache_contract_fingerprint": fingerprint,
+            },
+            "chunk_cache_contract": {
+                "schema_version": "chunk-cache-contract-v1",
+                "fingerprint": fingerprint,
+                "file_count": 3,
+                "chunk_count": 7,
+            },
+        },
+        "source_plan": {"validation_tests": []},
+        "repomap": {"dependency_recall": {"hit_rate": 1.0}},
+    }
+
+    row = evaluate_case_result(case=case, plan_payload=payload, latency_ms=5.0)
+
+    assert row["chunk_cache_contract_present"] == 1.0
+    assert row["chunk_cache_contract_fingerprint_present"] == 1.0
+    assert row["chunk_cache_contract_metadata_aligned"] == 1.0
+    assert row["chunk_cache_contract_file_count"] == 3.0
+    assert row["chunk_cache_contract_chunk_count"] == 7.0
+    assert row["chunk_cache_contract"] == {
+        "present": True,
+        "fingerprint_present": True,
+        "metadata_aligned": True,
+        "file_count": 3,
+        "chunk_count": 7,
+    }
+
+    metrics = aggregate_metrics([row])
+    assert metrics["chunk_cache_contract_present_ratio"] == 1.0
+    assert metrics["chunk_cache_contract_fingerprint_present_ratio"] == 1.0
+    assert metrics["chunk_cache_contract_metadata_aligned_ratio"] == 1.0
+    assert metrics["chunk_cache_contract_file_count_mean"] == 3.0
+    assert metrics["chunk_cache_contract_chunk_count_mean"] == 7.0
+
+    summary = build_chunk_cache_contract_summary([row])
+    assert summary == {
+        "case_count": 1,
+        "present_case_count": 1,
+        "present_case_rate": 1.0,
+        "fingerprint_present_case_count": 1,
+        "fingerprint_present_case_rate": 1.0,
+        "metadata_aligned_case_count": 1,
+        "metadata_aligned_case_rate": 1.0,
+        "file_count_mean": 3.0,
+        "chunk_count_mean": 7.0,
+    }
 
 
 def test_evaluate_case_result_reports_subgraph_payload_kpis() -> None:
