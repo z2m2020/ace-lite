@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ace_lite.embeddings import CrossEncoderProvider, EmbeddingProvider
@@ -31,7 +32,6 @@ class ChunkSelectionRuntimeConfig:
     chunk_topological_shield_max_attenuation: float
     chunk_topological_shield_shared_parent_attenuation: float
     chunk_topological_shield_adjacency_attenuation: float
-    chunk_scoring_config: dict[str, Any]
     chunk_guard_enabled: bool
     chunk_guard_mode: str
     chunk_guard_lambda_penalty: float
@@ -43,6 +43,7 @@ class ChunkSelectionRuntimeConfig:
     embedding_lexical_weight: float
     embedding_semantic_weight: float
     embedding_min_similarity: float
+    chunk_scoring_config: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +54,31 @@ class ChunkSelectionDeps:
     rerank_rows_cross_encoder_with_time_budget: Callable[
         ..., tuple[list[dict[str, Any]], Any]
     ]
+
+
+def _call_with_supported_kwargs(func: Callable[..., Any], **kwargs: Any) -> Any:
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        return func(**kwargs)
+    if any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    ):
+        return func(**kwargs)
+    supported = {
+        name
+        for name, parameter in signature.parameters.items()
+        if parameter.kind
+        in (
+            inspect.Parameter.KEYWORD_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+    }
+    filtered_kwargs = {
+        key: value for key, value in kwargs.items() if key in supported
+    }
+    return func(**filtered_kwargs)
 
 
 def select_index_chunks(
@@ -72,7 +98,8 @@ def select_index_chunks(
 ) -> ChunkSelectionResult:
     """Run chunk selection using a narrowed runtime config contract."""
 
-    return deps.apply_chunk_selection(
+    return _call_with_supported_kwargs(
+        deps.apply_chunk_selection,
         root=root,
         query=query,
         files_map=files_map,

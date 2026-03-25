@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from typing import Any, Callable
 
 from ace_lite.chunking.builder import build_candidate_chunks
+from ace_lite.scoring_config import resolve_chunk_scoring_config
 from ace_lite.chunking.robust_signature import (
     build_chunk_robust_signature_sidecar,
     count_available_robust_signatures,
@@ -57,7 +58,6 @@ def apply_chunk_selection(
     chunk_topological_shield_max_attenuation: float,
     chunk_topological_shield_shared_parent_attenuation: float,
     chunk_topological_shield_adjacency_attenuation: float,
-    chunk_scoring_config: Mapping[str, Any] | None,
     chunk_guard_enabled: bool,
     chunk_guard_mode: str,
     chunk_guard_lambda_penalty: float,
@@ -76,10 +76,14 @@ def apply_chunk_selection(
     mark_timing: Callable[[str, float], None],
     rerank_rows_embeddings_with_time_budget: Callable[..., tuple[list[dict[str, Any]], Any]],
     rerank_rows_cross_encoder_with_time_budget: Callable[..., tuple[list[dict[str, Any]], Any]],
+    chunk_scoring_config: Mapping[str, Any] | None = None,
     perf_counter_fn: Callable[[], float] = perf_counter,
     build_candidate_chunks_fn: Callable[..., tuple[list[dict[str, Any]], dict[str, Any]]] = build_candidate_chunks,
 ) -> ChunkSelectionResult:
     timing_started = perf_counter_fn()
+    resolved_chunk_scoring_config = resolve_chunk_scoring_config(
+        chunk_scoring_config
+    )
     candidate_chunks, chunk_metrics = build_candidate_chunks_fn(
         root=root,
         files_map=files_map,
@@ -111,7 +115,7 @@ def apply_chunk_selection(
         topological_shield_adjacency_attenuation=float(
             chunk_topological_shield_adjacency_attenuation
         ),
-        chunk_scoring_config=chunk_scoring_config,
+        chunk_scoring_config=resolved_chunk_scoring_config,
         reference_hits_cache_key=index_hash,
     )
     mark_timing("chunk_build", timing_started)

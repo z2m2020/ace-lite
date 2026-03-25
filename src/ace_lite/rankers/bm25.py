@@ -6,6 +6,7 @@ for file-specific features like path prefixes and module names.
 
 from __future__ import annotations
 
+import inspect
 import math
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
@@ -282,21 +283,29 @@ def rank_candidates_bm25_two_stage(
         min_score: int,
         index_hash: str | None,
     ) -> list[dict[str, Any]]:
+        kwargs: dict[str, Any] = {
+            "min_score": min_score,
+            "index_hash": index_hash,
+            "bm25_config": scoring,
+        }
         try:
-            return rank_candidates_bm25(
-                corpus,
-                terms,
-                min_score=min_score,
-                index_hash=index_hash,
-                bm25_config=scoring,
-            )
-        except TypeError:
-            return rank_candidates_bm25(
-                corpus,
-                terms,
-                min_score=min_score,
-                bm25_config=scoring,
-            )
+            signature = inspect.signature(rank_candidates_bm25)
+        except (TypeError, ValueError):
+            signature = None
+        if signature is not None:
+            supported = {
+                name
+                for name, parameter in signature.parameters.items()
+                if parameter.kind
+                in (
+                    inspect.Parameter.KEYWORD_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                )
+            }
+            kwargs = {
+                key: value for key, value in kwargs.items() if key in supported
+            }
+        return rank_candidates_bm25(corpus, terms, **kwargs)
 
     # First stage: heuristic ranking
     try:

@@ -83,11 +83,6 @@ def build_case_evaluation_row(
     chunk_contract_skeleton_chunk_count: int,
     chunk_contract_fallback_ratio: float,
     chunk_contract_skeleton_ratio: float,
-    chunk_cache_contract_present: bool,
-    chunk_cache_contract_fingerprint_present: bool,
-    chunk_cache_contract_metadata_aligned: bool,
-    chunk_cache_contract_file_count: int,
-    chunk_cache_contract_chunk_count: int,
     unsupported_language_fallback_count: int,
     unsupported_language_fallback_ratio: float,
     subgraph_payload_enabled: bool,
@@ -311,6 +306,11 @@ def build_case_evaluation_row(
     slo_downgrade_signals: list[str],
     decision_trace: list[dict[str, Any]],
     evidence_insufficiency: dict[str, Any],
+    chunk_cache_contract_present: bool = False,
+    chunk_cache_contract_fingerprint_present: bool = False,
+    chunk_cache_contract_metadata_aligned: bool = False,
+    chunk_cache_contract_file_count: int = 0,
+    chunk_cache_contract_chunk_count: int = 0,
 ) -> dict[str, Any]:
     issue_report_raw = case.get("issue_report")
     issue_report = issue_report_raw if isinstance(issue_report_raw, dict) else {}

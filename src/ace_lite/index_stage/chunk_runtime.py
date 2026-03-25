@@ -42,7 +42,6 @@ def run_index_chunk_selection(
     chunk_topological_shield_max_attenuation: float,
     chunk_topological_shield_shared_parent_attenuation: float,
     chunk_topological_shield_adjacency_attenuation: float,
-    chunk_scoring_config: dict[str, Any],
     chunk_guard_enabled: bool,
     chunk_guard_mode: str,
     chunk_guard_lambda_penalty: float,
@@ -63,6 +62,7 @@ def run_index_chunk_selection(
     rerank_rows_cross_encoder_with_time_budget_fn: Callable[
         ..., tuple[list[dict[str, Any]], Any]
     ],
+    chunk_scoring_config: dict[str, Any] | None = None,
 ) -> ChunkSelectionResult:
     return select_index_chunks_fn(
         root=root,
@@ -99,7 +99,7 @@ def run_index_chunk_selection(
             chunk_topological_shield_adjacency_attenuation=float(
                 chunk_topological_shield_adjacency_attenuation
             ),
-            chunk_scoring_config=dict(chunk_scoring_config),
+            chunk_scoring_config=dict(chunk_scoring_config or {}),
             chunk_guard_enabled=bool(chunk_guard_enabled),
             chunk_guard_mode=str(chunk_guard_mode),
             chunk_guard_lambda_penalty=float(chunk_guard_lambda_penalty),

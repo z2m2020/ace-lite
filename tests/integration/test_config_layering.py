@@ -260,6 +260,14 @@ def test_cli_plan_passes_grouped_chunking_config_to_run_plan(
         "per_file_limit": 2,
         "disclosure": "refs",
         "signature": True,
+        "file_prior_weight": 0.35,
+        "path_match": 1.0,
+        "module_match": 0.8,
+        "symbol_exact": 2.5,
+        "symbol_partial": 1.4,
+        "signature_match": 0.5,
+        "reference_factor": 0.3,
+        "reference_cap": 2.5,
         "snippet": {"max_lines": 9, "max_chars": 320},
         "token_budget": 700,
         "topological_shield": {
@@ -512,31 +520,41 @@ def test_cli_plan_passes_grouped_retrieval_router_and_auxiliary_config_to_run_pl
         "index_path": "context-map/scip/custom-index.json",
         "provider": "scip_lite",
         "generate_fallback": False,
+        "base_weight": 0.5,
     }
-    assert captured["retrieval_config"] == {
-        "top_k_files": 2,
-        "min_candidate_score": 4,
-        "candidate_relative_threshold": 0.25,
-        "candidate_ranker": "bm25_lite",
-        "exact_search_enabled": True,
-        "deterministic_refine_enabled": False,
-        "exact_search_time_budget_ms": 90,
-        "exact_search_max_paths": 7,
-        "hybrid_re2_fusion_mode": "rrf",
-        "hybrid_re2_rrf_k": 75,
-        "hybrid_re2_bm25_weight": 0.4,
-        "hybrid_re2_heuristic_weight": 0.35,
-        "hybrid_re2_coverage_weight": 0.25,
-        "hybrid_re2_combined_scale": 1.2,
-        "adaptive_router": {
-            "enabled": True,
-            "mode": "shadow",
-            "model_path": "custom/router/model.json",
-            "state_path": "custom/router/state.json",
-            "arm_set": "retrieval_policy_shadow",
-            "online_bandit": {"enabled": True, "experiment_enabled": True},
-        },
+    retrieval_config = captured["retrieval_config"]
+    assert retrieval_config["top_k_files"] == 2
+    assert retrieval_config["min_candidate_score"] == 4
+    assert retrieval_config["candidate_relative_threshold"] == 0.25
+    assert retrieval_config["candidate_ranker"] == "bm25_lite"
+    assert retrieval_config["exact_search_enabled"] is True
+    assert retrieval_config["deterministic_refine_enabled"] is False
+    assert retrieval_config["exact_search_time_budget_ms"] == 90
+    assert retrieval_config["exact_search_max_paths"] == 7
+    assert retrieval_config["hybrid_re2_fusion_mode"] == "rrf"
+    assert retrieval_config["hybrid_re2_rrf_k"] == 75
+    assert retrieval_config["hybrid_re2_bm25_weight"] == 0.4
+    assert retrieval_config["hybrid_re2_heuristic_weight"] == 0.35
+    assert retrieval_config["hybrid_re2_coverage_weight"] == 0.25
+    assert retrieval_config["hybrid_re2_combined_scale"] == 1.2
+    assert retrieval_config["adaptive_router"] == {
+        "enabled": True,
+        "mode": "shadow",
+        "model_path": "custom/router/model.json",
+        "state_path": "custom/router/state.json",
+        "arm_set": "retrieval_policy_shadow",
+        "online_bandit": {"enabled": True, "experiment_enabled": True},
     }
+    assert retrieval_config["bm25_k1"] == 1.2
+    assert retrieval_config["bm25_b"] == 0.75
+    assert retrieval_config["bm25_score_scale"] == 4.0
+    assert retrieval_config["bm25_path_prior_factor"] == 0.1
+    assert retrieval_config["bm25_shortlist_min"] == 16
+    assert retrieval_config["bm25_shortlist_factor"] == 6
+    assert retrieval_config["hybrid_re2_shortlist_min"] == 12
+    assert retrieval_config["hybrid_re2_shortlist_factor"] == 4
+    assert retrieval_config["heur_path_exact"] == 3.0
+    assert retrieval_config["heur_content_cap"] == 1.0
 
 
 def test_cli_plan_uses_repo_config_for_precomputed_skills_routing(tmp_path: Path) -> None:

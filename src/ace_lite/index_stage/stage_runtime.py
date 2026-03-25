@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
 
+from ace_lite.scoring_config import SCIP_BASE_WEIGHT, resolve_chunk_scoring_config
+
 
 @dataclass(frozen=True, slots=True)
 class IndexStageRuntimeDeps:
@@ -37,6 +39,26 @@ def execute_index_stage_runtime(
     chunking_cfg = config.chunking
     topological_shield_cfg = chunking_cfg.topological_shield
     chunk_guard_cfg = chunking_cfg.guard
+    chunk_scoring_config = resolve_chunk_scoring_config(
+        {
+            key: value
+            for key, value in {
+                "file_prior_weight": getattr(
+                    chunking_cfg, "file_prior_weight", None
+                ),
+                "path_match": getattr(chunking_cfg, "path_match", None),
+                "module_match": getattr(chunking_cfg, "module_match", None),
+                "symbol_exact": getattr(chunking_cfg, "symbol_exact", None),
+                "symbol_partial": getattr(chunking_cfg, "symbol_partial", None),
+                "signature_match": getattr(chunking_cfg, "signature_match", None),
+                "reference_factor": getattr(
+                    chunking_cfg, "reference_factor", None
+                ),
+                "reference_cap": getattr(chunking_cfg, "reference_cap", None),
+            }.items()
+            if value is not None
+        }
+    )
 
     def mark_timing(label: str, started_at: float) -> None:
         timings_ms[label] = round((perf_counter() - started_at) * 1000.0, 3)
@@ -134,7 +156,10 @@ def execute_index_stage_runtime(
         scip_index_path=str(config.scip_index_path),
         scip_provider=str(config.scip_provider),
         scip_generate_fallback=bool(config.scip_generate_fallback),
-        scip_base_weight=float(config.scip_base_weight),
+        scip_base_weight=float(
+            getattr(config, "scip_base_weight", SCIP_BASE_WEIGHT)
+            or SCIP_BASE_WEIGHT
+        ),
         embedding_index_path=embedding_index_path,
         embedding_enabled=bool(config.embedding_enabled),
         embedding_provider=str(config.embedding_provider),
@@ -189,16 +214,7 @@ def execute_index_stage_runtime(
         chunk_topological_shield_adjacency_attenuation=float(
             topological_shield_cfg.adjacency_attenuation
         ),
-        chunk_scoring_config={
-            "file_prior_weight": float(chunking_cfg.file_prior_weight),
-            "path_match": float(chunking_cfg.path_match),
-            "module_match": float(chunking_cfg.module_match),
-            "symbol_exact": float(chunking_cfg.symbol_exact),
-            "symbol_partial": float(chunking_cfg.symbol_partial),
-            "signature_match": float(chunking_cfg.signature_match),
-            "reference_factor": float(chunking_cfg.reference_factor),
-            "reference_cap": float(chunking_cfg.reference_cap),
-        },
+        chunk_scoring_config=chunk_scoring_config,
         chunk_guard_enabled=bool(chunk_guard_cfg.enabled),
         chunk_guard_mode=str(chunk_guard_cfg.mode),
         chunk_guard_lambda_penalty=float(chunk_guard_cfg.lambda_penalty),

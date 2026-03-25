@@ -4,6 +4,32 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from ace_lite.scoring_config import (
+    BM25_B,
+    BM25_K1,
+    BM25_PATH_PRIOR_FACTOR,
+    BM25_SCORE_SCALE,
+    BM25_SHORTLIST_FACTOR,
+    BM25_SHORTLIST_MIN,
+    HEUR_CONTENT_CAP,
+    HEUR_CONTENT_IMPORT_FACTOR,
+    HEUR_CONTENT_SYMBOL_FACTOR,
+    HEUR_DEPTH_BASE,
+    HEUR_DEPTH_FACTOR,
+    HEUR_IMPORT_CAP,
+    HEUR_IMPORT_FACTOR,
+    HEUR_MODULE_CONTAINS,
+    HEUR_MODULE_EXACT,
+    HEUR_MODULE_TAIL,
+    HEUR_PATH_CONTAINS,
+    HEUR_PATH_EXACT,
+    HEUR_SYMBOL_EXACT,
+    HEUR_SYMBOL_PARTIAL_CAP,
+    HEUR_SYMBOL_PARTIAL_FACTOR,
+    HYBRID_SHORTLIST_FACTOR,
+    HYBRID_SHORTLIST_MIN,
+)
+
 
 @dataclass(slots=True)
 class IndexRetrievalRuntime:
@@ -25,48 +51,154 @@ def build_index_retrieval_runtime(
     normalize_fusion_mode_fn: Callable[[str], str],
     build_retrieval_runtime_profile_fn: Callable[..., Any],
 ) -> IndexRetrievalRuntime:
-    fusion_mode = normalize_fusion_mode_fn(retrieval_cfg.hybrid_re2_fusion_mode)
+    fusion_mode = normalize_fusion_mode_fn(
+        str(getattr(retrieval_cfg, "hybrid_re2_fusion_mode", "relative"))
+    )
     hybrid_weights = {
-        "bm25_weight": float(retrieval_cfg.hybrid_re2_bm25_weight),
-        "heuristic_weight": float(retrieval_cfg.hybrid_re2_heuristic_weight),
-        "coverage_weight": float(retrieval_cfg.hybrid_re2_coverage_weight),
-        "combined_scale": float(retrieval_cfg.hybrid_re2_combined_scale),
+        "bm25_weight": float(
+            getattr(retrieval_cfg, "hybrid_re2_bm25_weight", 0.45) or 0.45
+        ),
+        "heuristic_weight": float(
+            getattr(retrieval_cfg, "hybrid_re2_heuristic_weight", 0.45) or 0.45
+        ),
+        "coverage_weight": float(
+            getattr(retrieval_cfg, "hybrid_re2_coverage_weight", 0.10) or 0.10
+        ),
+        "combined_scale": float(
+            getattr(retrieval_cfg, "hybrid_re2_combined_scale", 10.0) or 10.0
+        ),
     }
     bm25_config = {
-        "k1": float(retrieval_cfg.bm25_k1),
-        "b": float(retrieval_cfg.bm25_b),
-        "score_scale": float(retrieval_cfg.bm25_score_scale),
-        "path_prior_factor": float(retrieval_cfg.bm25_path_prior_factor),
-        "shortlist_min": int(retrieval_cfg.bm25_shortlist_min),
-        "shortlist_factor": int(retrieval_cfg.bm25_shortlist_factor),
+        "k1": float(getattr(retrieval_cfg, "bm25_k1", BM25_K1) or BM25_K1),
+        "b": float(getattr(retrieval_cfg, "bm25_b", BM25_B) or BM25_B),
+        "score_scale": float(
+            getattr(retrieval_cfg, "bm25_score_scale", BM25_SCORE_SCALE)
+            or BM25_SCORE_SCALE
+        ),
+        "path_prior_factor": float(
+            getattr(
+                retrieval_cfg,
+                "bm25_path_prior_factor",
+                BM25_PATH_PRIOR_FACTOR,
+            )
+            or BM25_PATH_PRIOR_FACTOR
+        ),
+        "shortlist_min": int(
+            getattr(retrieval_cfg, "bm25_shortlist_min", BM25_SHORTLIST_MIN)
+            or BM25_SHORTLIST_MIN
+        ),
+        "shortlist_factor": int(
+            getattr(
+                retrieval_cfg,
+                "bm25_shortlist_factor",
+                BM25_SHORTLIST_FACTOR,
+            )
+            or BM25_SHORTLIST_FACTOR
+        ),
     }
     heuristic_config = {
-        "path_exact": float(retrieval_cfg.heur_path_exact),
-        "path_contains": float(retrieval_cfg.heur_path_contains),
-        "module_exact": float(retrieval_cfg.heur_module_exact),
-        "module_tail": float(retrieval_cfg.heur_module_tail),
-        "module_contains": float(retrieval_cfg.heur_module_contains),
-        "symbol_exact": float(retrieval_cfg.heur_symbol_exact),
-        "symbol_partial_factor": float(retrieval_cfg.heur_symbol_partial_factor),
-        "symbol_partial_cap": float(retrieval_cfg.heur_symbol_partial_cap),
-        "import_factor": float(retrieval_cfg.heur_import_factor),
-        "import_cap": float(retrieval_cfg.heur_import_cap),
-        "content_symbol_factor": float(retrieval_cfg.heur_content_symbol_factor),
-        "content_import_factor": float(retrieval_cfg.heur_content_import_factor),
-        "content_cap": float(retrieval_cfg.heur_content_cap),
-        "depth_base": float(retrieval_cfg.heur_depth_base),
-        "depth_factor": float(retrieval_cfg.heur_depth_factor),
+        "path_exact": float(
+            getattr(retrieval_cfg, "heur_path_exact", HEUR_PATH_EXACT)
+            or HEUR_PATH_EXACT
+        ),
+        "path_contains": float(
+            getattr(retrieval_cfg, "heur_path_contains", HEUR_PATH_CONTAINS)
+            or HEUR_PATH_CONTAINS
+        ),
+        "module_exact": float(
+            getattr(retrieval_cfg, "heur_module_exact", HEUR_MODULE_EXACT)
+            or HEUR_MODULE_EXACT
+        ),
+        "module_tail": float(
+            getattr(retrieval_cfg, "heur_module_tail", HEUR_MODULE_TAIL)
+            or HEUR_MODULE_TAIL
+        ),
+        "module_contains": float(
+            getattr(retrieval_cfg, "heur_module_contains", HEUR_MODULE_CONTAINS)
+            or HEUR_MODULE_CONTAINS
+        ),
+        "symbol_exact": float(
+            getattr(retrieval_cfg, "heur_symbol_exact", HEUR_SYMBOL_EXACT)
+            or HEUR_SYMBOL_EXACT
+        ),
+        "symbol_partial_factor": float(
+            getattr(
+                retrieval_cfg,
+                "heur_symbol_partial_factor",
+                HEUR_SYMBOL_PARTIAL_FACTOR,
+            )
+            or HEUR_SYMBOL_PARTIAL_FACTOR
+        ),
+        "symbol_partial_cap": float(
+            getattr(retrieval_cfg, "heur_symbol_partial_cap", HEUR_SYMBOL_PARTIAL_CAP)
+            or HEUR_SYMBOL_PARTIAL_CAP
+        ),
+        "import_factor": float(
+            getattr(retrieval_cfg, "heur_import_factor", HEUR_IMPORT_FACTOR)
+            or HEUR_IMPORT_FACTOR
+        ),
+        "import_cap": float(
+            getattr(retrieval_cfg, "heur_import_cap", HEUR_IMPORT_CAP)
+            or HEUR_IMPORT_CAP
+        ),
+        "content_symbol_factor": float(
+            getattr(
+                retrieval_cfg,
+                "heur_content_symbol_factor",
+                HEUR_CONTENT_SYMBOL_FACTOR,
+            )
+            or HEUR_CONTENT_SYMBOL_FACTOR
+        ),
+        "content_import_factor": float(
+            getattr(
+                retrieval_cfg,
+                "heur_content_import_factor",
+                HEUR_CONTENT_IMPORT_FACTOR,
+            )
+            or HEUR_CONTENT_IMPORT_FACTOR
+        ),
+        "content_cap": float(
+            getattr(retrieval_cfg, "heur_content_cap", HEUR_CONTENT_CAP)
+            or HEUR_CONTENT_CAP
+        ),
+        "depth_base": float(
+            getattr(retrieval_cfg, "heur_depth_base", HEUR_DEPTH_BASE)
+            or HEUR_DEPTH_BASE
+        ),
+        "depth_factor": float(
+            getattr(retrieval_cfg, "heur_depth_factor", HEUR_DEPTH_FACTOR)
+            or HEUR_DEPTH_FACTOR
+        ),
     }
     hybrid_config = {
-        "shortlist_min": int(retrieval_cfg.hybrid_re2_shortlist_min),
-        "shortlist_factor": int(retrieval_cfg.hybrid_re2_shortlist_factor),
+        "shortlist_min": int(
+            getattr(
+                retrieval_cfg,
+                "hybrid_re2_shortlist_min",
+                HYBRID_SHORTLIST_MIN,
+            )
+            or HYBRID_SHORTLIST_MIN
+        ),
+        "shortlist_factor": int(
+            getattr(
+                retrieval_cfg,
+                "hybrid_re2_shortlist_factor",
+                HYBRID_SHORTLIST_FACTOR,
+            )
+            or HYBRID_SHORTLIST_FACTOR
+        ),
     }
     runtime_profile = build_retrieval_runtime_profile_fn(
-        candidate_ranker=retrieval_cfg.candidate_ranker,
-        min_candidate_score=int(retrieval_cfg.min_candidate_score),
-        top_k_files=int(retrieval_cfg.top_k_files),
+        candidate_ranker=str(
+            getattr(retrieval_cfg, "candidate_ranker", "hybrid_re2")
+            or "hybrid_re2"
+        ),
+        min_candidate_score=int(
+            getattr(retrieval_cfg, "min_candidate_score", 1) or 1
+        ),
+        top_k_files=int(getattr(retrieval_cfg, "top_k_files", 8) or 8),
         hybrid_fusion_mode=fusion_mode,
-        hybrid_rrf_k=int(retrieval_cfg.hybrid_re2_rrf_k),
+        hybrid_rrf_k=int(getattr(retrieval_cfg, "hybrid_re2_rrf_k", 60) or 60),
         hybrid_weights=hybrid_weights,
         bm25_config=bm25_config,
         heuristic_config=heuristic_config,

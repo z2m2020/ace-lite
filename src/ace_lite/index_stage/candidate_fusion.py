@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,6 +46,26 @@ class CandidateFusionResult:
     semantic_embedding_provider_impl: EmbeddingProvider | None
     semantic_cross_encoder_provider: CrossEncoderProvider | None
     retrieval_refinement_payload: dict[str, Any] = field(default_factory=dict)
+
+
+def _call_with_supported_kwargs(func: Callable[..., Any], **kwargs: Any) -> Any:
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        return func(**kwargs)
+    supported = {
+        name
+        for name, parameter in signature.parameters.items()
+        if parameter.kind
+        in (
+            inspect.Parameter.KEYWORD_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+    }
+    filtered_kwargs = {
+        key: value for key, value in kwargs.items() if key in supported
+    }
+    return func(**filtered_kwargs)
 
 
 def _candidate_granularity_score(entry: dict[str, Any]) -> float:
@@ -412,7 +433,8 @@ def refine_candidate_pool(
     )
     deps.mark_timing("candidate_postprocess", timing_started)
 
-    structural_rerank = deps.apply_structural_rerank(
+    structural_rerank = _call_with_supported_kwargs(
+        deps.apply_structural_rerank,
         root=root,
         files_map=files_map,
         candidates=refined_candidates,

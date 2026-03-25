@@ -17,6 +17,7 @@ class ScipSectionSpec(_StrictModel):
     index_path: str | None = None
     provider: str | None = None
     generate_fallback: bool | None = None
+    base_weight: float | None = None
 
 
 class EmbeddingsSectionSpec(_StrictModel):

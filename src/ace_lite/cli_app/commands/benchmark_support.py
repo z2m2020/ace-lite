@@ -755,7 +755,6 @@ def run_benchmark_and_write_outputs(
     warmup_runs: int,
     include_plan_payload: bool,
     include_case_details: bool,
-    tuning_context_summary: dict[str, Any] | None,
     reward_log_enabled: bool,
     reward_log_path: str,
     runtime_stats_enabled: bool,
@@ -770,6 +769,7 @@ def run_benchmark_and_write_outputs(
     echo_json_fn: Any,
     merge_reward_log_summary_fn: Any,
     attach_runtime_stats_summary_fn: Any,
+    tuning_context_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     reward_log_writer: Any = None
     reward_log_init_error = ""
