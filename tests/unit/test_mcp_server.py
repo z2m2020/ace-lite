@@ -64,6 +64,10 @@ def test_mcp_service_health_reports_defaults(tmp_path: Path) -> None:
     assert payload["embedding_dimension"] == 256
     assert payload["ollama_base_url"] == "http://localhost:11434"
     assert isinstance(payload["plan_timeout_seconds"], float)
+    assert payload["runtime_identity"]["pid"] > 0
+    assert payload["runtime_identity"]["process_started_at"]
+    assert payload["runtime_identity"]["module_path"].endswith("service.py")
+    assert payload["staleness_warning"] is None
     assert payload["request_stats"]["active_request_count"] == 0
     assert payload["request_stats"]["total_request_count"] == 0
 
@@ -140,6 +144,30 @@ def test_mcp_service_health_surfaces_request_stats(tmp_path: Path, monkeypatch) 
     assert payload_after["request_stats"]["total_request_count"] == 1
     assert payload_after["request_stats"]["last_request_finished_at"]
     assert payload_after["request_stats"]["last_request_elapsed_ms"] >= 0.0
+
+
+def test_mcp_service_health_surfaces_stale_runtime_warning(tmp_path: Path) -> None:
+    service = _make_service(tmp_path)
+    service._startup_head_snapshot = {
+        "enabled": True,
+        "reason": "ok",
+        "head_commit": "old123",
+        "head_ref": "main",
+    }
+    service._collect_runtime_head_snapshot = lambda: {
+        "enabled": True,
+        "reason": "ok",
+        "head_commit": "new456",
+        "head_ref": "main",
+    }
+
+    payload = service.health()
+
+    assert payload["runtime_identity"]["stale_process_suspected"] is True
+    assert payload["staleness_warning"]["reason"] == "git_head_changed_since_start"
+    assert payload["staleness_warning"]["startup_head_commit"] == "old123"
+    assert payload["staleness_warning"]["current_head_commit"] == "new456"
+    assert any("Runtime code appears stale" in item for item in payload["warnings"])
 
 
 def test_mcp_service_index_writes_output(tmp_path: Path) -> None:

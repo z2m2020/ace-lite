@@ -7,6 +7,7 @@ It can also run in a self-test mode for health validation.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -40,7 +41,11 @@ from ace_lite.mcp_server.service_feedback_handlers import (
     handle_feedback_record_request,
     handle_feedback_stats_request,
 )
-from ace_lite.mcp_server.service_health import build_health_response_payload
+from ace_lite.mcp_server.service_health import (
+    build_health_response_payload,
+    build_runtime_identity_payload,
+    resolve_runtime_source_tree,
+)
 from ace_lite.mcp_server.service_index_handlers import handle_index_request
 from ace_lite.mcp_server.service_issue_report_handlers import (
     handle_issue_report_apply_fix_request,
@@ -63,6 +68,7 @@ from ace_lite.mcp_server.service_repomap_handlers import handle_repomap_build_re
 from ace_lite.parsers.languages import parse_language_csv
 from ace_lite.plan_quick import build_plan_quick
 from ace_lite.repomap.builder import build_repo_map
+from ace_lite.vcs_history import collect_git_head_snapshot
 from ace_lite.version import get_version, get_version_info
 
 logger = logging.getLogger(__name__)
@@ -71,6 +77,11 @@ logger = logging.getLogger(__name__)
 class AceLiteMcpService:
     def __init__(self, *, config: AceLiteMcpConfig) -> None:
         self._config = config
+        self._process_id = os.getpid()
+        self._process_started_at_dt = datetime.now(timezone.utc)
+        self._process_started_at = self._process_started_at_dt.isoformat()
+        self._runtime_source_tree = resolve_runtime_source_tree(module_path=__file__)
+        self._startup_head_snapshot = self._collect_runtime_head_snapshot()
         self._stats_lock = Lock()
         self._active_request_count = 0
         self._total_request_count = 0
@@ -121,6 +132,32 @@ class AceLiteMcpService:
         with self._track_request(tool_name):
             return operation()
 
+    def _collect_runtime_head_snapshot(self) -> dict[str, Any]:
+        source_root = str(self._runtime_source_tree.get("source_root") or "").strip()
+        if not source_root:
+            return {}
+        return collect_git_head_snapshot(
+            repo_root=source_root,
+            timeout_seconds=0.2,
+        )
+
+    def _runtime_identity_payload(self) -> dict[str, Any]:
+        current_head_snapshot = self._collect_runtime_head_snapshot()
+        uptime_seconds = max(
+            0.0,
+            (datetime.now(timezone.utc) - self._process_started_at_dt).total_seconds(),
+        )
+        return build_runtime_identity_payload(
+            pid=self._process_id,
+            process_started_at=self._process_started_at,
+            process_uptime_seconds=uptime_seconds,
+            source_root=str(self._runtime_source_tree.get("source_root") or "").strip(),
+            pyproject_path=str(self._runtime_source_tree.get("pyproject_path") or "").strip(),
+            module_path=str(self._runtime_source_tree.get("module_path") or "").strip(),
+            startup_head_snapshot=self._startup_head_snapshot,
+            current_head_snapshot=current_head_snapshot,
+        )
+
     def health(self) -> dict[str, Any]:
         version_info = get_version_info()
         return build_health_response_payload(
@@ -128,6 +165,7 @@ class AceLiteMcpService:
             request_stats=self._request_stats_payload(),
             version=get_version(),
             version_info=version_info,
+            runtime_identity=self._runtime_identity_payload(),
         )
 
     def index(

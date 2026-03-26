@@ -6,6 +6,17 @@ from typing import Any
 
 import click
 
+from ace_lite.cli_app.runtime_doctor_support import (
+    build_runtime_cache_doctor_payload as build_runtime_cache_doctor_payload,
+)
+from ace_lite.cli_app.runtime_doctor_support import (
+    build_runtime_cache_vacuum_payload as build_runtime_cache_vacuum_payload,
+)
+from ace_lite.cli_app.runtime_doctor_support import (
+    build_runtime_doctor_payload,
+    build_runtime_git_doctor_payload,
+    build_runtime_version_sync_payload,
+)
 from ace_lite.cli_app.runtime_mcp_ops import (
     extract_memory_channels,
     load_mcp_env_snapshot,
@@ -15,6 +26,24 @@ from ace_lite.cli_app.runtime_mcp_ops import (
     probe_mcp_memory_endpoint,
     probe_rest_memory_endpoint,
     run_mcp_self_test,
+)
+from ace_lite.cli_app.runtime_settings_support import (
+    build_runtime_settings_governance_payload,
+    build_runtime_settings_payload,
+    collect_runtime_settings_persist_payload,
+    collect_runtime_settings_show_payload,
+    evaluate_runtime_memory_state,
+    load_runtime_snapshot,
+    resolve_runtime_settings_bundle,
+)
+from ace_lite.cli_app.runtime_settings_support import (
+    resolve_effective_runtime_skills_dir as resolve_effective_runtime_skills_dir,
+)
+from ace_lite.cli_app.runtime_setup_support import (
+    build_codex_mcp_setup_plan,
+)
+from ace_lite.cli_app.runtime_setup_support import (
+    execute_codex_mcp_setup_plan as execute_codex_mcp_setup_plan,
 )
 from ace_lite.cli_app.runtime_status_support import (
     DEFAULT_RUNTIME_STATS_DB_PATH,
@@ -26,37 +55,25 @@ from ace_lite.cli_app.runtime_status_support import (
     load_runtime_stats_summary,
     resolve_user_runtime_stats_path,
 )
-from ace_lite.cli_app.runtime_settings_support import (
-    build_runtime_settings_governance_payload,
-    build_runtime_settings_payload,
-    collect_runtime_settings_persist_payload,
-    collect_runtime_settings_show_payload,
-    evaluate_runtime_memory_state,
-    load_runtime_snapshot,
-    resolve_effective_runtime_skills_dir,
-    resolve_runtime_settings_bundle,
-)
-from ace_lite.cli_app.runtime_doctor_support import (
-    build_runtime_cache_doctor_payload,
-    build_runtime_cache_vacuum_payload,
-    build_runtime_doctor_payload,
-    build_runtime_git_doctor_payload,
-    build_runtime_version_sync_payload,
-)
-from ace_lite.cli_app.runtime_setup_support import (
-    build_codex_mcp_setup_plan,
-    execute_codex_mcp_setup_plan,
-)
-from ace_lite.stage_artifact_cache_gc import (
-    vacuum_stage_artifact_cache,
-    verify_stage_artifact_cache,
-)
 
 
 @dataclass(frozen=True)
 class RuntimeCommandDomainDescriptor:
     name: str
     handlers: tuple[str, ...]
+
+
+def _merge_unique_messages(*groups: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for item in group:
+            normalized = str(item or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            merged.append(normalized)
+    return merged
 
 
 def collect_runtime_mcp_doctor_payload(
@@ -102,8 +119,16 @@ def collect_runtime_mcp_doctor_payload(
             "ok": True,
         }
     ]
-    warnings = list(memory_state["warnings"])
-    recommendations = list(memory_state["recommendations"])
+    warnings = _merge_unique_messages(
+        list(memory_state["warnings"]),
+        list(payload.get("warnings", [])) if isinstance(payload.get("warnings"), list) else [],
+    )
+    recommendations = _merge_unique_messages(
+        list(memory_state["recommendations"]),
+        list(payload.get("recommendations", []))
+        if isinstance(payload.get("recommendations"), list)
+        else [],
+    )
     endpoint_checks: list[dict[str, Any]] = []
     ok = True
 
@@ -220,8 +245,16 @@ def collect_runtime_mcp_self_test_payload(
         "ok": True,
         "event": "mcp_self_test",
         "payload": payload,
-        "warnings": memory_state["warnings"],
-        "recommendations": memory_state["recommendations"],
+        "warnings": _merge_unique_messages(
+            list(memory_state["warnings"]),
+            list(payload.get("warnings", [])) if isinstance(payload.get("warnings"), list) else [],
+        ),
+        "recommendations": _merge_unique_messages(
+            list(memory_state["recommendations"]),
+            list(payload.get("recommendations", []))
+            if isinstance(payload.get("recommendations"), list)
+            else [],
+        ),
         "snapshot_loaded": bool(snapshot_env),
         "snapshot_path": str(snapshot_path),
     }
@@ -324,20 +357,21 @@ def iter_runtime_command_domains() -> tuple[RuntimeCommandDomainDescriptor, ...]
 
 
 __all__ = [
+    "DEFAULT_RUNTIME_STATS_DB_PATH",
+    "RUNTIME_COMMAND_DOMAIN_REGISTRY",
     "build_codex_mcp_setup_plan",
     "build_runtime_doctor_payload",
     "build_runtime_git_doctor_payload",
     "build_runtime_settings_governance_payload",
     "build_runtime_settings_payload",
+    "build_runtime_status_payload",
     "build_runtime_status_snapshot",
     "build_runtime_version_sync_payload",
+    "collect_runtime_mcp_self_test_payload",
     "collect_runtime_settings_persist_payload",
     "collect_runtime_settings_show_payload",
-    "collect_runtime_mcp_self_test_payload",
     "collect_runtime_status_payload",
-    "DEFAULT_RUNTIME_STATS_DB_PATH",
     "evaluate_runtime_memory_state",
-    "build_runtime_status_payload",
     "iter_runtime_command_domains",
     "load_latest_runtime_stats_match",
     "load_runtime_dev_feedback_summary",
@@ -345,6 +379,5 @@ __all__ = [
     "load_runtime_snapshot",
     "load_runtime_stats_summary",
     "resolve_runtime_settings_bundle",
-    "RUNTIME_COMMAND_DOMAIN_REGISTRY",
     "resolve_user_runtime_stats_path",
 ]

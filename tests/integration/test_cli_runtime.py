@@ -11,14 +11,14 @@ import ace_lite.cli as cli_module
 from ace_lite.cli_app.commands import runtime as runtime_module
 from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import SelectionFeedbackStore
-from ace_lite.runtime_stats import RuntimeInvocationStats
-from ace_lite.runtime_stats_schema import RUNTIME_STATS_DOCTOR_EVENT_CLASS
-from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.runtime_settings import RuntimeSettingsManager
 from ace_lite.runtime_settings_store import (
     build_runtime_settings_record,
     persist_runtime_settings_record,
 )
+from ace_lite.runtime_stats import RuntimeInvocationStats
+from ace_lite.runtime_stats_schema import RUNTIME_STATS_DOCTOR_EVENT_CLASS
+from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.stage_artifact_cache import StageArtifactCache
 
 
@@ -295,6 +295,9 @@ def test_cli_runtime_test_mcp_self_test(tmp_path: Path) -> None:
     assert payload["ok"] is True
     assert payload["event"] == "mcp_self_test"
     assert payload["payload"]["ok"] is True
+    assert payload["payload"]["runtime_identity"]["process_started_at"]
+    assert payload["payload"]["runtime_identity"]["pid"] > 0
+    assert payload["payload"]["staleness_warning"] is None
     assert isinstance(payload.get("warnings"), list)
     assert payload["warnings"]
 
@@ -345,6 +348,8 @@ def test_cli_runtime_doctor_mcp_reports_configuration(tmp_path: Path) -> None:
     assert payload["event"] == "mcp_doctor"
     assert payload["ok"] is True
     assert payload["snapshot_loaded"] is False
+    assert payload["self_test"]["runtime_identity"]["process_started_at"]
+    assert payload["self_test"]["staleness_warning"] is None
     checks = payload.get("checks", [])
     assert isinstance(checks, list)
     memory_check = next(item for item in checks if item.get("name") == "memory_configured")

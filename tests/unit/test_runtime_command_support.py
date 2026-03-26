@@ -4,12 +4,14 @@ import json
 import subprocess
 from pathlib import Path
 
+import ace_lite.cli_app.runtime_command_support as runtime_command_support_module
 from ace_lite.cli_app.runtime_command_support import (
     RUNTIME_COMMAND_DOMAIN_REGISTRY,
     build_codex_mcp_setup_plan,
     build_runtime_settings_governance_payload,
     build_runtime_status_payload,
     build_runtime_status_snapshot,
+    collect_runtime_mcp_self_test_payload,
     collect_runtime_settings_persist_payload,
     collect_runtime_settings_show_payload,
     collect_runtime_status_payload,
@@ -18,18 +20,18 @@ from ace_lite.cli_app.runtime_command_support import (
     load_runtime_dev_feedback_summary,
     load_runtime_preference_capture_summary,
     load_runtime_stats_summary,
-    resolve_runtime_settings_bundle,
     resolve_effective_runtime_skills_dir,
+    resolve_runtime_settings_bundle,
 )
 from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import SelectionFeedbackStore
-from ace_lite.runtime_stats import RuntimeInvocationStats
-from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.runtime_settings_store import (
     build_runtime_settings_record,
     load_runtime_settings_record,
     persist_runtime_settings_record,
 )
+from ace_lite.runtime_stats import RuntimeInvocationStats
+from ace_lite.runtime_stats_store import DurableStatsStore
 
 
 def _seed_runtime_stats_with_degraded_reason(db_path: Path) -> None:
@@ -111,6 +113,70 @@ def test_resolve_runtime_settings_bundle_uses_last_known_good_selected_profile(
     assert bundle["governance"]["current_record"]["status"] == "invalid"
     assert bundle["governance"]["last_known_good_record"]["status"] == "valid"
     assert bundle["governance"]["persist_recommended"] is True
+
+
+def test_collect_runtime_mcp_self_test_payload_merges_health_warnings() -> None:
+    payload = collect_runtime_mcp_self_test_payload(
+        root="repo",
+        skills_dir="skills",
+        python_executable="python",
+        timeout_seconds=5.0,
+        mcp_name="ace-lite",
+        use_snapshot=False,
+        require_memory=False,
+        extract_memory_channels_fn=lambda payload: (
+            payload.get("memory_primary", "none"),
+            payload.get("memory_secondary", "none"),
+        ),
+        memory_channels_disabled_fn=lambda primary, secondary: primary == "none"
+        and secondary == "none",
+        memory_config_recommendations_fn=lambda root, skills_dir: ["configure-memory"],
+        run_mcp_self_test_fn=lambda **kwargs: {
+            "ok": True,
+            "memory_primary": "rest",
+            "memory_secondary": "none",
+            "warnings": ["Runtime code appears stale"],
+            "recommendations": ["Restart the stdio MCP server/session after git pull or pip install -e updates."],
+            "runtime_identity": {"stale_process_suspected": True},
+        },
+        snapshot_path_fn=lambda **kwargs: Path("snapshot.json"),
+        load_snapshot_fn=lambda **kwargs: ({}, Path("snapshot.json")),
+    )
+
+    assert payload["ok"] is True
+    assert "Runtime code appears stale" in payload["warnings"]
+    assert any("Restart the stdio MCP server/session" in item for item in payload["recommendations"])
+
+
+def test_collect_runtime_mcp_doctor_payload_merges_self_test_warnings(monkeypatch) -> None:
+    monkeypatch.setattr(
+        runtime_command_support_module,
+        "run_mcp_self_test",
+        lambda **kwargs: {
+            "ok": True,
+            "memory_primary": "rest",
+            "memory_secondary": "none",
+            "warnings": ["Runtime code appears stale"],
+            "recommendations": ["Restart the stdio MCP server/session after git pull or pip install -e updates."],
+            "runtime_identity": {"stale_process_suspected": True},
+        },
+    )
+
+    payload = runtime_command_support_module.collect_runtime_mcp_doctor_payload(
+        root="repo",
+        skills_dir="skills",
+        python_executable="python",
+        timeout_seconds=5.0,
+        mcp_name="ace-lite",
+        use_snapshot=False,
+        require_memory=False,
+        probe_endpoints=False,
+    )
+
+    assert payload["ok"] is True
+    assert payload["self_test"]["runtime_identity"]["stale_process_suspected"] is True
+    assert "Runtime code appears stale" in payload["warnings"]
+    assert any("Restart the stdio MCP server/session" in item for item in payload["recommendations"])
 
 
 def test_collect_runtime_settings_show_payload_matches_bundle_snapshot(
