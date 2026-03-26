@@ -235,6 +235,33 @@ def test_lint_skill_manifest_flags_workflow_error_keywords() -> None:
     assert {item["keyword"] for item in issues} == {"handoff", "review", "docs"}
 
 
+def test_lint_skill_manifest_flags_missing_frontmatter_before_backfill(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "needs-metadata.md").write_text(
+        textwrap.dedent(
+            """
+            ---
+            name: needs-metadata
+            description: sample
+            ---
+            # Workflow
+            Missing explicit default sections and token estimate.
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_skill_manifest(tmp_path)
+    issues = lint_skill_manifest(manifest)
+
+    assert {item["field"] for item in issues} == {
+        "default_sections",
+        "token_estimate",
+    }
+
+
 def test_repo_skills_pass_frontmatter_lint() -> None:
     issues = lint_skill_manifest(_repo_skill_manifest())
     assert issues == []

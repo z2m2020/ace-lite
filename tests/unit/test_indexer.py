@@ -3,7 +3,7 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from ace_lite.indexer import build_index, update_index
+from ace_lite.indexer import build_index, classify_tier, update_index
 
 
 def _create_sample_repo(root: Path) -> None:
@@ -79,6 +79,14 @@ def test_update_index_applies_incremental_changes(tmp_path: Path) -> None:
 
     updated_functions = {item["name"] for item in updated["files"]["pkg/mod.py"]["functions"]}
     assert "another" in updated_functions
+
+
+def test_classify_tier_detects_dependencies() -> None:
+    assert classify_tier(path="node_modules/pkg/index.js", language="javascript") == "dependency"
+    assert classify_tier(path="lib/openzeppelin/Ownable.sol", language="solidity") == "dependency"
+    assert classify_tier(path="contracts/MyToken.sol", language="solidity") == "first_party"
+
+
 def test_build_index_extracts_python_references(tmp_path: Path) -> None:
     _create_sample_repo(tmp_path)
 

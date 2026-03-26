@@ -8,6 +8,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.60] - 2026-03-26
+
+### Added
+
+- Added the H2 2026 optimization roadmap under `docs/maintainers/ROADMAP_2026H2_OPTIMIZATION.md`.
+- Added focused unit coverage for skill frontmatter linting and the shared `classify_tier()` helper.
+
+### Changed
+
+- Promoted duplicated index tier classification into a module-level `classify_tier()` helper for full and incremental indexing paths.
+- Skill manifest linting now tracks missing frontmatter fields before runtime backfill so CI can flag missing `token_estimate` and `default_sections` accurately.
+
 ## [0.3.54] - 2026-03-23
 
 ### Added

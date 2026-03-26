@@ -35,6 +35,19 @@ DEFAULT_EXCLUDE_DIRS: set[str] = {
 ACEIGNORE_FILENAME = ".aceignore"
 
 
+def classify_tier(*, path: str, language: str) -> str:
+    """Classify a source file as first-party or dependency."""
+    normalized = str(path or "").strip().replace("\\", "/").lstrip("./")
+    if normalized.startswith("node_modules/"):
+        return "dependency"
+    if (
+        str(language or "").strip().lower() == "solidity"
+        and normalized.startswith("lib/")
+    ):
+        return "dependency"
+    return "first_party"
+
+
 def _default_exclude_dirs(*, enabled_languages: tuple[str, ...]) -> set[str]:
     excluded = set(DEFAULT_EXCLUDE_DIRS)
     # Solidity projects commonly vendor dependency contracts under node_modules/.
@@ -98,19 +111,14 @@ def build_index(
     engine = TreeSitterEngine(enabled_languages)
     files: dict[str, dict[str, Any]] = {}
 
-    def classify_tier(*, path: str, language: str) -> str:
-        normalized = str(path or "").strip().replace("\\", "/").lstrip("./")
-        if normalized.startswith("node_modules/"):
-            return "dependency"
-        if str(language or "").strip().lower() == "solidity" and normalized.startswith("lib/"):
-            return "dependency"
-        return "first_party"
-
     for file_path in file_paths:
         entry = engine.parse_file(file_path, root_path)
         if entry is None:
             continue
-        entry["tier"] = classify_tier(path=str(entry.get("path") or ""), language=str(entry.get("language") or ""))
+        entry["tier"] = classify_tier(
+            path=str(entry.get("path") or ""),
+            language=str(entry.get("language") or ""),
+        )
         files[entry["path"]] = entry
 
     return finalize_index_payload(
@@ -160,14 +168,6 @@ def update_index(
         files = {}
         index["files"] = files
 
-    def classify_tier(*, path: str, language: str) -> str:
-        normalized = str(path or "").strip().replace("\\", "/").lstrip("./")
-        if normalized.startswith("node_modules/"):
-            return "dependency"
-        if str(language or "").strip().lower() == "solidity" and normalized.startswith("lib/"):
-            return "dependency"
-        return "first_party"
-
     for changed_file in changed_files:
         relative_path = _normalize_changed_path(changed_file, root_path)
         if relative_path is None:
@@ -215,7 +215,10 @@ def update_index(
             files.pop(key, None)
             continue
 
-        entry["tier"] = classify_tier(path=key, language=str(entry.get("language") or ""))
+        entry["tier"] = classify_tier(
+            path=key,
+            language=str(entry.get("language") or ""),
+        )
         files[key] = entry
 
     return finalize_index_payload(index)

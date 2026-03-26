@@ -47,6 +47,13 @@ def build_skill_manifest(skills_dir: str | Path) -> list[dict[str, Any]]:
         )
         token_estimate = to_int(metadata.get("token_estimate"), default=None)
         needs_body_scan = token_estimate is None or not default_sections
+        # Record which frontmatter fields are missing BEFORE backfill so that
+        # lint_skill_manifest() can report accurate issues.
+        missing_frontmatter: list[str] = []
+        if token_estimate is None:
+            missing_frontmatter.append("token_estimate")
+        if not default_sections:
+            missing_frontmatter.append("default_sections")
         headings = _extract_headings(body) if needs_body_scan else []
         if token_estimate is None:
             token_estimate = _estimate_skill_token_estimate(
@@ -70,6 +77,7 @@ def build_skill_manifest(skills_dir: str | Path) -> list[dict[str, Any]]:
             "token_estimate": token_estimate,
             "headings": headings,
             "manifest_load_mode": "body_scan" if needs_body_scan else "metadata_only",
+            "_missing_frontmatter": missing_frontmatter,
         }
         manifest.append(entry)
 
@@ -348,6 +356,22 @@ def _lint_skill_entry(entry: dict[str, Any]) -> list[dict[str, str]]:
     )
     name = str(entry.get("name") or "").strip() or "(unknown)"
     path = str(entry.get("path") or "").strip()
+
+    # Frontmatter completeness: token_estimate and default_sections should be
+    # declared explicitly so build_skill_manifest() never falls back to a
+    # body-scan path.  We check _missing_frontmatter which is recorded BEFORE
+    # build_skill_manifest() backfills computed values.
+    missing = entry.get("_missing_frontmatter") or []
+    for field_name in missing:
+        issues.append(
+            {
+                "name": name,
+                "path": path,
+                "field": field_name,
+                "keyword": "",
+                "message": f"missing {field_name} in frontmatter; causes body-scan fallback",
+            }
+        )
 
     for keyword in sorted(error_keywords):
         if keyword in _ERROR_KEYWORD_BLOCKLIST:
