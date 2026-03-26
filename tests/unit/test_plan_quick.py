@@ -83,6 +83,60 @@ def test_score_plan_quick_rows_biases_doc_sync_queries_toward_markdown_status_fi
     assert scored[-1].intent_boost < 0.0
 
 
+def test_score_plan_quick_rows_boosts_newer_status_docs_for_latest_sensitive_query() -> None:
+    rows = [
+        {
+            "path": "docs/planning/2026-03-25_status.md",
+            "module": "docs.planning.current_status",
+            "language": "markdown",
+            "score": 5.0,
+        },
+        {
+            "path": "docs/planning/2026-02-01_status.md",
+            "module": "docs.planning.old_status",
+            "language": "markdown",
+            "score": 5.0,
+        },
+    ]
+
+    scored = score_plan_quick_rows(
+        query="latest status update",
+        rows=rows,
+        lexical_boost_per_hit=0.0,
+    )
+
+    assert [row.path for row in scored] == [
+        "docs/planning/2026-03-25_status.md",
+        "docs/planning/2026-02-01_status.md",
+    ]
+    assert scored[0].recency_boost > scored[1].recency_boost
+
+
+def test_score_plan_quick_rows_skips_recency_boost_without_latest_marker() -> None:
+    rows = [
+        {
+            "path": "docs/planning/2026-03-25_status.md",
+            "module": "docs.planning.current_status",
+            "language": "markdown",
+            "score": 5.0,
+        },
+        {
+            "path": "docs/planning/2026-02-01_status.md",
+            "module": "docs.planning.old_status",
+            "language": "markdown",
+            "score": 5.0,
+        },
+    ]
+
+    scored = score_plan_quick_rows(
+        query="docs status",
+        rows=rows,
+        lexical_boost_per_hit=0.0,
+    )
+
+    assert all(row.recency_boost == 0.0 for row in scored)
+
+
 def test_build_index_marks_generated_files(tmp_path: Path) -> None:
     _write_file(
         tmp_path / "pkg/contract/erc20_generated.py",
@@ -375,6 +429,13 @@ def test_build_plan_quick_adds_query_profile_risk_hints_and_full_build_reason(
     )
 
     assert result["query_profile"] == {"doc_sync": True, "latest_sensitive": True}
+    assert result["candidate_domain_summary"]["primary_domain"] == "docs"
+    assert isinstance(result["candidate_domain_summary"]["cross_domain_mix"], bool)
+    assert result["candidate_domain_summary"]["domain_counts"]["docs"] >= 1
+    assert len(result["suggested_query_refinements"]) >= 1
+    assert result["suggested_query_refinements"][0]["reason_code"] == "docs_status_focus"
+    assert "docs" in result["suggested_query_refinements"][0]["target_domains"]
+    assert "planning" in result["suggested_query_refinements"][0]["query"]
     assert isinstance(result["risk_hints"], list)
     assert any(item["code"] == "index_cold_start" for item in result["risk_hints"])
     assert result["index_cache"]["full_build_reason"] == "cache_missing"

@@ -885,13 +885,16 @@ def test_mcp_service_plan_config_pack_respects_explicit_args(tmp_path: Path, mon
 
 def test_mcp_service_plan_quick_returns_candidate_files(tmp_path: Path) -> None:
     _write_sample_repo(tmp_path)
+    docs_dir = tmp_path / "docs" / "planning"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    (docs_dir / "2026-03-26_status.md").write_text("Current status\n", encoding="utf-8")
     service = _make_service(tmp_path)
 
     result = service.plan_quick(
-        query="counter increment",
+        query="sync docs update latest status",
         repo="demo-repo",
         root=str(tmp_path),
-        languages="python",
+        languages="python,markdown",
         top_k_files=3,
         repomap_top_k=8,
         include_rows=True,
@@ -904,6 +907,9 @@ def test_mcp_service_plan_quick_returns_candidate_files(tmp_path: Path) -> None:
     assert isinstance(result["retrieval_policy_profile"], str)
     assert result["retrieval_policy_profile"]
     assert result["retrieval_policy_observability"]["selected"] == result["retrieval_policy_profile"]
+    assert isinstance(result["candidate_domain_summary"], dict)
+    assert isinstance(result["suggested_query_refinements"], list)
+    assert result["suggested_query_refinements"]
     assert isinstance(result.get("rows"), list)
     assert result["total_ms"] >= 0.0
 

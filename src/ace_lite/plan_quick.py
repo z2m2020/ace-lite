@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import re
+from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +91,39 @@ _DOC_PENALIZED_PREFIXES: tuple[tuple[str, float], ...] = (
     ("pkg/", -2.0),
 )
 _MARKDOWN_LANGUAGES: frozenset[str] = frozenset({"markdown", "md"})
+_LATEST_DOC_DOMAINS: frozenset[str] = frozenset(
+    {"docs", "planning", "repos", "reports", "markdown"}
+)
+_QUERY_REFINEMENT_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "doc",
+        "docs",
+        "markdown",
+        "readme",
+        "planning",
+        "plan",
+        "progress",
+        "status",
+        "report",
+        "roadmap",
+        "runbook",
+        "sync",
+        "update",
+        "latest",
+        "recent",
+        "current",
+        "repo",
+        "repos",
+        "reports",
+        "code",
+        "fix",
+        "debug",
+        "quick",
+        "ace",
+        "ace_plan_quick",
+    }
+)
+_PATH_DATE_PATTERN = re.compile(r"(?<!\d)((?:19|20)\d{2})-(\d{2})-(\d{2})(?!\d)")
 
 
 def _query_flags(query: str) -> dict[str, bool]:
@@ -120,6 +155,45 @@ def _classify_path_domain(path: str) -> str:
     return "code"
 
 
+def _is_markdown_doc(*, path: str, language: str) -> bool:
+    normalized_path = str(path or "").strip().replace("\\", "/").lower()
+    normalized_language = str(language or "").strip().lower()
+    return normalized_language in _MARKDOWN_LANGUAGES or normalized_path.endswith(
+        (".md", ".mdx")
+    )
+
+
+def _extract_path_date(path: str) -> date | None:
+    normalized_path = str(path or "").strip().replace("\\", "/")
+    matched = _PATH_DATE_PATTERN.search(normalized_path)
+    if not matched:
+        return None
+    try:
+        return datetime.strptime(matched.group(0), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _find_newest_dated_doc(rows: list[dict[str, Any]]) -> date | None:
+    newest: date | None = None
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path", "") or "")
+        language = str(item.get("language", "") or "")
+        domain = _classify_path_domain(path)
+        if domain not in _LATEST_DOC_DOMAINS:
+            continue
+        if not _is_markdown_doc(path=path, language=language):
+            continue
+        path_date = _extract_path_date(path)
+        if path_date is None:
+            continue
+        if newest is None or path_date > newest:
+            newest = path_date
+    return newest
+
+
 def _doc_sync_intent_boost(*, path: str, language: str, query_flags: dict[str, bool]) -> float:
     if not bool(query_flags.get("doc_sync", False)):
         return 0.0
@@ -136,6 +210,40 @@ def _doc_sync_intent_boost(*, path: str, language: str, query_flags: dict[str, b
         if normalized_path.startswith(prefix):
             boost += penalty
             break
+    return boost
+
+
+def _latest_doc_intent_boost(
+    *,
+    path: str,
+    language: str,
+    query_flags: dict[str, bool],
+    newest_dated_doc: date | None,
+) -> float:
+    if not bool(query_flags.get("latest_sensitive", False)):
+        return 0.0
+    domain = _classify_path_domain(path)
+    if domain not in _LATEST_DOC_DOMAINS:
+        return 0.0
+    if not _is_markdown_doc(path=path, language=language):
+        return 0.0
+    normalized_path = str(path or "").strip().replace("\\", "/").lower()
+    boost = 0.0
+    if normalized_path.startswith(_DOC_PREFERRED_PREFIXES):
+        boost += 1.0
+    if any(marker in normalized_path for marker in _DOC_PREFERRED_NAME_MARKERS):
+        boost += 1.5
+    if "current" in normalized_path or "latest" in normalized_path:
+        boost += 0.75
+    path_date = _extract_path_date(path)
+    if newest_dated_doc is not None and path_date is not None:
+        lag_days = max(0, (newest_dated_doc - path_date).days)
+        if lag_days == 0:
+            boost += 3.0
+        elif lag_days <= 30:
+            boost += 2.0
+        elif lag_days <= 90:
+            boost += 1.0
     return boost
 
 
@@ -235,6 +343,177 @@ def build_plan_quick_policy_observability(
     }
 
 
+def _build_candidate_domain_summary(
+    rows: list[PlanQuickScoredRow],
+) -> dict[str, Any]:
+    domain_counts = Counter(
+        row.semantic_domain for row in rows if str(row.path or "").strip()
+    )
+    ranked_domains = sorted(domain_counts.items(), key=lambda item: (-item[1], item[0]))
+    markdown_count = sum(
+        1 for row in rows if _is_markdown_doc(path=row.path, language=row.language)
+    )
+    latest_doc_candidates = [
+        {
+            "path": row.path,
+            "date": path_date.isoformat(),
+            "semantic_domain": row.semantic_domain,
+        }
+        for row in rows
+        for path_date in [_extract_path_date(row.path)]
+        if path_date is not None
+    ]
+    latest_doc_candidates.sort(key=lambda item: (str(item["date"]), str(item["path"])), reverse=True)
+    domains = [
+        {"domain": domain, "count": int(count)}
+        for domain, count in ranked_domains
+    ]
+    dominant_domain = domains[0]["domain"] if domains else None
+    return {
+        "top_k_considered": len(rows),
+        "unique_domains": len(domains),
+        "dominant_domain": dominant_domain,
+        "primary_domain": dominant_domain,
+        "mixed_domains": bool(len(domains) > 1),
+        "cross_domain_mix": bool(len(domains) > 1),
+        "top_domains": [item["domain"] for item in domains[:3]],
+        "domain_counts": {domain: int(count) for domain, count in ranked_domains},
+        "markdown_ratio": (
+            float(markdown_count) / float(len(rows)) if rows else 0.0
+        ),
+        "latest_doc_candidates": latest_doc_candidates[:3],
+        "domains": domains,
+    }
+
+
+def _dedupe_tokens(tokens: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for token in tokens:
+        normalized = str(token or "").strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        ordered.append(normalized)
+    return ordered
+
+
+def _build_refinement_query(
+    *,
+    fixed_tokens: list[str],
+    topic_tokens: list[str],
+) -> str:
+    return " ".join(_dedupe_tokens([*fixed_tokens, *topic_tokens])).strip()
+
+
+def _append_query_refinement(
+    refinements: list[dict[str, Any]],
+    *,
+    code: str,
+    query: str,
+    reason: str,
+    raw_tokens: list[str],
+    strategy: str,
+    target_domains: list[str],
+) -> None:
+    normalized_query = str(query or "").strip()
+    if not normalized_query:
+        return
+    if any(item.get("query") == normalized_query for item in refinements):
+        return
+    query_tokens = [token for token in normalized_query.lower().split() if token]
+    added_terms = [
+        token for token in query_tokens if token not in set(_dedupe_tokens(raw_tokens))
+    ]
+    refinements.append(
+        {
+            "code": str(code or "").strip(),
+            "query": normalized_query,
+            "reason": str(reason or "").strip(),
+            "reason_code": str(code or "").strip(),
+            "strategy": str(strategy or "").strip(),
+            "added_terms": added_terms,
+            "target_domains": [domain for domain in target_domains if domain],
+        }
+    )
+
+
+def _build_suggested_query_refinements(
+    *,
+    query: str,
+    rows: list[PlanQuickScoredRow],
+) -> list[dict[str, Any]]:
+    query_flags = _query_flags(query)
+    if not (
+        bool(query_flags.get("doc_sync", False))
+        or bool(query_flags.get("latest_sensitive", False))
+    ):
+        return []
+    raw_tokens = [token for token in str(query or "").strip().lower().split() if token]
+    topic_tokens = [
+        token for token in raw_tokens if token not in _QUERY_REFINEMENT_STOPWORDS
+    ]
+    domain_summary = _build_candidate_domain_summary(rows)
+    ranked_domains = [
+        str(item.get("domain", "") or "")
+        for item in domain_summary.get("domains", [])
+        if isinstance(item, dict)
+    ]
+    refinements: list[dict[str, Any]] = []
+
+    primary_tokens = ["docs", "planning", "progress", "status"]
+    if bool(query_flags.get("latest_sensitive", False)):
+        primary_tokens.append("latest")
+    _append_query_refinement(
+        refinements,
+        code="docs_status_focus",
+        query=_build_refinement_query(
+            fixed_tokens=primary_tokens,
+            topic_tokens=topic_tokens,
+        ),
+        reason="Narrow the query toward status boards, planning docs, and current progress entrypoints.",
+        raw_tokens=raw_tokens,
+        strategy="add_doc_scope_terms",
+        target_domains=["docs", "planning"],
+    )
+
+    if bool(domain_summary.get("mixed_domains", False)):
+        mixed_tokens = ["markdown", "docs", "planning"]
+        if bool(query_flags.get("latest_sensitive", False)):
+            mixed_tokens.append("latest")
+        _append_query_refinement(
+            refinements,
+            code="markdown_focus",
+            query=_build_refinement_query(
+                fixed_tokens=mixed_tokens,
+                topic_tokens=topic_tokens,
+            ),
+            reason="Current candidates mix multiple domains, so prefer markdown entrypoints first.",
+            raw_tokens=raw_tokens,
+            strategy="prefer_markdown_entrypoints",
+            target_domains=["docs", "planning", "markdown"],
+        )
+
+    if any(domain in {"repos", "reports", "planning"} for domain in ranked_domains[:3]):
+        repo_tokens = ["repos", "reports", "progress", "status"]
+        if bool(query_flags.get("latest_sensitive", False)):
+            repo_tokens.append("latest")
+        _append_query_refinement(
+            refinements,
+            code="repo_progress_focus",
+            query=_build_refinement_query(
+                fixed_tokens=repo_tokens,
+                topic_tokens=topic_tokens,
+            ),
+            reason="Bias the query toward repo-sync progress reports and adjacent status documents.",
+            raw_tokens=raw_tokens,
+            strategy="bias_repo_progress_docs",
+            target_domains=["repos", "reports", "planning"],
+        )
+
+    return refinements[:3]
+
+
 @dataclass(frozen=True, slots=True)
 class PlanQuickScoredRow:
     path: str
@@ -244,6 +523,8 @@ class PlanQuickScoredRow:
     lexical_hits: int
     lexical_boost: float
     intent_boost: float
+    recency_boost: float
+    semantic_domain: str
     fused_score: float
 
     def as_dict(self) -> dict[str, Any]:
@@ -255,6 +536,8 @@ class PlanQuickScoredRow:
             "lexical_hits": int(self.lexical_hits),
             "lexical_boost": float(self.lexical_boost),
             "intent_boost": float(self.intent_boost),
+            "recency_boost": float(self.recency_boost),
+            "semantic_domain": self.semantic_domain,
             "fused_score": float(self.fused_score),
         }
 
@@ -269,6 +552,7 @@ def score_plan_quick_rows(
     tokens = [token for token in normalized_query.lower().split() if token]
     boost_per_hit = float(lexical_boost_per_hit)
     query_flags = _query_flags(normalized_query)
+    newest_dated_doc = _find_newest_dated_doc(rows)
 
     scored: list[PlanQuickScoredRow] = []
     for item in rows:
@@ -281,12 +565,19 @@ def score_plan_quick_rows(
         blob = f"{path} {module}".lower()
         lexical_hits = sum(1 for token in tokens if token in blob)
         lexical_boost = float(lexical_hits) * boost_per_hit
+        semantic_domain = _classify_path_domain(path)
         intent_boost = _doc_sync_intent_boost(
             path=path,
             language=language,
             query_flags=query_flags,
         )
-        fused_score = base_score + lexical_boost + intent_boost
+        recency_boost = _latest_doc_intent_boost(
+            path=path,
+            language=language,
+            query_flags=query_flags,
+            newest_dated_doc=newest_dated_doc,
+        )
+        fused_score = base_score + lexical_boost + intent_boost + recency_boost
         scored.append(
             PlanQuickScoredRow(
                 path=path,
@@ -296,6 +587,8 @@ def score_plan_quick_rows(
                 lexical_hits=lexical_hits,
                 lexical_boost=lexical_boost,
                 intent_boost=intent_boost,
+                recency_boost=recency_boost,
+                semantic_domain=semantic_domain,
                 fused_score=fused_score,
             )
         )
@@ -495,6 +788,11 @@ def build_plan_quick(
         if ranking_source == "repomap"
         else str(ranking_profile or "graph"),
         "query_profile": _query_flags(normalized_query),
+        "candidate_domain_summary": _build_candidate_domain_summary(limited_rows),
+        "suggested_query_refinements": _build_suggested_query_refinements(
+            query=normalized_query,
+            rows=limited_rows,
+        ),
         "risk_hints": _build_plan_quick_risk_hints(
             query=normalized_query,
             rows=limited_rows,
