@@ -114,6 +114,28 @@ def render_retrieval_context_from_sidecar(*, sidecar: dict[str, Any]) -> str:
                 joined += ", ..."
             context_parts.append(f"references={joined}")
 
+    callees = sidecar.get("callees", [])
+    if isinstance(callees, list):
+        callee_values = [str(item).strip() for item in callees if str(item).strip()]
+        if callee_values:
+            joined = ", ".join(callee_values)
+            if bool(sidecar.get("callees_truncated", False)):
+                joined += ", ..."
+            context_parts.append(f"callees={joined}")
+
+    callers = sidecar.get("callers", [])
+    if isinstance(callers, list):
+        caller_values = [str(item).strip() for item in callers if str(item).strip()]
+        if caller_values:
+            joined = ", ".join(caller_values)
+            if bool(sidecar.get("callers_truncated", False)):
+                joined += ", ..."
+            context_parts.append(f"callers={joined}")
+
+    reference_scope = str(sidecar.get("references_scope") or "").strip()
+    if reference_scope:
+        context_parts.append(f"references_scope={reference_scope}")
+
     return "\n".join(context_parts).strip()
 
 

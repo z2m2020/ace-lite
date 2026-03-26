@@ -130,7 +130,8 @@ def test_finalize_index_stage_output_from_state_uses_state_contract() -> None:
         requested_ranker="bm25",
         selected_ranker="bm25",
         ranker_fallbacks=[],
-        corpus_size=1,
+        corpus_size=12,
+        effective_corpus_size=1,
         min_score_used=2,
         candidates=[{"path": "src/app.py", "score": 1.0}],
         candidate_chunks=[],
@@ -185,6 +186,7 @@ def test_finalize_index_stage_output_from_state_uses_state_contract() -> None:
 
     assert captured["build"]["memory_paths"] == ["docs/guide.md"]
     assert captured["build"]["top_k_files"] == 4
+    assert captured["build"]["corpus_size"] == 1
     assert captured["cloned_payload"]["retrieval_refinement"]["focus_paths"] == [
         "src/app.py"
     ]

@@ -82,7 +82,10 @@ def test_render_retrieval_context_from_sidecar_preserves_expected_text_shape() -
             "imports": ["from pkg.auth import validate"],
             "imports_truncated": False,
             "references": ["pkg.auth.validate"],
+            "callees": ["pkg.auth.validate"],
+            "callers": ["src.entry.bootstrap"],
             "references_truncated": False,
+            "references_scope": "symbol_local_call",
         }
     )
 
@@ -93,6 +96,9 @@ def test_render_retrieval_context_from_sidecar_preserves_expected_text_shape() -
     assert "parent=class Demo:" in rendered
     assert "imports=from pkg.auth import validate" in rendered
     assert "references=pkg.auth.validate" in rendered
+    assert "callees=pkg.auth.validate" in rendered
+    assert "callers=src.entry.bootstrap" in rendered
+    assert "references_scope=symbol_local_call" in rendered
 
 
 def test_resolve_retrieval_context_text_can_fall_back_to_structured_sidecar() -> None:

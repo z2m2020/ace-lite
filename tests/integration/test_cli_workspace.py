@@ -183,6 +183,7 @@ def test_cli_workspace_plan_supports_repo_scope_and_evidence_contract(tmp_path: 
     selected_names = [item["name"] for item in payload["selected_repos"]]
     assert set(selected_names) <= {"billing-api", "frontend-ui"}
     assert "ops-observability" not in selected_names
+    assert payload["summary_routing"]["enabled"] is True
     contract = payload["evidence_contract"]
     assert isinstance(contract["candidate_repos"], list)
     assert isinstance(contract["selected_repos"], list)

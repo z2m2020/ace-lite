@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from ace_lite.chunking.types import (
+    CONTEXTUAL_CHUNKING_SIDECAR_KEY,
+    RETRIEVAL_CONTEXT_SIDECAR_KEY,
+)
+
 
 def _chunk_granularity_signals(item: dict[str, Any]) -> tuple[int, int, int, int, int]:
     evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
@@ -122,6 +127,8 @@ def rank_source_plan_chunks(
                 "disclosure_fallback_reason",
                 "skeleton",
                 "robust_signature_summary",
+                RETRIEVAL_CONTEXT_SIDECAR_KEY,
+                CONTEXTUAL_CHUNKING_SIDECAR_KEY,
             ):
                 value = source.get(field)
                 if field == "skeleton":
@@ -130,6 +137,12 @@ def rank_source_plan_chunks(
                 elif field == "robust_signature_summary":
                     if isinstance(value, dict):
                         target[field] = dict(value)
+                elif field == CONTEXTUAL_CHUNKING_SIDECAR_KEY:
+                    if isinstance(value, dict):
+                        target[field] = dict(value)
+                elif field == RETRIEVAL_CONTEXT_SIDECAR_KEY:
+                    if isinstance(value, str) and value.strip():
+                        target[field] = value
                 elif isinstance(value, str) and value.strip():
                     target[field] = value
 

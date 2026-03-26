@@ -6,6 +6,7 @@ for file-specific features like path prefixes and module names.
 
 from __future__ import annotations
 
+import hashlib
 import inspect
 import math
 from collections import OrderedDict
@@ -22,15 +23,32 @@ def _tokenize_words(text: str) -> list[str]:
 
 
 _BM25_CACHE_MAX_ENTRIES = 4
-_BM25_CACHE_VERSION = "bm25-docs-v1"
+_BM25_CACHE_VERSION = "bm25-docs-v2"
 _BM25_DOC_CACHE: OrderedDict[str, list[dict[str, Any]]] = OrderedDict()
 
 
-def _bm25_cache_key(index_hash: str | None) -> str | None:
+def _bm25_scope_fingerprint(files_map: Any) -> str:
+    if not isinstance(files_map, dict):
+        return ""
+    paths = [
+        str(path).strip()
+        for path, entry in files_map.items()
+        if isinstance(path, str) and isinstance(entry, dict)
+    ]
+    if not paths:
+        return ""
+    normalized = "\n".join(sorted(paths)).encode("utf-8", errors="ignore")
+    return hashlib.sha256(normalized).hexdigest()[:16]
+
+
+def _bm25_cache_key(index_hash: str | None, files_map: Any) -> str | None:
     normalized = str(index_hash or "").strip()
     if not normalized:
         return None
-    return f"{_BM25_CACHE_VERSION}:{normalized}"
+    scope = _bm25_scope_fingerprint(files_map)
+    if not scope:
+        return None
+    return f"{_BM25_CACHE_VERSION}:{normalized}:{scope}"
 
 
 def _get_cached_docs(cache_key: str | None) -> list[dict[str, Any]] | None:
@@ -87,7 +105,7 @@ def rank_candidates_bm25(
         return []
     scoring = resolve_bm25_scoring_config(bm25_config)
 
-    cache_key = _bm25_cache_key(index_hash)
+    cache_key = _bm25_cache_key(index_hash, files_map)
     cached_docs = _get_cached_docs(cache_key)
     docs: list[dict[str, Any]] = list(cached_docs) if cached_docs is not None else []
 

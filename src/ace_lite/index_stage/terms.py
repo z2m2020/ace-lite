@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
@@ -79,11 +80,26 @@ _STOPWORDS: frozenset[str] = frozenset(
 )
 
 
-def extract_terms(*, query: str, memory_stage: dict[str, Any]) -> list[str]:
+def _resolve_query_expansion_enabled(value: bool | None) -> bool:
+    if value is not None:
+        return bool(value)
+    raw = str(os.getenv("ACE_LITE_QUERY_EXPANSION_ENABLED", "") or "").strip().lower()
+    if not raw:
+        return True
+    return raw not in {"0", "false", "off", "no", "disabled"}
+
+
+def extract_terms(
+    *,
+    query: str,
+    memory_stage: dict[str, Any],
+    query_expansion_enabled: bool | None = None,
+) -> list[str]:
     """Extract index query terms from the user query and memory hits."""
 
     terms: list[str] = []
     max_terms = EXTRACT_TERMS_MAX
+    expansion_enabled = _resolve_query_expansion_enabled(query_expansion_enabled)
 
     def stem(token: str) -> str:
         if len(token) <= 4:
@@ -131,7 +147,7 @@ def extract_terms(*, query: str, memory_stage: dict[str, Any]) -> list[str]:
 
     query_lower = str(query or "").lower()
 
-    if len(terms) < max_terms:
+    if expansion_enabled and len(terms) < max_terms:
         # Prioritize stable internal tokens before generic raw query tokens so
         # important compound expansions are not crowded out by stopwords or
         # low-signal natural language terms.
@@ -140,6 +156,33 @@ def extract_terms(*, query: str, memory_stage: dict[str, Any]) -> list[str]:
             ("tree-sitter", ("treesitter", "tree_sitter")),
             ("open memory", ("openmemory", "open_memory")),
             ("repo map", ("repomap", "repo_map")),
+            (
+                "term expansion",
+                (
+                    "extract_terms",
+                    "terms.py",
+                    "index_stage/terms.py",
+                    "src/ace_lite/index_stage/terms.py",
+                ),
+            ),
+            (
+                "retrieval terms",
+                (
+                    "extract_terms",
+                    "terms.py",
+                    "index_stage/terms.py",
+                    "src/ace_lite/index_stage/terms.py",
+                ),
+            ),
+            (
+                "deterministic retrieval terms",
+                (
+                    "extract_terms",
+                    "terms.py",
+                    "index_stage/terms.py",
+                    "src/ace_lite/index_stage/terms.py",
+                ),
+            ),
             # Internal ops/control-plane phrases that map to stable file tokens.
             ("docs channel", ("docs_channel", "docs_channel.py")),
             ("docs evidence", ("docs_channel", "docs_channel.py")),
@@ -303,6 +346,205 @@ def extract_terms(*, query: str, memory_stage: dict[str, Any]) -> list[str]:
             ("仓库地图缓存", ("repomap/cache.py", "repomap_cache")),
             ("预计算", ("repomap_precompute", "repomap_precompute_ttl_seconds", "precompute_cache.json")),
             (
+                "summary index",
+                (
+                    "summary_index",
+                    "summary_index.py",
+                    "workspace/planner.py",
+                    "src/ace_lite/workspace/planner.py",
+                ),
+            ),
+            (
+                "summary tokens",
+                (
+                    "summary_tokens_for_repo",
+                    "summary_index.py",
+                    "workspace/planner.py",
+                ),
+            ),
+            (
+                "workspace summary",
+                (
+                    "summary_index",
+                    "summary_tokens_for_repo",
+                    "workspace/planner.py",
+                ),
+            ),
+            (
+                "reference sidecar",
+                (
+                    "references",
+                    "chunking/builder.py",
+                    "src/ace_lite/chunking/builder.py",
+                    "chunk_selection.py",
+                    "src/ace_lite/index_stage/chunk_selection.py",
+                ),
+            ),
+            (
+                "caller callee",
+                (
+                    "references",
+                    "treesitter_engine.py",
+                    "chunking/builder.py",
+                    "chunk_selection.py",
+                ),
+            ),
+            (
+                "摘要索引",
+                (
+                    "summary_index",
+                    "summary_index.py",
+                    "workspace/planner.py",
+                    "summary_tokens_for_repo",
+                ),
+            ),
+            (
+                "摘要词",
+                (
+                    "summary_tokens_for_repo",
+                    "summary_index.py",
+                    "workspace/planner.py",
+                ),
+            ),
+            (
+                "引用旁路",
+                (
+                    "references",
+                    "chunking/builder.py",
+                    "chunk_selection.py",
+                    "treesitter_engine.py",
+                ),
+            ),
+            (
+                "调用方",
+                (
+                    "references",
+                    "treesitter_engine.py",
+                    "chunking/builder.py",
+                ),
+            ),
+            (
+                "被调用方",
+                (
+                    "references",
+                    "treesitter_engine.py",
+                    "chunking/builder.py",
+                ),
+            ),
+            (
+                "stage contract",
+                (
+                    "stagecontracterror",
+                    "exceptions.py",
+                    "pipeline/contracts.py",
+                    "src/ace_lite/pipeline/contracts.py",
+                    "validate_stage_output",
+                    "stage_contract.invalid_type",
+                    "stage_contract.missing_key",
+                ),
+            ),
+            (
+                "stagecontracterror",
+                (
+                    "stagecontracterror",
+                    "stage_contract_error",
+                    "exceptions.py",
+                    "pipeline/contracts.py",
+                    "src/ace_lite/pipeline/contracts.py",
+                    "validate_stage_output",
+                    "stage_contract.invalid_type",
+                    "stage_contract.missing_key",
+                ),
+            ),
+            (
+                "pipeline contract",
+                (
+                    "pipeline/contracts.py",
+                    "src/ace_lite/pipeline/contracts.py",
+                    "validate_stage_output",
+                    "stage_contract.invalid_type",
+                    "stage_contract.missing_key",
+                ),
+            ),
+            (
+                "error code",
+                (
+                    "error_code",
+                    "exceptions.py",
+                    "validation/result.py",
+                    "src/ace_lite/validation/result.py",
+                ),
+            ),
+            (
+                "traceback",
+                (
+                    "traceback",
+                    "plan_timeout.py",
+                    "exceptions.py",
+                    "src/ace_lite/plan_timeout.py",
+                    "_capture_thread_stack",
+                    "execute_with_timeout",
+                ),
+            ),
+            (
+                "stack trace",
+                (
+                    "traceback",
+                    "plan_timeout.py",
+                    "exceptions.py",
+                    "src/ace_lite/plan_timeout.py",
+                ),
+            ),
+            (
+                "plan fallback",
+                (
+                    "build_plan_timeout_fallback_payload",
+                    "execute_with_timeout",
+                    "_capture_thread_stack",
+                    "plantimeoutoutcome",
+                    "plan_timeout.py",
+                    "src/ace_lite/plan_timeout.py",
+                ),
+            ),
+            (
+                "runtime error",
+                (
+                    "runtimeerror",
+                    "exceptions.py",
+                    "runtime/scheduler.py",
+                    "src/ace_lite/runtime/scheduler.py",
+                ),
+            ),
+            (
+                "value error",
+                (
+                    "valueerror",
+                    "exceptions.py",
+                    "validation/result.py",
+                    "src/ace_lite/validation/result.py",
+                ),
+            ),
+            (
+                "key error",
+                (
+                    "keyerror",
+                    "exceptions.py",
+                    "pipeline/registry.py",
+                ),
+            ),
+            (
+                "type error",
+                (
+                    "typeerror",
+                    "exceptions.py",
+                    "pipeline/stages/memory.py",
+                ),
+            ),
+            ("异常", ("exceptions.py", "stagecontracterror", "runtimeerror")),
+            ("错误码", ("error_code", "validation/result.py", "exceptions.py")),
+            ("堆栈", ("traceback", "plan_timeout.py", "exceptions.py")),
+            ("运行时错误", ("runtimeerror", "exceptions.py", "runtime/scheduler.py")),
+            (
                 "cross encoder",
                 (
                     "embeddings",
@@ -310,6 +552,62 @@ def extract_terms(*, query: str, memory_stage: dict[str, Any]) -> list[str]:
                     "ace_lite/embeddings.py",
                     "src/ace_lite/embeddings.py",
                     "test_orchestrator_embeddings",
+                ),
+            ),
+            (
+                "embedding provider",
+                (
+                    "embedding_provider",
+                    "--embedding-provider",
+                    "embedding_provider_choices",
+                    "benchmark_run_command",
+                    "resolve_benchmark_run_settings",
+                    "_resolve_shared_plan_config",
+                    "cli_app/commands/benchmark.py",
+                    "src/ace_lite/cli_app/commands/benchmark.py",
+                ),
+            ),
+            (
+                "rerank pool",
+                (
+                    "embedding_rerank_pool",
+                    "--embedding-rerank-pool",
+                    "shared_embedding_option_descriptors",
+                    "benchmark_run_command",
+                    "resolve_benchmark_run_settings",
+                    "cli_app/params_option_retrieval_groups.py",
+                    "src/ace_lite/cli_app/params_option_retrieval_groups.py",
+                ),
+            ),
+            (
+                "benchmark options",
+                (
+                    "benchmark_run_command",
+                    "resolve_benchmark_run_settings",
+                    "_resolve_shared_plan_config",
+                    "shared_embedding_option_descriptors",
+                    "cli_app/commands/benchmark.py",
+                    "src/ace_lite/cli_app/commands/benchmark.py",
+                ),
+            ),
+            (
+                "academic optimization",
+                (
+                    "_build_benchmark_command",
+                    "query_expansion_experiment",
+                    "ace_lite_query_expansion_enabled",
+                    "academic_optimization.yaml",
+                    "run_academic_optimization_benchmark.py",
+                    "scripts/run_academic_optimization_benchmark.py",
+                ),
+            ),
+            (
+                "academic optimization experiments",
+                (
+                    "_build_benchmark_command",
+                    "query_expansion_experiment",
+                    "ace_lite_query_expansion_enabled",
+                    "academic_optimization.yaml",
                 ),
             ),
             ("time budget", ("semantic_rerank_time_budget_ms", "time_budget")),
@@ -345,7 +643,7 @@ def extract_terms(*, query: str, memory_stage: dict[str, Any]) -> list[str]:
         if len(terms) >= max_terms:
             break
 
-    if len(terms) < max_terms:
+    if expansion_enabled and len(terms) < max_terms:
         # Provide stable "directory-ish" hints for repo-internal keywords so
         # implementation modules can surface alongside tests (especially in
         # concept/architecture queries).
@@ -360,6 +658,51 @@ def extract_terms(*, query: str, memory_stage: dict[str, Any]) -> list[str]:
         if "repomap" in terms:
             add_token("repomap/", min_len=5)
             add_token("repomap.py", min_len=5)
+        if "summary_index" in terms or "summary_tokens_for_repo" in terms:
+            add_token("workspace/summary_index.py", min_len=5)
+            add_token("src/ace_lite/workspace/summary_index.py", min_len=5)
+            add_token("workspace/planner.py", min_len=5)
+            add_token("src/ace_lite/workspace/planner.py", min_len=5)
+        if "references" in terms:
+            add_token("treesitter_engine.py", min_len=5)
+            add_token("chunking/builder.py", min_len=5)
+            add_token("chunk_selection.py", min_len=5)
+        if (
+            "stagecontracterror" in terms
+            or "runtimeerror" in terms
+            or "valueerror" in terms
+            or "keyerror" in terms
+            or "typeerror" in terms
+            or "error_code" in terms
+            or "traceback" in terms
+        ):
+            add_token("exceptions.py", min_len=5)
+            add_token("src/ace_lite/exceptions.py", min_len=5)
+
+    if expansion_enabled and len(terms) < max_terms:
+        flag_tokens = re.findall(r"--[a-z0-9][a-z0-9-]*", query_lower)
+        for raw_flag in flag_tokens:
+            normalized_flag = raw_flag.lstrip("-").strip()
+            if not normalized_flag:
+                continue
+            add_token(normalized_flag, min_len=3)
+            add_variants(normalized_flag.replace("-", "_"), min_len=3)
+            if len(terms) >= max_terms:
+                break
+
+    if expansion_enabled and len(terms) < max_terms:
+        exception_tokens = re.findall(r"\b[A-Z][A-Za-z]+(?:Error|Exception)\b", str(query or ""))
+        for raw_exception in exception_tokens:
+            normalized_exception = raw_exception.strip().lower()
+            if not normalized_exception:
+                continue
+            add_token(normalized_exception, min_len=3)
+            snake_case = re.sub(r"(?<!^)([A-Z])", r"_\1", raw_exception).lower()
+            add_variants(snake_case, min_len=3)
+            add_token("exceptions.py", min_len=5)
+            add_token("src/ace_lite/exceptions.py", min_len=5)
+            if len(terms) >= max_terms:
+                break
 
     hits = memory_stage.get("hits", [])
     if not isinstance(hits, list):

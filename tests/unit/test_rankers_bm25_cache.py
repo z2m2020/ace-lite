@@ -46,3 +46,42 @@ def test_rank_candidates_bm25_reuses_cached_docs(monkeypatch: Any) -> None:
     )
     assert second
 
+
+def test_rank_candidates_bm25_cache_isolated_by_files_map_scope() -> None:
+    bm25_module._BM25_DOC_CACHE.clear()
+
+    alpha_files_map = {
+        "src/alpha.py": {
+            "language": "python",
+            "module": "src.alpha",
+            "tier": "first_party",
+            "symbols": [{"name": "alphaThing", "qualified_name": "src.alpha.alphaThing"}],
+            "imports": [],
+        },
+    }
+    beta_files_map = {
+        "src/beta.py": {
+            "language": "python",
+            "module": "src.beta",
+            "tier": "first_party",
+            "symbols": [{"name": "betaThing", "qualified_name": "src.beta.betaThing"}],
+            "imports": [],
+        },
+    }
+
+    alpha_ranked = bm25_module.rank_candidates_bm25(
+        alpha_files_map,
+        ["alpha"],
+        min_score=0,
+        index_hash="shared-index-hash",
+    )
+    beta_ranked = bm25_module.rank_candidates_bm25(
+        beta_files_map,
+        ["beta"],
+        min_score=0,
+        index_hash="shared-index-hash",
+    )
+
+    assert [item["path"] for item in alpha_ranked] == ["src/alpha.py"]
+    assert [item["path"] for item in beta_ranked] == ["src/beta.py"]
+    assert len(bm25_module._BM25_DOC_CACHE) == 2

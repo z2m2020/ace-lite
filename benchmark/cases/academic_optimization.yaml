@@ -1,0 +1,212 @@
+cases:
+  - case_id: academic-query-expansion-compounds-01
+    query: how does retrieval term expansion handle tree sitter and repo map compound phrases
+    expected_keys: [terms, treesitter, repomap]
+    filters:
+      include_paths:
+        - src/ace_lite/index_stage/terms.py
+        - src/ace_lite/plan_quick.py
+        - tests/unit/test_orchestrator_term_extraction.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: query_expansion
+    query_bucket: doc_explain
+
+  - case_id: academic-query-expansion-docs-channel-02
+    query: how do docs channel hits feed back into deterministic retrieval terms for explain queries
+    expected_keys: [terms, docs_channel]
+    filters:
+      include_paths:
+        - src/ace_lite/index_stage/terms.py
+        - src/ace_lite/docs_channel.py
+        - tests/unit/test_docs_channel.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: query_expansion
+    query_bucket: doc_explain
+
+  - case_id: academic-query-expansion-exception-name-11
+    query: where does StageContractError format error code and reason for pipeline contract failures
+    expected_keys: [pipeline/contracts.py, exceptions.py]
+    filters:
+      include_paths:
+        - src/ace_lite/index_stage/terms.py
+        - src/ace_lite/exceptions.py
+        - src/ace_lite/pipeline/contracts.py
+        - tests/unit/test_orchestrator_term_extraction.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: query_expansion
+    query_bucket: doc_explain
+
+  - case_id: academic-query-expansion-error-pattern-12
+    query: how are runtime error and traceback handled when plan fallback times out
+    expected_keys: [plan_timeout.py, exceptions.py]
+    filters:
+      include_paths:
+        - src/ace_lite/index_stage/terms.py
+        - src/ace_lite/plan_timeout.py
+        - src/ace_lite/exceptions.py
+        - tests/unit/test_orchestrator_term_extraction.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: query_expansion
+    query_bucket: refactor
+
+  - case_id: academic-query-expansion-cli-flags-13
+    query: where are embedding provider and rerank pool benchmark options wired for academic optimization experiments
+    expected_keys:
+      - cli_app/commands/benchmark.py
+      - params_option_retrieval_groups.py
+      - run_academic_optimization_benchmark.py
+    filters:
+      include_paths:
+        - scripts/run_academic_optimization_benchmark.py
+        - src/ace_lite/cli_app/commands/benchmark.py
+        - src/ace_lite/cli_app/params_option_retrieval_groups.py
+        - tests/unit/test_orchestrator_term_extraction.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: query_expansion
+    query_bucket: feature
+
+  - case_id: academic-cross-encoder-file-rerank-03
+    query: where are file candidates reranked with a cross encoder and semantic weight
+    expected_keys: [embeddings_rerank, cross encoder]
+    filters:
+      include_paths:
+        - src/ace_lite/embeddings_rerank.py
+        - tests/unit/test_index_semantic_candidate_rerank.py
+        - tests/integration/test_orchestrator_embeddings.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: cross_encoder
+    query_bucket: feature
+
+  - case_id: academic-cross-encoder-chunk-time-budget-04
+    query: how does chunk semantic rerank enforce time budget and fail open fallback
+    expected_keys: [chunk_selection, rerank, timeout]
+    filters:
+      include_paths:
+        - src/ace_lite/index_stage/chunk_selection.py
+        - src/ace_lite/embeddings_rerank.py
+        - tests/unit/test_index_rerank_timeouts.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: cross_encoder
+    query_bucket: refactor
+
+  - case_id: academic-graph-closure-bonus-05
+    query: how does graph closure bonus boost neighboring chunks during retrieval
+    expected_keys: [graph_closure, graph_context]
+    filters:
+      include_paths:
+        - src/ace_lite/chunking/graph_closure.py
+        - src/ace_lite/chunking/graph_context.py
+        - tests/unit/test_chunking_graph_closure.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: graph_context
+    query_bucket: refactor
+
+  - case_id: academic-reference-sidecar-06
+    query: how does chunk rerank text include retrieval context parent symbol and references sidecar
+    expected_keys: [chunk_selection, references]
+    filters:
+      include_paths:
+        - src/ace_lite/index_stage/chunk_selection.py
+        - src/ace_lite/chunking/builder.py
+        - src/ace_lite/chunking/types.py
+        - tests/unit/test_index_chunk_selection.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: reference_sidecar
+    query_bucket: refactor
+
+  - case_id: academic-source-plan-graph-pack-07
+    query: where does source plan pack graph closure grounded chunks with focused files
+    expected_keys: [source_plan, graph_closure]
+    filters:
+      include_paths:
+        - src/ace_lite/pipeline/stages/source_plan.py
+        - tests/integration/test_orchestrator_source_plan_chunk_ranking.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: source_plan
+    query_bucket: feature
+
+  - case_id: academic-workspace-summary-index-08
+    query: how does workspace summary index return summary tokens for a repo
+    expected_keys: [summary_index, workspace]
+    filters:
+      include_paths:
+        - src/ace_lite/workspace/summary_index.py
+        - tests/unit/test_workspace_summary_index.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: workspace_summary
+    query_bucket: doc_explain
+
+  - case_id: academic-workspace-summary-routing-09
+    query: how does workspace planner apply summary score when routing repos
+    expected_keys: [workspace planner, summary]
+    filters:
+      include_paths:
+        - src/ace_lite/workspace/planner.py
+        - tests/unit/test_workspace_benchmark.py
+        - tests/integration/test_cli_workspace.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: workspace_summary
+    query_bucket: doc_explain
+
+  - case_id: academic-plan-quick-control-10
+    query: how does plan quick rank candidate files before escalating to ace plan
+    expected_keys: [plan_quick, candidate]
+    filters:
+      include_paths:
+        - src/ace_lite/plan_quick.py
+        - tests/unit/test_plan_quick.py
+      exclude_paths:
+        - tests/e2e/test_benchmark_case_files.py
+        - tests/e2e/test_academic_optimization_benchmark_script.py
+    top_k: 6
+    comparison_lane: academic_optimization
+    optimization_surface: control
+    query_bucket: doc_explain

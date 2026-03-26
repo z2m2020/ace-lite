@@ -71,6 +71,13 @@ def _coerce_metric_value(*, value: Any, context: str) -> float:
     return float(value)
 
 
+def _default_threshold_bound(metric: str) -> str:
+    normalized = str(metric).strip().lower()
+    if "latency" in normalized or normalized.endswith("_ms"):
+        return "max"
+    return "min"
+
+
 def _coerce_metric_or_zero(*, metrics: dict[str, Any], metric: str) -> float:
     value = metrics.get(metric, 0.0)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -93,6 +100,27 @@ def _reciprocal_rank(*, ranked_repos: tuple[str, ...], expected_repos: tuple[str
         if name in expected:
             return 1.0 / float(position)
     return 0.0
+
+
+def _candidate_value(candidate: Any, field: str, default: Any = None) -> Any:
+    if isinstance(candidate, dict):
+        return candidate.get(field, default)
+    return getattr(candidate, field, default)
+
+
+def _candidate_name(candidate: Any) -> str:
+    return str(_candidate_value(candidate, "name", "") or "").strip()
+
+
+def _candidate_matched_summary_terms(candidate: Any) -> tuple[str, ...]:
+    value = _candidate_value(candidate, "matched_summary_terms", ())
+    if not isinstance(value, (list, tuple)):
+        return ()
+    return tuple(
+        str(item).strip()
+        for item in value
+        if isinstance(item, str) and str(item).strip()
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,30 +157,34 @@ def load_workspace_benchmark_baseline(
     if not isinstance(raw_payload, dict):
         raise ValueError("benchmark baseline must be a JSON object")
 
-    metrics_candidate: Any = raw_payload.get("metrics", raw_payload)
+    metrics_candidate: Any
+    if "metrics" in raw_payload:
+        metrics_candidate = raw_payload.get("metrics")
+    else:
+        metrics_candidate = {
+            key: value
+            for key, value in raw_payload.items()
+            if key not in {"checks", "thresholds"}
+        }
     if not isinstance(metrics_candidate, dict):
         raise ValueError("benchmark baseline field 'metrics' must be an object")
 
     normalized_metrics: dict[str, float] = {}
-    for metric in ("hit_at_k", "mrr", "avg_latency_ms"):
-        if metric in metrics_candidate:
-            normalized_metrics[metric] = _coerce_metric_value(
-                value=metrics_candidate.get(metric),
-                context=f"benchmark baseline metrics.{metric}",
-            )
+    for metric, value in metrics_candidate.items():
+        metric_name = str(metric).strip()
+        if not metric_name:
+            raise ValueError("benchmark baseline metrics contains an empty metric name")
+        normalized_metrics[metric_name] = _coerce_metric_value(
+            value=value,
+            context=f"benchmark baseline metrics.{metric_name}",
+        )
 
     checks_candidate = raw_payload.get("checks", raw_payload.get("thresholds"))
     normalized_checks: dict[str, dict[str, float]] = {}
 
     if checks_candidate is None:
-        if "hit_at_k" in normalized_metrics:
-            normalized_checks["hit_at_k"] = {"min": normalized_metrics["hit_at_k"]}
-        if "mrr" in normalized_metrics:
-            normalized_checks["mrr"] = {"min": normalized_metrics["mrr"]}
-        if "avg_latency_ms" in normalized_metrics:
-            normalized_checks["avg_latency_ms"] = {
-                "max": normalized_metrics["avg_latency_ms"]
-            }
+        for metric, value in normalized_metrics.items():
+            normalized_checks[metric] = {_default_threshold_bound(metric): value}
     else:
         if not isinstance(checks_candidate, dict):
             raise ValueError("benchmark baseline field 'checks' must be an object")
@@ -190,15 +222,9 @@ def load_workspace_benchmark_baseline(
                 value=rule_payload,
                 context=f"benchmark baseline checks.{metric_name}",
             )
-            if metric_name in ("hit_at_k", "mrr"):
-                normalized_checks[metric_name] = {"min": scalar_threshold}
-            elif metric_name == "avg_latency_ms":
-                normalized_checks[metric_name] = {"max": scalar_threshold}
-            else:
-                raise ValueError(
-                    f"benchmark baseline checks.{metric_name} must be an object "
-                    "with min and/or max"
-                )
+            normalized_checks[metric_name] = {
+                _default_threshold_bound(metric_name): scalar_threshold
+            }
 
     if not normalized_checks:
         raise ValueError("benchmark baseline checks resolved to empty thresholds")
@@ -332,6 +358,8 @@ def run_workspace_benchmark(
     reciprocal_rank_sum = 0.0
     latency_sum_ms = 0.0
     evidence_completeness_sum = 0.0
+    summary_match_case_count = 0
+    summary_promoted_case_count = 0
     case_rows: list[dict[str, Any]] = []
 
     for case in cases:
@@ -344,7 +372,7 @@ def run_workspace_benchmark(
             summary_score_enabled=bool(summary_score_enabled),
         )
         latency_ms = (perf_counter() - started) * 1000.0
-        ranked_repos = tuple(candidate.name for candidate in routed)
+        ranked_repos = tuple(_candidate_name(candidate) for candidate in routed if _candidate_name(candidate))
 
         hit = bool(set(case.expected_repos) & set(ranked_repos))
         reciprocal_rank = _reciprocal_rank(
@@ -365,6 +393,44 @@ def run_workspace_benchmark(
             "reciprocal_rank": round(float(reciprocal_rank), 6),
             "latency_ms": round(float(latency_ms), 3),
         }
+
+        if summary_score_enabled:
+            baseline_routed = route_workspace_repos(
+                query=case.query,
+                manifest=manifest_payload,
+                top_k=int(top_k_repos),
+                repo_scope=repo_scope,
+                summary_score_enabled=False,
+            )
+            baseline_ranked_repos = tuple(
+                _candidate_name(candidate)
+                for candidate in baseline_routed
+                if _candidate_name(candidate)
+            )
+            matched_summary_repos = [
+                _candidate_name(candidate)
+                for candidate in routed
+                if _candidate_matched_summary_terms(candidate)
+            ]
+            expected_before = _reciprocal_rank(
+                ranked_repos=baseline_ranked_repos,
+                expected_repos=case.expected_repos,
+            )
+            expected_after = reciprocal_rank
+            summary_promoted = bool(expected_after > expected_before)
+            summary_matched = bool(matched_summary_repos)
+            if summary_matched:
+                summary_match_case_count += 1
+            if summary_promoted:
+                summary_promoted_case_count += 1
+            row["summary_routing"] = {
+                "matched_repos": matched_summary_repos,
+                "matched": summary_matched,
+                "baseline_predicted_repos": list(baseline_ranked_repos),
+                "expected_reciprocal_rank_before": round(float(expected_before), 6),
+                "expected_reciprocal_rank_after": round(float(expected_after), 6),
+                "promoted_expected_repo": summary_promoted,
+            }
 
         if full_plan:
             plan_payload = build_workspace_plan(
@@ -393,6 +459,15 @@ def run_workspace_benchmark(
     if full_plan:
         metrics["evidence_completeness"] = round(
             float(evidence_completeness_sum) / float(cases_total),
+            6,
+        )
+    if summary_score_enabled:
+        metrics["summary_match_case_rate"] = round(
+            float(summary_match_case_count) / float(cases_total),
+            6,
+        )
+        metrics["summary_promoted_case_rate"] = round(
+            float(summary_promoted_case_count) / float(cases_total),
             6,
         )
 

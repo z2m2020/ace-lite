@@ -37,6 +37,28 @@ def test_build_repo_summary_from_index_payload_extracts_core_fields() -> None:
     assert "billing" in summary.summary_tokens
 
 
+def test_build_repo_summary_from_index_payload_splits_snake_case_summary_tokens() -> None:
+    payload = {
+        "files": {
+            "src/checkout_widget_renderer.py": {
+                "language": "python",
+                "module": "ui.checkout_widget_renderer",
+            }
+        }
+    }
+    summary = build_repo_summary_v1_from_index_payload(
+        repo_name="mango-ui",
+        repo_root="/tmp/mango-ui",
+        index_payload=payload,
+        token_limit=32,
+    )
+
+    assert "checkout_widget_renderer" in summary.summary_tokens
+    assert "checkout" in summary.summary_tokens
+    assert "widget" in summary.summary_tokens
+    assert "renderer" in summary.summary_tokens
+
+
 def test_summary_index_roundtrip_save_and_load(tmp_path: Path) -> None:
     summary = build_repo_summary_v1_from_index_payload(
         repo_name="repo-a",

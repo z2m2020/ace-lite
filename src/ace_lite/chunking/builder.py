@@ -36,12 +36,17 @@ from ace_lite.chunking.types import (
     ChunkMetrics,
     render_retrieval_context_from_sidecar,
 )
+from ace_lite.repomap.adjacency import _build_symbol_adjacency
 from ace_lite.token_estimator import estimate_tokens
 
 _REFERENCE_HITS_CACHE: OrderedDict[str, dict[str, int]] = OrderedDict()
 _REFERENCE_HITS_CACHE_CAP = 8
 _TOKEN_ESTIMATE_CACHE: OrderedDict[tuple[str, str, str, str, str], int] = OrderedDict()
 _TOKEN_ESTIMATE_CACHE_CAP = 4096
+_SYMBOL_RELATION_CACHE: OrderedDict[
+    str, tuple[dict[str, list[str]], dict[str, list[str]], dict[str, str]]
+] = OrderedDict()
+_SYMBOL_RELATION_CACHE_CAP = 8
 
 
 def _resolve_candidate_per_file_limit(
@@ -216,6 +221,171 @@ def _format_reference_entry(item: Any) -> str:
     return ""
 
 
+def _collect_symbol_local_call_references(
+    *,
+    references: list[Any],
+    language: str,
+    start_line: int,
+    end_line: int,
+) -> list[str]:
+    normalized_language = str(language or "").strip().lower()
+    if normalized_language not in {"python", "go"}:
+        return []
+
+    lower_bound = max(1, int(start_line))
+    upper_bound = max(lower_bound, int(end_line) or lower_bound)
+    output: list[str] = []
+    seen: set[str] = set()
+    for item in references:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("kind") or "").strip().lower() != "call":
+            continue
+        try:
+            lineno = int(item.get("lineno") or 0)
+        except Exception:
+            lineno = 0
+        if lineno < lower_bound or lineno > upper_bound:
+            continue
+        rendered = _format_reference_entry(item)
+        if not rendered or rendered in seen:
+            continue
+        seen.add(rendered)
+        output.append(rendered)
+    return output
+
+
+def _build_symbol_node_id(
+    *,
+    path: str,
+    lineno: int,
+    end_lineno: int,
+    qualified_name: str,
+    name: str = "",
+) -> str:
+    symbol_key = str(qualified_name or name).strip()
+    if not path or not symbol_key:
+        return ""
+    lower_bound = max(1, int(lineno))
+    upper_bound = max(lower_bound, int(end_lineno) or lower_bound)
+    return f"{path}|{lower_bound}|{upper_bound}|{symbol_key}"
+
+
+def _build_symbol_label_lookup(
+    *,
+    files_map: dict[str, dict[str, Any]],
+) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    for path, entry in files_map.items():
+        if not isinstance(entry, dict):
+            continue
+        symbols = entry.get("symbols", [])
+        if not isinstance(symbols, list):
+            continue
+        for symbol in symbols:
+            if not isinstance(symbol, dict):
+                continue
+            try:
+                lineno = int(symbol.get("lineno") or 0)
+            except Exception:
+                continue
+            if lineno <= 0:
+                continue
+            try:
+                end_lineno = int(symbol.get("end_lineno") or lineno)
+            except Exception:
+                end_lineno = lineno
+            if end_lineno < lineno:
+                end_lineno = lineno
+            qualified_name = str(symbol.get("qualified_name") or "").strip()
+            name = str(symbol.get("name") or "").strip()
+            node_id = _build_symbol_node_id(
+                path=str(path),
+                lineno=lineno,
+                end_lineno=end_lineno,
+                qualified_name=qualified_name,
+                name=name,
+            )
+            if node_id:
+                labels[node_id] = qualified_name or name
+    return labels
+
+
+def _get_symbol_relation_maps(
+    *,
+    files_map: dict[str, dict[str, Any]],
+    cache_key: str,
+) -> tuple[dict[str, list[str]], dict[str, list[str]], dict[str, str]]:
+    normalized_key = str(cache_key or "").strip()
+    if normalized_key:
+        cached = _SYMBOL_RELATION_CACHE.get(normalized_key)
+        if cached is not None:
+            _SYMBOL_RELATION_CACHE.move_to_end(normalized_key)
+            return cached
+
+    adjacency = _build_symbol_adjacency(files=files_map)
+    reverse_adjacency: dict[str, list[str]] = {}
+    for source_id, target_ids in adjacency.items():
+        if source_id not in reverse_adjacency:
+            reverse_adjacency[source_id] = []
+        if not isinstance(target_ids, list):
+            continue
+        for target_id in target_ids:
+            normalized_target = str(target_id or "").strip()
+            if not normalized_target:
+                continue
+            reverse_adjacency.setdefault(normalized_target, []).append(str(source_id))
+
+    for target_id, source_ids in list(reverse_adjacency.items()):
+        reverse_adjacency[target_id] = sorted(dict.fromkeys(source_ids))
+
+    payload = (adjacency, reverse_adjacency, _build_symbol_label_lookup(files_map=files_map))
+    if normalized_key:
+        _SYMBOL_RELATION_CACHE[normalized_key] = payload
+        _SYMBOL_RELATION_CACHE.move_to_end(normalized_key)
+        while len(_SYMBOL_RELATION_CACHE) > _SYMBOL_RELATION_CACHE_CAP:
+            _SYMBOL_RELATION_CACHE.popitem(last=False)
+    return payload
+
+
+def _resolve_symbol_one_hop_relations(
+    *,
+    files_map: dict[str, dict[str, Any]],
+    cache_key: str,
+    path: str,
+    qualified_name: str,
+    start_line: int,
+    end_line: int,
+) -> tuple[list[str], list[str]]:
+    node_id = _build_symbol_node_id(
+        path=path,
+        lineno=start_line,
+        end_lineno=end_line,
+        qualified_name=qualified_name,
+    )
+    if not node_id:
+        return [], []
+
+    adjacency, reverse_adjacency, labels = _get_symbol_relation_maps(
+        files_map=files_map,
+        cache_key=cache_key,
+    )
+    callees = [
+        label
+        for label in (labels.get(str(item or "").strip(), "") for item in adjacency.get(node_id, []))
+        if label
+    ]
+    callers = [
+        label
+        for label in (
+            labels.get(str(item or "").strip(), "")
+            for item in reverse_adjacency.get(node_id, [])
+        )
+        if label
+    ]
+    return callees, callers
+
+
 def _extract_snippet(
     *,
     lines: list[str],
@@ -286,12 +456,15 @@ def _extract_snippet(
 
 def _build_contextual_chunking_sidecar(
     *,
+    files_map: dict[str, dict[str, Any]],
+    reference_hits_cache_key: str,
     path: str,
     qualified_name: str,
     kind: str,
     signature: str,
     lines: list[str],
     start_line: int,
+    end_line: int,
     symbol: dict[str, Any] | None,
     all_symbols: list[Any] | None,
     file_entry: dict[str, Any] | None,
@@ -341,17 +514,45 @@ def _build_contextual_chunking_sidecar(
         if isinstance(file_entry, dict) and isinstance(file_entry.get("references"), list)
         else []
     )
+    local_call_references = _collect_symbol_local_call_references(
+        references=references,
+        language=language,
+        start_line=start_line,
+        end_line=end_line,
+    )
     reference_values: list[str] = []
     seen_references: set[str] = set()
-    for item in references:
-        rendered = _format_reference_entry(item)
-        if not rendered or rendered in seen_references:
-            continue
-        seen_references.add(rendered)
-        reference_values.append(rendered)
+    if local_call_references:
+        reference_values.extend(local_call_references)
+        sidecar["references_scope"] = "symbol_local_call"
+    else:
+        for item in references:
+            rendered = _format_reference_entry(item)
+            if not rendered or rendered in seen_references:
+                continue
+            seen_references.add(rendered)
+            reference_values.append(rendered)
+        if reference_values:
+            sidecar["references_scope"] = "file"
     if reference_values:
         sidecar["references"] = reference_values[:3]
         sidecar["references_truncated"] = len(reference_values) > 3
+
+    if language in {"python", "go"} and path and qualified_name:
+        callees, callers = _resolve_symbol_one_hop_relations(
+            files_map=files_map,
+            cache_key=reference_hits_cache_key,
+            path=path,
+            qualified_name=qualified_name,
+            start_line=start_line,
+            end_line=end_line,
+        )
+        if callees:
+            sidecar["callees"] = callees[:3]
+            sidecar["callees_truncated"] = len(callees) > 3
+        if callers:
+            sidecar["callers"] = callers[:3]
+            sidecar["callers_truncated"] = len(callers) > 3
 
     return sidecar
 
@@ -556,12 +757,15 @@ def build_candidate_chunks(
                     file_entry=file_entry,
                 )
             retrieval_context_sidecar = _build_contextual_chunking_sidecar(
+                files_map=files_map,
+                reference_hits_cache_key=reference_hits_cache_key,
                 path=path,
                 qualified_name=qualified_name or name,
                 kind=kind,
                 signature=signature,
                 lines=file_lines,
                 start_line=lineno,
+                end_line=end_lineno,
                 symbol=symbol,
                 all_symbols=symbols,
                 file_entry=file_entry,

@@ -4,10 +4,16 @@ import copy
 import random
 from itertools import pairwise
 
+from ace_lite.chunking.types import CONTEXTUAL_CHUNKING_SIDECAR_KEY
 from ace_lite.chunking.skeleton import CHUNK_SKELETON_SCHEMA_VERSION
 from ace_lite.pipeline.stages.source_plan import run_source_plan
 from ace_lite.pipeline.types import StageContext
-from ace_lite.source_plan import pack_source_plan_chunks, rank_source_plan_chunks
+from ace_lite.source_plan import (
+    annotate_source_plan_grounding,
+    pack_source_plan_chunks,
+    rank_source_plan_chunks,
+    summarize_source_plan_grounding,
+)
 from ace_lite.validation.patch_artifact import build_patch_artifact_contract_v1
 from ace_lite.validation.result import build_validation_result_v1
 
@@ -953,6 +959,52 @@ def test_rank_source_plan_chunks_preserves_candidate_breakdown_for_packing() -> 
     }
 
 
+def test_rank_source_plan_chunks_preserves_reference_sidecars_for_grounding() -> None:
+    ranked = rank_source_plan_chunks(
+        suspicious_chunks=[],
+        candidate_chunks=[
+            {
+                "path": "src/service.py",
+                "qualified_name": "src.service.handle",
+                "kind": "function",
+                "lineno": 10,
+                "end_lineno": 16,
+                "score": 4.0,
+                "signature": "def handle() -> None:",
+                "_retrieval_context": (
+                    "module=src.service\n"
+                    "symbol=src.service.handle\n"
+                    "references=repo.save, helper\n"
+                    "references_scope=symbol_local_call"
+                ),
+                CONTEXTUAL_CHUNKING_SIDECAR_KEY: {
+                    "schema_version": "v1",
+                    "module": "src.service",
+                    "symbol": "src.service.handle",
+                    "references": ["repo.save", "helper"],
+                    "references_scope": "symbol_local_call",
+                },
+            }
+        ],
+        test_signal_weight=1.0,
+    )
+
+    grounded = annotate_source_plan_grounding(
+        prioritized_chunks=ranked,
+        direct_candidate_files=["src/service.py"],
+        direct_candidate_chunks=ranked,
+        focused_files=["src/service.py"],
+    )
+    evidence_summary = summarize_source_plan_grounding(grounded)
+
+    assert "_retrieval_context" not in grounded[0]
+    assert CONTEXTUAL_CHUNKING_SIDECAR_KEY not in grounded[0]
+    assert grounded[0]["evidence"]["reference_sidecar"] is True
+    assert "reference_sidecar" in grounded[0]["evidence"]["granularity"]
+    assert evidence_summary["reference_sidecar_count"] == 1.0
+    assert evidence_summary["reference_sidecar_ratio"] == 1.0
+
+
 def test_rank_source_plan_chunks_prefers_higher_granularity_on_score_tie() -> None:
     ranked = rank_source_plan_chunks(
         suspicious_chunks=[],
@@ -1548,6 +1600,7 @@ def test_run_source_plan_emits_machine_readable_grounding_roles() -> None:
         "neighbor_context": False,
         "hint_only": False,
         "hint_support": True,
+        "reference_sidecar": False,
         "sources": ["direct_candidate", "test_hint"],
         "granularity": ["symbol", "signature", "skeleton", "robust_signature"],
     }
@@ -1578,8 +1631,10 @@ def test_run_source_plan_emits_machine_readable_grounding_roles() -> None:
         "signature_count": 2.0,
         "skeleton_count": 1.0,
         "robust_signature_count": 1.0,
+        "reference_sidecar_count": 0.0,
         "symbol_ratio": 1.0,
         "signature_ratio": 2.0 / 3.0,
         "skeleton_ratio": 1.0 / 3.0,
         "robust_signature_ratio": 1.0 / 3.0,
+        "reference_sidecar_ratio": 0.0,
     }

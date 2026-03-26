@@ -172,6 +172,14 @@ def test_build_candidate_chunks_attaches_internal_retrieval_context(
                     {
                         "name": "validate",
                         "qualified_name": "pkg.auth.validate",
+                        "lineno": 5,
+                        "kind": "call",
+                    },
+                    {
+                        "name": "build_service",
+                        "qualified_name": "pkg.factory.build_service",
+                        "lineno": 1,
+                        "kind": "call",
                     }
                 ],
                 "imports": [
@@ -216,6 +224,7 @@ def test_build_candidate_chunks_attaches_internal_retrieval_context(
     assert "parent=class DemoService:" in retrieval_context
     assert "imports=from pkg.auth import validate" in retrieval_context
     assert "references=pkg.auth.validate" in retrieval_context
+    assert "references_scope=symbol_local_call" in retrieval_context
     assert isinstance(contextual_sidecar, dict)
     assert contextual_sidecar["schema_version"] == "v1"
     assert contextual_sidecar["module"] == "src.demo"
@@ -227,6 +236,7 @@ def test_build_candidate_chunks_attaches_internal_retrieval_context(
     assert contextual_sidecar["imports"] == ["from pkg.auth import validate"]
     assert contextual_sidecar["imports_truncated"] is False
     assert contextual_sidecar["references"] == ["pkg.auth.validate"]
+    assert contextual_sidecar["references_scope"] == "symbol_local_call"
     assert contextual_sidecar["references_truncated"] is False
     assert metrics["retrieval_context_chunk_count"] == 2.0
     assert metrics["retrieval_context_coverage_ratio"] == 1.0
@@ -235,3 +245,110 @@ def test_build_candidate_chunks_attaches_internal_retrieval_context(
     assert metrics["contextual_sidecar_parent_symbol_coverage_ratio"] == 1.0
     assert metrics["contextual_sidecar_reference_hint_chunk_count"] == 2.0
     assert metrics["contextual_sidecar_reference_hint_coverage_ratio"] == 1.0
+
+
+def test_build_candidate_chunks_uses_symbol_local_go_call_references(
+    tmp_path,
+) -> None:
+    source_dir = tmp_path / "src"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    (source_dir / "service.go").write_text(
+        "package service\n\n"
+        "func helper() {}\n\n"
+        "func Bootstrap() {\n"
+        "    Handle()\n"
+        "}\n\n"
+        "func Handle() {\n"
+        "    helper()\n"
+        "    repo.Save()\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    chunks, _ = chunk_builder.build_candidate_chunks(
+        root=str(tmp_path),
+        files_map={
+            "src/service.go": {
+                "module": "src.service",
+                "language": "go",
+                "symbols": [
+                    {
+                        "kind": "function",
+                        "name": "helper",
+                        "qualified_name": "src.service.helper",
+                        "lineno": 3,
+                        "end_lineno": 3,
+                    },
+                    {
+                        "kind": "function",
+                        "name": "Bootstrap",
+                        "qualified_name": "src.service.Bootstrap",
+                        "lineno": 5,
+                        "end_lineno": 7,
+                    },
+                    {
+                        "kind": "function",
+                        "name": "Handle",
+                        "qualified_name": "src.service.Handle",
+                        "lineno": 9,
+                        "end_lineno": 12,
+                    }
+                ],
+                "references": [
+                    {
+                        "name": "Handle",
+                        "qualified_name": "src.service.Handle",
+                        "lineno": 6,
+                        "kind": "call",
+                    },
+                    {
+                        "name": "helper",
+                        "qualified_name": "src.service.helper",
+                        "lineno": 10,
+                        "kind": "call",
+                    },
+                    {
+                        "name": "Save",
+                        "qualified_name": "repo.Save",
+                        "lineno": 11,
+                        "kind": "call",
+                    },
+                    {
+                        "name": "ignored",
+                        "qualified_name": "repo.Ignored",
+                        "lineno": 3,
+                        "kind": "call",
+                    },
+                ],
+                "imports": [],
+            }
+        },
+        candidates=[{"path": "src/service.go", "score": 2.0}],
+        terms=["handle"],
+        top_k_files=1,
+        top_k_chunks=2,
+        per_file_limit=2,
+        token_budget=256,
+        disclosure_mode="refs",
+        snippet_max_lines=4,
+        snippet_max_chars=240,
+        policy={"chunk_weight": 1.0},
+        tokenizer_model="gpt-4o-mini",
+        diversity_enabled=False,
+        diversity_path_penalty=0.0,
+        diversity_symbol_family_penalty=0.0,
+        diversity_kind_penalty=0.0,
+        diversity_locality_penalty=0.0,
+        diversity_locality_window=32,
+    )
+
+    handle_chunk = next(
+        item for item in chunks if item["qualified_name"] == "src.service.Handle"
+    )
+    contextual_sidecar = handle_chunk.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
+
+    assert isinstance(contextual_sidecar, dict)
+    assert contextual_sidecar["references"] == ["src.service.helper", "repo.Save"]
+    assert contextual_sidecar["references_scope"] == "symbol_local_call"
+    assert contextual_sidecar["callees"] == ["src.service.helper"]
+    assert contextual_sidecar["callers"] == ["src.service.Bootstrap"]

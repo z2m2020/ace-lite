@@ -178,6 +178,7 @@ def finalize_index_stage_output_from_state(
     store_cached_index_candidates_fn: Callable[..., bool],
     attach_index_candidate_cache_info_fn: Callable[..., dict[str, Any]],
 ) -> dict[str, Any]:
+    effective_corpus_size = getattr(state, "effective_corpus_size", state.corpus_size)
     return finalize_index_stage_output(
         repo=repo,
         root=root,
@@ -189,7 +190,7 @@ def finalize_index_stage_output_from_state(
         requested_ranker=state.requested_ranker,
         selected_ranker=state.selected_ranker,
         ranker_fallbacks=state.ranker_fallbacks,
-        corpus_size=state.corpus_size,
+        corpus_size=int(effective_corpus_size),
         min_score_used=state.min_score_used,
         fusion_mode=fusion_mode,
         hybrid_re2_rrf_k=int(hybrid_re2_rrf_k),

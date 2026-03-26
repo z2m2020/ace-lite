@@ -1,0 +1,19 @@
+{
+  "cases": [
+    {
+      "id": "workspace-summary-ui-01",
+      "query": "checkout widget renderer",
+      "expected_repos": ["mango-ui"]
+    },
+    {
+      "id": "workspace-summary-ops-02",
+      "query": "pager alert router",
+      "expected_repos": ["zulu-ops"]
+    },
+    {
+      "id": "workspace-summary-baseline-control-03",
+      "query": "backend services",
+      "expected_repos": ["alpha-core"]
+    }
+  ]
+}

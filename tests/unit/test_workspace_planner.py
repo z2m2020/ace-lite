@@ -110,6 +110,137 @@ def test_build_workspace_plan_emits_evidence_contract(tmp_path: Path) -> None:
     assert 0.0 <= float(contract["confidence"]) <= 1.0
 
 
+def test_route_workspace_repos_summary_routing_promotes_repo_with_summary_match(
+    tmp_path: Path,
+) -> None:
+    manifest = _write_manifest(tmp_path)
+    manifest_payload = workspace_planner.load_workspace_manifest(manifest)
+    summary_path = tmp_path / "context-map" / "workspace" / "summary-index.v1.json"
+    summary_index = build_workspace_summary_index_v1(
+        repo_summaries=[
+            RepoSummaryV1(
+                name="billing-api",
+                root=manifest_payload.repos[0].root,
+                file_count=1,
+                language_counts={"python": 1},
+                top_directories=("src",),
+                top_modules=("billing.main",),
+                summary_tokens=("payment",),
+            ),
+            RepoSummaryV1(
+                name="frontend-ui",
+                root=manifest_payload.repos[1].root,
+                file_count=1,
+                language_counts={"python": 1},
+                top_directories=("src",),
+                top_modules=("frontend.main",),
+                summary_tokens=("checkout",),
+            ),
+            RepoSummaryV1(
+                name="ops-observability",
+                root=manifest_payload.repos[2].root,
+                file_count=1,
+                language_counts={"python": 1},
+                top_directories=("src",),
+                top_modules=("ops.main",),
+                summary_tokens=("incident", "pager"),
+            ),
+        ],
+        generated_at="2026-03-26T00:00:00+00:00",
+    )
+    save_summary_index_v1(summary_index=summary_index, path=summary_path)
+
+    baseline = route_workspace_repos(
+        query="incident pager",
+        manifest=manifest,
+        top_k=3,
+    )
+    routed = route_workspace_repos(
+        query="incident pager",
+        manifest=manifest,
+        top_k=3,
+        summary_score_enabled=True,
+        summary_index_path=summary_path,
+    )
+
+    assert [item.name for item in baseline] == [
+        "billing-api",
+        "frontend-ui",
+        "ops-observability",
+    ]
+    assert routed[0].name == "ops-observability"
+    assert routed[0].matched_summary_terms == ("incident", "pager")
+    assert routed[0].summary_terms_preview == ("incident", "pager")
+    assert routed[0].summary_score_contribution > 0.0
+    assert routed[0].as_dict()["routing_breakdown"]["summary_hits"] == 2
+
+
+def test_build_workspace_plan_emits_summary_routing_observability(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = _write_manifest(tmp_path)
+    manifest_payload = workspace_planner.load_workspace_manifest(manifest)
+    summary_path = tmp_path / "context-map" / "workspace" / "summary-index.v1.json"
+    summary_index = build_workspace_summary_index_v1(
+        repo_summaries=[
+            RepoSummaryV1(
+                name="billing-api",
+                root=manifest_payload.repos[0].root,
+                file_count=1,
+                language_counts={"python": 1},
+                top_directories=("src",),
+                top_modules=("billing.main",),
+                summary_tokens=("payment",),
+            ),
+            RepoSummaryV1(
+                name="frontend-ui",
+                root=manifest_payload.repos[1].root,
+                file_count=1,
+                language_counts={"python": 1},
+                top_directories=("src",),
+                top_modules=("frontend.main",),
+                summary_tokens=("checkout",),
+            ),
+            RepoSummaryV1(
+                name="ops-observability",
+                root=manifest_payload.repos[2].root,
+                file_count=1,
+                language_counts={"python": 1},
+                top_directories=("src",),
+                top_modules=("ops.main",),
+                summary_tokens=("incident", "pager"),
+            ),
+        ],
+        generated_at="2026-03-26T00:00:00+00:00",
+    )
+    save_summary_index_v1(summary_index=summary_index, path=summary_path)
+
+    monkeypatch.setattr(
+        workspace_planner,
+        "build_plan_quick",
+        lambda **kwargs: {"candidate_files": [f"{kwargs['root']}/src/app.py"]},
+    )
+
+    payload = build_workspace_plan(
+        query="incident pager",
+        manifest=manifest,
+        top_k_repos=2,
+        languages="python",
+        summary_score_enabled=True,
+        summary_index_path=summary_path,
+    )
+
+    assert payload["summary_routing"]["enabled"] is True
+    assert payload["summary_routing"]["repo_count_with_summary_tokens"] == 3
+    assert payload["summary_routing"]["repo_count_with_summary_matches"] == 1
+    assert payload["summary_routing"]["selected_repo_count_with_summary_matches"] == 1
+    assert payload["summary_routing"]["promoted_repos"] == ["ops-observability"]
+    assert payload["selected_repos"][0]["name"] == "ops-observability"
+    assert payload["selected_repos"][0]["matched_summary_terms"] == ["incident", "pager"]
+    assert payload["selected_repos"][0]["routing_breakdown"]["summary_hits"] == 2
+
+
 def test_build_workspace_plan_strict_gate_adds_evidence_validation(
     tmp_path: Path,
 ) -> None:

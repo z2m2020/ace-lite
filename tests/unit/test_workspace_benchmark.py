@@ -176,6 +176,60 @@ def test_run_workspace_benchmark_reports_basic_metrics(
     assert [item["id"] for item in payload["cases"]] == ["case-hit", "case-miss"]
 
 
+def test_run_workspace_benchmark_reports_summary_routing_metrics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = _build_manifest(tmp_path)
+    cases = [
+        {"id": "case-promoted", "query": "query-promoted", "expected_repos": ["repo-beta"]},
+        {"id": "case-unmatched", "query": "query-unmatched", "expected_repos": ["repo-alpha"]},
+    ]
+
+    routed_by_query = {
+        ("query-promoted", True): [
+            SimpleNamespace(name="repo-beta", matched_summary_terms=("incident",)),
+            SimpleNamespace(name="repo-alpha", matched_summary_terms=()),
+        ],
+        ("query-promoted", False): [
+            SimpleNamespace(name="repo-alpha", matched_summary_terms=()),
+            SimpleNamespace(name="repo-beta", matched_summary_terms=()),
+        ],
+        ("query-unmatched", True): [
+            SimpleNamespace(name="repo-alpha", matched_summary_terms=()),
+        ],
+        ("query-unmatched", False): [
+            SimpleNamespace(name="repo-alpha", matched_summary_terms=()),
+        ],
+    }
+
+    def _fake_route_workspace_repos(**kwargs: object) -> list[SimpleNamespace]:
+        key = (
+            str(kwargs["query"]),
+            bool(kwargs.get("summary_score_enabled", False)),
+        )
+        return list(routed_by_query[key])
+
+    clock = iter([10.0, 10.010, 20.0, 20.010])
+    monkeypatch.setattr(workspace_benchmark, "route_workspace_repos", _fake_route_workspace_repos)
+    monkeypatch.setattr(workspace_benchmark, "perf_counter", lambda: next(clock))
+
+    payload = workspace_benchmark.run_workspace_benchmark(
+        manifest=manifest,
+        cases_json=cases,
+        top_k_repos=2,
+        summary_score_enabled=True,
+    )
+
+    assert payload["metrics"]["summary_match_case_rate"] == 0.5
+    assert payload["metrics"]["summary_promoted_case_rate"] == 0.5
+    promoted_row = payload["cases"][0]["summary_routing"]
+    assert promoted_row["matched"] is True
+    assert promoted_row["matched_repos"] == ["repo-beta"]
+    assert promoted_row["baseline_predicted_repos"] == ["repo-alpha", "repo-beta"]
+    assert promoted_row["promoted_expected_repo"] is True
+
+
 def test_run_workspace_benchmark_full_plan_includes_evidence_completeness(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -221,6 +275,7 @@ def test_load_workspace_benchmark_baseline_derives_default_checks() -> None:
                 "hit_at_k": 0.7,
                 "mrr": 0.6,
                 "avg_latency_ms": 120.0,
+                "summary_match_case_rate": 0.5,
             }
         }
     )
@@ -228,9 +283,30 @@ def test_load_workspace_benchmark_baseline_derives_default_checks() -> None:
     assert loaded["metrics"]["hit_at_k"] == 0.7
     assert loaded["metrics"]["mrr"] == 0.6
     assert loaded["metrics"]["avg_latency_ms"] == 120.0
+    assert loaded["metrics"]["summary_match_case_rate"] == 0.5
     assert loaded["checks"]["hit_at_k"] == {"min": 0.7}
     assert loaded["checks"]["mrr"] == {"min": 0.6}
     assert loaded["checks"]["avg_latency_ms"] == {"max": 120.0}
+    assert loaded["checks"]["summary_match_case_rate"] == {"min": 0.5}
+
+
+def test_load_workspace_benchmark_baseline_supports_scalar_checks_for_additional_metrics() -> None:
+    loaded = workspace_benchmark.load_workspace_benchmark_baseline(
+        {
+            "metrics": {
+                "summary_match_case_rate": 0.666667,
+                "avg_latency_ms": 500.0,
+            },
+            "checks": {
+                "summary_match_case_rate": 0.666667,
+                "avg_latency_ms": 500.0,
+            },
+        }
+    )
+
+    assert loaded["metrics"]["summary_match_case_rate"] == pytest.approx(0.666667)
+    assert loaded["checks"]["summary_match_case_rate"] == {"min": pytest.approx(0.666667)}
+    assert loaded["checks"]["avg_latency_ms"] == {"max": 500.0}
 
 
 def test_evaluate_workspace_benchmark_against_baseline_reports_violations() -> None:
@@ -271,13 +347,24 @@ def test_evaluate_workspace_benchmark_against_baseline_flags_missing_metric() ->
 
 def test_compare_workspace_benchmark_metrics_returns_delta() -> None:
     delta = workspace_benchmark.compare_workspace_benchmark_metrics(
-        current={"hit_at_k": 0.8, "mrr": 0.6, "avg_latency_ms": 90.0},
-        baseline={"hit_at_k": 0.5, "mrr": 0.4, "avg_latency_ms": 100.0},
+        current={
+            "hit_at_k": 0.8,
+            "mrr": 0.6,
+            "avg_latency_ms": 90.0,
+            "summary_match_case_rate": 0.7,
+        },
+        baseline={
+            "hit_at_k": 0.5,
+            "mrr": 0.4,
+            "avg_latency_ms": 100.0,
+            "summary_match_case_rate": 0.6,
+        },
     )
 
     assert delta["hit_at_k"] == pytest.approx(0.3)
     assert delta["mrr"] == pytest.approx(0.2)
     assert delta["avg_latency_ms"] == pytest.approx(-10.0)
+    assert delta["summary_match_case_rate"] == pytest.approx(0.1)
 
 
 def test_run_workspace_benchmark_includes_baseline_check(
@@ -287,11 +374,12 @@ def test_run_workspace_benchmark_includes_baseline_check(
     manifest = _build_manifest(tmp_path)
     cases = [{"id": "case-hit", "query": "query-hit", "expected_repos": ["repo-alpha"]}]
 
-    monkeypatch.setattr(
-        workspace_benchmark,
-        "route_workspace_repos",
-        lambda **_: [SimpleNamespace(name="repo-alpha")],
-    )
+    def _fake_route_workspace_repos(**kwargs: object) -> list[SimpleNamespace]:
+        if bool(kwargs.get("summary_score_enabled", False)):
+            return [SimpleNamespace(name="repo-alpha", matched_summary_terms=())]
+        return [SimpleNamespace(name="repo-alpha")]
+
+    monkeypatch.setattr(workspace_benchmark, "route_workspace_repos", _fake_route_workspace_repos)
     clock = iter([10.0, 10.020])
     monkeypatch.setattr(workspace_benchmark, "perf_counter", lambda: next(clock))
 
@@ -299,12 +387,19 @@ def test_run_workspace_benchmark_includes_baseline_check(
         manifest=manifest,
         cases_json=cases,
         top_k_repos=1,
+        summary_score_enabled=True,
         baseline_json={
-            "metrics": {"hit_at_k": 0.8, "mrr": 0.75, "avg_latency_ms": 25.0},
+            "metrics": {
+                "hit_at_k": 0.8,
+                "mrr": 0.75,
+                "avg_latency_ms": 25.0,
+                "summary_match_case_rate": 0.0,
+            },
             "checks": {
                 "hit_at_k": {"min": 0.8},
                 "mrr": {"min": 0.75},
                 "avg_latency_ms": {"max": 25.0},
+                "summary_match_case_rate": {"min": 0.0},
             },
         },
     )
@@ -312,11 +407,18 @@ def test_run_workspace_benchmark_includes_baseline_check(
     baseline_check = payload.get("baseline_check")
     assert isinstance(baseline_check, dict)
     assert baseline_check.get("ok") is True
+    assert baseline_check.get("baseline_metrics") == {
+        "hit_at_k": 0.8,
+        "mrr": 0.75,
+        "avg_latency_ms": 25.0,
+        "summary_match_case_rate": 0.0,
+    }
     delta = baseline_check.get("delta")
     assert isinstance(delta, dict)
     assert delta.get("hit_at_k") == pytest.approx(0.2)
     assert delta.get("mrr") == pytest.approx(0.25)
     assert delta.get("avg_latency_ms") == pytest.approx(-5.0)
+    assert delta.get("summary_match_case_rate") == pytest.approx(0.0)
 
 
 def test_run_workspace_benchmark_fail_on_baseline_requires_baseline_json(

@@ -273,6 +273,132 @@ def test_validation_rich_cases_cover_validation_and_agent_loop_surfaces() -> Non
     ]
 
 
+def test_academic_optimization_cases_cover_planned_surfaces() -> None:
+    config_path = (
+        Path(__file__).resolve().parents[2]
+        / "benchmark"
+        / "cases"
+        / "academic_optimization.yaml"
+    )
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    cases = payload.get("cases", []) if isinstance(payload, dict) else []
+    assert len(cases) == 13
+
+    case_ids = {str(item.get("case_id") or "") for item in cases if isinstance(item, dict)}
+    assert case_ids == {
+        "academic-query-expansion-compounds-01",
+        "academic-query-expansion-docs-channel-02",
+        "academic-query-expansion-exception-name-11",
+        "academic-query-expansion-error-pattern-12",
+        "academic-query-expansion-cli-flags-13",
+        "academic-cross-encoder-file-rerank-03",
+        "academic-cross-encoder-chunk-time-budget-04",
+        "academic-graph-closure-bonus-05",
+        "academic-reference-sidecar-06",
+        "academic-source-plan-graph-pack-07",
+        "academic-workspace-summary-index-08",
+        "academic-workspace-summary-routing-09",
+        "academic-plan-quick-control-10",
+    }
+
+    surfaces = {
+        str(item.get("optimization_surface") or "")
+        for item in cases
+        if isinstance(item, dict)
+    }
+    assert surfaces == {
+        "query_expansion",
+        "cross_encoder",
+        "graph_context",
+        "reference_sidecar",
+        "source_plan",
+        "workspace_summary",
+        "control",
+    }
+
+    for item in cases:
+        assert item["comparison_lane"] == "academic_optimization"
+        assert item["top_k"] == 6
+        filters = item["filters"]
+        assert "tests/e2e/test_benchmark_case_files.py" in filters["exclude_paths"]
+        assert (
+            "tests/e2e/test_academic_optimization_benchmark_script.py"
+            in filters["exclude_paths"]
+        )
+
+    plan_quick = next(
+        item
+        for item in cases
+        if isinstance(item, dict)
+        and item.get("case_id") == "academic-plan-quick-control-10"
+    )
+    assert plan_quick["filters"]["include_paths"] == [
+        "src/ace_lite/plan_quick.py",
+        "tests/unit/test_plan_quick.py",
+    ]
+
+    workspace_routing = next(
+        item
+        for item in cases
+        if isinstance(item, dict)
+        and item.get("case_id") == "academic-workspace-summary-routing-09"
+    )
+    assert workspace_routing["query_bucket"] == "doc_explain"
+    assert workspace_routing["filters"]["include_paths"] == [
+        "src/ace_lite/workspace/planner.py",
+        "tests/unit/test_workspace_benchmark.py",
+        "tests/integration/test_cli_workspace.py",
+    ]
+
+    query_expansion_cases = [
+        item
+        for item in cases
+        if isinstance(item, dict)
+        and item.get("optimization_surface") == "query_expansion"
+    ]
+    assert len(query_expansion_cases) == 5
+    assert {
+        str(item.get("query_bucket") or "")
+        for item in query_expansion_cases
+    } == {"doc_explain", "refactor", "feature"}
+
+    cli_flags_case = next(
+        item
+        for item in query_expansion_cases
+        if item.get("case_id") == "academic-query-expansion-cli-flags-13"
+    )
+    assert cli_flags_case["filters"]["include_paths"] == [
+        "scripts/run_academic_optimization_benchmark.py",
+        "src/ace_lite/cli_app/commands/benchmark.py",
+        "src/ace_lite/cli_app/params_option_retrieval_groups.py",
+        "tests/unit/test_orchestrator_term_extraction.py",
+    ]
+    assert cli_flags_case["expected_keys"] == [
+        "cli_app/commands/benchmark.py",
+        "params_option_retrieval_groups.py",
+        "run_academic_optimization_benchmark.py",
+    ]
+
+    exception_name_case = next(
+        item
+        for item in query_expansion_cases
+        if item.get("case_id") == "academic-query-expansion-exception-name-11"
+    )
+    assert exception_name_case["expected_keys"] == [
+        "pipeline/contracts.py",
+        "exceptions.py",
+    ]
+
+    error_pattern_case = next(
+        item
+        for item in query_expansion_cases
+        if item.get("case_id") == "academic-query-expansion-error-pattern-12"
+    )
+    assert error_pattern_case["expected_keys"] == ["plan_timeout.py", "exceptions.py"]
+    assert error_pattern_case["query_bucket"] == "refactor"
+
+
 def test_external_howwhy_matrix_reuses_primary_checkout_names() -> None:
     config_path = (
         Path(__file__).resolve().parents[2]
@@ -546,4 +672,3 @@ def test_memory_feedback_cases_cover_memory_taxonomy_surfaces() -> None:
         "tests/unit/test_source_plan_properties.py",
         "tests/unit/test_benchmark_scoring.py",
     ]
-

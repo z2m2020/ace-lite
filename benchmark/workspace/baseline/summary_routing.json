@@ -1,0 +1,26 @@
+{
+  "metrics": {
+    "hit_at_k": 1.0,
+    "mrr": 1.0,
+    "avg_latency_ms": 500.0,
+    "summary_match_case_rate": 0.666667,
+    "summary_promoted_case_rate": 0.666667
+  },
+  "checks": {
+    "hit_at_k": {
+      "min": 1.0
+    },
+    "mrr": {
+      "min": 1.0
+    },
+    "avg_latency_ms": {
+      "max": 500.0
+    },
+    "summary_match_case_rate": {
+      "min": 0.666667
+    },
+    "summary_promoted_case_rate": {
+      "min": 0.666667
+    }
+  }
+}

@@ -488,6 +488,9 @@ def _build_chunks_with_structured_sidecar_only(
                     "parent_symbol": "app",
                     "imports": ["from src.deps import helper"],
                     "references": ["src.deps.helper"],
+                    "callees": ["src.deps.helper"],
+                    "callers": ["src.app.bootstrap"],
+                    "references_scope": "symbol_local_call",
                 },
                 "robust_signature_summary": {
                     "version": "v1",
@@ -660,6 +663,9 @@ def test_apply_chunk_selection_can_consume_structured_sidecar_without_text_sidec
     assert "parent_symbol=app" in captured["texts"][0]
     assert "imports=from src.deps import helper" in captured["texts"][0]
     assert "references=src.deps.helper" in captured["texts"][0]
+    assert "callees=src.deps.helper" in captured["texts"][0]
+    assert "callers=src.app.bootstrap" in captured["texts"][0]
+    assert "references_scope=symbol_local_call" in captured["texts"][0]
     assert CONTEXTUAL_CHUNKING_SIDECAR_KEY not in result.candidate_chunks[0]
     assert "_retrieval_context" not in result.candidate_chunks[0]
 

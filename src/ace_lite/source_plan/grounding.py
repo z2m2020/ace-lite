@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from ace_lite.chunking.types import (
+    CONTEXTUAL_CHUNKING_SIDECAR_KEY,
+    RETRIEVAL_CONTEXT_SIDECAR_KEY,
+)
+
 
 def _chunk_key(item: dict[str, Any]) -> tuple[str, int, int, str]:
     lineno = int(item.get("lineno") or 0)
@@ -46,6 +51,19 @@ def _build_granularity_evidence(item: dict[str, Any]) -> list[str]:
         and bool(robust_signature.get("available", True))
     ):
         granularity.append("robust_signature")
+
+    contextual_sidecar = (
+        item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
+        if isinstance(item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY), dict)
+        else {}
+    )
+    references = (
+        contextual_sidecar.get("references")
+        if isinstance(contextual_sidecar.get("references"), list)
+        else []
+    )
+    if any(str(value).strip() for value in references):
+        granularity.append("reference_sidecar")
 
     return granularity
 
@@ -117,15 +135,19 @@ def annotate_source_plan_grounding(
             sources.append("test_hint")
 
         granularity = _build_granularity_evidence(payload)
+        has_reference_sidecar = "reference_sidecar" in granularity
         payload["evidence"] = {
             "role": role,
             "direct_retrieval": bool(direct_retrieval),
             "neighbor_context": bool(neighbor_context),
             "hint_only": role == "hint_only",
             "hint_support": bool(has_test_hint),
+            "reference_sidecar": bool(has_reference_sidecar),
             "sources": sources,
             "granularity": granularity,
         }
+        payload.pop(RETRIEVAL_CONTEXT_SIDECAR_KEY, None)
+        payload.pop(CONTEXTUAL_CHUNKING_SIDECAR_KEY, None)
         annotated.append(payload)
 
     return annotated
@@ -140,6 +162,7 @@ def summarize_source_plan_grounding(chunks: list[dict[str, Any]]) -> dict[str, f
     signature_count = 0
     skeleton_count = 0
     robust_signature_count = 0
+    reference_sidecar_count = 0
 
     for item in chunks:
         if not isinstance(item, dict):
@@ -170,6 +193,8 @@ def summarize_source_plan_grounding(chunks: list[dict[str, Any]]) -> dict[str, f
             skeleton_count += 1
         if "robust_signature" in normalized_granularity:
             robust_signature_count += 1
+        if "reference_sidecar" in normalized_granularity:
+            reference_sidecar_count += 1
 
     return {
         "direct_count": float(direct_count),
@@ -182,10 +207,12 @@ def summarize_source_plan_grounding(chunks: list[dict[str, Any]]) -> dict[str, f
         "signature_count": float(signature_count),
         "skeleton_count": float(skeleton_count),
         "robust_signature_count": float(robust_signature_count),
+        "reference_sidecar_count": float(reference_sidecar_count),
         "symbol_ratio": float(symbol_count) / float(total),
         "signature_ratio": float(signature_count) / float(total),
         "skeleton_ratio": float(skeleton_count) / float(total),
         "robust_signature_ratio": float(robust_signature_count) / float(total),
+        "reference_sidecar_ratio": float(reference_sidecar_count) / float(total),
     }
 
 

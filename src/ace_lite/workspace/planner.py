@@ -37,6 +37,15 @@ class WorkspaceRepoCandidate:
     score: float
     rationale: str
     matched_terms: tuple[str, ...]
+    matched_name_terms: tuple[str, ...] = ()
+    matched_context_terms: tuple[str, ...] = ()
+    matched_summary_terms: tuple[str, ...] = ()
+    summary_terms_preview: tuple[str, ...] = ()
+    base_weight: float = 0.0
+    name_hits: int = 0
+    context_hits: int = 0
+    summary_hits: int = 0
+    summary_score_contribution: float = 0.0
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -45,6 +54,17 @@ class WorkspaceRepoCandidate:
             "score": float(self.score),
             "rationale": self.rationale,
             "matched_terms": list(self.matched_terms),
+            "matched_name_terms": list(self.matched_name_terms),
+            "matched_context_terms": list(self.matched_context_terms),
+            "matched_summary_terms": list(self.matched_summary_terms),
+            "summary_terms_preview": list(self.summary_terms_preview),
+            "routing_breakdown": {
+                "base_weight": float(self.base_weight),
+                "name_hits": int(self.name_hits),
+                "context_hits": int(self.context_hits),
+                "summary_hits": int(self.summary_hits),
+                "summary_score_contribution": float(self.summary_score_contribution),
+            },
         }
 
 
@@ -212,18 +232,26 @@ def _score_repo(
     context_blob = " ".join([repo.description.lower(), " ".join(repo.tags)])
     summary_blob = set(summary_terms)
 
-    matched_name = {term for term in query_terms if term in name_blob}
-    matched_context = {term for term in query_terms if term in context_blob}
-    matched_summary = {term for term in query_terms if term in summary_blob}
-    matched_terms = tuple(sorted(matched_name | matched_context | matched_summary))
+    matched_name_set = {term for term in query_terms if term in name_blob}
+    matched_context_set = {term for term in query_terms if term in context_blob}
+    matched_summary_set = {term for term in query_terms if term in summary_blob}
+    matched_name = tuple(sorted(matched_name_set))
+    matched_context = tuple(sorted(matched_context_set))
+    matched_summary = tuple(sorted(matched_summary_set))
+    matched_terms = tuple(sorted(matched_name_set | matched_context_set | matched_summary_set))
 
     name_hits = len(matched_name)
-    context_hits = len(matched_context - matched_name)
-    summary_hits = len(matched_summary - matched_name - matched_context)
+    context_only = matched_context_set - matched_name_set
+    summary_only = matched_summary_set - matched_name_set - matched_context_set
+    context_hits = len(context_only)
+    summary_hits = len(summary_only)
 
-    score = float(repo.weight) + float(name_hits) * 2.0 + float(context_hits)
+    base_weight = float(repo.weight)
+    score = base_weight + float(name_hits) * 2.0 + float(context_hits)
+    summary_score_contribution = 0.0
     if summary_hits > 0 and summary_score_weight > 0.0:
-        score += float(summary_hits) * float(summary_score_weight)
+        summary_score_contribution = float(summary_hits) * float(summary_score_weight)
+        score += summary_score_contribution
 
     if matched_terms:
         rationale = (
@@ -243,7 +271,64 @@ def _score_repo(
         score=score,
         rationale=rationale,
         matched_terms=matched_terms,
+        matched_name_terms=matched_name,
+        matched_context_terms=tuple(sorted(context_only)),
+        matched_summary_terms=tuple(sorted(summary_only)),
+        summary_terms_preview=tuple(summary_terms[:12]),
+        base_weight=base_weight,
+        name_hits=name_hits,
+        context_hits=context_hits,
+        summary_hits=summary_hits,
+        summary_score_contribution=summary_score_contribution,
     )
+
+
+def _build_summary_routing_observability(
+    *,
+    enabled: bool,
+    selected: list[WorkspaceRepoCandidate],
+    all_candidates: list[WorkspaceRepoCandidate],
+    baseline_candidates: list[WorkspaceRepoCandidate] | None = None,
+) -> dict[str, Any]:
+    candidate_order = {
+        candidate.name: index + 1 for index, candidate in enumerate(all_candidates)
+    }
+    baseline_order = {
+        candidate.name: index + 1
+        for index, candidate in enumerate(baseline_candidates or [])
+    }
+
+    repos_with_summary_tokens = [
+        candidate.name for candidate in all_candidates if candidate.summary_terms_preview
+    ]
+    matched_repos = [
+        candidate.name for candidate in all_candidates if candidate.matched_summary_terms
+    ]
+    selected_matched_repos = [
+        candidate.name for candidate in selected if candidate.matched_summary_terms
+    ]
+    promoted_repos: list[str] = []
+    for candidate in all_candidates:
+        if not candidate.matched_summary_terms:
+            continue
+        before = baseline_order.get(candidate.name)
+        after = candidate_order.get(candidate.name)
+        if before is None or after is None:
+            continue
+        if after < before:
+            promoted_repos.append(candidate.name)
+
+    return {
+        "enabled": bool(enabled),
+        "repo_count_with_summary_tokens": len(repos_with_summary_tokens),
+        "repo_count_with_summary_matches": len(matched_repos),
+        "selected_repo_count_with_summary_matches": len(selected_matched_repos),
+        "repos_with_summary_tokens": repos_with_summary_tokens,
+        "matched_repos": matched_repos,
+        "selected_matched_repos": selected_matched_repos,
+        "promoted_repo_count": len(promoted_repos),
+        "promoted_repos": promoted_repos,
+    }
 
 
 def _resolve_repo_option(
@@ -431,6 +516,26 @@ def build_workspace_plan(
         index_cache_path=index_cache_path,
     )
     selected = all_candidates[:top_k_repos]
+    summary_routing = _build_summary_routing_observability(
+        enabled=bool(summary_score_enabled),
+        selected=selected,
+        all_candidates=all_candidates,
+        baseline_candidates=(
+            route_workspace_repos(
+                query=query,
+                manifest=manifest_payload,
+                top_k=max(top_k_repos, len(manifest_payload.repos)),
+                repo_scope=normalized_scope,
+                summary_score_enabled=False,
+                summary_index_path=summary_index_path,
+                summary_score_weight=summary_score_weight,
+                summary_token_limit=summary_token_limit,
+                index_cache_path=index_cache_path,
+            )
+            if summary_score_enabled
+            else None
+        ),
+    )
 
     repo_by_name = {repo.name: repo for repo in manifest_payload.repos}
     routed_payload: list[dict[str, Any]] = []
@@ -563,6 +668,19 @@ def build_workspace_plan(
                 "score": float(candidate.score),
                 "rationale": candidate.rationale,
                 "matched_terms": list(candidate.matched_terms),
+                "matched_name_terms": list(candidate.matched_name_terms),
+                "matched_context_terms": list(candidate.matched_context_terms),
+                "matched_summary_terms": list(candidate.matched_summary_terms),
+                "summary_terms_preview": list(candidate.summary_terms_preview),
+                "routing_breakdown": {
+                    "base_weight": float(candidate.base_weight),
+                    "name_hits": int(candidate.name_hits),
+                    "context_hits": int(candidate.context_hits),
+                    "summary_hits": int(candidate.summary_hits),
+                    "summary_score_contribution": float(
+                        candidate.summary_score_contribution
+                    ),
+                },
                 "quick_plan": quick_plan,
             }
         )
@@ -604,6 +722,7 @@ def build_workspace_plan(
         "top_k_repos": int(top_k_repos),
         "repo_scope": list(normalized_scope or ()),
         "summary_score_enabled": bool(summary_score_enabled),
+        "summary_routing": summary_routing,
         "candidate_repos": candidate_payload,
         "selected_repos": routed_payload,
         "evidence_contract": evidence_contract_payload,
