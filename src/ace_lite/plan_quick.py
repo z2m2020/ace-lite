@@ -100,9 +100,14 @@ _DOC_SECONDARY_NAME_PENALTIES: tuple[tuple[str, float], ...] = (
     ("weekly", -2.5),
     ("matrix", -1.0),
 )
+_DOC_ENTRYPOINT_BASENAMES: tuple[str, ...] = (
+    "readme",
+    "index",
+    "overview",
+)
 _MARKDOWN_LANGUAGES: frozenset[str] = frozenset({"markdown", "md"})
 _LATEST_DOC_DOMAINS: frozenset[str] = frozenset(
-    {"docs", "planning", "repos", "reports", "markdown"}
+    {"docs", "planning", "repos", "reports", "reference", "markdown"}
 )
 _QUERY_REFINEMENT_STOPWORDS: frozenset[str] = frozenset(
     {
@@ -154,10 +159,10 @@ def _classify_path_domain(path: str) -> str:
         return "repos"
     if normalized.startswith("reports/"):
         return "reports"
-    if normalized.startswith(("research/", "reference/")) or any(
-        marker in normalized for marker in ("/research/", "/reference/")
-    ):
+    if normalized.startswith("research/") or "/research/" in normalized:
         return "research"
+    if normalized.startswith(("reference/", "docs/reference/")) or "/reference/" in normalized:
+        return "reference"
     if normalized.startswith(("docs/", "doc/")):
         return "docs"
     if normalized.startswith(("tests/", "test/")):
@@ -184,6 +189,20 @@ def _extract_path_date(path: str) -> date | None:
         return datetime.strptime(matched.group(0), "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def _path_stem(path: str) -> str:
+    normalized_path = str(path or "").strip().replace("\\", "/").lower()
+    basename = normalized_path.rsplit("/", 1)[-1]
+    stem = basename.rsplit(".", 1)[0]
+    return stem
+
+
+def _is_doc_entrypoint_path(*, path: str, semantic_domain: str) -> bool:
+    if semantic_domain not in {"docs", "planning", "repos", "reference", "markdown"}:
+        return False
+    stem = _path_stem(path)
+    return stem in _DOC_ENTRYPOINT_BASENAMES
 
 
 def _find_newest_dated_doc(rows: list[dict[str, Any]]) -> date | None:
@@ -218,6 +237,10 @@ def _doc_sync_intent_boost(*, path: str, language: str, query_flags: dict[str, b
     secondary_hits = sum(
         1 for marker in _DOC_SECONDARY_NAME_MARKERS if marker in normalized_path
     )
+    is_entrypoint = _is_doc_entrypoint_path(
+        path=path,
+        semantic_domain=semantic_domain,
+    )
     boost = 0.0
     if normalized_language in _MARKDOWN_LANGUAGES or normalized_path.endswith((".md", ".mdx")):
         boost += 4.0
@@ -225,6 +248,8 @@ def _doc_sync_intent_boost(*, path: str, language: str, query_flags: dict[str, b
         boost += 3.0
     boost += min(4.0, float(primary_hits) * 1.5)
     boost += min(1.5, float(secondary_hits) * 0.75)
+    if is_entrypoint:
+        boost += 3.0
     for prefix, penalty in _DOC_PENALIZED_PREFIXES:
         if normalized_path.startswith(prefix):
             boost += penalty
@@ -260,11 +285,17 @@ def _latest_doc_intent_boost(
     secondary_hits = sum(
         1 for marker in _DOC_SECONDARY_NAME_MARKERS if marker in normalized_path
     )
+    is_entrypoint = _is_doc_entrypoint_path(
+        path=path,
+        semantic_domain=domain,
+    )
     boost = 0.0
     if normalized_path.startswith(_DOC_PREFERRED_PREFIXES):
         boost += 1.0
     boost += min(2.5, float(primary_hits))
     boost += min(0.75, float(secondary_hits) * 0.5)
+    if is_entrypoint:
+        boost += 1.5
     if "current" in normalized_path or "latest" in normalized_path:
         boost += 0.75
     path_date = _extract_path_date(path)

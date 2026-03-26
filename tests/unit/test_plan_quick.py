@@ -182,6 +182,146 @@ def test_score_plan_quick_rows_demotes_weekly_and_research_docs_for_docs_sync_la
     )
 
 
+def test_score_plan_quick_rows_prefers_docs_entrypoint_over_weekly_status_report() -> None:
+    rows = [
+        {
+            "path": "docs/planning/README.md",
+            "module": "docs.planning.readme",
+            "language": "markdown",
+            "score": 8.0,
+        },
+        {
+            "path": "reports/2026-03-26_weekly_status_update.md",
+            "module": "reports.weekly",
+            "language": "markdown",
+            "score": 8.0,
+        },
+    ]
+
+    scored = score_plan_quick_rows(
+        query="contract repo sync docs update latest status",
+        rows=rows,
+        lexical_boost_per_hit=0.0,
+    )
+
+    assert [row.path for row in scored] == [
+        "docs/planning/README.md",
+        "reports/2026-03-26_weekly_status_update.md",
+    ]
+    assert scored[0].intent_boost > scored[1].intent_boost
+    assert scored[0].recency_boost > 0.0
+
+
+def test_score_plan_quick_rows_applies_weekly_and_matrix_penalties_to_boosts() -> None:
+    rows = [
+        {
+            "path": "docs/planning/2026-03-26_sync-update.md",
+            "module": "docs.planning.sync_update",
+            "language": "markdown",
+            "score": 5.0,
+        },
+        {
+            "path": "docs/planning/2026-03-26_weekly_sync-update.md",
+            "module": "docs.planning.weekly_sync_update",
+            "language": "markdown",
+            "score": 5.0,
+        },
+        {
+            "path": "docs/planning/2026-03-26_matrix_sync-update.md",
+            "module": "docs.planning.matrix_sync_update",
+            "language": "markdown",
+            "score": 5.0,
+        },
+    ]
+
+    scored = {
+        row.path: row
+        for row in score_plan_quick_rows(
+            query="contract repo sync docs update latest status",
+            rows=rows,
+            lexical_boost_per_hit=0.0,
+        )
+    }
+
+    baseline = scored["docs/planning/2026-03-26_sync-update.md"]
+    weekly = scored["docs/planning/2026-03-26_weekly_sync-update.md"]
+    matrix = scored["docs/planning/2026-03-26_matrix_sync-update.md"]
+
+    assert weekly.intent_boost < baseline.intent_boost
+    assert weekly.recency_boost < baseline.recency_boost
+    assert matrix.intent_boost < baseline.intent_boost
+    assert matrix.recency_boost < baseline.recency_boost
+
+
+def test_score_plan_quick_rows_marks_docs_research_as_research_without_recency_boost() -> None:
+    rows = [
+        {
+            "path": "docs/research/2026-03-24_Report_Full-Lifecycle-ERC-Matrix.md",
+            "module": "docs.research.erc_matrix",
+            "language": "markdown",
+            "score": 6.5,
+        },
+        {
+            "path": "docs/planning/2026-03-24_current-status.md",
+            "module": "docs.planning.current_status",
+            "language": "markdown",
+            "score": 6.5,
+        },
+    ]
+
+    scored = {
+        row.path: row
+        for row in score_plan_quick_rows(
+            query="latest docs sync update status",
+            rows=rows,
+            lexical_boost_per_hit=0.0,
+        )
+    }
+
+    research = scored["docs/research/2026-03-24_Report_Full-Lifecycle-ERC-Matrix.md"]
+    planning = scored["docs/planning/2026-03-24_current-status.md"]
+
+    assert research.semantic_domain == "research"
+    assert research.recency_boost == 0.0
+    assert planning.semantic_domain == "planning"
+    assert planning.recency_boost > 0.0
+
+
+def test_score_plan_quick_rows_treats_docs_reference_as_reference_with_recency_boost() -> None:
+    rows = [
+        {
+            "path": "docs/reference/2026-03-24_upgrade-notes.md",
+            "module": "docs.reference.upgrade_notes",
+            "language": "markdown",
+            "score": 6.5,
+        },
+        {
+            "path": "docs/research/2026-03-24_upgrade-notes.md",
+            "module": "docs.research.upgrade_notes",
+            "language": "markdown",
+            "score": 6.5,
+        },
+    ]
+
+    scored = {
+        row.path: row
+        for row in score_plan_quick_rows(
+            query="latest docs update notes",
+            rows=rows,
+            lexical_boost_per_hit=0.0,
+        )
+    }
+
+    reference = scored["docs/reference/2026-03-24_upgrade-notes.md"]
+    research = scored["docs/research/2026-03-24_upgrade-notes.md"]
+
+    assert reference.semantic_domain == "reference"
+    assert reference.recency_boost > 0.0
+    assert research.semantic_domain == "research"
+    assert research.recency_boost == 0.0
+    assert reference.fused_score > research.fused_score
+
+
 def test_build_index_marks_generated_files(tmp_path: Path) -> None:
     _write_file(
         tmp_path / "pkg/contract/erc20_generated.py",
@@ -548,6 +688,85 @@ def test_build_plan_quick_risk_hints_flags_secondary_doc_mix_within_visible_rows
     )
 
     assert any(item["code"] == "secondary_doc_mix" for item in hints)
+
+
+def test_build_plan_quick_risk_hints_skips_secondary_doc_mix_for_non_doc_sync_query() -> None:
+    rows = [
+        PlanQuickScoredRow(
+            path="docs/planning/2026-03-26_sync-status.md",
+            module="docs.planning.sync_status",
+            language="markdown",
+            score=10.0,
+            lexical_hits=0,
+            lexical_boost=0.0,
+            intent_boost=8.0,
+            recency_boost=4.0,
+            semantic_domain="planning",
+            fused_score=22.0,
+        ),
+        PlanQuickScoredRow(
+            path="reports/2026-03-02_Weekly.md",
+            module="reports.weekly",
+            language="markdown",
+            score=6.0,
+            lexical_hits=0,
+            lexical_boost=0.0,
+            intent_boost=1.0,
+            recency_boost=0.0,
+            semantic_domain="reports",
+            fused_score=7.0,
+        ),
+    ]
+
+    hints = _build_plan_quick_risk_hints(
+        query="why build failed in pipeline",
+        rows=rows,
+        retrieval_policy_profile="doc_intent",
+        index_cache={},
+    )
+
+    assert all(item["code"] != "secondary_doc_mix" for item in hints)
+
+
+def test_build_plan_quick_risk_hints_skips_secondary_doc_mix_outside_visible_rows() -> None:
+    rows = [
+        PlanQuickScoredRow(
+            path=f"docs/planning/2026-03-{day:02d}_sync-status.md",
+            module=f"docs.planning.sync_{day}",
+            language="markdown",
+            score=10.0 - (day * 0.1),
+            lexical_hits=0,
+            lexical_boost=0.0,
+            intent_boost=8.0,
+            recency_boost=4.0,
+            semantic_domain="planning",
+            fused_score=22.0 - (day * 0.1),
+        )
+        for day in range(1, 9)
+    ]
+    rows.append(
+        PlanQuickScoredRow(
+            path="reports/2026-03-02_Weekly.md",
+            module="reports.weekly",
+            language="markdown",
+            score=6.0,
+            lexical_hits=0,
+            lexical_boost=0.0,
+            intent_boost=1.0,
+            recency_boost=0.0,
+            semantic_domain="reports",
+            fused_score=7.0,
+        )
+    )
+
+    hints = _build_plan_quick_risk_hints(
+        query="contract repo sync docs update ERC mandated execution",
+        rows=rows,
+        retrieval_policy_profile="doc_intent",
+        index_cache={},
+    )
+
+    assert all(item["code"] != "secondary_doc_mix" for item in hints)
 
 
 def test_build_plan_quick_preserves_repomap_fallback_when_selection_is_empty(
