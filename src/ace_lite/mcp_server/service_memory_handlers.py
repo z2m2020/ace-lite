@@ -6,6 +6,7 @@ from typing import Any
 
 from ace_lite.memory_long_term.graph_view import build_long_term_graph_view
 from ace_lite.memory_long_term.store import LongTermMemoryStore
+from ace_lite.memory_search_guardrails import build_memory_search_guardrails
 
 
 def handle_memory_search(
@@ -54,7 +55,7 @@ def handle_memory_search(
         reverse=False,
     )
     items = [row for _, row in scored[: max(1, int(limit))]]
-    return {
+    payload = {
         "ok": True,
         "query": normalized_query,
         "namespace": namespace_filter or None,
@@ -62,6 +63,13 @@ def handle_memory_search(
         "items": items,
         "notes_path": str(path),
     }
+    payload.update(
+        build_memory_search_guardrails(
+            query=normalized_query,
+            items=items,
+        )
+    )
+    return payload
 
 
 def handle_memory_store(

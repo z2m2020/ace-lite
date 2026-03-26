@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 
-from ace_lite.index_stage.policy import resolve_online_bandit_gate
-from ace_lite.index_stage.policy import resolve_retrieval_policy
-from ace_lite.index_stage.policy import resolve_shadow_router_arm
+from ace_lite.index_stage.policy import (
+    resolve_online_bandit_gate,
+    resolve_retrieval_policy,
+    resolve_shadow_router_arm,
+)
 
 
 def test_resolve_retrieval_policy_selects_doc_intent_for_architecture_queries() -> None:
@@ -76,6 +78,19 @@ def test_resolve_retrieval_policy_selects_doc_intent_for_chinese_architecture_qu
     assert payload["docs_enabled"] is True
     assert float(payload["docs_weight"]) > 1.0
     assert payload["worktree_query_guard_enabled"] is True
+
+
+def test_resolve_retrieval_policy_selects_doc_intent_for_doc_sync_queries() -> None:
+    payload = resolve_retrieval_policy(
+        query="sync docs update latest progress report",
+        retrieval_policy="auto",
+        policy_version="v1",
+        cochange_enabled=True,
+        embedding_enabled=True,
+    )
+
+    assert payload["name"] == "doc_intent"
+    assert payload["docs_enabled"] is True
 
 
 def test_resolve_retrieval_policy_keeps_general_for_chinese_definition_lookup() -> None:

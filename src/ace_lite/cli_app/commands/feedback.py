@@ -10,10 +10,10 @@ import click
 
 from ace_lite.cli_app.output import echo_json
 from ace_lite.cli_app.runtime_command_support import DEFAULT_RUNTIME_STATS_DB_PATH
-from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.dev_feedback_runtime_linkage import (
     record_dev_issue_from_runtime_invocation,
 )
+from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import FeedbackBoostConfig, SelectionFeedbackStore
 from ace_lite.index_stage.terms import extract_terms
 from ace_lite.issue_report_store import IssueReportStore
@@ -120,6 +120,174 @@ def _write_export_payload(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def _build_cli_issue_report_workflow_hints(*, repo: str, issue_id: str) -> dict[str, Any]:
+    return {
+        "workflow": "issue_report_feedback_v1",
+        "recommended_next_steps": [
+            f"ace-lite feedback list-issues --repo {repo} --status open --limit 20",
+            (
+                "ace-lite feedback report-dev-issue --repo "
+                f"{repo} --title <issue-title> --reason-code general"
+            ),
+            (
+                "ace-lite feedback issue-to-benchmark-case --issue-id "
+                f"{issue_id} --comparison-lane issue_report_feedback"
+            ),
+        ],
+        "template_fields": [
+            "title",
+            "query",
+            "actual_behavior",
+            "expected_behavior",
+            "category",
+            "severity",
+            "repro_steps",
+            "attachments",
+        ],
+    }
+
+
+def _build_cli_issue_resolution_workflow_hints(
+    *,
+    repo: str,
+    issue_id: str,
+    fix_id: str,
+) -> dict[str, Any]:
+    return {
+        "workflow": "issue_report_resolution_v1",
+        "recommended_next_steps": [
+            f"ace-lite feedback list-issues --repo {repo} --status resolved --limit 20",
+            (
+                "ace-lite feedback issue-to-benchmark-case --issue-id "
+                f"{issue_id} --comparison-lane dev_feedback_resolution"
+            ),
+            f"ace-lite feedback dev-feedback-summary --repo {repo}",
+        ],
+        "linked_fix_id": fix_id,
+    }
+
+
+def _build_cli_dev_issue_workflow_hints(*, repo: str, issue_id: str) -> dict[str, Any]:
+    return {
+        "workflow": "dev_issue_triage_v1",
+        "recommended_next_steps": [
+            f"ace-lite feedback dev-feedback-summary --repo {repo}",
+            (
+                "ace-lite feedback report-dev-fix --repo "
+                f"{repo} --issue-id {issue_id} --reason-code general --resolution-note <note>"
+            ),
+            (
+                "ace-lite feedback apply-dev-fix --issue-id "
+                f"{issue_id} --fix-id <dev-fix-id> --status fixed"
+            ),
+        ],
+    }
+
+
+def _build_cli_dev_fix_workflow_hints(
+    *,
+    repo: str,
+    issue_id: str,
+    fix_id: str,
+) -> dict[str, Any]:
+    resolved_issue_id = issue_id or "<dev-issue-id>"
+    return {
+        "workflow": "dev_fix_linking_v1",
+        "recommended_next_steps": [
+            (
+                "ace-lite feedback apply-dev-fix --issue-id "
+                f"{resolved_issue_id} --fix-id {fix_id} --status fixed"
+            ),
+            f"ace-lite feedback dev-feedback-summary --repo {repo}",
+        ],
+    }
+
+
+def _build_cli_dev_summary_workflow_hints(
+    *,
+    repo: str | None,
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    normalized_repo = str(repo or "").strip() or "<repo>"
+    issue_count = int(summary.get("issue_count", 0) or 0)
+    open_issue_count = int(summary.get("open_issue_count", 0) or 0)
+    if issue_count <= 0:
+        return {
+            "workflow": "dev_feedback_bootstrap_v1",
+            "recommended_next_steps": [
+                (
+                    "ace-lite feedback report-dev-issue --repo "
+                    f"{normalized_repo} --title <issue-title> --reason-code general"
+                ),
+                (
+                    "ace-lite feedback report-dev-issue-from-runtime "
+                    "--invocation-id <runtime-invocation-id>"
+                ),
+            ],
+        }
+    if open_issue_count > 0:
+        return {
+            "workflow": "dev_feedback_closure_v1",
+            "recommended_next_steps": [
+                (
+                    "ace-lite feedback report-dev-fix --repo "
+                    f"{normalized_repo} --issue-id <open-issue-id> "
+                    "--reason-code general --resolution-note <note>"
+                ),
+                (
+                    "ace-lite feedback apply-dev-fix --issue-id <open-issue-id> "
+                    "--fix-id <dev-fix-id> --status fixed"
+                ),
+            ],
+        }
+    return {
+        "workflow": "dev_feedback_maintenance_v1",
+        "recommended_next_steps": [
+            f"ace-lite feedback dev-feedback-summary --repo {normalized_repo}",
+        ],
+    }
+
+
+def _build_cli_runtime_issue_workflow_hints(
+    *,
+    repo: str,
+    issue_id: str,
+    invocation_id: str,
+) -> dict[str, Any]:
+    return {
+        "workflow": "runtime_issue_promotion_v1",
+        "recommended_next_steps": [
+            (
+                "ace-lite feedback report-dev-fix --repo "
+                f"{repo} --issue-id {issue_id} --related-invocation-id {invocation_id} "
+                "--reason-code general --resolution-note <note>"
+            ),
+            (
+                "ace-lite feedback apply-dev-fix --issue-id "
+                f"{issue_id} --fix-id <dev-fix-id> --status fixed"
+            ),
+        ],
+    }
+
+
+def _build_cli_dev_issue_resolution_workflow_hints(
+    *,
+    repo: str,
+    issue_id: str,
+    fix_id: str,
+) -> dict[str, Any]:
+    return {
+        "workflow": "dev_issue_resolution_v1",
+        "recommended_next_steps": [
+            f"ace-lite feedback dev-feedback-summary --repo {repo}",
+            (
+                "ace-lite feedback resolve-issue-from-dev-fix --issue-id "
+                f"{issue_id} --fix-id {fix_id} --status resolved"
+            ),
+        ],
+    }
 
 
 @feedback_group.command("record", help="Record a selection feedback event.")
@@ -509,13 +677,18 @@ def feedback_report_issue_command(
         },
         root_path=root_path,
     )
+    report_payload = report.to_payload()
     echo_json(
         {
             "ok": True,
             "root": str(root_path),
             "repo": repo,
             "store_path": str(store.db_path),
-            "report": report.to_payload(),
+            "report": report_payload,
+            "workflow_hints": _build_cli_issue_report_workflow_hints(
+                repo=repo,
+                issue_id=str(report_payload.get("issue_id") or ""),
+            ),
         }
     )
 
@@ -677,14 +850,21 @@ def feedback_resolve_issue_from_dev_fix_command(
         resolved_at=resolved_at,
         status=status,
     )
+    report_payload = report.to_payload()
+    fix_payload = fix.to_payload()
     echo_json(
         {
             "ok": True,
             "root": str(root_path),
             "issue_store_path": str(issue_store.db_path),
             "dev_feedback_path": str(dev_store.db_path),
-            "report": report.to_payload(),
-            "fix": fix.to_payload(),
+            "report": report_payload,
+            "fix": fix_payload,
+            "workflow_hints": _build_cli_issue_resolution_workflow_hints(
+                repo=str(report_payload.get("repo") or ""),
+                issue_id=str(report_payload.get("issue_id") or issue_id),
+                fix_id=str(fix_payload.get("fix_id") or fix_id),
+            ),
         }
     )
 
@@ -752,12 +932,13 @@ def feedback_report_dev_issue_command(
             "resolved_at": resolved_at,
         }
     )
+    issue_payload = issue.to_payload()
     long_term_capture_service = _build_long_term_capture_service(root=root)
     long_term_capture = _capture_long_term_event(
         service=long_term_capture_service,
         stage_name="dev_issue",
         operation=lambda: long_term_capture_service.capture_dev_issue(
-            issue=issue.to_payload(),
+            issue=issue_payload,
             root=_resolve_root_path(root),
         ),
     )
@@ -765,8 +946,12 @@ def feedback_report_dev_issue_command(
         {
             "ok": True,
             "store_path": str(store.db_path),
-            "issue": issue.to_payload(),
+            "issue": issue_payload,
             "long_term_capture": long_term_capture,
+            "workflow_hints": _build_cli_dev_issue_workflow_hints(
+                repo=str(issue_payload.get("repo") or repo),
+                issue_id=str(issue_payload.get("issue_id") or ""),
+            ),
         }
     )
 
@@ -825,12 +1010,13 @@ def feedback_report_dev_fix_command(
             "created_at": created_at,
         }
     )
+    fix_payload = fix.to_payload()
     long_term_capture_service = _build_long_term_capture_service(root=root)
     long_term_capture = _capture_long_term_event(
         service=long_term_capture_service,
         stage_name="dev_fix",
         operation=lambda: long_term_capture_service.capture_dev_fix(
-            fix=fix.to_payload(),
+            fix=fix_payload,
             root=_resolve_root_path(root),
         ),
     )
@@ -838,8 +1024,13 @@ def feedback_report_dev_fix_command(
         {
             "ok": True,
             "store_path": str(store.db_path),
-            "fix": fix.to_payload(),
+            "fix": fix_payload,
             "long_term_capture": long_term_capture,
+            "workflow_hints": _build_cli_dev_fix_workflow_hints(
+                repo=str(fix_payload.get("repo") or repo),
+                issue_id=str(fix_payload.get("issue_id") or ""),
+                fix_id=str(fix_payload.get("fix_id") or ""),
+            ),
         }
     )
 
@@ -881,13 +1072,15 @@ def feedback_apply_dev_fix_command(
     fix = store.get_fix(fix_id)
     if fix is None:
         raise click.ClickException(f"Developer fix not found: {fix_id}")
+    issue_payload = issue.to_payload()
+    fix_payload = fix.to_payload()
     long_term_capture_service = _build_long_term_capture_service(root=root)
     long_term_capture = _capture_long_term_event(
         service=long_term_capture_service,
         stage_name="dev_issue_resolution",
         operation=lambda: long_term_capture_service.capture_dev_issue_resolution(
-            issue=issue.to_payload(),
-            fix=fix.to_payload(),
+            issue=issue_payload,
+            fix=fix_payload,
             root=_resolve_root_path(root),
         ),
     )
@@ -895,9 +1088,14 @@ def feedback_apply_dev_fix_command(
         {
             "ok": True,
             "store_path": str(store.db_path),
-            "issue": issue.to_payload(),
-            "fix": fix.to_payload(),
+            "issue": issue_payload,
+            "fix": fix_payload,
             "long_term_capture": long_term_capture,
+            "workflow_hints": _build_cli_dev_issue_resolution_workflow_hints(
+                repo=str(issue_payload.get("repo") or ""),
+                issue_id=str(issue_payload.get("issue_id") or issue_id),
+                fix_id=str(fix_payload.get("fix_id") or fix_id),
+            ),
         }
     )
 
@@ -919,11 +1117,22 @@ def feedback_dev_feedback_summary_command(
     store_path: str,
 ) -> None:
     store = DevFeedbackStore(db_path=store_path)
-    echo_json({"ok": True, "store_path": str(store.db_path), "summary": store.summarize(
+    summary_payload = store.summarize(
         repo=repo,
         user_id=user_id,
         profile_key=profile_key,
-    )})
+    )
+    echo_json(
+        {
+            "ok": True,
+            "store_path": str(store.db_path),
+            "summary": summary_payload,
+            "workflow_hints": _build_cli_dev_summary_workflow_hints(
+                repo=repo,
+                summary=summary_payload,
+            ),
+        }
+    )
 
 
 @feedback_group.command(
@@ -982,12 +1191,14 @@ def feedback_report_dev_issue_from_runtime_command(
             issue_id=issue_id,
         )
     )
+    issue_payload = issue.to_payload()
+    invocation_payload = invocation.to_payload()
     long_term_capture_service = _build_long_term_capture_service(root=root)
     long_term_capture = _capture_long_term_event(
         service=long_term_capture_service,
         stage_name="dev_issue",
         operation=lambda: long_term_capture_service.capture_dev_issue(
-            issue=issue.to_payload(),
+            issue=issue_payload,
             root=_resolve_root_path(root),
         ),
     )
@@ -996,9 +1207,14 @@ def feedback_report_dev_issue_from_runtime_command(
             "ok": True,
             "store_path": resolved_store_path,
             "stats_db_path": resolved_stats_db_path,
-            "issue": issue.to_payload(),
-            "invocation": invocation.to_payload(),
+            "issue": issue_payload,
+            "invocation": invocation_payload,
             "long_term_capture": long_term_capture,
+            "workflow_hints": _build_cli_runtime_issue_workflow_hints(
+                repo=str(issue_payload.get("repo") or ""),
+                issue_id=str(issue_payload.get("issue_id") or ""),
+                invocation_id=str(invocation_payload.get("invocation_id") or invocation_id),
+            ),
         }
     )
 

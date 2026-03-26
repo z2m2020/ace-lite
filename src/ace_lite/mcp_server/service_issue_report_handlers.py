@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.issue_report_store import IssueReportStore
@@ -13,6 +13,7 @@ class IssueReportRecordResponse(TypedDict):
     repo: str
     store_path: str
     report: dict[str, Any]
+    workflow_hints: NotRequired[dict[str, Any]]
 
 
 class IssueReportListResponse(TypedDict):
@@ -43,6 +44,7 @@ class IssueReportApplyFixResponse(TypedDict):
     dev_feedback_path: str
     report: dict[str, Any]
     fix: dict[str, Any]
+    workflow_hints: NotRequired[dict[str, Any]]
 
 
 def resolve_issue_report_store_path(
@@ -58,6 +60,95 @@ def resolve_issue_report_store_path(
     if not target.is_absolute():
         target = root_path / target
     return target.resolve()
+
+
+def _build_issue_report_record_workflow_hints(
+    *,
+    repo: str,
+    issue_id: str,
+) -> dict[str, Any]:
+    return {
+        "workflow": "issue_report_feedback_v1",
+        "recommended_next_steps": [
+            {
+                "tool": "ace_issue_report_list",
+                "reason": "确认新 issue 已按预期写入, 并且可以通过筛选条件查询到。",
+                "suggested_args": {
+                    "repo": repo,
+                    "status": "open",
+                    "limit": 20,
+                },
+            },
+            {
+                "tool": "ace_dev_issue_record",
+                "reason": "如果这是工具链或运行时问题, 把它镜像到开发者侧 triage。",
+                "suggested_args": {
+                    "repo": repo,
+                    "query": "<same query>",
+                    "title": "<same title>",
+                    "reason_code": "general",
+                },
+            },
+            {
+                "tool": "ace_issue_report_export_case",
+                "reason": "把该 issue 导出为 benchmark case, 便于后续回归跟踪。",
+                "suggested_args": {
+                    "issue_id": issue_id,
+                    "comparison_lane": "issue_report_feedback",
+                    "top_k": 8,
+                },
+            },
+        ],
+        "template_fields": [
+            "title",
+            "query",
+            "actual_behavior",
+            "expected_behavior",
+            "category",
+            "severity",
+            "repro_steps",
+            "attachments",
+        ],
+    }
+
+
+def _build_issue_report_resolution_workflow_hints(
+    *,
+    repo: str,
+    issue_id: str,
+    fix_id: str,
+) -> dict[str, Any]:
+    return {
+        "workflow": "issue_report_resolution_v1",
+        "recommended_next_steps": [
+            {
+                "tool": "ace_issue_report_list",
+                "reason": "确认 issue 状态已经从 open triage 迁出。",
+                "suggested_args": {
+                    "repo": repo,
+                    "status": "resolved",
+                    "limit": 20,
+                },
+            },
+            {
+                "tool": "ace_issue_report_export_case",
+                "reason": "把已解决行为沉淀到 benchmark lane。",
+                "suggested_args": {
+                    "issue_id": issue_id,
+                    "comparison_lane": "dev_feedback_resolution",
+                    "top_k": 8,
+                },
+            },
+            {
+                "tool": "ace_dev_feedback_summary",
+                "reason": "在应用 fix 后检查 dev issue 到 fix 的闭环情况。",
+                "suggested_args": {
+                    "repo": repo,
+                },
+            },
+        ],
+        "linked_fix_id": fix_id,
+    }
 
 
 def handle_issue_report_record_request(
@@ -111,13 +202,18 @@ def handle_issue_report_record_request(
         },
         root_path=root_path,
     )
-    return {
+    payload: IssueReportRecordResponse = {
         "ok": True,
         "root": str(root_path),
         "repo": resolved_repo,
         "store_path": str(store.db_path),
         "report": report.to_payload(),
     }
+    payload["workflow_hints"] = _build_issue_report_record_workflow_hints(
+        repo=resolved_repo,
+        issue_id=report.issue_id,
+    )
+    return payload
 
 
 def handle_issue_report_list_request(
@@ -217,7 +313,7 @@ def handle_issue_report_apply_fix_request(
         resolved_at=resolved_at,
         status=status,
     )
-    return {
+    payload: IssueReportApplyFixResponse = {
         "ok": True,
         "root": str(root_path),
         "repo": report.repo,
@@ -226,6 +322,12 @@ def handle_issue_report_apply_fix_request(
         "report": report.to_payload(),
         "fix": fix.to_payload(),
     }
+    payload["workflow_hints"] = _build_issue_report_resolution_workflow_hints(
+        repo=report.repo,
+        issue_id=report.issue_id,
+        fix_id=fix.fix_id,
+    )
+    return payload
 
 
 __all__ = [

@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ace_lite.parsers.languages import parse_language_csv
 from ace_lite.index_stage.policy import resolve_retrieval_policy
+from ace_lite.parsers.languages import parse_language_csv
 from ace_lite.repomap.builder import build_repo_map, build_stage_repo_map
 from ace_lite.retrieval_shared import (
     CandidateSelectionResult,
@@ -22,6 +22,187 @@ PLAN_QUICK_STEPS: tuple[str, ...] = (
     "Open highest-fused files and confirm symbol-level relevance.",
     "Escalate to ace_plan only after narrowing to concrete edit targets.",
 )
+
+_DOC_SYNC_MARKERS: tuple[str, ...] = (
+    "doc",
+    "docs",
+    "markdown",
+    "readme",
+    "planning",
+    "plan",
+    "progress",
+    "status",
+    "report",
+    "roadmap",
+    "runbook",
+    "sync",
+    "update",
+    "latest",
+    "文档",
+    "说明",
+    "同步",
+    "更新",
+    "最新",
+    "状态",
+    "进展",
+    "报告",
+    "路线图",
+)
+_LATEST_MARKERS: tuple[str, ...] = (
+    "latest",
+    "recent",
+    "sync",
+    "update",
+    "current",
+    "最近",
+    "最新",
+    "同步",
+    "更新",
+    "当前",
+)
+_DOC_PREFERRED_PREFIXES: tuple[str, ...] = (
+    "docs/",
+    "doc/",
+    "planning/",
+    "plans/",
+    "repos/",
+    "reports/",
+)
+_DOC_PREFERRED_NAME_MARKERS: tuple[str, ...] = (
+    "readme",
+    "progress",
+    "status",
+    "report",
+    "roadmap",
+    "runbook",
+    "overview",
+    "summary",
+    "changelog",
+)
+_DOC_PENALIZED_PREFIXES: tuple[tuple[str, float], ...] = (
+    ("tests/", -3.5),
+    ("test/", -3.5),
+    ("research/", -6.0),
+    ("reference/", -6.0),
+    ("src/", -2.0),
+    ("internal/", -2.0),
+    ("pkg/", -2.0),
+)
+_MARKDOWN_LANGUAGES: frozenset[str] = frozenset({"markdown", "md"})
+
+
+def _query_flags(query: str) -> dict[str, bool]:
+    lowered = str(query or "").lower().strip()
+    has_doc_sync_markers = any(marker in lowered for marker in _DOC_SYNC_MARKERS)
+    latest_sensitive = any(marker in lowered for marker in _LATEST_MARKERS)
+    return {
+        "doc_sync": has_doc_sync_markers,
+        "latest_sensitive": latest_sensitive,
+    }
+
+
+def _classify_path_domain(path: str) -> str:
+    normalized = str(path or "").strip().replace("\\", "/").lower()
+    if normalized.startswith(("docs/", "doc/")):
+        return "docs"
+    if normalized.startswith(("planning/", "plans/")) or "/planning/" in normalized:
+        return "planning"
+    if normalized.startswith("repos/"):
+        return "repos"
+    if normalized.startswith("reports/"):
+        return "reports"
+    if normalized.startswith(("research/", "reference/")):
+        return "research"
+    if normalized.startswith(("tests/", "test/")):
+        return "tests"
+    if normalized.endswith((".md", ".mdx")):
+        return "markdown"
+    return "code"
+
+
+def _doc_sync_intent_boost(*, path: str, language: str, query_flags: dict[str, bool]) -> float:
+    if not bool(query_flags.get("doc_sync", False)):
+        return 0.0
+    normalized_path = str(path or "").strip().replace("\\", "/").lower()
+    normalized_language = str(language or "").strip().lower()
+    boost = 0.0
+    if normalized_language in _MARKDOWN_LANGUAGES or normalized_path.endswith((".md", ".mdx")):
+        boost += 4.0
+    if normalized_path.startswith(_DOC_PREFERRED_PREFIXES):
+        boost += 3.0
+    if any(marker in normalized_path for marker in _DOC_PREFERRED_NAME_MARKERS):
+        boost += 2.0
+    for prefix, penalty in _DOC_PENALIZED_PREFIXES:
+        if normalized_path.startswith(prefix):
+            boost += penalty
+            break
+    return boost
+
+
+def _build_plan_quick_risk_hints(
+    *,
+    query: str,
+    rows: list[PlanQuickScoredRow],
+    retrieval_policy_profile: str,
+    index_cache: dict[str, Any],
+) -> list[dict[str, Any]]:
+    query_flags = _query_flags(query)
+    hints: list[dict[str, Any]] = []
+    top_rows = rows[:5]
+    if bool(query_flags.get("doc_sync", False)):
+        top_domains = {
+            _classify_path_domain(item.path)
+            for item in top_rows
+            if str(item.path or "").strip()
+        }
+        if retrieval_policy_profile != "doc_intent":
+            hints.append(
+                {
+                    "code": "doc_sync_policy_mismatch",
+                    "severity": "medium",
+                    "message": "query 更像文档同步任务, 但当前 retrieval policy 未落到 doc_intent。",
+                    "action": "建议追加 docs/planning/progress/status 之类的目录或状态词, 或直接限制目标子目录。",
+                }
+            )
+        if len(top_domains) >= 3 and any(
+            domain in top_domains for domain in ("code", "research", "tests")
+        ):
+            hints.append(
+                {
+                    "code": "cross_domain_mix",
+                    "severity": "high",
+                    "message": "前排候选混入多个语义域, 结果可能需要人工纠偏。",
+                    "action": "优先阅读前 3 个 markdown/docs/planning 候选, 再决定是否升级到 ace_plan。",
+                }
+            )
+        if top_rows and not any(
+            str(item.language or "").lower() in _MARKDOWN_LANGUAGES
+            or str(item.path or "").lower().endswith((".md", ".mdx"))
+            for item in top_rows[:3]
+        ):
+            hints.append(
+                {
+                    "code": "markdown_underweighted",
+                    "severity": "medium",
+                    "message": "文档同步 query 的前排结果缺少 markdown 入口文档。",
+                    "action": "建议把 query 收紧到 docs planning repo progress status latest, 或直接指定 markdown 目录。",
+                }
+            )
+    if str(index_cache.get("mode") or "").strip() == "full_build":
+        hints.append(
+            {
+                "code": "index_cold_start",
+                "severity": "low",
+                "message": "本次 quick plan 触发了 full build, 首轮耗时会偏高。",
+                "action": "若仓库无本地改动, 后续再次运行通常会转为 cache_only; 也可先执行 ace_index 预热索引。",
+                "reason": str(
+                    index_cache.get("full_build_reason")
+                    or index_cache.get("reason")
+                    or "cache_missing"
+                ),
+            }
+        )
+    return hints
 
 
 def build_plan_quick_policy_observability(
@@ -62,6 +243,7 @@ class PlanQuickScoredRow:
     score: float
     lexical_hits: int
     lexical_boost: float
+    intent_boost: float
     fused_score: float
 
     def as_dict(self) -> dict[str, Any]:
@@ -72,6 +254,7 @@ class PlanQuickScoredRow:
             "score": float(self.score),
             "lexical_hits": int(self.lexical_hits),
             "lexical_boost": float(self.lexical_boost),
+            "intent_boost": float(self.intent_boost),
             "fused_score": float(self.fused_score),
         }
 
@@ -85,6 +268,7 @@ def score_plan_quick_rows(
     normalized_query = str(query or "").strip()
     tokens = [token for token in normalized_query.lower().split() if token]
     boost_per_hit = float(lexical_boost_per_hit)
+    query_flags = _query_flags(normalized_query)
 
     scored: list[PlanQuickScoredRow] = []
     for item in rows:
@@ -92,19 +276,26 @@ def score_plan_quick_rows(
             continue
         path = str(item.get("path", "") or "")
         module = str(item.get("module", "") or "")
+        language = str(item.get("language", "") or "")
         base_score = float(item.get("score", 0.0) or 0.0)
         blob = f"{path} {module}".lower()
         lexical_hits = sum(1 for token in tokens if token in blob)
         lexical_boost = float(lexical_hits) * boost_per_hit
-        fused_score = base_score + lexical_boost
+        intent_boost = _doc_sync_intent_boost(
+            path=path,
+            language=language,
+            query_flags=query_flags,
+        )
+        fused_score = base_score + lexical_boost + intent_boost
         scored.append(
             PlanQuickScoredRow(
                 path=path,
                 module=module,
-                language=str(item.get("language", "") or ""),
+                language=language,
                 score=base_score,
                 lexical_hits=lexical_hits,
                 lexical_boost=lexical_boost,
+                intent_boost=intent_boost,
                 fused_score=fused_score,
             )
         )
@@ -154,6 +345,13 @@ def build_plan_quick(
     )
     index_payload = snapshot.index_payload
     cache_info = snapshot.cache_info
+    if isinstance(cache_info, dict) and str(cache_info.get("mode") or "") == "full_build":
+        cache_info = dict(cache_info)
+        cache_info["full_build_reason"] = str(
+            cache_info.get("full_build_reason")
+            or cache_info.get("reason")
+            or "cache_missing"
+        )
     repo_map: dict[str, Any] = {}
     files_map = snapshot.files_map
 
@@ -296,6 +494,13 @@ def build_plan_quick(
         )
         if ranking_source == "repomap"
         else str(ranking_profile or "graph"),
+        "query_profile": _query_flags(normalized_query),
+        "risk_hints": _build_plan_quick_risk_hints(
+            query=normalized_query,
+            rows=limited_rows,
+            retrieval_policy_profile=retrieval_policy_profile,
+            index_cache=dict(cache_info or {}),
+        ),
     }
     if include_rows:
         response["rows"] = [row.as_dict() for row in limited_rows]
@@ -305,7 +510,7 @@ def build_plan_quick(
 __all__ = [
     "PLAN_QUICK_STEPS",
     "PlanQuickScoredRow",
-    "build_plan_quick_policy_observability",
     "build_plan_quick",
+    "build_plan_quick_policy_observability",
     "score_plan_quick_rows",
 ]

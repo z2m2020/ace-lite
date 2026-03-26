@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
-from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.dev_feedback_runtime_linkage import (
     record_dev_issue_from_runtime_invocation,
     resolve_runtime_stats_store_path,
 )
+from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.memory_long_term import build_long_term_capture_service_from_runtime
 
 
@@ -16,6 +16,7 @@ class DevIssueRecordResponse(TypedDict):
     store_path: str
     issue: dict[str, Any]
     long_term_capture: dict[str, Any] | None
+    workflow_hints: NotRequired[dict[str, Any]]
 
 
 class DevFixRecordResponse(TypedDict):
@@ -23,12 +24,14 @@ class DevFixRecordResponse(TypedDict):
     store_path: str
     fix: dict[str, Any]
     long_term_capture: dict[str, Any] | None
+    workflow_hints: NotRequired[dict[str, Any]]
 
 
 class DevFeedbackSummaryResponse(TypedDict):
     ok: bool
     store_path: str
     summary: dict[str, Any]
+    workflow_hints: NotRequired[dict[str, Any]]
 
 
 class DevIssueFromRuntimeResponse(TypedDict):
@@ -38,6 +41,7 @@ class DevIssueFromRuntimeResponse(TypedDict):
     issue: dict[str, Any]
     invocation: dict[str, Any]
     long_term_capture: dict[str, Any] | None
+    workflow_hints: NotRequired[dict[str, Any]]
 
 
 class DevIssueApplyFixResponse(TypedDict):
@@ -46,6 +50,7 @@ class DevIssueApplyFixResponse(TypedDict):
     issue: dict[str, Any]
     fix: dict[str, Any]
     long_term_capture: dict[str, Any] | None
+    workflow_hints: NotRequired[dict[str, Any]]
 
 
 def resolve_dev_feedback_store_path_for_request(
@@ -82,6 +87,196 @@ def _capture_long_term_event(
             "reason": f"capture_failed:{exc.__class__.__name__}",
         }
     return dict(payload) if isinstance(payload, dict) else None
+
+
+def _build_dev_issue_workflow_hints(
+    *,
+    repo: str,
+    issue_id: str,
+) -> dict[str, Any]:
+    return {
+        "workflow": "dev_issue_triage_v1",
+        "recommended_next_steps": [
+            {
+                "tool": "ace_dev_feedback_summary",
+                "reason": "先看聚合后的问题压力, 再决定优先修哪一类。",
+                "suggested_args": {"repo": repo},
+            },
+            {
+                "tool": "ace_dev_fix_record",
+                "reason": "一旦有明确修复或缓解措施, 就先记录 fix。",
+                "suggested_args": {
+                    "repo": repo,
+                    "issue_id": issue_id,
+                    "reason_code": "general",
+                    "resolution_note": "<what was changed>",
+                },
+            },
+            {
+                "tool": "ace_dev_issue_apply_fix",
+                "reason": "在 fix 关联并验证后, 关闭 issue 状态。",
+                "suggested_args": {
+                    "issue_id": issue_id,
+                    "fix_id": "<dev_fix_id>",
+                    "status": "fixed",
+                },
+            },
+        ],
+    }
+
+
+def _build_dev_fix_workflow_hints(
+    *,
+    repo: str,
+    issue_id: str,
+    fix_id: str,
+) -> dict[str, Any]:
+    return {
+        "workflow": "dev_fix_linking_v1",
+        "recommended_next_steps": [
+            {
+                "tool": "ace_dev_issue_apply_fix",
+                "reason": "把当前 fix 应用到一个 open 的开发者 issue 上。",
+                "suggested_args": {
+                    "issue_id": issue_id or "<dev_issue_id>",
+                    "fix_id": fix_id,
+                    "status": "fixed",
+                },
+            },
+            {
+                "tool": "ace_dev_feedback_summary",
+                "reason": "确认关联 fix 之后 open issue 数量是否下降。",
+                "suggested_args": {"repo": repo},
+            },
+        ],
+    }
+
+
+def _build_dev_summary_workflow_hints(
+    *,
+    repo: str | None,
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    normalized_repo = str(repo or "").strip()
+    issue_count = int(summary.get("issue_count", 0) or 0)
+    open_issue_count = int(summary.get("open_issue_count", 0) or 0)
+    if issue_count <= 0:
+        return {
+            "workflow": "dev_feedback_bootstrap_v1",
+            "recommended_next_steps": [
+                {
+                    "tool": "ace_dev_issue_record",
+                    "reason": "先沉淀第一条开发或运行时痛点。",
+                    "suggested_args": {
+                        "repo": normalized_repo or "<repo>",
+                        "title": "<issue title>",
+                        "reason_code": "general",
+                    },
+                },
+                {
+                    "tool": "ace_dev_issue_from_runtime",
+                    "reason": "把降级运行时调用提升为 triage issue。",
+                    "suggested_args": {
+                        "invocation_id": "<runtime_invocation_id>",
+                        "repo": normalized_repo or "<repo>",
+                    },
+                },
+            ],
+        }
+    if open_issue_count > 0:
+        return {
+            "workflow": "dev_feedback_closure_v1",
+            "recommended_next_steps": [
+                {
+                    "tool": "ace_dev_fix_record",
+                    "reason": "为尚未解决的 issue 记录 fix 或缓解措施。",
+                    "suggested_args": {
+                        "repo": normalized_repo or "<repo>",
+                        "issue_id": "<open_issue_id>",
+                        "reason_code": "general",
+                        "resolution_note": "<what was changed>",
+                    },
+                },
+                {
+                    "tool": "ace_dev_issue_apply_fix",
+                    "reason": "在 fix 验证通过后, 把 issue 标记为 fixed。",
+                    "suggested_args": {
+                        "issue_id": "<open_issue_id>",
+                        "fix_id": "<dev_fix_id>",
+                        "status": "fixed",
+                    },
+                },
+            ],
+        }
+    return {
+        "workflow": "dev_feedback_maintenance_v1",
+        "recommended_next_steps": [
+            {
+                "tool": "ace_dev_feedback_summary",
+                "reason": "继续跟踪 reason-code 趋势和闭环率。",
+                "suggested_args": {"repo": normalized_repo or None},
+            }
+        ],
+    }
+
+
+def _build_dev_issue_from_runtime_workflow_hints(
+    *,
+    repo: str,
+    issue_id: str,
+    invocation_id: str,
+) -> dict[str, Any]:
+    return {
+        "workflow": "runtime_issue_promotion_v1",
+        "recommended_next_steps": [
+            {
+                "tool": "ace_dev_fix_record",
+                "reason": "记录与当前运行时调用关联的 fix 或缓解措施。",
+                "suggested_args": {
+                    "repo": repo,
+                    "issue_id": issue_id,
+                    "related_invocation_id": invocation_id,
+                    "resolution_note": "<mitigation summary>",
+                },
+            },
+            {
+                "tool": "ace_dev_issue_apply_fix",
+                "reason": "在 mitigation 确认后关闭该 promoted issue。",
+                "suggested_args": {
+                    "issue_id": issue_id,
+                    "fix_id": "<dev_fix_id>",
+                    "status": "fixed",
+                },
+            },
+        ],
+    }
+
+
+def _build_dev_issue_resolution_workflow_hints(
+    *,
+    repo: str,
+    issue_id: str,
+    fix_id: str,
+) -> dict[str, Any]:
+    return {
+        "workflow": "dev_issue_resolution_v1",
+        "recommended_next_steps": [
+            {
+                "tool": "ace_dev_feedback_summary",
+                "reason": "在 issue 解决后检查闭环指标。",
+                "suggested_args": {"repo": repo},
+            },
+            {
+                "tool": "ace_issue_report_apply_fix",
+                "reason": "如有需要, 把同一个 fix 传播到关联 issue report。",
+                "suggested_args": {
+                    "issue_id": issue_id,
+                    "fix_id": fix_id,
+                    "status": "resolved",
+                },
+            },
+        ],
+    }
 
 
 def handle_dev_issue_record_request(
@@ -135,12 +330,17 @@ def handle_dev_issue_record_request(
             root=str(root_path) if root_path is not None else "",
         ),
     )
-    return {
+    payload: DevIssueRecordResponse = {
         "ok": True,
         "store_path": str(store.db_path),
         "issue": issue.to_payload(),
         "long_term_capture": long_term_capture,
     }
+    payload["workflow_hints"] = _build_dev_issue_workflow_hints(
+        repo=issue.repo,
+        issue_id=issue.issue_id,
+    )
+    return payload
 
 
 def handle_dev_fix_record_request(
@@ -188,12 +388,18 @@ def handle_dev_fix_record_request(
             root=str(root_path) if root_path is not None else "",
         ),
     )
-    return {
+    payload: DevFixRecordResponse = {
         "ok": True,
         "store_path": str(store.db_path),
         "fix": fix.to_payload(),
         "long_term_capture": long_term_capture,
     }
+    payload["workflow_hints"] = _build_dev_fix_workflow_hints(
+        repo=fix.repo,
+        issue_id=fix.issue_id,
+        fix_id=fix.fix_id,
+    )
+    return payload
 
 
 def handle_dev_feedback_summary_request(
@@ -207,7 +413,16 @@ def handle_dev_feedback_summary_request(
         db_path=resolve_dev_feedback_store_path_for_request(store_path=store_path)
     )
     summary = store.summarize(repo=repo, user_id=user_id, profile_key=profile_key)
-    return {"ok": True, "store_path": str(store.db_path), "summary": summary}
+    payload: DevFeedbackSummaryResponse = {
+        "ok": True,
+        "store_path": str(store.db_path),
+        "summary": summary,
+    }
+    payload["workflow_hints"] = _build_dev_summary_workflow_hints(
+        repo=repo,
+        summary=summary,
+    )
+    return payload
 
 
 def handle_dev_issue_from_runtime_request(
@@ -253,7 +468,7 @@ def handle_dev_issue_from_runtime_request(
             root=str(root_path) if root_path is not None else "",
         ),
     )
-    return {
+    payload: DevIssueFromRuntimeResponse = {
         "ok": True,
         "store_path": resolved_store_path,
         "stats_db_path": resolved_stats_db_path,
@@ -261,6 +476,12 @@ def handle_dev_issue_from_runtime_request(
         "invocation": invocation.to_payload(),
         "long_term_capture": long_term_capture,
     }
+    payload["workflow_hints"] = _build_dev_issue_from_runtime_workflow_hints(
+        repo=issue.repo,
+        issue_id=issue.issue_id,
+        invocation_id=invocation.invocation_id,
+    )
+    return payload
 
 
 def handle_dev_issue_apply_fix_request(
@@ -296,24 +517,30 @@ def handle_dev_issue_apply_fix_request(
             root=str(root_path) if root_path is not None else "",
         ),
     )
-    return {
+    payload: DevIssueApplyFixResponse = {
         "ok": True,
         "store_path": str(store.db_path),
         "issue": issue.to_payload(),
         "fix": fix.to_payload(),
         "long_term_capture": long_term_capture,
     }
+    payload["workflow_hints"] = _build_dev_issue_resolution_workflow_hints(
+        repo=issue.repo,
+        issue_id=issue.issue_id,
+        fix_id=fix.fix_id,
+    )
+    return payload
 
 
 __all__ = [
     "DevFeedbackSummaryResponse",
+    "DevFixRecordResponse",
     "DevIssueApplyFixResponse",
     "DevIssueFromRuntimeResponse",
-    "DevFixRecordResponse",
     "DevIssueRecordResponse",
-    "handle_dev_issue_apply_fix_request",
     "handle_dev_feedback_summary_request",
-    "handle_dev_issue_from_runtime_request",
     "handle_dev_fix_record_request",
+    "handle_dev_issue_apply_fix_request",
+    "handle_dev_issue_from_runtime_request",
     "handle_dev_issue_record_request",
 ]

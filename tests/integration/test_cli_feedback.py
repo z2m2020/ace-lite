@@ -470,6 +470,7 @@ def test_cli_feedback_issue_report_round_trip(tmp_path: Path) -> None:
     assert recorded_payload["ok"] is True
     assert recorded_payload["report"]["selected_path"] == "src/demo.py"
     assert recorded_payload["report"]["plan_payload_ref"] == "run-123"
+    assert recorded_payload["workflow_hints"]["workflow"] == "issue_report_feedback_v1"
 
     listed = runner.invoke(
         cli_module.cli,
@@ -546,6 +547,7 @@ def test_cli_feedback_dev_issue_fix_and_summary_round_trip(tmp_path: Path) -> No
     assert recorded_issue_payload["ok"] is True
     assert recorded_issue_payload["issue"]["reason_code"] == "memory_fallback"
     assert recorded_issue_payload["issue"]["selected_path"] == "src/planner.py"
+    assert recorded_issue_payload["workflow_hints"]["workflow"] == "dev_issue_triage_v1"
 
     recorded_fix = runner.invoke(
         cli_module.cli,
@@ -583,6 +585,7 @@ def test_cli_feedback_dev_issue_fix_and_summary_round_trip(tmp_path: Path) -> No
     recorded_fix_payload = json.loads(recorded_fix.output)
     assert recorded_fix_payload["ok"] is True
     assert recorded_fix_payload["fix"]["issue_id"] == "devi_memory_fallback"
+    assert recorded_fix_payload["workflow_hints"]["workflow"] == "dev_fix_linking_v1"
 
     summary = runner.invoke(
         cli_module.cli,
@@ -607,6 +610,7 @@ def test_cli_feedback_dev_issue_fix_and_summary_round_trip(tmp_path: Path) -> No
     assert summary_payload["summary"]["open_issue_count"] == 1
     assert summary_payload["summary"]["fix_count"] == 1
     assert summary_payload["summary"]["by_reason_code"][0]["reason_code"] == "memory_fallback"
+    assert summary_payload["workflow_hints"]["workflow"] == "dev_feedback_closure_v1"
 
 
 def test_cli_feedback_report_dev_issue_from_runtime_round_trip(tmp_path: Path) -> None:
@@ -658,6 +662,7 @@ def test_cli_feedback_report_dev_issue_from_runtime_round_trip(tmp_path: Path) -
     assert payload["issue"]["repo"] == "demo"
     assert payload["issue"]["reason_code"] == "memory_fallback"
     assert payload["invocation"]["invocation_id"] == "inv-runtime-1"
+    assert payload["workflow_hints"]["workflow"] == "runtime_issue_promotion_v1"
 
 
 def test_cli_feedback_report_dev_issue_from_runtime_mirrors_to_long_term_memory_when_enabled(
@@ -952,6 +957,7 @@ def test_cli_feedback_issue_export_case_and_apply_fix_round_trip(tmp_path: Path)
     assert resolved_payload["report"]["status"] == "resolved"
     assert resolved_payload["report"]["resolution_note"] == "patched validation payload"
     assert "dev-fix://devf_demo1234" in resolved_payload["report"]["attachments"]
+    assert resolved_payload["workflow_hints"]["workflow"] == "issue_report_resolution_v1"
 
     exported_resolved_case = runner.invoke(
         cli_module.cli,

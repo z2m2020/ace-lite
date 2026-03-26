@@ -3,11 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from ace_lite.indexer import build_index
-from ace_lite.retrieval_shared import CandidateSelectionResult
-from ace_lite.plan_quick import build_plan_quick
-from ace_lite.plan_quick import build_plan_quick_policy_observability
-from ace_lite.plan_quick import score_plan_quick_rows
+from ace_lite.plan_quick import (
+    build_plan_quick,
+    build_plan_quick_policy_observability,
+    score_plan_quick_rows,
+)
 from ace_lite.repomap.ranking import rank_index_files
+from ace_lite.retrieval_shared import CandidateSelectionResult
 
 
 def _write_file(path: Path, text: str) -> None:
@@ -42,6 +44,43 @@ def test_score_plan_quick_rows_tiebreaks_by_path() -> None:
     scored = score_plan_quick_rows(query="missing", rows=rows, lexical_boost_per_hit=5.0)
 
     assert [row.path for row in scored] == ["a.py", "b.py"]
+
+
+def test_score_plan_quick_rows_biases_doc_sync_queries_toward_markdown_status_files() -> None:
+    rows = [
+        {
+            "path": "src/runtime/indexer.py",
+            "module": "src.runtime.indexer",
+            "language": "python",
+            "score": 7.0,
+        },
+        {
+            "path": "docs/planning/repo-progress.md",
+            "module": "docs.planning.repo_progress",
+            "language": "markdown",
+            "score": 5.5,
+        },
+        {
+            "path": "research/notes.md",
+            "module": "research.notes",
+            "language": "markdown",
+            "score": 6.5,
+        },
+    ]
+
+    scored = score_plan_quick_rows(
+        query="sync docs update latest progress",
+        rows=rows,
+        lexical_boost_per_hit=0.0,
+    )
+
+    assert [row.path for row in scored] == [
+        "docs/planning/repo-progress.md",
+        "src/runtime/indexer.py",
+        "research/notes.md",
+    ]
+    assert scored[0].intent_boost > 0.0
+    assert scored[-1].intent_boost < 0.0
 
 
 def test_build_index_marks_generated_files(tmp_path: Path) -> None:
@@ -318,6 +357,27 @@ def test_build_plan_quick_includes_retrieval_policy_observability(tmp_path: Path
         "chunk_semantic_rerank_enabled": True,
         "semantic_rerank_time_budget_ms": 120,
     }
+
+
+def test_build_plan_quick_adds_query_profile_risk_hints_and_full_build_reason(
+    tmp_path: Path,
+) -> None:
+    _write_file(tmp_path / "docs/planning/current-status.md", "Current rollout status\n")
+    _write_file(tmp_path / "src/runtime/indexer.py", "def refresh_index():\n    return True\n")
+    _write_file(tmp_path / "research/notes.md", "historic note\n")
+
+    result = build_plan_quick(
+        query="sync docs update latest status",
+        root=tmp_path,
+        languages="python,markdown",
+        top_k_files=5,
+        repomap_top_k=8,
+    )
+
+    assert result["query_profile"] == {"doc_sync": True, "latest_sensitive": True}
+    assert isinstance(result["risk_hints"], list)
+    assert any(item["code"] == "index_cold_start" for item in result["risk_hints"])
+    assert result["index_cache"]["full_build_reason"] == "cache_missing"
 
 
 def test_build_plan_quick_preserves_repomap_fallback_when_selection_is_empty(

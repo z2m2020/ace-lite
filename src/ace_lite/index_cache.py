@@ -626,14 +626,14 @@ def expand_changed_files_with_reverse_dependencies(
                     return text[: -len(suffix)]
             return text
 
-        def add_path_keys(candidate_path: str) -> None:
+        def add_path_keys(candidate_path: str, *, source_path: str = normalized_path) -> None:
             without = _remove_source_suffix(candidate_path)
             stem = without.rsplit("/", 1)[-1]
             for key in (without, stem, f"{without}/index"):
                 normalized_key = str(key or "").strip().lstrip("./")
                 if not normalized_key:
                     continue
-                path_style_to_paths.setdefault(normalized_key, set()).add(normalized_path)
+                path_style_to_paths.setdefault(normalized_key, set()).add(source_path)
 
         add_path_keys(normalized_path)
         if normalized_path.startswith("node_modules/"):
@@ -715,7 +715,12 @@ def build_or_refresh_index(
         if current_sha is not None:
             payload["git_head_sha"] = current_sha
         save_index_cache(payload=payload, cache_path=cache_path)
-        return payload, {"cache_hit": False, "mode": "full_build", "changed_files": 0}
+        return payload, {
+            "cache_hit": False,
+            "mode": "full_build",
+            "changed_files": 0,
+            "reason": "cache_missing",
+        }
 
     if not incremental:
         return cache, {"cache_hit": True, "mode": "cache_only", "changed_files": 0}

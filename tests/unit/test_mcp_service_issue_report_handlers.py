@@ -59,6 +59,8 @@ def test_handle_issue_report_record_and_list_round_trip(tmp_path: Path) -> None:
 
     assert recorded["ok"] is True
     assert recorded["report"]["selected_path"] == "src/demo.py"
+    assert recorded["workflow_hints"]["workflow"] == "issue_report_feedback_v1"
+    assert len(recorded["workflow_hints"]["recommended_next_steps"]) >= 2
     assert listed["ok"] is True
     assert listed["count"] == 1
     assert listed["reports"][0]["plan_payload_ref"] == "run-123"
@@ -146,6 +148,8 @@ def test_handle_issue_report_export_case_and_apply_fix(tmp_path: Path) -> None:
     assert resolved["ok"] is True
     assert resolved["report"]["status"] == "resolved"
     assert resolved["report"]["resolution_note"] == "patched validation payload"
+    assert resolved["workflow_hints"]["workflow"] == "issue_report_resolution_v1"
+    assert len(resolved["workflow_hints"]["recommended_next_steps"]) >= 2
     assert exported_after_resolution["case"]["dev_feedback"] == {
         "issue_count": 1,
         "linked_fix_issue_count": 1,

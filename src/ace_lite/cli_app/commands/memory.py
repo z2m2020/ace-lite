@@ -13,6 +13,7 @@ from ace_lite.cli_app.output import echo_json
 from ace_lite.memory import prune_memory_notes_rows
 from ace_lite.memory_long_term.graph_view import build_long_term_graph_view
 from ace_lite.memory_long_term.store import LongTermMemoryStore
+from ace_lite.memory_search_guardrails import build_memory_search_guardrails
 
 
 def _parse_tags(values: tuple[str, ...]) -> dict[str, str]:
@@ -111,15 +112,20 @@ def memory_search_command(
     )
     limit_value = max(1, int(limit))
     items = [row for _, row in scored[:limit_value]]
-    echo_json(
-        {
-            "query": query,
-            "namespace": namespace_filter or None,
-            "count": len(items),
-            "items": items,
-            "notes_path": str(Path(notes_path).expanduser()),
-        }
+    payload = {
+        "query": query,
+        "namespace": namespace_filter or None,
+        "count": len(items),
+        "items": items,
+        "notes_path": str(Path(notes_path).expanduser()),
+    }
+    payload.update(
+        build_memory_search_guardrails(
+            query=query,
+            items=items,
+        )
     )
+    echo_json(payload)
 
 
 @memory_group.command("store")

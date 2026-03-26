@@ -4,17 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from ace_lite.memory_long_term import LongTermMemoryStore
-from ace_lite.runtime_stats import RuntimeInvocationStats
-from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.mcp_server.service_dev_feedback_handlers import (
-    handle_dev_issue_apply_fix_request,
     handle_dev_feedback_summary_request,
-    handle_dev_issue_from_runtime_request,
     handle_dev_fix_record_request,
+    handle_dev_issue_apply_fix_request,
+    handle_dev_issue_from_runtime_request,
     handle_dev_issue_record_request,
     resolve_dev_feedback_store_path_for_request,
 )
+from ace_lite.memory_long_term import LongTermMemoryStore
+from ace_lite.runtime_stats import RuntimeInvocationStats
+from ace_lite.runtime_stats_store import DurableStatsStore
 
 
 def test_resolve_dev_feedback_store_path_for_request_expands_path(tmp_path: Path) -> None:
@@ -68,8 +68,10 @@ def test_handle_dev_feedback_round_trip(tmp_path: Path) -> None:
 
     assert recorded_issue["ok"] is True
     assert recorded_issue["issue"]["selected_path"] == "src/planner.py"
+    assert recorded_issue["workflow_hints"]["workflow"] == "dev_issue_triage_v1"
     assert recorded_fix["ok"] is True
     assert recorded_fix["fix"]["issue_id"] == "devi_memory_fallback"
+    assert recorded_fix["workflow_hints"]["workflow"] == "dev_fix_linking_v1"
     assert summary["ok"] is True
     assert summary["summary"]["issue_count"] == 1
     assert summary["summary"]["open_issue_count"] == 1
@@ -78,6 +80,7 @@ def test_handle_dev_feedback_round_trip(tmp_path: Path) -> None:
     assert summary["summary"]["linked_fix_issue_count"] == 1
     assert summary["summary"]["dev_issue_to_fix_rate"] == 1.0
     assert summary["summary"]["by_reason_code"][0]["reason_code"] == "memory_fallback"
+    assert summary["workflow_hints"]["workflow"] == "dev_feedback_closure_v1"
 
 
 def test_handle_dev_feedback_can_capture_long_term_memory_when_enabled(
@@ -246,6 +249,7 @@ def test_handle_dev_issue_from_runtime_promotes_auto_captured_event(
     assert recorded_issue["invocation"]["invocation_id"] == "inv-runtime-1"
     assert recorded_issue["long_term_capture"]["ok"] is True
     assert recorded_issue["long_term_capture"]["stage"] == "dev_issue"
+    assert recorded_issue["workflow_hints"]["workflow"] == "runtime_issue_promotion_v1"
 
 
 def test_handle_dev_issue_apply_fix_updates_open_issue_count(tmp_path: Path) -> None:
@@ -302,6 +306,25 @@ def test_handle_dev_issue_apply_fix_updates_open_issue_count(tmp_path: Path) -> 
     assert summary["summary"]["issue_count"] == 1
     assert summary["summary"]["open_issue_count"] == 0
     assert summary["summary"]["resolved_issue_count"] == 1
-    assert summary["summary"]["linked_fix_issue_count"] == 1
-    assert summary["summary"]["dev_issue_to_fix_rate"] == 1.0
-    assert summary["summary"]["issue_time_to_fix_case_count"] == 1
+    assert summary["workflow_hints"]["workflow"] == "dev_feedback_maintenance_v1"
+
+
+def test_handle_dev_feedback_summary_recommends_bootstrap_when_empty(
+    tmp_path: Path,
+) -> None:
+    store_path = str(tmp_path / "context-map" / "dev-feedback.db")
+
+    summary = handle_dev_feedback_summary_request(
+        repo="demo",
+        user_id="mcp-user",
+        profile_key="bugfix",
+        store_path=store_path,
+    )
+
+    assert summary["ok"] is True
+    assert summary["summary"]["issue_count"] == 0
+    assert summary["summary"]["fix_count"] == 0
+    assert summary["workflow_hints"]["workflow"] == "dev_feedback_bootstrap_v1"
+    assert summary["summary"]["linked_fix_issue_count"] == 0
+    assert summary["summary"]["dev_issue_to_fix_rate"] == 0.0
+    assert summary["summary"]["issue_time_to_fix_case_count"] == 0

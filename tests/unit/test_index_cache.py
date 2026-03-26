@@ -168,6 +168,26 @@ def test_build_or_refresh_index_cache_only_when_no_changes(
     assert info["changed_files"] == 0
 
 
+def test_build_or_refresh_index_reports_reason_when_cache_is_missing(tmp_path: Path) -> None:
+    cache_path = tmp_path / "context-map" / "index.json"
+    (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "src" / "app.py").write_text(
+        "def ok():\n    return True\n",
+        encoding="utf-8",
+    )
+
+    _payload, info = index_cache.build_or_refresh_index(
+        root_dir=tmp_path,
+        cache_path=cache_path,
+        languages=["python"],
+        incremental=True,
+    )
+
+    assert info["cache_hit"] is False
+    assert info["mode"] == "full_build"
+    assert info["reason"] == "cache_missing"
+
+
 def test_build_or_refresh_index_cache_only_when_only_non_indexable_changes(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -532,7 +552,12 @@ def test_build_or_refresh_index_rebuilds_when_git_head_changes(
     )
 
     assert calls["build"] == 1
-    assert first_info == {"cache_hit": False, "mode": "full_build", "changed_files": 0}
+    assert first_info == {
+        "cache_hit": False,
+        "mode": "full_build",
+        "changed_files": 0,
+        "reason": "cache_missing",
+    }
     assert first_payload.get("git_head_sha") == "a" * 40
 
     current_sha["value"] = "b" * 40
@@ -545,7 +570,12 @@ def test_build_or_refresh_index_rebuilds_when_git_head_changes(
     )
 
     assert calls["build"] == 2
-    assert second_info == {"cache_hit": False, "mode": "full_build", "changed_files": 0}
+    assert second_info == {
+        "cache_hit": False,
+        "mode": "full_build",
+        "changed_files": 0,
+        "reason": "cache_missing",
+    }
     assert second_payload.get("git_head_sha") == "b" * 40
 
 

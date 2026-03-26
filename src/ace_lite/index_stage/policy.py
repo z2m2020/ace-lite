@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -74,6 +75,23 @@ def _resolve_fallback_shadow_arm(
             return "general_hybrid"
         return "general_rrf"
     return _DEFAULT_SHADOW_ARM_BY_POLICY.get(policy_name, "")
+
+
+def _text_contains_marker(text: str, marker: str) -> bool:
+    normalized_text = str(text or "").lower()
+    normalized_marker = str(marker or "").strip().lower()
+    if not normalized_text or not normalized_marker:
+        return False
+    if any("\u4e00" <= char <= "\u9fff" for char in normalized_marker):
+        return normalized_marker in normalized_text
+    if any(char.isspace() for char in normalized_marker):
+        return normalized_marker in normalized_text
+    return bool(
+        re.search(
+            rf"(?<![a-z0-9_]){re.escape(normalized_marker)}(?![a-z0-9_])",
+            normalized_text,
+        )
+    )
 
 
 def resolve_shadow_router_arm(
@@ -524,7 +542,7 @@ def resolve_retrieval_policy(
             )
         )
         has_bugfix_markers = any(
-            token in lowered
+            _text_contains_marker(lowered, token)
             for token in (
                 "test",
                 "pytest",
@@ -548,7 +566,7 @@ def resolve_retrieval_policy(
             )
         )
         doc_markers = any(
-            token in lowered
+            _text_contains_marker(lowered, token)
             for token in (
                 "how ",
                 "why ",
@@ -572,6 +590,28 @@ def resolve_retrieval_policy(
                 "如何",
                 "怎么",
                 "怎样",
+                "docs",
+                "doc ",
+                "markdown",
+                "readme",
+                "planning",
+                "progress",
+                "status",
+                "report",
+                "roadmap",
+                "runbook",
+                "latest",
+                "sync",
+                "update",
+                "文档",
+                "说明",
+                "同步",
+                "更新",
+                "最新",
+                "状态",
+                "进展",
+                "报告",
+                "路线图",
             )
         )
         where_lookup = lowered.strip().startswith("where ")
