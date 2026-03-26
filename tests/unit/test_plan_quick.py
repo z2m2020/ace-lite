@@ -4,6 +4,8 @@ from pathlib import Path
 
 from ace_lite.indexer import build_index
 from ace_lite.plan_quick import (
+    PlanQuickScoredRow,
+    _build_plan_quick_risk_hints,
     build_plan_quick,
     build_plan_quick_policy_observability,
     score_plan_quick_rows,
@@ -135,6 +137,49 @@ def test_score_plan_quick_rows_skips_recency_boost_without_latest_marker() -> No
     )
 
     assert all(row.recency_boost == 0.0 for row in scored)
+
+
+def test_score_plan_quick_rows_demotes_weekly_and_research_docs_for_docs_sync_latest_query() -> None:
+    rows = [
+        {
+            "path": "docs/planning/2026-03-26_ERC-mandated-execution-sync-status.md",
+            "module": "docs.planning.current_status",
+            "language": "markdown",
+            "score": 7.2,
+        },
+        {
+            "path": "docs/planning/2026-03-23_repo-progress-sync.md",
+            "module": "docs.planning.repo_progress",
+            "language": "markdown",
+            "score": 7.0,
+        },
+        {
+            "path": "reports/2026-03-02_Weekly.md",
+            "module": "reports.weekly",
+            "language": "markdown",
+            "score": 8.6,
+        },
+        {
+            "path": "docs/research/2026-03-24_Report_Full-Lifecycle-ERC-Matrix.md",
+            "module": "docs.research.erc_matrix",
+            "language": "markdown",
+            "score": 8.8,
+        },
+    ]
+
+    scored = score_plan_quick_rows(
+        query="contract repo sync docs update ERC mandated execution",
+        rows=rows,
+        lexical_boost_per_hit=0.0,
+    )
+
+    ranked_paths = [row.path for row in scored]
+    assert ranked_paths.index("docs/planning/2026-03-26_ERC-mandated-execution-sync-status.md") < ranked_paths.index(
+        "reports/2026-03-02_Weekly.md"
+    )
+    assert ranked_paths.index("docs/planning/2026-03-23_repo-progress-sync.md") < ranked_paths.index(
+        "docs/research/2026-03-24_Report_Full-Lifecycle-ERC-Matrix.md"
+    )
 
 
 def test_build_index_marks_generated_files(tmp_path: Path) -> None:
@@ -429,9 +474,9 @@ def test_build_plan_quick_adds_query_profile_risk_hints_and_full_build_reason(
     )
 
     assert result["query_profile"] == {"doc_sync": True, "latest_sensitive": True}
-    assert result["candidate_domain_summary"]["primary_domain"] == "docs"
+    assert result["candidate_domain_summary"]["primary_domain"] == "planning"
     assert isinstance(result["candidate_domain_summary"]["cross_domain_mix"], bool)
-    assert result["candidate_domain_summary"]["domain_counts"]["docs"] >= 1
+    assert result["candidate_domain_summary"]["domain_counts"]["planning"] >= 1
     assert len(result["suggested_query_refinements"]) >= 1
     assert result["suggested_query_refinements"][0]["reason_code"] == "docs_status_focus"
     assert "docs" in result["suggested_query_refinements"][0]["target_domains"]
@@ -439,6 +484,70 @@ def test_build_plan_quick_adds_query_profile_risk_hints_and_full_build_reason(
     assert isinstance(result["risk_hints"], list)
     assert any(item["code"] == "index_cold_start" for item in result["risk_hints"])
     assert result["index_cache"]["full_build_reason"] == "cache_missing"
+
+
+def test_build_plan_quick_adds_secondary_doc_mix_risk_hint_for_docs_sync_query(
+    tmp_path: Path,
+) -> None:
+    _write_file(tmp_path / "docs/planning/2026-03-26_sync-status.md", "Current sync status\n")
+    _write_file(tmp_path / "docs/planning/2026-03-20_repo-progress.md", "Repo progress snapshot\n")
+    _write_file(tmp_path / "reports/2026-03-02_Weekly.md", "Weekly status note\n")
+    _write_file(
+        tmp_path / "docs/research/2026-03-24_Report_Full-Lifecycle-ERC-Matrix.md",
+        "Deep research note\n",
+    )
+
+    result = build_plan_quick(
+        query="contract repo sync docs update ERC mandated execution",
+        root=tmp_path,
+        languages="markdown",
+        top_k_files=4,
+        repomap_top_k=8,
+    )
+
+    assert isinstance(result["risk_hints"], list)
+    assert any(item["code"] == "secondary_doc_mix" for item in result["risk_hints"])
+
+
+def test_build_plan_quick_risk_hints_flags_secondary_doc_mix_within_visible_rows() -> None:
+    rows = [
+        PlanQuickScoredRow(
+            path=f"docs/planning/2026-03-{day:02d}_sync-status.md",
+            module=f"docs.planning.sync_{day}",
+            language="markdown",
+            score=10.0 - (day * 0.1),
+            lexical_hits=0,
+            lexical_boost=0.0,
+            intent_boost=8.0,
+            recency_boost=4.0,
+            semantic_domain="planning",
+            fused_score=22.0 - (day * 0.1),
+        )
+        for day in range(1, 8)
+    ]
+    rows.append(
+        PlanQuickScoredRow(
+            path="reports/2026-03-02_Weekly.md",
+            module="reports.weekly",
+            language="markdown",
+            score=6.0,
+            lexical_hits=0,
+            lexical_boost=0.0,
+            intent_boost=1.0,
+            recency_boost=0.0,
+            semantic_domain="reports",
+            fused_score=7.0,
+        )
+    )
+
+    hints = _build_plan_quick_risk_hints(
+        query="contract repo sync docs update ERC mandated execution",
+        rows=rows,
+        retrieval_policy_profile="doc_intent",
+        index_cache={},
+    )
+
+    assert any(item["code"] == "secondary_doc_mix" for item in hints)
 
 
 def test_build_plan_quick_preserves_repomap_fallback_when_selection_is_empty(

@@ -70,13 +70,19 @@ _DOC_PREFERRED_PREFIXES: tuple[str, ...] = (
     "repos/",
     "reports/",
 )
-_DOC_PREFERRED_NAME_MARKERS: tuple[str, ...] = (
-    "readme",
+_DOC_PRIMARY_NAME_MARKERS: tuple[str, ...] = (
     "progress",
     "status",
+    "runbook",
+    "sync",
+    "update",
+    "latest",
+    "current",
+)
+_DOC_SECONDARY_NAME_MARKERS: tuple[str, ...] = (
+    "readme",
     "report",
     "roadmap",
-    "runbook",
     "overview",
     "summary",
     "changelog",
@@ -89,6 +95,10 @@ _DOC_PENALIZED_PREFIXES: tuple[tuple[str, float], ...] = (
     ("src/", -2.0),
     ("internal/", -2.0),
     ("pkg/", -2.0),
+)
+_DOC_SECONDARY_NAME_PENALTIES: tuple[tuple[str, float], ...] = (
+    ("weekly", -2.5),
+    ("matrix", -1.0),
 )
 _MARKDOWN_LANGUAGES: frozenset[str] = frozenset({"markdown", "md"})
 _LATEST_DOC_DOMAINS: frozenset[str] = frozenset(
@@ -138,16 +148,18 @@ def _query_flags(query: str) -> dict[str, bool]:
 
 def _classify_path_domain(path: str) -> str:
     normalized = str(path or "").strip().replace("\\", "/").lower()
-    if normalized.startswith(("docs/", "doc/")):
-        return "docs"
     if normalized.startswith(("planning/", "plans/")) or "/planning/" in normalized:
         return "planning"
     if normalized.startswith("repos/"):
         return "repos"
     if normalized.startswith("reports/"):
         return "reports"
-    if normalized.startswith(("research/", "reference/")):
+    if normalized.startswith(("research/", "reference/")) or any(
+        marker in normalized for marker in ("/research/", "/reference/")
+    ):
         return "research"
+    if normalized.startswith(("docs/", "doc/")):
+        return "docs"
     if normalized.startswith(("tests/", "test/")):
         return "tests"
     if normalized.endswith((".md", ".mdx")):
@@ -199,17 +211,31 @@ def _doc_sync_intent_boost(*, path: str, language: str, query_flags: dict[str, b
         return 0.0
     normalized_path = str(path or "").strip().replace("\\", "/").lower()
     normalized_language = str(language or "").strip().lower()
+    semantic_domain = _classify_path_domain(path)
+    primary_hits = sum(
+        1 for marker in _DOC_PRIMARY_NAME_MARKERS if marker in normalized_path
+    )
+    secondary_hits = sum(
+        1 for marker in _DOC_SECONDARY_NAME_MARKERS if marker in normalized_path
+    )
     boost = 0.0
     if normalized_language in _MARKDOWN_LANGUAGES or normalized_path.endswith((".md", ".mdx")):
         boost += 4.0
     if normalized_path.startswith(_DOC_PREFERRED_PREFIXES):
         boost += 3.0
-    if any(marker in normalized_path for marker in _DOC_PREFERRED_NAME_MARKERS):
-        boost += 2.0
+    boost += min(4.0, float(primary_hits) * 1.5)
+    boost += min(1.5, float(secondary_hits) * 0.75)
     for prefix, penalty in _DOC_PENALIZED_PREFIXES:
         if normalized_path.startswith(prefix):
             boost += penalty
             break
+    if semantic_domain == "research":
+        boost -= 4.0
+    elif semantic_domain == "reports" and primary_hits == 0:
+        boost -= 1.5
+    for marker, penalty in _DOC_SECONDARY_NAME_PENALTIES:
+        if marker in normalized_path:
+            boost += penalty
     return boost
 
 
@@ -228,11 +254,17 @@ def _latest_doc_intent_boost(
     if not _is_markdown_doc(path=path, language=language):
         return 0.0
     normalized_path = str(path or "").strip().replace("\\", "/").lower()
+    primary_hits = sum(
+        1 for marker in _DOC_PRIMARY_NAME_MARKERS if marker in normalized_path
+    )
+    secondary_hits = sum(
+        1 for marker in _DOC_SECONDARY_NAME_MARKERS if marker in normalized_path
+    )
     boost = 0.0
     if normalized_path.startswith(_DOC_PREFERRED_PREFIXES):
         boost += 1.0
-    if any(marker in normalized_path for marker in _DOC_PREFERRED_NAME_MARKERS):
-        boost += 1.5
+    boost += min(2.5, float(primary_hits))
+    boost += min(0.75, float(secondary_hits) * 0.5)
     if "current" in normalized_path or "latest" in normalized_path:
         boost += 0.75
     path_date = _extract_path_date(path)
@@ -244,6 +276,11 @@ def _latest_doc_intent_boost(
             boost += 2.0
         elif lag_days <= 90:
             boost += 1.0
+    if domain == "reports" and primary_hits == 0:
+        boost -= 0.75
+    for marker, penalty in _DOC_SECONDARY_NAME_PENALTIES:
+        if marker in normalized_path:
+            boost += penalty * 0.5
     return boost
 
 
@@ -257,6 +294,7 @@ def _build_plan_quick_risk_hints(
     query_flags = _query_flags(query)
     hints: list[dict[str, Any]] = []
     top_rows = rows[:5]
+    visible_rows = rows[:8]
     if bool(query_flags.get("doc_sync", False)):
         top_domains = {
             _classify_path_domain(item.path)
@@ -281,6 +319,17 @@ def _build_plan_quick_risk_hints(
                     "severity": "high",
                     "message": "前排候选混入多个语义域, 结果可能需要人工纠偏。",
                     "action": "优先阅读前 3 个 markdown/docs/planning 候选, 再决定是否升级到 ace_plan。",
+                }
+            )
+        if any(
+            item.semantic_domain in {"reports", "research"} for item in visible_rows
+        ):
+            hints.append(
+                {
+                    "code": "secondary_doc_mix",
+                    "severity": "medium",
+                    "message": "前排候选仍混入周报或研究类文档, 当前状态入口可能还没有完全收敛。",
+                    "action": "优先查看 planning/progress/status/sync 文档; 如仍不稳, 在 query 中追加 planning progress status current latest。",
                 }
             )
         if top_rows and not any(
