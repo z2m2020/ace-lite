@@ -167,6 +167,26 @@ def test_collect_durable_stats_reasons_marks_chunk_guard_fallback() -> None:
     assert "chunk_guard_fallback" in reasons
 
 
+def test_collect_durable_stats_reasons_marks_memory_namespace_fallback() -> None:
+    reasons = AceOrchestrator._collect_durable_stats_reasons(
+        stage_metrics=[
+            StageMetric(
+                stage="memory",
+                elapsed_ms=4.0,
+                plugins=[],
+                tags={
+                    "memory_namespace_fallback": True,
+                },
+            )
+        ],
+        contract_error=None,
+        replay_cache_info=None,
+        trace_export={},
+    )
+
+    assert "memory_namespace_fallback" in reasons
+
+
 def test_collect_durable_stats_reasons_marks_latency_budget_exceeded_from_xref_budget_exhaustion() -> None:
     reasons = AceOrchestrator._collect_durable_stats_reasons(
         stage_metrics=[
@@ -256,3 +276,66 @@ def test_collect_durable_stats_reasons_marks_skills_budget_exhausted() -> None:
     )
 
     assert "skills_budget_exhausted" in reasons
+
+
+def test_collect_durable_stats_reasons_marks_invalid_cached_payload() -> None:
+    reasons = AceOrchestrator._collect_durable_stats_reasons(
+        stage_metrics=[],
+        contract_error=None,
+        replay_cache_info={"reason": "invalid_cached_payload"},
+        trace_export={},
+    )
+
+    assert reasons == ["plan_replay_invalid_cached_payload"]
+
+
+def test_collect_durable_stats_reasons_marks_plugin_policy_warn_from_common_rule() -> None:
+    reasons = AceOrchestrator._collect_durable_stats_reasons(
+        stage_metrics=[
+            StageMetric(
+                stage="index",
+                elapsed_ms=4.0,
+                plugins=[],
+                tags={"slot_policy_warn": 1},
+            )
+        ],
+        contract_error=None,
+        replay_cache_info=None,
+        trace_export={},
+    )
+
+    assert reasons == ["plugin_policy_warn"]
+
+
+def test_collect_durable_stats_reasons_marks_replay_and_trace_failures() -> None:
+    reasons = AceOrchestrator._collect_durable_stats_reasons(
+        stage_metrics=[],
+        contract_error=None,
+        replay_cache_info={"reason": "invalid_cached_payload"},
+        trace_export={"enabled": True, "exported": False},
+    )
+
+    assert "plan_replay_invalid_cached_payload" in reasons
+    assert "trace_export_failed" in reasons
+
+
+def test_collect_durable_stats_reasons_marks_plugin_policy_signals() -> None:
+    reasons = AceOrchestrator._collect_durable_stats_reasons(
+        stage_metrics=[
+            StageMetric(
+                stage="index",
+                elapsed_ms=3.0,
+                plugins=[],
+                tags={
+                    "slot_policy_blocked": 1,
+                    "slot_policy_warn": 2,
+                },
+            )
+        ],
+        contract_error=None,
+        replay_cache_info=None,
+        trace_export={},
+    )
+
+    assert "plugin_policy_blocked" in reasons
+    assert "plugin_policy_warn" in reasons

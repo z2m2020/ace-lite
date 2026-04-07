@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import hashlib
 import logging
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
@@ -12,32 +10,22 @@ from ace_lite.exceptions import StageContractError
 from ace_lite.memory import (
     MemoryProvider,
 )
-from ace_lite.memory.local_notes import append_capture_note
 from ace_lite.memory_long_term import LongTermMemoryCaptureService, LongTermMemoryStore
 from ace_lite.orchestrator_config import OrchestratorConfig
-from ace_lite.feedback_store import SelectionFeedbackStore
-from ace_lite.plan_replay_cache import (
-    default_plan_replay_cache_path,
-    load_cached_plan,
-    load_cached_plan_with_meta,
-    normalize_plan_query,
-    store_cached_plan,
+from ace_lite.orchestrator_memory_context_service import (
+    MemoryContextService,
 )
-from ace_lite.orchestrator_replay import (
-    build_augment_replay_fingerprint,
-    build_index_replay_fingerprint,
-    build_memory_replay_fingerprint,
-    build_orchestrator_plan_replay_key,
-    build_repomap_replay_fingerprint,
-    build_repo_inputs_replay_fingerprint,
-    build_skills_replay_fingerprint,
+from ace_lite.orchestrator_source_plan_replay_service import (
+    SourcePlanReplayService,
+)
+from ace_lite.orchestrator_runtime_observability_service import (
+    RuntimeObservabilityService,
 )
 from ace_lite.orchestrator_runtime_support import (
     run_orchestrator_finalization,
     run_orchestrator_lifecycle,
     run_orchestrator_preparation,
 )
-from ace_lite.pipeline.contracts import validate_stage_output
 from ace_lite.pipeline.hooks import HookBus
 from ace_lite.pipeline.plugin_runtime import PluginRuntime
 from ace_lite.pipeline.registry import (
@@ -55,8 +43,6 @@ from ace_lite.pipeline.stages.source_plan import run_source_plan
 from ace_lite.pipeline.stages.validation import run_validation_stage
 from ace_lite.pipeline.types import StageContext, StageMetric
 from ace_lite.plugins.loader import PluginLoader
-from ace_lite.profile_store import ProfileStore
-from ace_lite.preference_capture_store import DurablePreferenceCaptureStore
 from ace_lite.runtime_manager import RuntimeManager
 from ace_lite.runtime_state import RuntimeState
 from ace_lite.schema import SCHEMA_VERSION
@@ -76,8 +62,6 @@ from ace_lite.scoring_config import (
 from ace_lite.token_estimator import (
     estimate_tokens,
 )
-from ace_lite.tracing import export_stage_trace_jsonl, export_stage_trace_otlp
-from ace_lite.runtime_stats import RuntimeInvocationStats
 from ace_lite.runtime_stats import build_learning_router_rollout_decision_payload
 from ace_lite.validation.result import build_validation_result_v1
 
@@ -151,6 +135,20 @@ class AceOrchestrator:
         self._tokenizer_model = self._config.tokenizer.model
         self._signal_extractor = runtime_state.services.signal_extractor
         self._skill_manifest = runtime_state.services.skill_manifest
+        self._source_plan_replay_service = SourcePlanReplayService(
+            config=self._config,
+            plan_replay_stage=self.PLAN_REPLAY_STAGE,
+            plan_replay_mode=self.PLAN_REPLAY_MODE,
+            plan_replay_guarded_by=self.PLAN_REPLAY_GUARDED_BY,
+            resolve_repo_relative_path_fn=self._resolve_repo_relative_path,
+        )
+        self._runtime_observability_service = RuntimeObservabilityService(
+            config=self._config,
+            pipeline_order=tuple(self.PIPELINE_ORDER),
+            resolve_repo_relative_path_fn=self._resolve_repo_relative_path,
+            durable_stats_store_factory=self._durable_stats_store_factory,
+            durable_stats_session_id=self._durable_stats_session_id,
+        )
         self._long_term_capture_service = (
             LongTermMemoryCaptureService(
                 store=LongTermMemoryStore(db_path=self._config.memory.long_term.path),
@@ -164,6 +162,11 @@ class AceOrchestrator:
                 and bool(self._config.memory.long_term.write_enabled)
             )
             else None
+        )
+        self._memory_context_service = MemoryContextService(
+            config=self._config,
+            long_term_capture_service=self._long_term_capture_service,
+            durable_stats_session_id=self._durable_stats_session_id,
         )
         self._last_learning_router_rollout_decision: dict[str, Any] = {}
 
@@ -544,114 +547,27 @@ class AceOrchestrator:
         ctx: StageContext,
         stage_payload: dict[str, Any],
     ) -> dict[str, Any] | None:
-        if self._long_term_capture_service is None:
-            return None
-        if stage_name not in {"source_plan", "validation"}:
-            return None
-        try:
-            return self._long_term_capture_service.capture_stage_observation(
-                stage_name=stage_name,
-                query=ctx.query,
-                repo=ctx.repo,
-                root=ctx.root,
-                profile_key=None,
-                source_run_id=self._durable_stats_session_id,
-                stage_payload=stage_payload,
-            )
-        except Exception as exc:
-            return {
-                "ok": False,
-                "stage": stage_name,
-                "reason": f"capture_failed:{exc.__class__.__name__}",
-                "message": str(exc),
-            }
+        return self._memory_context_service.capture_long_term_stage_observation(
+            stage_name=stage_name,
+            ctx=ctx,
+            stage_payload=stage_payload,
+        )
 
     def _resolve_plan_replay_cache_path(self, *, root: str) -> Path:
-        configured = str(self._config.plan_replay_cache.cache_path or "").strip()
-        if not configured:
-            return default_plan_replay_cache_path(root=root)
-        return self._resolve_repo_relative_path(root=root, configured_path=configured)
+        return self._source_plan_replay_service.resolve_plan_replay_cache_path(
+            root=root
+        )
 
-    @staticmethod
     def _extract_source_plan_failure_signal_summary(
+        self,
         source_plan_stage: Any,
     ) -> dict[str, Any]:
-        default_summary = {
-            "status": "skipped",
-            "issue_count": 0,
-            "probe_status": "disabled",
-            "probe_issue_count": 0,
-            "probe_executed_count": 0,
-            "selected_test_count": 0,
-            "executed_test_count": 0,
-            "has_failure": False,
-            "source": "source_plan",
-        }
-        if not isinstance(source_plan_stage, dict):
-            return dict(default_summary)
-
-        summary = (
-            dict(source_plan_stage.get("failure_signal_summary"))
-            if isinstance(source_plan_stage.get("failure_signal_summary"), dict)
-            else {}
+        return self._source_plan_replay_service.extract_source_plan_failure_signal_summary(
+            source_plan_stage
         )
-        if not summary:
-            steps = (
-                source_plan_stage.get("steps")
-                if isinstance(source_plan_stage.get("steps"), list)
-                else []
-            )
-            validate_step = next(
-                (
-                    item
-                    for item in steps
-                    if isinstance(item, dict)
-                    and str(item.get("stage") or "").strip() == "validate"
-                ),
-                {},
-            )
-            feedback_summary = (
-                validate_step.get("validation_feedback_summary")
-                if isinstance(validate_step.get("validation_feedback_summary"), dict)
-                else {}
-            )
-            summary = dict(feedback_summary) if feedback_summary else {}
-
-        normalized = dict(default_summary)
-        normalized.update(summary)
-        normalized["has_failure"] = bool(
-            str(normalized.get("status") or "").strip().lower()
-            in {"failed", "degraded", "timeout"}
-            or str(normalized.get("probe_status") or "").strip().lower()
-            in {"failed", "degraded", "timeout"}
-            or int(normalized.get("issue_count", 0) or 0) > 0
-            or int(normalized.get("probe_issue_count", 0) or 0) > 0
-        )
-        normalized["source"] = str(normalized.get("source") or "source_plan")
-        return normalized
 
     def _default_plan_replay_cache_info(self, *, root: str) -> dict[str, Any]:
-        enabled = bool(self._config.plan_replay_cache.enabled)
-        return {
-            "enabled": enabled,
-            "stage": self.PLAN_REPLAY_STAGE,
-            "mode": self.PLAN_REPLAY_MODE,
-            "cache_path": str(self._resolve_plan_replay_cache_path(root=root)),
-            "hit": False,
-            "safe_hit": False,
-            "stale_hit_safe": enabled,
-            "stored": False,
-            "reused_stages": [],
-            "guarded_by": list(self.PLAN_REPLAY_GUARDED_BY),
-            "origin": "none",
-            "age_seconds": None,
-            "trust_class": "",
-            "policy_name": self.PLAN_REPLAY_STAGE,
-            "failure_signal_summary": self._extract_source_plan_failure_signal_summary(
-                {}
-            ),
-            "reason": "disabled" if not enabled else "not_reached",
-        }
+        return self._source_plan_replay_service.default_plan_replay_cache_info(root=root)
 
     def _load_replayed_source_plan(
         self,
@@ -660,49 +576,11 @@ class AceOrchestrator:
         replay_cache_path: Path,
         replay_cache_key: str,
     ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
-        replay_cache_info = self._default_plan_replay_cache_info(root=root)
-        replay_cache_info["cache_path"] = str(replay_cache_path)
-        replay_cache_info["key"] = replay_cache_key
-        replay_cache_info["reason"] = "miss"
-
-        lookup_started = perf_counter()
-        cached_payload, cache_metadata = load_cached_plan_with_meta(
-            cache_path=replay_cache_path,
-            key=replay_cache_key,
+        return self._source_plan_replay_service.load_replayed_source_plan(
+            root=root,
+            replay_cache_path=replay_cache_path,
+            replay_cache_key=replay_cache_key,
         )
-        replay_cache_info["lookup_ms"] = round(
-            (perf_counter() - lookup_started) * 1000.0,
-            3,
-        )
-        if not isinstance(cached_payload, dict):
-            return None, replay_cache_info
-
-        cached_source_plan = cached_payload.get("source_plan", {})
-        if not isinstance(cached_source_plan, dict):
-            replay_cache_info["reason"] = "invalid_cached_payload"
-            return None, replay_cache_info
-
-        try:
-            validate_stage_output(self.PLAN_REPLAY_STAGE, cached_source_plan)
-        except Exception as exc:
-            replay_cache_info["reason"] = "invalid_cached_payload"
-            replay_cache_info["load_error"] = str(exc)
-            return None, replay_cache_info
-
-        replay_cache_info["hit"] = True
-        replay_cache_info["safe_hit"] = True
-        replay_cache_info["reused_stages"] = [self.PLAN_REPLAY_STAGE]
-        replay_cache_info["origin"] = str(cache_metadata.get("origin") or "unknown")
-        replay_cache_info["age_seconds"] = cache_metadata.get("age_seconds")
-        replay_cache_info["trust_class"] = str(cache_metadata.get("trust_class") or "")
-        replay_cache_info["policy_name"] = str(
-            cache_metadata.get("policy_name") or self.PLAN_REPLAY_STAGE
-        )
-        replay_cache_info["reason"] = "hit"
-        replay_cache_info["failure_signal_summary"] = (
-            self._extract_source_plan_failure_signal_summary(cached_source_plan)
-        )
-        return cached_source_plan, replay_cache_info
 
     def _store_source_plan_replay(
         self,
@@ -714,35 +592,14 @@ class AceOrchestrator:
         source_plan_stage: Any,
         replay_cache_info: dict[str, Any],
     ) -> dict[str, Any]:
-        updated_info = dict(replay_cache_info)
-        source_plan_payload = (
-            dict(source_plan_stage) if isinstance(source_plan_stage, dict) else {}
+        return self._source_plan_replay_service.store_source_plan_replay(
+            query=query,
+            repo=repo,
+            replay_cache_path=replay_cache_path,
+            replay_cache_key=replay_cache_key,
+            source_plan_stage=source_plan_stage,
+            replay_cache_info=replay_cache_info,
         )
-        store_started = perf_counter()
-        stored = store_cached_plan(
-            cache_path=replay_cache_path,
-            key=replay_cache_key,
-            payload={"source_plan": source_plan_payload},
-            meta={
-                "query": normalize_plan_query(query),
-                "repo": repo,
-                "stage": self.PLAN_REPLAY_STAGE,
-            },
-        )
-        updated_info["store_ms"] = round(
-            (perf_counter() - store_started) * 1000.0,
-            3,
-        )
-        updated_info["stored"] = bool(stored)
-        updated_info["origin"] = "stage_artifact_cache"
-        updated_info["trust_class"] = "exact"
-        updated_info["policy_name"] = self.PLAN_REPLAY_STAGE
-        updated_info["failure_signal_summary"] = (
-            self._extract_source_plan_failure_signal_summary(source_plan_payload)
-        )
-        if not bool(stored):
-            updated_info["reason"] = "store_failed"
-        return updated_info
 
     def _build_plan_replay_key(
         self,
@@ -759,55 +616,37 @@ class AceOrchestrator:
         augment_stage: Any,
         skills_stage: Any,
     ) -> str:
-        memory_payload = memory_stage if isinstance(memory_stage, dict) else {}
-        index_payload = index_stage if isinstance(index_stage, dict) else {}
-        repomap_payload = repomap_stage if isinstance(repomap_stage, dict) else {}
-        augment_payload = augment_stage if isinstance(augment_stage, dict) else {}
-        skills_payload = skills_stage if isinstance(skills_stage, dict) else {}
-        return build_orchestrator_plan_replay_key(
+        return self._source_plan_replay_service.build_plan_replay_key(
             query=query,
             repo=repo,
             root=root,
             temporal_input=temporal_input,
             plugins_loaded=plugins_loaded,
             conventions_hashes=conventions_hashes,
-            memory_payload=memory_payload,
-            index_payload=index_payload,
-            repomap_payload=repomap_payload,
-            augment_payload=augment_payload,
-            skills_payload=skills_payload,
-            retrieval_policy_version=str(self._config.retrieval.policy_version),
-            candidate_ranker_default=str(self._config.retrieval.candidate_ranker),
-            chunk_disclosure=str(self._config.chunking.disclosure),
-            budget_knobs={
-                "top_k_files": int(self._config.retrieval.top_k_files),
-                "repomap_top_k": int(self._config.repomap.top_k),
-                "repomap_neighbor_limit": int(self._config.repomap.neighbor_limit),
-                "repomap_budget_tokens": int(self._config.repomap.budget_tokens),
-                "skills_top_n": int(self._config.skills.top_n),
-                "skills_token_budget": int(self._config.skills.token_budget),
-                "precomputed_skills_routing_enabled": bool(
-                    self._config.skills.precomputed_routing_enabled
-                ),
-                "chunk_top_k": int(self._config.chunking.top_k),
-                "chunk_per_file_limit": int(self._config.chunking.per_file_limit),
-                "chunk_token_budget": int(self._config.chunking.token_budget),
-                "lsp_top_n": int(self._config.lsp.top_n),
-                "lsp_xref_top_n": int(self._config.lsp.xref_top_n),
-            },
+            memory_stage=memory_stage,
+            index_stage=index_stage,
+            repomap_stage=repomap_stage,
+            augment_stage=augment_stage,
+            skills_stage=skills_stage,
         )
 
     @staticmethod
     def _build_memory_replay_fingerprint(*, memory_payload: dict[str, Any]) -> str:
-        return build_memory_replay_fingerprint(memory_payload=memory_payload)
+        return SourcePlanReplayService.build_memory_replay_fingerprint(
+            memory_payload=memory_payload
+        )
 
     @staticmethod
     def _build_index_replay_fingerprint(*, index_payload: dict[str, Any]) -> str:
-        return build_index_replay_fingerprint(index_payload=index_payload)
+        return SourcePlanReplayService.build_index_replay_fingerprint(
+            index_payload=index_payload
+        )
 
     @staticmethod
     def _build_repomap_replay_fingerprint(*, repomap_payload: dict[str, Any]) -> str:
-        return build_repomap_replay_fingerprint(repomap_payload=repomap_payload)
+        return SourcePlanReplayService.build_repomap_replay_fingerprint(
+            repomap_payload=repomap_payload
+        )
 
     @staticmethod
     def _build_repo_inputs_replay_fingerprint(
@@ -816,7 +655,7 @@ class AceOrchestrator:
         index_payload: dict[str, Any],
         repomap_payload: dict[str, Any],
     ) -> str:
-        return build_repo_inputs_replay_fingerprint(
+        return SourcePlanReplayService.build_repo_inputs_replay_fingerprint(
             root=root,
             index_payload=index_payload,
             repomap_payload=repomap_payload,
@@ -824,11 +663,15 @@ class AceOrchestrator:
 
     @staticmethod
     def _build_augment_replay_fingerprint(*, augment_payload: dict[str, Any]) -> str:
-        return build_augment_replay_fingerprint(augment_payload=augment_payload)
+        return SourcePlanReplayService.build_augment_replay_fingerprint(
+            augment_payload=augment_payload
+        )
 
     @staticmethod
     def _build_skills_replay_fingerprint(*, skills_payload: dict[str, Any]) -> str:
-        return build_skills_replay_fingerprint(skills_payload=skills_payload)
+        return SourcePlanReplayService.build_skills_replay_fingerprint(
+            skills_payload=skills_payload
+        )
 
     def _export_stage_trace(
         self,
@@ -841,99 +684,15 @@ class AceOrchestrator:
         stage_metrics: list[StageMetric],
         plugin_policy_summary: dict[str, Any],
     ) -> dict[str, Any]:
-        if not self._config.trace.export_enabled and not self._config.trace.otlp_enabled:
-            return {"enabled": False}
-
-        result: dict[str, Any] = {"enabled": True}
-
-        if self._config.trace.export_enabled:
-            output_path = self._resolve_repo_relative_path(
-                root=root,
-                configured_path=str(self._config.trace.export_path),
-            )
-            try:
-                result.update(
-                    export_stage_trace_jsonl(
-                        output_path=output_path,
-                        query=query,
-                        repo=repo,
-                        root=root,
-                        started_at=started_at,
-                        total_ms=total_ms,
-                        stage_metrics=stage_metrics,
-                        pipeline_order=list(self.PIPELINE_ORDER),
-                        plugin_policy_summary=plugin_policy_summary,
-                    )
-                )
-            except Exception as exc:
-                logger.warning(
-                    "trace.export.error",
-                    extra={
-                        "path": str(output_path),
-                        "error": str(exc),
-                    },
-                )
-                result.update(
-                    {
-                        "exported": False,
-                        "path": str(output_path),
-                        "error": str(exc),
-                    }
-                )
-
-        if self._config.trace.otlp_enabled:
-            endpoint = str(self._config.trace.otlp_endpoint)
-            resolved_endpoint = endpoint
-            if endpoint.startswith("file://"):
-                raw_path = endpoint.replace("file://", "", 1)
-                candidate = Path(raw_path)
-                if not candidate.is_absolute():
-                    resolved = self._resolve_repo_relative_path(
-                        root=root,
-                        configured_path=raw_path,
-                    )
-                    resolved_endpoint = f"file://{resolved}"
-            elif endpoint and not endpoint.startswith(("http://", "https://")):
-                resolved_endpoint = str(
-                    self._resolve_repo_relative_path(root=root, configured_path=endpoint)
-                )
-
-            try:
-                otlp_result = export_stage_trace_otlp(
-                    endpoint=resolved_endpoint,
-                    query=query,
-                    repo=repo,
-                    root=root,
-                    started_at=started_at,
-                    total_ms=total_ms,
-                    stage_metrics=stage_metrics,
-                    pipeline_order=list(self.PIPELINE_ORDER),
-                    plugin_policy_summary=plugin_policy_summary,
-                    timeout_seconds=self._config.trace.otlp_timeout_seconds,
-                )
-                result["otlp"] = otlp_result
-                if not self._config.trace.export_enabled:
-                    result["exported"] = bool(otlp_result.get("exported", False))
-                    result["trace_id"] = otlp_result.get("trace_id", "")
-                    result["otel_trace_id"] = otlp_result.get("otel_trace_id", "")
-                    result["span_count"] = int(otlp_result.get("span_count", 0) or 0)
-                    result["format"] = "otlp"
-            except Exception as exc:
-                logger.warning(
-                    "trace.otlp.export.error",
-                    extra={
-                        "endpoint": str(resolved_endpoint),
-                        "error": str(exc),
-                    },
-                )
-                result["otlp"] = {
-                    "enabled": True,
-                    "exported": False,
-                    "endpoint": str(resolved_endpoint),
-                    "error": str(exc),
-                }
-
-        return result
+        return self._runtime_observability_service.export_stage_trace(
+            query=query,
+            repo=repo,
+            root=root,
+            started_at=started_at,
+            total_ms=total_ms,
+            stage_metrics=stage_metrics,
+            plugin_policy_summary=plugin_policy_summary,
+        )
 
     def _load_plugins(self, *, root: str) -> tuple[HookBus, list[str]]:
         if not self._config.plugins.enabled:
@@ -953,92 +712,18 @@ class AceOrchestrator:
         replay_cache_info: dict[str, Any] | None,
         trace_export: dict[str, Any],
     ) -> dict[str, Any]:
-        invocation_seed = "|".join(
-            (
-                repo,
-                root,
-                query,
-                started_at.astimezone(timezone.utc).isoformat(),
-            )
-        )
-        invocation_id = hashlib.sha256(invocation_seed.encode("utf-8")).hexdigest()[:24]
-        degraded_reason_codes = self._collect_durable_stats_reasons(
+        return self._runtime_observability_service.record_durable_stats(
+            query=query,
+            repo=repo,
+            root=root,
+            started_at=started_at,
+            total_ms=total_ms,
             stage_metrics=stage_metrics,
             contract_error=contract_error,
             replay_cache_info=replay_cache_info,
             trace_export=trace_export,
+            learning_router_rollout_decision=self._last_learning_router_rollout_decision,
         )
-        status = "succeeded"
-        if contract_error is not None:
-            status = "failed"
-        elif degraded_reason_codes:
-            status = "degraded"
-        try:
-            store = self._durable_stats_store_factory()
-            store.record_invocation(
-                RuntimeInvocationStats(
-                    invocation_id=invocation_id,
-                    session_id=self._durable_stats_session_id,
-                    repo_key=repo,
-                    status=status,
-                    total_latency_ms=round(float(total_ms), 6),
-                    started_at=started_at.astimezone(timezone.utc).isoformat(),
-                    finished_at=datetime.now(timezone.utc).isoformat(),
-                    contract_error_code=contract_error.error_code
-                    if contract_error is not None
-                    else "",
-                    degraded_reason_codes=tuple(degraded_reason_codes),
-                    stage_latencies=tuple(
-                        {"stage_name": item.stage, "elapsed_ms": item.elapsed_ms}
-                        for item in stage_metrics
-                    )
-                    + (
-                        {"stage_name": "total", "elapsed_ms": round(float(total_ms), 6)},
-                    ),
-                    learning_router_rollout_decision=dict(
-                        self._last_learning_router_rollout_decision
-                    ),
-                    plan_replay_hit=bool((replay_cache_info or {}).get("hit", False)),
-                    plan_replay_safe_hit=bool(
-                        (replay_cache_info or {}).get("safe_hit", False)
-                    ),
-                    plan_replay_store_written=bool(
-                        (replay_cache_info or {}).get("stored", False)
-                    ),
-                    trace_exported=bool(trace_export.get("exported", False)),
-                    trace_export_failed=bool(
-                        trace_export.get("enabled", False)
-                        and not trace_export.get("exported", False)
-                    ),
-                )
-            )
-            return {
-                "enabled": True,
-                "recorded": True,
-                "session_id": self._durable_stats_session_id,
-                "invocation_id": invocation_id,
-                "status": status,
-                "db_path": str(getattr(store, "db_path", "")),
-                "learning_router_rollout_decision": dict(
-                    self._last_learning_router_rollout_decision
-                ),
-            }
-        except Exception as exc:
-            logger.warning(
-                "durable.stats.record.error",
-                extra={"repo": repo, "error": str(exc)},
-            )
-            return {
-                "enabled": True,
-                "recorded": False,
-                "session_id": self._durable_stats_session_id,
-                "invocation_id": invocation_id,
-                "status": status,
-                "error": str(exc),
-                "learning_router_rollout_decision": dict(
-                    self._last_learning_router_rollout_decision
-                ),
-            }
 
     @staticmethod
     def _collect_durable_stats_reasons(
@@ -1048,114 +733,22 @@ class AceOrchestrator:
         replay_cache_info: dict[str, Any] | None,
         trace_export: dict[str, Any],
     ) -> list[str]:
-        def _safe_float(value: Any) -> float:
-            try:
-                return float(value or 0.0)
-            except Exception:
-                return 0.0
-
-        reasons: set[str] = set()
-        if contract_error is not None:
-            reasons.add("contract_error")
-        replay_reason = str((replay_cache_info or {}).get("reason") or "").strip().lower()
-        if replay_reason == "invalid_cached_payload":
-            reasons.add("plan_replay_invalid_cached_payload")
-        if replay_reason == "store_failed":
-            reasons.add("plan_replay_store_failed")
-        if trace_export.get("enabled", False) and not trace_export.get("exported", False):
-            reasons.add("trace_export_failed")
-        for metric in stage_metrics:
-            tags = metric.tags if isinstance(metric.tags, dict) else {}
-            if metric.stage == "memory":
-                if bool(tags.get("fallback", False)):
-                    reasons.add("memory_fallback")
-                if bool(tags.get("memory_namespace_fallback", False)):
-                    reasons.add("memory_namespace_fallback")
-            if metric.stage == "index":
-                if bool(tags.get("candidate_ranker_fallback", False)):
-                    reasons.add("candidate_ranker_fallback")
-                if bool(tags.get("embedding_time_budget_exceeded", False)):
-                    reasons.add("embedding_time_budget_exceeded")
-                    reasons.add("latency_budget_exceeded")
-                if bool(tags.get("embedding_fallback", False)):
-                    reasons.add("embedding_fallback")
-                if bool(tags.get("chunk_semantic_time_budget_exceeded", False)):
-                    reasons.add("chunk_semantic_time_budget_exceeded")
-                    reasons.add("latency_budget_exceeded")
-                if bool(tags.get("chunk_semantic_fallback", False)):
-                    reasons.add("chunk_semantic_fallback")
-                if bool(tags.get("chunk_guard_fallback", False)):
-                    reasons.add("chunk_guard_fallback")
-                if bool(tags.get("parallel_docs_timed_out", False)):
-                    reasons.add("parallel_docs_timeout")
-                    reasons.add("latency_budget_exceeded")
-                if bool(tags.get("parallel_worktree_timed_out", False)):
-                    reasons.add("parallel_worktree_timeout")
-                    reasons.add("latency_budget_exceeded")
-                if bool(tags.get("router_fallback_applied", False)):
-                    reasons.add("router_fallback_applied")
-            if metric.stage == "validation":
-                validation_reason = str(tags.get("reason") or "").strip().lower()
-                sandbox_apply_reason = str(tags.get("sandbox_apply_reason") or "").strip().lower()
-                sandbox_apply_timed_out = bool(tags.get("sandbox_apply_timed_out", False))
-                if sandbox_apply_timed_out or sandbox_apply_reason == "timeout":
-                    reasons.add("validation_timeout")
-                    reasons.add("latency_budget_exceeded")
-                elif (
-                    validation_reason == "patch_apply_failed"
-                    or sandbox_apply_reason == "apply_failed"
-                ):
-                    reasons.add("validation_apply_failed")
-            if metric.stage == "augment" and bool(tags.get("xref_budget_exhausted", False)):
-                reasons.add("xref_budget_exhausted")
-                reasons.add("latency_budget_exceeded")
-            if metric.stage == "skills":
-                if bool(tags.get("budget_exhausted", False)) or int(
-                    tags.get("skipped_for_budget_count", 0) or 0
-                ) > 0:
-                    reasons.add("skills_budget_exhausted")
-            if metric.stage == "source_plan":
-                direct_count = int(tags.get("evidence_direct_count", 0) or 0)
-                neighbor_count = int(
-                    tags.get("evidence_neighbor_context_count", 0) or 0
-                )
-                hint_only_count = int(tags.get("evidence_hint_only_count", 0) or 0)
-                candidate_chunk_count = int(tags.get("candidate_chunk_count", 0) or 0)
-                validation_test_count = int(tags.get("validation_test_count", 0) or 0)
-                hint_only_ratio = _safe_float(tags.get("evidence_hint_only_ratio", 0.0))
-                if validation_test_count <= 0:
-                    reasons.add("evidence_insufficient")
-                if direct_count <= 0 and (
-                    candidate_chunk_count <= 0
-                    or hint_only_count > 0
-                    or neighbor_count > 0
-                ):
-                    reasons.add("evidence_insufficient")
-                if (
-                    direct_count > 0
-                    and hint_only_count > 0
-                    and hint_only_ratio >= 0.5
-                ):
-                    reasons.add("noisy_hit")
-            if metric.stage == "agent_loop":
-                stop_reason = str(tags.get("stop_reason") or "").strip().lower()
-                iteration_count = int(tags.get("iteration_count", 0) or 0)
-                if stop_reason == "max_iterations" and iteration_count > 0:
-                    reasons.add("repeated_retry")
-            if int(tags.get("slot_policy_blocked", 0) or 0) > 0:
-                reasons.add("plugin_policy_blocked")
-            if int(tags.get("slot_policy_warn", 0) or 0) > 0:
-                reasons.add("plugin_policy_warn")
-        return sorted(reasons)
+        return RuntimeObservabilityService.collect_durable_stats_reasons(
+            stage_metrics=stage_metrics,
+            contract_error=contract_error,
+            replay_cache_info=replay_cache_info,
+            trace_export=trace_export,
+        )
 
     def _estimate_tokens(self, text: str) -> int:
         return estimate_tokens(text, model=self._tokenizer_model)
 
     @staticmethod
     def _normalize_namespace_component(*, value: str, fallback: str) -> str:
-        normalized = re.sub(r"[^a-z0-9._-]+", "-", str(value or "").strip().lower())
-        normalized = normalized.strip("-")
-        return normalized or fallback
+        return MemoryContextService.normalize_namespace_component(
+            value=value,
+            fallback=fallback,
+        )
 
     def _resolve_memory_namespace(
         self,
@@ -1163,69 +756,27 @@ class AceOrchestrator:
         repo: str,
         root: str,
     ) -> tuple[str | None, str, str]:
-        explicit_tag = self._config.memory.namespace.container_tag
-        if explicit_tag:
-            return explicit_tag, "explicit", "explicit"
-
-        mode = self._config.memory.namespace.auto_tag_mode
-        if mode == "repo":
-            repo_name = str(repo or "").strip() or Path(root or ".").name
-            return (
-                f"repo:{self._normalize_namespace_component(value=repo_name, fallback='repo')}",
-                "repo",
-                "auto",
-            )
-        if mode == "user":
-            import getpass
-
-            try:
-                user_name = getpass.getuser()
-            except Exception:
-                user_name = ""
-            return (
-                f"user:{self._normalize_namespace_component(value=user_name, fallback='local')}",
-                "user",
-                "auto",
-            )
-        if mode == "global":
-            return "global", "global", "auto"
-        return None, "disabled", "disabled"
+        return self._memory_context_service.resolve_memory_namespace(
+            repo=repo,
+            root=root,
+        )
 
     def _resolve_profile_store(self, *, root: str) -> ProfileStore:
-        configured = str(self._config.memory.profile.path or "").strip()
-        path = Path(configured).expanduser()
-        if not path.is_absolute():
-            path = Path(root) / path
-        return ProfileStore(
-            path=path,
-            expiry_enabled=self._config.memory.profile.expiry_enabled,
-            ttl_days=self._config.memory.profile.ttl_days,
-            max_age_days=self._config.memory.profile.max_age_days,
+        return self._memory_context_service.resolve_profile_store(
+            root=root,
         )
 
     def _resolve_capture_notes_path(self, *, root: str) -> Path:
-        configured = str(self._config.memory.capture.notes_path or "").strip()
-        path = Path(configured).expanduser()
-        if not path.is_absolute():
-            path = Path(root) / path
-        return path
+        return self._memory_context_service.resolve_capture_notes_path(root=root)
 
     def _resolve_validation_preference_capture_store(
         self,
         *,
         root: str,
     ) -> DurablePreferenceCaptureStore | None:
-        if not self._config.memory.feedback.enabled:
-            return None
-        configured = str(self._config.memory.feedback.path or "").strip()
-        path = Path(configured).expanduser()
-        if not path.is_absolute():
-            path = Path(root) / path
-        feedback_store = SelectionFeedbackStore(
-            profile_path=path,
-            max_entries=self._config.memory.feedback.max_entries,
+        return self._memory_context_service.resolve_validation_preference_capture_store(
+            root=root,
         )
-        return DurablePreferenceCaptureStore(db_path=feedback_store.path)
 
     def _capture_memory_signal(
         self,
@@ -1236,41 +787,13 @@ class AceOrchestrator:
         namespace: str | None,
         matched_keywords: list[str],
     ) -> dict[str, Any]:
-        captured_items = 0
-        warnings: list[str] = []
-        notes_pruned_expired_count = 0
-
-        try:
-            store = self._resolve_profile_store(root=root)
-            store.add_recent_context(query=query, repo=repo)
-            captured_items += 1
-        except Exception as exc:
-            warnings.append(f"profile_recent_context_error:{exc.__class__.__name__}")
-
-        try:
-            notes_path = self._resolve_capture_notes_path(root=root)
-            notes_captured_items, notes_pruned_expired_count = append_capture_note(
-                notes_path=notes_path,
-                query=query,
-                repo=repo,
-                namespace=namespace,
-                matched_keywords=matched_keywords,
-                expiry_enabled=self._config.memory.notes.expiry_enabled,
-                ttl_days=self._config.memory.notes.ttl_days,
-                max_age_days=self._config.memory.notes.max_age_days,
-            )
-            captured_items += notes_captured_items
-        except Exception as exc:
-            warnings.append(f"notes_append_error:{exc.__class__.__name__}")
-
-        return {
-            "enabled": True,
-            "triggered": bool(matched_keywords),
-            "matched_keywords": matched_keywords,
-            "captured_items": captured_items,
-            "notes_pruned_expired_count": notes_pruned_expired_count,
-            "warning": ";".join(warnings) if warnings else None,
-        }
+        return self._memory_context_service.capture_memory_signal(
+            query=query,
+            repo=repo,
+            root=root,
+            namespace=namespace,
+            matched_keywords=matched_keywords,
+        )
 
     def _run_memory(self, *, ctx: StageContext) -> dict[str, Any]:
         query = ctx.query

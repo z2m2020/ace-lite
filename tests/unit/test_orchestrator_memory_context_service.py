@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+from ace_lite.orchestrator_memory_context_service import MemoryContextService
+from ace_lite.pipeline.types import StageContext
+from ace_lite.profile_store import ProfileStore
+
+
+def _build_service(
+    *,
+    root: Path,
+    container_tag: str = "",
+    auto_tag_mode: str = "disabled",
+    feedback_enabled: bool = False,
+    long_term_capture_service: object | None = None,
+) -> MemoryContextService:
+    return MemoryContextService(
+        config=SimpleNamespace(
+            memory=SimpleNamespace(
+                namespace=SimpleNamespace(
+                    container_tag=container_tag,
+                    auto_tag_mode=auto_tag_mode,
+                ),
+                profile=SimpleNamespace(
+                    path=str(root / "profile.json"),
+                    expiry_enabled=False,
+                    ttl_days=30,
+                    max_age_days=365,
+                ),
+                capture=SimpleNamespace(
+                    notes_path=str(root / "memory_notes.jsonl"),
+                ),
+                notes=SimpleNamespace(
+                    expiry_enabled=True,
+                    ttl_days=90,
+                    max_age_days=365,
+                ),
+                feedback=SimpleNamespace(
+                    enabled=feedback_enabled,
+                    path=str(root / "feedback.jsonl"),
+                    max_entries=50,
+                ),
+            )
+        ),
+        long_term_capture_service=long_term_capture_service,
+        durable_stats_session_id="session-123",
+    )
+
+
+def test_resolve_memory_namespace_uses_repo_auto_tag(tmp_path: Path) -> None:
+    service = _build_service(root=tmp_path, auto_tag_mode="repo")
+
+    container_tag, namespace_mode, namespace_source = service.resolve_memory_namespace(
+        repo="Ace Lite Engine",
+        root=str(tmp_path),
+    )
+
+    assert container_tag == "repo:ace-lite-engine"
+    assert namespace_mode == "repo"
+    assert namespace_source == "auto"
+
+
+def test_capture_memory_signal_writes_recent_context_and_notes(tmp_path: Path) -> None:
+    service = _build_service(root=tmp_path)
+
+    payload = service.capture_memory_signal(
+        query="please fix auth bug",
+        repo="demo",
+        root=str(tmp_path),
+        namespace="repo:demo",
+        matched_keywords=["fix", "bug"],
+    )
+
+    assert payload["enabled"] is True
+    assert payload["triggered"] is True
+    assert payload["captured_items"] == 2
+    assert payload["warning"] is None
+
+    note_line = (tmp_path / "memory_notes.jsonl").read_text(encoding="utf-8").strip()
+    note_payload = json.loads(note_line)
+    assert note_payload["repo"] == "demo"
+    assert note_payload["namespace"] == "repo:demo"
+
+    stored_profile = ProfileStore(path=tmp_path / "profile.json").load()
+    assert stored_profile["recent_contexts"][0]["query"] == "please fix auth bug"
+
+
+def test_capture_memory_signal_downgrades_notes_append_error(tmp_path: Path) -> None:
+    service = _build_service(root=tmp_path)
+    notes_dir = tmp_path / "notes_dir"
+    notes_dir.mkdir(parents=True, exist_ok=True)
+    service.config.memory.capture.notes_path = str(notes_dir)
+
+    payload = service.capture_memory_signal(
+        query="fix auth bug now",
+        repo="demo",
+        root=str(tmp_path),
+        namespace="repo:demo",
+        matched_keywords=["fix"],
+    )
+
+    assert payload["enabled"] is True
+    assert payload["triggered"] is True
+    assert payload["captured_items"] == 1
+    assert "notes_append_error" in str(payload["warning"] or "")
+
+
+def test_capture_long_term_stage_observation_passes_session_run_id(tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    class _CaptureService:
+        def capture_stage_observation(self, **kwargs: object) -> dict[str, object]:
+            captured.update(kwargs)
+            return {"ok": True, "stage": str(kwargs["stage_name"])}
+
+    service = _build_service(
+        root=tmp_path,
+        long_term_capture_service=_CaptureService(),
+    )
+
+    payload = service.capture_long_term_stage_observation(
+        stage_name="source_plan",
+        ctx=StageContext(query="q", repo="demo", root=str(tmp_path)),
+        stage_payload={"steps": []},
+    )
+
+    assert payload == {"ok": True, "stage": "source_plan"}
+    assert captured["source_run_id"] == "session-123"
+    assert captured["repo"] == "demo"

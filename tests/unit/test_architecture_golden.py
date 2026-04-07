@@ -557,3 +557,59 @@ class TestRefactorBoundaryContracts:
     def test_case_evaluation_entry_has_no_private_helpers(self) -> None:
         case_eval_text = _read_repo_text("src/ace_lite/benchmark/case_evaluation.py")
         assert re.search(r"^def _", case_eval_text, flags=re.MULTILINE) is None
+
+
+class TestArchitectureSeamsAndGuardrailsGolden:
+    """Freeze cross-cutting seams and guardrail contracts for refactors."""
+
+    def test_orchestrator_cross_cutting_seams_exist(self) -> None:
+        orchestrator_text = _read_repo_text("src/ace_lite/orchestrator.py")
+
+        expected_methods = (
+            "def _export_stage_trace(",
+            "def _record_durable_stats(",
+            "def _resolve_memory_namespace(",
+            "def _capture_memory_signal(",
+        )
+        for method_signature in expected_methods:
+            assert method_signature in orchestrator_text
+
+    def test_orchestrator_replay_fingerprint_seams_exist(self) -> None:
+        orchestrator_text = _read_repo_text("src/ace_lite/orchestrator.py")
+
+        expected_helpers = (
+            "def _build_memory_replay_fingerprint(",
+            "def _build_index_replay_fingerprint(",
+            "def _build_repomap_replay_fingerprint(",
+            "def _build_repo_inputs_replay_fingerprint(",
+            "def _build_augment_replay_fingerprint(",
+            "def _build_skills_replay_fingerprint(",
+        )
+        for helper_signature in expected_helpers:
+            assert helper_signature in orchestrator_text
+
+    def test_plan_quick_docs_sync_guardrails_are_present(self) -> None:
+        plan_quick_text = _read_repo_text("src/ace_lite/plan_quick.py")
+
+        expected_contract_tokens = (
+            '"query_profile": _query_flags(normalized_query)',
+            '"candidate_domain_summary": _build_candidate_domain_summary(limited_rows)',
+            '"suggested_query_refinements": _build_suggested_query_refinements(',
+            '"risk_hints": _build_plan_quick_risk_hints(',
+            '"retrieval_policy_profile": retrieval_policy_profile',
+            '"docs_enabled": bool(policy.get("docs_enabled", False))',
+            '"full_build_reason"',
+        )
+        for token in expected_contract_tokens:
+            assert token in plan_quick_text
+
+    def test_memory_search_guardrails_contract_fields_exist(self) -> None:
+        guardrails_text = _read_repo_text("src/ace_lite/memory_search_guardrails.py")
+
+        expected_guardrail_fields = (
+            '"disclaimer": MEMORY_SEARCH_DISCLAIMER',
+            '"staleness_warning": staleness_warning',
+            '"recency_alert": recency_alert',
+        )
+        for field in expected_guardrail_fields:
+            assert field in guardrails_text

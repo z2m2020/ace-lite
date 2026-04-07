@@ -51,6 +51,12 @@
 - Run optional validation checks against the source-plan output
 - Emit stable validation result and sandbox payloads for CLI, benchmark, and replay consumers
 
+## 2026-03-27 baseline guardrails
+
+- `ace_plan_quick` retrieval guardrails are part of the current runtime baseline: docs-sync intent biasing, domain summary, query refinements, risk hints, and `full_build_reason` observability.
+- Memory search guardrails are also baseline behavior across CLI/MCP surfaces: disclaimer, staleness warning, and recency alert.
+- Current orchestrator refactor waves should preserve these guardrails as compatibility expectations unless an explicit replacement path is documented.
+
 ## Plugin system
 
 `AceOrchestrator` loads plugin hooks from `plugins/*/plugin.yaml`.
@@ -102,6 +108,12 @@ Each plan payload is schema-validated (`schema_version = 2.0`) and includes:
 - `src/ace_lite/mcp_server/server_tool_registration.py` owns MCP tool registration metadata and registration grouping.
 - `src/ace_lite/index_stage/` owns extracted index-stage helper seams; `src/ace_lite/pipeline/stages/index.py` remains the stage orchestration entry.
 - `src/ace_lite/benchmark/case_evaluation_*.py` owns extracted benchmark-evaluation seams; `src/ace_lite/benchmark/case_evaluation.py` remains the orchestration shell.
+
+## Active structural hotspots (current)
+
+- `AceOrchestrator` still carries several cross-cutting runtime concerns in one shell (replay cache path, trace/export writeback, durable stats flush, memory namespace wiring).
+- Config behavior remains distributed across layered config models and runtime mapping, so default/normalization drift is still a practical refactor risk.
+- Stage payload contracts are still largely dynamic dict-based in hot paths; stronger typing boundaries are only partially in place today.
 
 ## Conventions loading
 

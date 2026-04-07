@@ -71,6 +71,18 @@ needed.
 - validation feedback loop: implemented as a bounded rerun/query-refinement loop. It is not an autonomous code-writing agent.
 - branch validation: score, selection, and archive contracts are implemented and exposed as report-only observability. Real `N>1` candidate generation and concurrent sandbox execution are still future work.
 
+## 2026-03-27 baseline notes
+
+- `ace_plan_quick` docs-sync guardrails are implemented in the live path: doc-intent path/domain biasing, risk hints, query refinements, domain summary, and `full_build_reason` observability.
+- Memory search guardrails are implemented in both CLI and MCP surfaces: disclaimer, staleness warning, and recency alert.
+- These are considered stabilized UX guardrails for the current architecture baseline and should not be implicitly removed during orchestrator refactor waves.
+
+## Active structural hotspots (not yet resolved)
+
+- `AceOrchestrator` remains a large orchestration shell with multiple cross-cutting concerns still co-located (replay cache flow, trace export, durable stats writeback, memory namespace resolution, memory signal capture).
+- Config semantics still span multiple layers (`config_models`, `orchestrator_config`, runtime settings mapping), so field defaults and normalization behavior require careful compatibility checks before consolidation.
+- Stage-to-stage payloads still rely heavily on dynamic dict contracts in hot paths; boundary typing is partial and remains a planned refactor area.
+
 ## Refactor seam boundaries
 
 - `src/ace_lite/cli_app/runtime_command_support.py`: shared runtime doctor/status/settings/setup payload builders, keeping CLI command callbacks thin.
