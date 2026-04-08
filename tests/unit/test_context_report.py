@@ -550,7 +550,7 @@ def test_render_empty_payload():
     payload = build_context_report_payload({})
     md = render_context_report_markdown(payload)
     assert "Context Report" in md
-    assert "⚠️" in md
+    assert "status: degraded" in md
 
 
 def test_render_contains_section_headers(minimal_plan_payload):
@@ -584,7 +584,7 @@ def test_render_confidence_breakdown_section(minimal_plan_payload):
 def test_render_degraded_has_warning(minimal_plan_payload, degraded_plan_payload):
     degraded = build_context_report_payload(degraded_plan_payload)
     md = render_context_report_markdown(degraded)
-    assert "⚠️" in md or "Warning" in md
+    assert "warning:" in md or "Warnings" in md
 
 
 # ----------------------------------------------------------------------

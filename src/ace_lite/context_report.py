@@ -14,6 +14,19 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
+from ace_lite.plan_payload_view import (
+    coerce_payload,
+    resolve_candidate_chunks,
+    resolve_candidate_files,
+    resolve_confidence_summary,
+    resolve_evidence_summary,
+    resolve_pipeline_stage_names,
+    resolve_repomap_payload,
+    resolve_source_plan_payload,
+    resolve_validation_result,
+    resolve_validation_tests,
+)
+
 __all__ = [
     "build_context_report_payload",
     "render_context_report_markdown",
@@ -63,7 +76,7 @@ def _dedup_label(path: str) -> str:
 
 
 # ----------------------------------------------------------------------
-# Confidence breakdown (P0 heuristics → P1 taxonomy later)
+# Confidence breakdown (P0 heuristics -> P1 taxonomy later)
 # ----------------------------------------------------------------------
 
 
@@ -89,7 +102,7 @@ def _infer_confidence_tier(chunk: dict[str, Any]) -> tuple[str, float]:
     if role == "hint_only":
         return "AMBIGUOUS", 0.28
 
-    # No evidence field — check score_breakdown for hints
+    # No evidence field -> check score_breakdown for hints
     score_breakdown = _dict(chunk.get("score_breakdown", {}))
     if score_breakdown:
         has_candidate = _float(score_breakdown.get("candidate", 0.0)) > 0
@@ -223,9 +236,7 @@ def _build_core_nodes(
     nodes: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
 
-    candidate_files = _list(source_plan.get("candidate_files", [])) or _list(
-        plan_payload.get("candidate_files", [])
-    )
+    candidate_files = resolve_candidate_files(plan_payload, source_plan=source_plan)
     for item in candidate_files:
         if not isinstance(item, dict):
             continue
@@ -246,9 +257,7 @@ def _build_core_nodes(
             }
         )
 
-    candidate_chunks = _list(source_plan.get("candidate_chunks", [])) or _list(
-        plan_payload.get("candidate_chunks", [])
-    )
+    candidate_chunks = resolve_candidate_chunks(plan_payload, source_plan=source_plan)
     for idx, chunk in enumerate(candidate_chunks):
         if not isinstance(chunk, dict):
             continue
@@ -291,7 +300,7 @@ def _build_core_nodes(
             )
 
     # Repomap focused_files add "source: repomap"
-    repomap = _dict(source_plan.get("repomap", {})) or _dict(plan_payload.get("repomap", {}))
+    repomap = resolve_repomap_payload(plan_payload, source_plan=source_plan)
     repomap_focused = {
         str(p).strip() for p in _list(repomap.get("focused_files", [])) if str(p).strip()
     }
@@ -318,9 +327,7 @@ def _build_surprising_connections(
     connections: list[dict[str, Any]] = []
     warnings: list[str] = []
 
-    candidate_chunks = _list(source_plan.get("candidate_chunks", [])) or _list(
-        plan_payload.get("candidate_chunks", [])
-    )
+    candidate_chunks = resolve_candidate_chunks(plan_payload, source_plan=source_plan)
     if not candidate_chunks:
         warnings.append("surprising_connections_unavailable: no candidate_chunks")
         return connections, warnings
@@ -377,7 +384,7 @@ def _build_surprising_connections(
             }
         )
 
-    # Cross-directory associations (production ↔ test, code ↔ docs)
+    # Cross-directory associations (production <-> test, code <-> docs)
     paths = [str(c.get("path") or "") for c in candidate_chunks if isinstance(c, dict)]
     test_code_pairs: list[tuple[str, str]] = []
     for p in paths:
@@ -459,9 +466,7 @@ def _build_knowledge_gaps(
     """Identify knowledge gaps from plan payload signals."""
     gaps: list[dict[str, Any]] = []
 
-    validation_tests = _list(source_plan.get("validation_tests", [])) or _list(
-        plan_payload.get("validation_tests", [])
-    )
+    validation_tests = resolve_validation_tests(plan_payload, source_plan=source_plan)
     if not validation_tests:
         gaps.append(
             {
@@ -471,9 +476,7 @@ def _build_knowledge_gaps(
             }
         )
 
-    evidence_summary = _dict(source_plan.get("evidence_summary", {})) or _dict(
-        plan_payload.get("evidence_summary", {})
-    )
+    evidence_summary = resolve_evidence_summary(plan_payload, source_plan=source_plan)
     hint_ratio = _float(evidence_summary.get("hint_only_ratio", 0.0))
     if hint_ratio > 0.5:
         gaps.append(
@@ -484,9 +487,7 @@ def _build_knowledge_gaps(
             }
         )
 
-    candidate_chunks = _list(source_plan.get("candidate_chunks", [])) or _list(
-        plan_payload.get("candidate_chunks", [])
-    )
+    candidate_chunks = resolve_candidate_chunks(plan_payload, source_plan=source_plan)
     if not candidate_chunks:
         gaps.append(
             {
@@ -542,12 +543,8 @@ def _build_suggested_questions(
     """Generate suggested questions from plan payload and gaps."""
     questions: list[dict[str, Any]] = []
 
-    candidate_chunks = _list(source_plan.get("candidate_chunks", [])) or _list(
-        plan_payload.get("candidate_chunks", [])
-    )
-    candidate_files = _list(source_plan.get("candidate_files", [])) or _list(
-        plan_payload.get("candidate_files", [])
-    )
+    candidate_chunks = resolve_candidate_chunks(plan_payload, source_plan=source_plan)
+    candidate_files = resolve_candidate_files(plan_payload, source_plan=source_plan)
 
     # Entrypoint question from top candidate file
     if candidate_chunks:
@@ -617,9 +614,7 @@ def _build_suggested_questions(
         )
 
     # Ambiguous evidence questions
-    evidence_summary = _dict(source_plan.get("evidence_summary", {})) or _dict(
-        plan_payload.get("evidence_summary", {})
-    )
+    evidence_summary = resolve_evidence_summary(plan_payload, source_plan=source_plan)
     neighbor_count = _int(evidence_summary.get("neighbor_context_count", 0))
     if neighbor_count > 0:
         questions.append(
@@ -652,20 +647,10 @@ def _build_summary(
     source_plan: dict[str, Any],
 ) -> dict[str, Any]:
     """Build summary section from plan payload."""
-    candidate_chunks = _list(source_plan.get("candidate_chunks", [])) or _list(
-        plan_payload.get("candidate_chunks", [])
-    )
-    candidate_files_in_index = _list(source_plan.get("candidate_files", [])) or _list(
-        plan_payload.get("candidate_files", [])
-    )
-    validation_tests = _list(source_plan.get("validation_tests", [])) or _list(
-        plan_payload.get("validation_tests", [])
-    )
-    stages = (
-        _list(source_plan.get("stages", []))
-        or _list(plan_payload.get("pipeline_order", []))
-        or _list(plan_payload.get("stages", []))
-    )
+    candidate_chunks = resolve_candidate_chunks(plan_payload, source_plan=source_plan)
+    candidate_files_in_index = resolve_candidate_files(plan_payload, source_plan=source_plan)
+    validation_tests = resolve_validation_tests(plan_payload, source_plan=source_plan)
+    stages = resolve_pipeline_stage_names(plan_payload, source_plan=source_plan)
 
     # Count degraded reasons from observability
     degraded_reasons = _collect_degraded_reasons(plan_payload)
@@ -688,12 +673,7 @@ def _build_summary(
             if p:
                 unique_files.add(p)
 
-    validation_payload = _dict(source_plan.get("validation_result", {}))
-    if not validation_payload:
-        validation_payload = _dict(_dict(plan_payload.get("validation", {})).get("result", {}))
-    if not validation_payload:
-        validation_payload = _dict(plan_payload.get("validation_result", {}))
-    has_validation_payload = bool(validation_payload)
+    has_validation_payload = bool(resolve_validation_result(plan_payload, source_plan=source_plan))
 
     return {
         "candidate_file_count": len(unique_files),
@@ -720,23 +700,19 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
         A dict conforming to the ``context_report_v1`` schema.
         Always returns a valid report even for empty/None inputs (``ok=false``).
     """
-    payload = _dict(plan_payload) if hasattr(plan_payload, "__getitem__") else {}
-    sp: dict[str, Any] = _dict(payload.get("source_plan", {}))
+    payload = coerce_payload(plan_payload)
+    sp: dict[str, Any] = resolve_source_plan_payload(payload)
 
     warnings: list[str] = []
     inputs: dict[str, bool] = {
         "has_source_plan": bool(payload),
         "has_observability": bool(_dict(payload.get("observability", {}))),
-        "has_validation": bool(_dict(payload.get("validation", {})).get("result")),
+        "has_validation": bool(resolve_validation_result(payload, source_plan=sp)),
     }
 
     # Graceful empty handling
-    has_chunks = bool(
-        _list(sp.get("candidate_chunks", [])) or _list(payload.get("candidate_chunks", []))
-    )
-    has_files = bool(
-        _list(sp.get("candidate_files", [])) or _list(payload.get("candidate_files", []))
-    )
+    has_chunks = bool(resolve_candidate_chunks(payload, source_plan=sp))
+    has_files = bool(resolve_candidate_files(payload, source_plan=sp))
     has_query = bool(payload.get("query") or sp.get("query"))
 
     if not payload or (not has_chunks and not has_files and not has_query):
@@ -750,7 +726,7 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
                 "candidate_file_count": 0,
                 "candidate_chunk_count": 0,
                 "validation_test_count": 0,
-                "stage_count": _int(payload.get("stages") and len(payload.get("stages", []))),
+                "stage_count": len(resolve_pipeline_stage_names(payload, source_plan=sp)),
                 "degraded_reason_count": 0,
                 "has_validation_payload": False,
             },
@@ -776,13 +752,9 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
         }
 
     # P1: try confidence_summary first, fall back to P0 heuristics
-    sp_chunks = _list(sp.get("candidate_chunks", [])) or _list(payload.get("candidate_chunks", []))
-    confidence_summary = _dict(sp.get("confidence_summary", {})) or _dict(
-        payload.get("confidence_summary", {})
-    )
-    evidence_summary = _dict(sp.get("evidence_summary", {})) or _dict(
-        payload.get("evidence_summary", {})
-    )
+    sp_chunks = resolve_candidate_chunks(payload, source_plan=sp)
+    confidence_summary = resolve_confidence_summary(payload, source_plan=sp)
+    evidence_summary = resolve_evidence_summary(payload, source_plan=sp)
 
     if confidence_summary:
         confidence_breakdown = _build_confidence_breakdown_p1(sp_chunks, confidence_summary)
@@ -835,7 +807,7 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
     # Header
     lines.append("# Context Report")
     schema_ver = _str(p.get("schema_version", "unknown"))
-    ok_status = "✅ ok" if _bool(p.get("ok")) else "⚠️  degraded"
+    ok_status = "ok" if _bool(p.get("ok")) else "degraded"
     lines.append(f"*schema: {schema_ver} | status: {ok_status}*")
     lines.append("")
 
@@ -959,7 +931,7 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
     if warnings:
         lines.append("## Warnings")
         for w in warnings:
-            lines.append(f"- ⚠️  {w}")
+            lines.append(f"- warning: {w}")
         lines.append("")
 
     # Footer

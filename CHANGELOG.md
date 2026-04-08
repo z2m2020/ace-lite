@@ -8,6 +8,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.63] - 2026-04-08
+
+### Added
+
+- Added `src/ace_lite/plan_payload_view.py` to centralize read-only fallback resolution for `source_plan`, validation payloads, stage lists, repomap, and retrieval subgraph inputs.
+- Added unit coverage in `tests/unit/test_plan_payload_view.py` to lock the fallback contract used by report and graph view builders.
+
+### Changed
+
+- Refactored `context_report.py` and `retrieval_graph_view.py` to consume the shared plan payload view helpers instead of duplicating nested/top-level payload parsing.
+- Normalized read-only report and retrieval graph warning text so rendered output is more stable for humans and downstream agents.
+
 ## [0.3.60] - 2026-03-26
 
 ### Added
