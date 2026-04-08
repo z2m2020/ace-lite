@@ -14,6 +14,7 @@ MCP_TOOL_DESCRIPTIONS: dict[str, str] = {
     "ace_plan": "Run ACE-Lite deterministic pipeline and return source plan payload.",
     "ace_memory_search": "Search local ACE-Lite notes memory by lexical matching.",
     "ace_memory_graph_view": "Build a read-only long-term memory graph view payload for CLI/MCP/UI.",
+    "ace_retrieval_graph_view": "Build a read-only retrieval graph view from a plan payload (runs ace_plan internally).",
     "ace_memory_store": "Store a memory note into local ACE-Lite JSONL memory.",
     "ace_memory_wipe": "Wipe local ACE-Lite memory notes (optionally by namespace).",
     "ace_feedback_record": "Record a selection feedback event into local profile storage.",
@@ -209,6 +210,48 @@ def _register_memory_tools(*, server: FastMCP, service: AceLiteMcpService) -> No
             max_hops=max_hops,
             limit=limit,
             root=root,
+        )
+
+    @_tool(server, "ace_retrieval_graph_view")
+    def ace_retrieval_graph_view(
+        query: str,
+        repo: str | None = None,
+        root: str | None = None,
+        skills_dir: str | None = None,
+        config_pack: str | None = None,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        memory_primary: str | None = None,
+        memory_secondary: str | None = None,
+        lsp_enabled: bool = False,
+        plugins_enabled: bool = False,
+        top_k_files: int = 8,
+        min_candidate_score: int = 2,
+        retrieval_policy: str = "auto",
+        timeout_seconds: float | None = None,
+        limit: int = 50,
+        max_hops: int = 1,
+    ) -> dict[str, Any]:
+        return service.retrieval_graph_view(
+            query=query,
+            repo=repo,
+            root=root,
+            skills_dir=skills_dir,
+            config_pack=config_pack,
+            time_range=time_range,
+            start_date=start_date,
+            end_date=end_date,
+            memory_primary=memory_primary,
+            memory_secondary=memory_secondary,
+            lsp_enabled=bool(lsp_enabled),
+            plugins_enabled=bool(plugins_enabled),
+            top_k_files=top_k_files,
+            min_candidate_score=min_candidate_score,
+            retrieval_policy=retrieval_policy,
+            timeout_seconds=timeout_seconds,
+            limit=limit,
+            max_hops=max_hops,
         )
 
     @_tool(server, "ace_memory_store")

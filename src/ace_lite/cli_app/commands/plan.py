@@ -40,6 +40,7 @@ from ace_lite.plan_timeout import (
     is_plan_timeout_debug_enabled,
     resolve_plan_timeout_seconds,
 )
+from ace_lite.context_report import write_context_report_markdown
 from ace_lite.scoring_config import (
     HYBRID_BM25_WEIGHT,
     HYBRID_COMBINED_SCALE,
@@ -72,6 +73,16 @@ def _cli_module():
     type=str,
     help="Optional path to write the plan payload JSON (UTF-8). Relative paths are resolved under --root.",
 )
+@click.option(
+    "--context-report-path",
+    default=None,
+    type=str,
+    help=(
+        "Optional path to write a ContextReport Markdown file (UTF-8). "
+        "Relative paths are resolved under --root. "
+        "Default: do not write a report."
+    ),
+)
 @_with_shared_plan_options
 @click.pass_context
 def plan_command(
@@ -79,6 +90,7 @@ def plan_command(
     query: str,
     timeout_seconds: float | None,
     output_json: str | None,
+    context_report_path: str | None,
     runtime_profile: str | None,
     repo: str,
     root: str,
@@ -276,9 +288,7 @@ def plan_command(
         memory_timeline_enabled=memory_timeline_enabled,
         memory_container_tag=memory_container_tag,
         memory_auto_tag_mode=memory_auto_tag_mode,
-        memory_profile_enabled=bool(
-            PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_enabled"]
-        ),
+        memory_profile_enabled=bool(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_enabled"]),
         memory_profile_path=str(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_path"]),
         memory_profile_top_n=int(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_top_n"]),
         memory_profile_token_budget=int(
@@ -287,15 +297,11 @@ def plan_command(
         memory_profile_expiry_enabled=bool(
             PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_expiry_enabled"]
         ),
-        memory_profile_ttl_days=int(
-            PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_ttl_days"]
-        ),
+        memory_profile_ttl_days=int(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_ttl_days"]),
         memory_profile_max_age_days=int(
             PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_max_age_days"]
         ),
-        memory_feedback_enabled=bool(
-            PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_enabled"]
-        ),
+        memory_feedback_enabled=bool(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_enabled"]),
         memory_feedback_path=str(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_path"]),
         memory_feedback_max_entries=int(
             PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_max_entries"]
@@ -303,18 +309,12 @@ def plan_command(
         memory_feedback_boost_per_select=float(
             PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_boost_per_select"]
         ),
-        memory_feedback_max_boost=float(
-            PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_max_boost"]
-        ),
+        memory_feedback_max_boost=float(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_max_boost"]),
         memory_feedback_decay_days=float(
             PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_decay_days"]
         ),
-        memory_capture_enabled=bool(
-            PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_enabled"]
-        ),
-        memory_capture_notes_path=str(
-            PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_notes_path"]
-        ),
+        memory_capture_enabled=bool(PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_enabled"]),
+        memory_capture_notes_path=str(PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_notes_path"]),
         memory_capture_min_query_length=int(
             PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_min_query_length"]
         ),
@@ -323,13 +323,9 @@ def plan_command(
         memory_notes_path=str(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_path"]),
         memory_notes_limit=int(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_limit"]),
         memory_notes_mode=str(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_mode"]),
-        memory_notes_expiry_enabled=bool(
-            PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_expiry_enabled"]
-        ),
+        memory_notes_expiry_enabled=bool(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_expiry_enabled"]),
         memory_notes_ttl_days=int(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_ttl_days"]),
-        memory_notes_max_age_days=int(
-            PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_max_age_days"]
-        ),
+        memory_notes_max_age_days=int(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_max_age_days"]),
         memory_postprocess_enabled=bool(
             PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_enabled"]
         ),
@@ -337,14 +333,10 @@ def plan_command(
             PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_noise_filter_enabled"]
         ),
         memory_postprocess_length_norm_anchor_chars=int(
-            PLAN_MEMORY_POSTPROCESS_DEFAULTS[
-                "memory_postprocess_length_norm_anchor_chars"
-            ]
+            PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_length_norm_anchor_chars"]
         ),
         memory_postprocess_time_decay_half_life_days=float(
-            PLAN_MEMORY_POSTPROCESS_DEFAULTS[
-                "memory_postprocess_time_decay_half_life_days"
-            ]
+            PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_time_decay_half_life_days"]
         ),
         memory_postprocess_hard_min_score=float(
             PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_hard_min_score"]
@@ -353,9 +345,7 @@ def plan_command(
             PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_diversity_enabled"]
         ),
         memory_postprocess_diversity_similarity_threshold=float(
-            PLAN_MEMORY_POSTPROCESS_DEFAULTS[
-                "memory_postprocess_diversity_similarity_threshold"
-            ]
+            PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_diversity_similarity_threshold"]
         ),
         precomputed_skills_routing_enabled=precomputed_skills_routing_enabled,
         plan_replay_cache_enabled=plan_replay_cache_enabled,
@@ -406,18 +396,16 @@ def plan_command(
     )
 
     cli_module = _cli_module()
-    memory_provider_kwargs: MemoryProviderKwargs = (
-        build_memory_provider_kwargs_from_resolved(
-            resolved=resolved,
-            primary=memory_primary,
-            secondary=memory_secondary,
-            mcp_base_url=mcp_base_url,
-            rest_base_url=rest_base_url,
-            timeout_seconds=memory_timeout,
-            user_id=user_id,
-            app=app,
-            limit=memory_limit,
-        )
+    memory_provider_kwargs: MemoryProviderKwargs = build_memory_provider_kwargs_from_resolved(
+        resolved=resolved,
+        primary=memory_primary,
+        secondary=memory_secondary,
+        mcp_base_url=mcp_base_url,
+        rest_base_url=rest_base_url,
+        timeout_seconds=memory_timeout,
+        user_id=user_id,
+        app=app,
+        limit=memory_limit,
     )
     memory_provider = cli_module.create_memory_provider(**memory_provider_kwargs)
 
@@ -485,7 +473,14 @@ def plan_command(
         )
     else:
         payload = execution.payload or {}
+    if execution.timed_out:
+        payload["_plan_timeout_fallback"] = True
     payload = attach_plan_contract_summary(payload)
+    if context_report_path:
+        report_target = Path(str(context_report_path)).expanduser()
+        if not report_target.is_absolute():
+            report_target = Path(root) / report_target
+        write_context_report_markdown(payload, report_target)
     if output_json:
         target = Path(str(output_json)).expanduser()
         if not target.is_absolute():

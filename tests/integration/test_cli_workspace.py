@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -121,6 +122,195 @@ def test_cli_workspace_validate_outputs_summary(tmp_path: Path) -> None:
     assert payload["workspace"]["repo_count"] == 3
 
 
+def test_cli_workspace_install_agent_hints_dry_run_new_file(tmp_path: Path) -> None:
+    target = tmp_path / "AGENTS.md"
+    target.write_text("# Repository Guidelines\n\nUse Python conventions.\n", encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["workspace", "install-agent-hints", "--target", str(target)],
+        env=_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["mode"] == "dry-run"
+    assert payload["target"] == str(target.resolve())
+    assert payload["has_existing_section"] is False
+    assert payload["would_append"] is True
+    assert payload["would_remove"] is False
+    assert "append" in payload["changes_preview"]
+
+
+def test_cli_workspace_install_agent_hints_append_creates_section(tmp_path: Path) -> None:
+    target = tmp_path / "AGENTS.md"
+    target.write_text("# Repository Guidelines\n", encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "workspace",
+            "install-agent-hints",
+            "--target",
+            str(target),
+            "--mode",
+            "append",
+        ],
+        env=_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    content = target.read_text(encoding="utf-8")
+    assert payload["ok"] is True
+    assert payload["mode"] == "append"
+    assert payload["file_updated"] is True
+    assert payload["bytes_written"] == len(content.encode("utf-8"))
+    assert "<!-- AGENT_HINTS_START -->" in content
+    assert "## Agent Hints" in content
+    assert "- Write tests for new functionality" in content
+    assert "<!-- AGENT_HINTS_END -->" in content
+
+
+def test_cli_workspace_install_agent_hints_append_creates_missing_file(tmp_path: Path) -> None:
+    target = tmp_path / "AGENTS.md"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "workspace",
+            "install-agent-hints",
+            "--target",
+            str(target),
+            "--mode",
+            "append",
+        ],
+        env=_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["mode"] == "append"
+    assert payload["file_updated"] is True
+    assert payload["file_created"] is True
+    content = target.read_text(encoding="utf-8")
+    assert "context-map/CONTEXT_REPORT.md" in content
+    assert "<!-- AGENT_HINTS_START -->" in content
+
+
+def test_cli_workspace_install_agent_hints_dry_run_existing_section(tmp_path: Path) -> None:
+    target = tmp_path / "AGENTS.md"
+    target.write_text(
+        "\n".join(
+            [
+                "# Repository Guidelines",
+                "",
+                "<!-- AGENT_HINTS_START -->",
+                "## Agent Hints",
+                "",
+                "- Existing hint",
+                "<!-- AGENT_HINTS_END -->",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["workspace", "install-agent-hints", "--target", str(target)],
+        env=_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["has_existing_section"] is True
+    assert payload["would_append"] is True
+    assert payload["would_remove"] is True
+    assert "replace" in payload["changes_preview"]
+
+
+def test_cli_workspace_install_agent_hints_remove_existing_section(tmp_path: Path) -> None:
+    target = tmp_path / "AGENTS.md"
+    target.write_text(
+        "\n".join(
+            [
+                "# Repository Guidelines",
+                "",
+                "<!-- AGENT_HINTS_START -->",
+                "## Agent Hints",
+                "",
+                "- Existing hint",
+                "<!-- AGENT_HINTS_END -->",
+                "",
+                "Keep this line.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "workspace",
+            "install-agent-hints",
+            "--target",
+            str(target),
+            "--mode",
+            "remove",
+        ],
+        env=_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    content = target.read_text(encoding="utf-8")
+    assert payload["ok"] is True
+    assert payload["mode"] == "remove"
+    assert payload["file_updated"] is True
+    assert payload["bytes_written"] == len(content.encode("utf-8"))
+    assert "<!-- AGENT_HINTS_START -->" not in content
+    assert "<!-- AGENT_HINTS_END -->" not in content
+    assert "Keep this line." in content
+
+
+def test_cli_workspace_install_agent_hints_remove_nonexistent_section(tmp_path: Path) -> None:
+    target = tmp_path / "AGENTS.md"
+    original = "# Repository Guidelines\n\nNo agent hints yet.\n"
+    target.write_text(original, encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "workspace",
+            "install-agent-hints",
+            "--target",
+            str(target),
+            "--mode",
+            "remove",
+        ],
+        env=_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["mode"] == "remove"
+    assert payload["file_updated"] is False
+    assert payload["bytes_written"] == 0
+    assert target.read_text(encoding="utf-8") == original
+
+
 def test_cli_workspace_summarize_writes_summary_artifact(tmp_path: Path) -> None:
     _seed_repo(tmp_path, "billing-api", "def total() -> int:\n    return 1\n")
     _seed_repo(tmp_path, "frontend-ui", "def render() -> None:\n    return None\n")
@@ -190,9 +380,7 @@ def test_cli_workspace_plan_supports_repo_scope_and_evidence_contract(tmp_path: 
     assert isinstance(contract["confidence"], (int, float))
 
 
-def test_cli_workspace_plan_strict_emits_evidence_validation(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_cli_workspace_plan_strict_emits_evidence_validation(tmp_path: Path, monkeypatch) -> None:
     manifest = tmp_path / "workspace.yaml"
     manifest.write_text("workspace:\n  name: demo\nrepos: []\n", encoding="utf-8")
 
@@ -259,9 +447,7 @@ def test_cli_workspace_plan_strict_emits_evidence_validation(
 
 
 @pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
-def test_cli_workspace_plan_rejects_non_finite_min_confidence(
-    tmp_path: Path, value: str
-) -> None:
+def test_cli_workspace_plan_rejects_non_finite_min_confidence(tmp_path: Path, value: str) -> None:
     _seed_repo(tmp_path, "billing-api", "def total() -> int:\n    return 1\n")
     _seed_repo(tmp_path, "frontend-ui", "def render() -> None:\n    return None\n")
     _seed_repo(tmp_path, "ops-observability", "def alert() -> str:\n    return 'ok'\n")
@@ -303,7 +489,11 @@ def test_cli_workspace_plan_fail_closed_errors_on_low_confidence(
                 "evidence validation failed: fail_closed=True, "
                 "violation=confidence_below_min_confidence"
             )
-        return {"selected_repos": [], "candidate_repos": [], "evidence_contract": {"confidence": 0.2}}
+        return {
+            "selected_repos": [],
+            "candidate_repos": [],
+            "evidence_contract": {"confidence": 0.2},
+        }
 
     def fake_workspace_callable(name: str):
         if name == "build_workspace_plan":
@@ -354,7 +544,7 @@ def test_cli_workspace_benchmark_command_outputs_metrics(
     cases = _write_workspace_benchmark_cases(tmp_path)
     output_dir = tmp_path / "artifacts" / "workspace-benchmark"
 
-    workspace_group = cli.commands.get("workspace")
+    workspace_group = cast(click.Group | None, cli.commands.get("workspace"))
     assert workspace_group is not None
     benchmark_command = workspace_group.commands.get("benchmark")
     assert benchmark_command is not None, "workspace benchmark command missing"
@@ -410,9 +600,7 @@ def test_cli_workspace_benchmark_command_outputs_metrics(
     assert isinstance(first.get("reciprocal_rank"), (int, float))
 
 
-def test_cli_workspace_benchmark_with_baseline_passes(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_cli_workspace_benchmark_with_baseline_passes(tmp_path: Path, monkeypatch) -> None:
     manifest = tmp_path / "workspace.yaml"
     manifest.write_text("workspace:\n  name: demo\nrepos: []\n", encoding="utf-8")
     cases = tmp_path / "cases.json"

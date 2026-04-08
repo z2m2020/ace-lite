@@ -4,12 +4,32 @@ from __future__ import annotations
 
 from importlib import import_module
 import math
+from pathlib import Path
 from typing import Any, Callable
 
 import click
 
 from ace_lite.cli_app.output import echo_json
 from ace_lite.parsers.languages import parse_language_csv
+
+
+AGENT_HINTS_START_MARKER = "<!-- AGENT_HINTS_START -->"
+AGENT_HINTS_END_MARKER = "<!-- AGENT_HINTS_END -->"
+DEFAULT_AGENT_HINTS_SECTION = "\n".join(
+    [
+        AGENT_HINTS_START_MARKER,
+        "## Agent Hints",
+        "",
+        "- Always read context-map/CONTEXT_REPORT.md first when starting work in this repository",
+        "- If context-map/CONTEXT_REPORT.md is missing or stale, regenerate it by running:",
+        '  ace-lite plan --context-report-path context-map/CONTEXT_REPORT.md --query "<your query>"',
+        "- Follow existing code conventions in this repository",
+        "- Use type hints for all function signatures",
+        "- Prefer small, focused functions",
+        "- Write tests for new functionality",
+        AGENT_HINTS_END_MARKER,
+    ]
+)
 
 
 def _workspace_module() -> Any:
@@ -69,6 +89,63 @@ def _normalize_min_confidence(value: float) -> float:
     return threshold
 
 
+def _agent_hints_bounds(text: str) -> tuple[int, int] | None:
+    start = text.find(AGENT_HINTS_START_MARKER)
+    if start < 0:
+        return None
+    end_marker_start = text.find(AGENT_HINTS_END_MARKER, start + len(AGENT_HINTS_START_MARKER))
+    if end_marker_start < 0:
+        return None
+    end = end_marker_start + len(AGENT_HINTS_END_MARKER)
+    if end < len(text) and text[end] == "\r":
+        end += 1
+    if end < len(text) and text[end] == "\n":
+        end += 1
+    return start, end
+
+
+def _has_agent_hints_section(text: str) -> bool:
+    return _agent_hints_bounds(text) is not None
+
+
+def _append_agent_hints_section(text: str) -> str:
+    bounds = _agent_hints_bounds(text)
+    replacement = f"{DEFAULT_AGENT_HINTS_SECTION}\n"
+    if bounds is not None:
+        start, end = bounds
+        return f"{text[:start]}{replacement}{text[end:]}"
+    if not text:
+        return replacement
+    separator = "\n\n" if not text.endswith("\n") else "\n"
+    return f"{text}{separator}{replacement}"
+
+
+def _remove_agent_hints_section(text: str) -> tuple[str, bool]:
+    bounds = _agent_hints_bounds(text)
+    if bounds is None:
+        return text, False
+    start, end = bounds
+    return f"{text[:start]}{text[end:]}", True
+
+
+def _read_agent_hints_target(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise click.ClickException(f"failed to read target {path}: {exc}") from exc
+    except UnicodeError as exc:
+        raise click.ClickException(f"failed to decode target {path} as UTF-8: {exc}") from exc
+
+
+def _write_agent_hints_target(path: Path, text: str) -> int:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    except OSError as exc:
+        raise click.ClickException(f"failed to write target {path}: {exc}") from exc
+    return len(text.encode("utf-8"))
+
+
 @click.group("workspace", help="Workspace-level validation and multi-repo planning.")
 def workspace_group() -> None:
     return None
@@ -106,6 +183,116 @@ def workspace_validate_command(manifest: str) -> None:
                 }
                 for repo in manifest_payload.repos
             ],
+        }
+    )
+
+
+@workspace_group.command(
+    "install-agent-hints",
+    help="Install, preview, or remove an AGENTS.md agent hints section.",
+)
+@click.option(
+    "--target",
+    required=True,
+    type=click.Path(path_type=str),
+    help="Path to the target AGENTS.md file.",
+)
+@click.option(
+    "--mode",
+    default="dry-run",
+    show_default=True,
+    type=click.Choice(["dry-run", "append", "remove"]),
+    help="Operation mode for the agent hints section.",
+)
+def workspace_install_agent_hints_command(target: str, mode: str) -> None:
+    target_path = Path(target).expanduser().resolve()
+    if not target_path.exists():
+        if mode == "dry-run":
+            changes_preview = "append mode would create and append the agent hints section"
+            echo_json(
+                {
+                    "ok": True,
+                    "mode": "dry-run",
+                    "target": str(target_path),
+                    "has_existing_section": False,
+                    "would_append": True,
+                    "would_remove": False,
+                    "changes_preview": changes_preview,
+                    "file_exists": False,
+                }
+            )
+            return
+        if mode == "append":
+            next_text = _append_agent_hints_section("")
+            bytes_written = _write_agent_hints_target(target_path, next_text)
+            echo_json(
+                {
+                    "ok": True,
+                    "mode": "append",
+                    "target": str(target_path),
+                    "file_updated": True,
+                    "bytes_written": bytes_written,
+                    "file_created": True,
+                }
+            )
+            return
+        echo_json(
+            {
+                "ok": True,
+                "mode": "remove",
+                "target": str(target_path),
+                "file_exists": False,
+                "file_updated": False,
+                "bytes_written": 0,
+            }
+        )
+        return
+
+    current_text = _read_agent_hints_target(target_path)
+    has_existing_section = _has_agent_hints_section(current_text)
+
+    if mode == "dry-run":
+        changes_preview = (
+            "append mode would replace the existing agent hints section"
+            if has_existing_section
+            else "append mode would append the default agent hints section"
+        )
+        echo_json(
+            {
+                "ok": True,
+                "mode": "dry-run",
+                "target": str(target_path),
+                "has_existing_section": has_existing_section,
+                "would_append": True,
+                "would_remove": has_existing_section,
+                "changes_preview": changes_preview,
+            }
+        )
+        return
+
+    if mode == "append":
+        next_text = _append_agent_hints_section(current_text)
+        bytes_written = _write_agent_hints_target(target_path, next_text)
+        echo_json(
+            {
+                "ok": True,
+                "mode": "append",
+                "target": str(target_path),
+                "file_updated": True,
+                "bytes_written": bytes_written,
+            }
+        )
+        return
+
+    next_text, file_updated = _remove_agent_hints_section(current_text)
+    bytes_written = _write_agent_hints_target(target_path, next_text) if file_updated else 0
+    echo_json(
+        {
+            "ok": True,
+            "mode": "remove",
+            "target": str(target_path),
+            "file_updated": file_updated,
+            "bytes_written": bytes_written,
         }
     )
 
@@ -369,5 +556,6 @@ def workspace_benchmark_command(
         raise click.ClickException(str(exc)) from exc
 
     echo_json(payload)
+
 
 __all__ = ["workspace_group"]

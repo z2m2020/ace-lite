@@ -1,4 +1,4 @@
-﻿"""MCP server exposing ACE-Lite capabilities as tools.
+"""MCP server exposing ACE-Lite capabilities as tools.
 
 This module provides a production-ready stdio MCP server built on FastMCP.
 It can also run in a self-test mode for health validation.
@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.cli_app.orchestrator_factory import create_memory_provider, run_plan
 from ace_lite.indexer import build_index
@@ -65,6 +65,9 @@ from ace_lite.mcp_server.service_plan_handlers import (
 )
 from ace_lite.mcp_server.service_plan_runtime import execute_mcp_plan_payload
 from ace_lite.mcp_server.service_repomap_handlers import handle_repomap_build_request
+from ace_lite.mcp_server.service_retrieval_graph_view_handlers import (
+    handle_retrieval_graph_view_request,
+)
 from ace_lite.parsers.languages import parse_language_csv
 from ace_lite.plan_quick import build_plan_quick
 from ace_lite.repomap.builder import build_repo_map
@@ -127,10 +130,10 @@ class AceLiteMcpService:
     def _run_tracked(
         self,
         tool_name: str,
-        operation: Callable[[], dict[str, Any]],
+        operation: Callable[[], Any],
     ) -> dict[str, Any]:
         with self._track_request(tool_name):
-            return operation()
+            return cast(dict[str, Any], operation())
 
     def _collect_runtime_head_snapshot(self) -> dict[str, Any]:
         source_root = str(self._runtime_source_tree.get("source_root") or "").strip()
@@ -147,25 +150,31 @@ class AceLiteMcpService:
             0.0,
             (datetime.now(timezone.utc) - self._process_started_at_dt).total_seconds(),
         )
-        return build_runtime_identity_payload(
-            pid=self._process_id,
-            process_started_at=self._process_started_at,
-            process_uptime_seconds=uptime_seconds,
-            source_root=str(self._runtime_source_tree.get("source_root") or "").strip(),
-            pyproject_path=str(self._runtime_source_tree.get("pyproject_path") or "").strip(),
-            module_path=str(self._runtime_source_tree.get("module_path") or "").strip(),
-            startup_head_snapshot=self._startup_head_snapshot,
-            current_head_snapshot=current_head_snapshot,
+        return cast(
+            dict[str, Any],
+            build_runtime_identity_payload(
+                pid=self._process_id,
+                process_started_at=self._process_started_at,
+                process_uptime_seconds=uptime_seconds,
+                source_root=str(self._runtime_source_tree.get("source_root") or "").strip(),
+                pyproject_path=str(self._runtime_source_tree.get("pyproject_path") or "").strip(),
+                module_path=str(self._runtime_source_tree.get("module_path") or "").strip(),
+                startup_head_snapshot=self._startup_head_snapshot,
+                current_head_snapshot=current_head_snapshot,
+            ),
         )
 
     def health(self) -> dict[str, Any]:
         version_info = get_version_info()
-        return build_health_response_payload(
-            config=self._config,
-            request_stats=self._request_stats_payload(),
-            version=get_version(),
-            version_info=version_info,
-            runtime_identity=self._runtime_identity_payload(),
+        return cast(
+            dict[str, Any],
+            build_health_response_payload(
+                config=self._config,
+                request_stats=self._request_stats_payload(),
+                version=get_version(),
+                version_info=version_info,
+                runtime_identity=cast(Any, self._runtime_identity_payload()),
+            ),
         )
 
     def index(
@@ -191,7 +200,8 @@ class AceLiteMcpService:
                 language_csv=str(languages or self._config.default_languages).strip(),
                 enabled_languages=parse_language_csv(
                     str(languages or self._config.default_languages).strip()
-                ),
+                )
+                or [],
                 output=output,
                 batch_mode=batch_mode,
                 batch_size=batch_size,
@@ -231,7 +241,7 @@ class AceLiteMcpService:
                 output_md=output_md,
                 tokenizer_model=str(self._config.tokenizer_model),
                 build_index_fn=build_index,
-                parse_language_csv_fn=parse_language_csv,
+                parse_language_csv_fn=lambda raw_languages: parse_language_csv(raw_languages) or [],
                 build_repo_map_fn=build_repo_map,
                 resolve_output_path_fn=self._resolve_output_path,
             ),
@@ -435,6 +445,61 @@ class AceLiteMcpService:
             )
 
         return self._run_tracked("ace_memory_graph_view", _operation)
+
+    def retrieval_graph_view(
+        self,
+        *,
+        query: str,
+        repo: str | None = None,
+        root: str | None = None,
+        skills_dir: str | None = None,
+        config_pack: str | None = None,
+        time_range: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        memory_primary: str | None = None,
+        memory_secondary: str | None = None,
+        lsp_enabled: bool = False,
+        plugins_enabled: bool = False,
+        top_k_files: int = 8,
+        min_candidate_score: int = 2,
+        retrieval_policy: str = "auto",
+        timeout_seconds: float | None = None,
+        limit: int = 50,
+        max_hops: int = 1,
+    ) -> dict[str, Any]:
+        def _operation() -> dict[str, Any]:
+            root_path = self._resolve_root(root)
+            plan_result = self.plan(
+                query=query,
+                repo=repo,
+                root=root,
+                skills_dir=skills_dir,
+                config_pack=config_pack,
+                time_range=time_range,
+                start_date=start_date,
+                end_date=end_date,
+                memory_primary=memory_primary,
+                memory_secondary=memory_secondary,
+                lsp_enabled=lsp_enabled,
+                plugins_enabled=plugins_enabled,
+                top_k_files=top_k_files,
+                min_candidate_score=min_candidate_score,
+                retrieval_policy=retrieval_policy,
+                include_full_payload=True,
+                timeout_seconds=timeout_seconds,
+            )
+            plan_payload = plan_result.get("plan", {})
+            return handle_retrieval_graph_view_request(
+                plan_payload=plan_payload,
+                limit=limit,
+                max_hops=max_hops,
+                repo=repo,
+                root=str(root_path),
+                query=query,
+            )
+
+        return self._run_tracked("ace_retrieval_graph_view", _operation)
 
     def memory_store(
         self,
@@ -865,4 +930,4 @@ class AceLiteMcpService:
         save_notes(path, rows)
 
 
-__all__ = ['AceLiteMcpService']
+__all__ = ["AceLiteMcpService"]

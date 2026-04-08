@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import time
@@ -15,8 +15,12 @@ from ace_lite.mcp_server.server_tool_registration import (
     MCP_REGISTERED_TOOL_NAMES,
     MCP_TOOL_DESCRIPTIONS,
 )
+from ace_lite.mcp_server.service_retrieval_graph_view_handlers import (
+    handle_retrieval_graph_view_request,
+)
 from ace_lite.memory_long_term.contracts import build_long_term_fact_contract_v1
 from ace_lite.memory_long_term.store import LongTermMemoryStore
+from ace_lite.retrieval_graph_view import RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION
 
 
 def _make_service(tmp_path: Path) -> AceLiteMcpService:
@@ -43,6 +47,52 @@ def _write_sample_repo(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
+
+
+def _minimal_retrieval_plan() -> dict[str, object]:
+    return {
+        "query": "implement adder",
+        "repo": "mini-calc",
+        "root": "/tmp/mini-calc",
+        "candidate_files": [
+            {"path": "src/adder.py", "score": 9.0},
+            {"path": "tests/test_adder.py", "score": 3.0},
+        ],
+        "candidate_chunks": [
+            {
+                "path": "src/adder.py",
+                "qualified_name": "add",
+                "kind": "function",
+                "lineno": 1,
+                "end_lineno": 3,
+                "score": 9.0,
+            },
+            {
+                "path": "src/adder.py",
+                "qualified_name": "subtract",
+                "kind": "function",
+                "lineno": 5,
+                "end_lineno": 7,
+                "score": 7.5,
+            },
+            {
+                "path": "tests/test_adder.py",
+                "qualified_name": "test_add",
+                "kind": "function",
+                "lineno": 1,
+                "end_lineno": 5,
+                "score": 3.0,
+            },
+        ],
+        "index": {"candidate_files": []},
+        "repomap": {"focused_files": ["src/adder.py", "tests/test_adder.py"]},
+        "subgraph_payload": {
+            "enabled": True,
+            "reason": "ok",
+            "seed_paths": ["src/adder.py"],
+            "edge_counts": {"cochange_edges": 2},
+        },
+    }
 
 
 def test_mcp_service_health_reports_defaults(tmp_path: Path) -> None:
@@ -98,8 +148,7 @@ def test_build_mcp_server_exposes_stable_tool_metadata_and_schema(tmp_path: Path
     assert tools["ace_plan_quick"].parameters["required"] == ["query"]
     assert tools["ace_index"].parameters["properties"]["resume"]["default"] is False
     assert (
-        tools["ace_memory_store"].parameters["properties"]["tags"]["anyOf"][0]["type"]
-        == "object"
+        tools["ace_memory_store"].parameters["properties"]["tags"]["anyOf"][0]["type"] == "object"
     )
 
 
@@ -240,6 +289,102 @@ def test_mcp_service_memory_graph_view_reads_long_term_graph(tmp_path: Path) -> 
     assert payload["edges"][0]["fact_handle"] == "fact-1"
 
 
+def test_handle_retrieval_graph_view_request_empty_payload_returns_not_ok() -> None:
+    payload = handle_retrieval_graph_view_request(
+        plan_payload={},
+        limit=50,
+        max_hops=1,
+        repo="mini-calc",
+        root="/tmp/mini-calc",
+        query="implement adder",
+    )
+
+    assert payload["ok"] is False
+    assert payload["schema_version"] == RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION
+    assert payload["nodes"] == []
+
+
+def test_handle_retrieval_graph_view_request_minimal_payload_returns_nodes() -> None:
+    payload = handle_retrieval_graph_view_request(
+        plan_payload=_minimal_retrieval_plan(),
+        limit=50,
+        max_hops=1,
+        repo="mini-calc",
+        root="/tmp/mini-calc",
+        query="implement adder",
+    )
+
+    assert payload["ok"] is True
+    assert payload["schema_version"] == RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION
+    assert payload["summary"]["node_count"] == len(payload["nodes"])
+    assert {node["id"] for node in payload["nodes"]} >= {"src/adder.py"}
+
+
+def test_handle_retrieval_graph_view_request_respects_limit() -> None:
+    payload = handle_retrieval_graph_view_request(
+        plan_payload=_minimal_retrieval_plan(),
+        limit=5,
+        max_hops=1,
+        repo="mini-calc",
+        root="/tmp/mini-calc",
+        query="implement adder",
+    )
+
+    assert payload["summary"]["limit"] == 5
+    assert payload["summary"]["node_count"] <= 5
+
+
+def test_handle_retrieval_graph_view_request_respects_max_hops() -> None:
+    payload = handle_retrieval_graph_view_request(
+        plan_payload=_minimal_retrieval_plan(),
+        limit=50,
+        max_hops=2,
+        repo="mini-calc",
+        root="/tmp/mini-calc",
+        query="implement adder",
+    )
+
+    assert payload["scope"]["max_hops"] == 2
+    assert payload["summary"]["max_hops"] == 2
+
+
+def test_mcp_service_retrieval_graph_view_runs_plan_under_mocked_tracking(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    service = _make_service(tmp_path)
+    captured_plan_kwargs: dict[str, object] = {}
+    captured_tool_names: list[str] = []
+
+    def _fake_run_tracked(tool_name, operation):
+        captured_tool_names.append(tool_name)
+        return operation()
+
+    def _fake_plan(**kwargs):
+        captured_plan_kwargs.update(kwargs)
+        return {"ok": True, "plan": _minimal_retrieval_plan()}
+
+    monkeypatch.setattr(service, "_run_tracked", _fake_run_tracked)
+    monkeypatch.setattr(service, "plan", _fake_plan)
+
+    payload = service.retrieval_graph_view(
+        query="implement adder",
+        repo="mini-calc",
+        root=str(tmp_path),
+        skills_dir=str(tmp_path / "skills"),
+        memory_primary="none",
+        memory_secondary="none",
+        limit=5,
+        max_hops=2,
+    )
+
+    assert captured_tool_names == ["ace_retrieval_graph_view"]
+    assert captured_plan_kwargs["include_full_payload"] is True
+    assert payload["ok"] is True
+    assert payload["scope"]["limit"] == 5
+    assert payload["scope"]["max_hops"] == 2
+
+
 def test_mcp_service_repomap_writes_json_and_markdown(tmp_path: Path) -> None:
     _write_sample_repo(tmp_path)
     service = _make_service(tmp_path)
@@ -270,12 +415,8 @@ def test_mcp_service_repomap_uses_default_output_paths(tmp_path: Path) -> None:
     )
 
     assert result["ok"] is True
-    assert result["output_json"] == str(
-        (tmp_path / "context-map" / "repo_map.json").resolve()
-    )
-    assert result["output_md"] == str(
-        (tmp_path / "context-map" / "repo_map.md").resolve()
-    )
+    assert result["output_json"] == str((tmp_path / "context-map" / "repo_map.json").resolve())
+    assert result["output_md"] == str((tmp_path / "context-map" / "repo_map.md").resolve())
     assert Path(result["output_json"]).exists()
     assert Path(result["output_md"]).exists()
 
@@ -538,7 +679,6 @@ def test_mcp_service_dev_feedback_round_trip(tmp_path: Path) -> None:
     assert summary["summary"]["by_reason_code"][0]["reason_code"] == "memory_fallback"
 
 
-
 def test_mcp_service_dev_feedback_record_fix_and_summary(tmp_path: Path) -> None:
     _write_sample_repo(tmp_path)
     service = _make_service(tmp_path)
@@ -726,9 +866,7 @@ def test_mcp_service_plan_smoke_returns_summary(tmp_path: Path) -> None:
     assert "plan" not in result
 
 
-def test_mcp_service_plan_summary_surfaces_contract_versions(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_mcp_service_plan_summary_surfaces_contract_versions(tmp_path: Path, monkeypatch) -> None:
     _write_sample_repo(tmp_path)
     service = _make_service(tmp_path)
 
@@ -934,7 +1072,9 @@ def test_mcp_service_plan_quick_returns_candidate_files(tmp_path: Path) -> None:
     assert result["candidate_files"]
     assert isinstance(result["retrieval_policy_profile"], str)
     assert result["retrieval_policy_profile"]
-    assert result["retrieval_policy_observability"]["selected"] == result["retrieval_policy_profile"]
+    assert (
+        result["retrieval_policy_observability"]["selected"] == result["retrieval_policy_profile"]
+    )
     assert isinstance(result["candidate_domain_summary"], dict)
     assert isinstance(result["suggested_query_refinements"], list)
     assert result["suggested_query_refinements"]
@@ -942,9 +1082,7 @@ def test_mcp_service_plan_quick_returns_candidate_files(tmp_path: Path) -> None:
     assert result["total_ms"] >= 0.0
 
 
-def test_mcp_service_plan_timeout_returns_structured_fallback(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_mcp_service_plan_timeout_returns_structured_fallback(tmp_path: Path, monkeypatch) -> None:
     _write_sample_repo(tmp_path)
     service = _make_service(tmp_path)
 
@@ -981,9 +1119,7 @@ def test_mcp_service_plan_timeout_returns_structured_fallback(
     assert isinstance(result.get("recommendations"), list)
 
 
-def test_mcp_service_plan_defaults_plugins_disabled(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_mcp_service_plan_defaults_plugins_disabled(tmp_path: Path, monkeypatch) -> None:
     _write_sample_repo(tmp_path)
     service = _make_service(tmp_path)
     captured: dict[str, object] = {}
@@ -1008,4 +1144,3 @@ def test_mcp_service_plan_defaults_plugins_disabled(
 
     assert result["ok"] is True
     assert captured.get("plugins_enabled") is False
-

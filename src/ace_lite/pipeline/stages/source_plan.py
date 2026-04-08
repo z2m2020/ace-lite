@@ -25,6 +25,10 @@ from ace_lite.source_plan import (
     select_validation_tests,
     summarize_source_plan_grounding,
 )
+from ace_lite.source_plan.evidence_confidence import (
+    annotate_chunk_confidence,
+    build_confidence_summary,
+)
 from ace_lite.validation.patch_artifact import validate_patch_artifact_contract_v1
 
 
@@ -55,7 +59,7 @@ def _sanitize_constraint(text: str, *, max_chars: int = 220) -> str:
     if not normalized:
         return ""
     # Strip basic tag-like patterns and escape angle brackets to reduce prompt-injection surface.
-    normalized = normalized.replace("<", "\uFF1C").replace(">", "\uFF1E")
+    normalized = normalized.replace("<", "\uff1c").replace(">", "\uff1e")
     normalized = " ".join(normalized.split())
     if len(normalized) > max(32, int(max_chars)):
         normalized = normalized[: max(32, int(max_chars))].rstrip() + "..."
@@ -81,9 +85,7 @@ def _extract_profile_constraints(profile_payload: dict[str, Any]) -> list[str]:
 def _extract_ltm_maps(
     memory_stage: dict[str, Any],
 ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
-    ltm_payload = (
-        memory_stage.get("ltm", {}) if isinstance(memory_stage.get("ltm"), dict) else {}
-    )
+    ltm_payload = memory_stage.get("ltm", {}) if isinstance(memory_stage.get("ltm"), dict) else {}
     selected_map: dict[str, dict[str, Any]] = {}
     attribution_map: dict[str, dict[str, Any]] = {}
 
@@ -110,9 +112,7 @@ def _build_constraints(
     ltm_attribution_map: dict[str, dict[str, Any]] | None = None,
     return_details: bool = False,
 ) -> list[str] | tuple[list[str], list[dict[str, Any]], dict[str, Any]]:
-    resolved_ltm_selected_map = (
-        ltm_selected_map if isinstance(ltm_selected_map, dict) else {}
-    )
+    resolved_ltm_selected_map = ltm_selected_map if isinstance(ltm_selected_map, dict) else {}
     resolved_ltm_attribution_map = (
         ltm_attribution_map if isinstance(ltm_attribution_map, dict) else {}
     )
@@ -149,14 +149,10 @@ def _build_constraints(
 
         if item.get("source") == "ltm":
             selected_payload = (
-                item.get("ltm_selected")
-                if isinstance(item.get("ltm_selected"), dict)
-                else {}
+                item.get("ltm_selected") if isinstance(item.get("ltm_selected"), dict) else {}
             )
             attribution_payload = (
-                item.get("ltm_attribution")
-                if isinstance(item.get("ltm_attribution"), dict)
-                else {}
+                item.get("ltm_attribution") if isinstance(item.get("ltm_attribution"), dict) else {}
             )
             graph_neighborhood = (
                 attribution_payload.get("graph_neighborhood")
@@ -173,9 +169,7 @@ def _build_constraints(
                     "derived_from_observation_id": str(
                         selected_payload.get("derived_from_observation_id") or ""
                     ).strip(),
-                    "graph_neighbor_count": int(
-                        graph_neighborhood.get("triple_count", 0) or 0
-                    ),
+                    "graph_neighbor_count": int(graph_neighborhood.get("triple_count", 0) or 0),
                 }
             )
         if len(sanitized) >= 5:
@@ -289,18 +283,22 @@ def run_source_plan(
     """
     memory_stage = ctx.state.get("memory", {}) if isinstance(ctx.state.get("memory"), dict) else {}
     index_stage = ctx.state.get("index", {}) if isinstance(ctx.state.get("index"), dict) else {}
-    repomap_stage = ctx.state.get("repomap", {}) if isinstance(ctx.state.get("repomap"), dict) else {}
+    repomap_stage = (
+        ctx.state.get("repomap", {}) if isinstance(ctx.state.get("repomap"), dict) else {}
+    )
     skills_stage = ctx.state.get("skills", {}) if isinstance(ctx.state.get("skills"), dict) else {}
-    augment_stage = ctx.state.get("augment", {}) if isinstance(ctx.state.get("augment"), dict) else {}
+    augment_stage = (
+        ctx.state.get("augment", {}) if isinstance(ctx.state.get("augment"), dict) else {}
+    )
     validation_stage = (
-        ctx.state.get("validation", {})
-        if isinstance(ctx.state.get("validation"), dict)
-        else {}
+        ctx.state.get("validation", {}) if isinstance(ctx.state.get("validation"), dict) else {}
     )
     policy = ctx.state.get("__policy", {}) if isinstance(ctx.state.get("__policy"), dict) else {}
 
     memory_hits = _extract_memory_hits(memory_stage)
-    profile_payload = memory_stage.get("profile", {}) if isinstance(memory_stage.get("profile"), dict) else {}
+    profile_payload = (
+        memory_stage.get("profile", {}) if isinstance(memory_stage.get("profile"), dict) else {}
+    )
     ltm_selected_map, ltm_attribution_map = _extract_ltm_maps(memory_stage)
     constraints, ltm_constraints, ltm_constraint_summary = _build_constraints(
         memory_hits=memory_hits,
@@ -359,6 +357,9 @@ def run_source_plan(
         focused_files=focused_files,
     )
     evidence_summary = summarize_source_plan_grounding(grounded_chunks)
+    # P1: annotate confidence taxonomy on grounded chunks (additive, report-only)
+    grounded_chunks = annotate_chunk_confidence(grounded_chunks)
+    confidence_summary = build_confidence_summary(grounded_chunks)
 
     validation_tests = select_validation_tests(
         tests=tests,
@@ -371,9 +372,7 @@ def run_source_plan(
     )
     subgraph_payload = build_subgraph_payload(
         candidate_files=[
-            item
-            for item in index_stage.get("candidate_files", [])
-            if isinstance(item, dict)
+            item for item in index_stage.get("candidate_files", []) if isinstance(item, dict)
         ],
         candidate_chunks=grounded_chunks[: max(1, int(chunk_top_k))],
         graph_lookup_payload=(
@@ -383,9 +382,7 @@ def run_source_plan(
         ),
     )
     validation_result = (
-        validation_stage.get("result")
-        if isinstance(validation_stage.get("result"), dict)
-        else {}
+        validation_stage.get("result") if isinstance(validation_stage.get("result"), dict) else {}
     )
     validation_feedback_summary = build_validation_feedback_summary(validation_result)
     failure_signal_summary = dict(validation_feedback_summary)
@@ -457,6 +454,7 @@ def run_source_plan(
         "prompt_rendering_boundary": prompt_rendering_boundary,
         "packing": packing,
         "evidence_summary": evidence_summary,
+        "confidence_summary": confidence_summary,
         "evidence_cards": evidence_cards,
         "file_cards": file_cards,
         "chunk_cards": chunk_cards,
