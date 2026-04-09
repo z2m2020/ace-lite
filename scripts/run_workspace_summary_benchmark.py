@@ -14,9 +14,16 @@ def _repo_root() -> Path:
 
 
 def _cli_command(*, root: Path) -> list[str]:
-    console_script = (root / ".venv" / "bin" / "ace-lite").resolve()
-    if console_script.exists() and console_script.is_file():
-        return [str(console_script)]
+    candidates = (
+        (root / ".venv" / "bin" / "ace-lite").resolve(),
+        (root / ".venv" / "Scripts" / "ace-lite").resolve(),
+        (root / ".venv" / "Scripts" / "ace-lite.exe").resolve(),
+        (root / ".venv" / "Scripts" / "ace-lite.cmd").resolve(),
+        (root / ".venv" / "Scripts" / "ace-lite.bat").resolve(),
+    )
+    for console_script in candidates:
+        if console_script.exists() and console_script.is_file():
+            return [str(console_script)]
     return [
         sys.executable,
         "-c",

@@ -18,6 +18,18 @@ def _load_script(name: str):
     return module
 
 
+def _assert_cli_entry(cmd: list[str]) -> int:
+    entry = Path(cmd[0])
+    if entry.stem == "ace-lite":
+        return 1
+
+    assert cmd[0] == sys.executable
+    assert cmd[1] == "-c"
+    assert "ace_lite.cli" in cmd[2]
+    assert "main()" in cmd[2]
+    return 3
+
+
 def test_academic_optimization_benchmark_script_defaults() -> None:
     module = _load_script("run_academic_optimization_benchmark.py")
 
@@ -67,13 +79,14 @@ def test_academic_optimization_benchmark_script_builds_cli_commands() -> None:
     )
     report_cmd = module._build_report_command(paths=paths)
 
-    assert index_cmd[0].endswith("ace-lite")
+    index_offset = _assert_cli_entry(index_cmd)
+    assert index_cmd[index_offset : index_offset + 1] == ["index"]
     assert "index" in index_cmd
     assert str(paths["index"]) in index_cmd
     assert "python,go" in index_cmd
 
-    assert benchmark_cmd[0].endswith("ace-lite")
-    assert benchmark_cmd[1:3] == ["benchmark", "run"]
+    benchmark_offset = _assert_cli_entry(benchmark_cmd)
+    assert benchmark_cmd[benchmark_offset : benchmark_offset + 2] == ["benchmark", "run"]
     assert "--cases" in benchmark_cmd
     assert str(paths["cases"]) in benchmark_cmd
     assert "--repo" in benchmark_cmd
@@ -83,7 +96,9 @@ def test_academic_optimization_benchmark_script_builds_cli_commands() -> None:
     assert benchmark_cmd.count("--memory-primary") == 1
     assert benchmark_cmd.count("--memory-secondary") == 1
     assert report_cmd[0] == sys.executable
-    assert report_cmd[1].endswith("scripts/build_academic_optimization_report.py")
+    assert Path(report_cmd[1]).resolve() == (
+        root / "scripts" / "build_academic_optimization_report.py"
+    ).resolve()
     assert report_cmd[-6:] == [
         "--results",
         str(paths["results"]),
@@ -123,11 +138,24 @@ def test_academic_optimization_benchmark_script_builds_cli_commands() -> None:
         }
     )
     assert "--baseline-summary" in report_cmd_with_baseline
-    assert report_cmd_with_baseline[report_cmd_with_baseline.index("--baseline-summary") + 1].endswith(
-        "artifacts/benchmark/academic_optimization/latest/academic_summary.json"
-    )
+    assert Path(
+        report_cmd_with_baseline[report_cmd_with_baseline.index("--baseline-summary") + 1]
+    ).resolve() == (
+        root / "artifacts" / "benchmark" / "academic_optimization" / "latest" / "academic_summary.json"
+    ).resolve()
     assert "--query-expansion-enabled" in report_cmd_with_baseline
     assert report_cmd_with_baseline[report_cmd_with_baseline.index("--query-expansion-enabled") + 1] == "false"
+
+
+def test_academic_optimization_benchmark_script_prefers_windows_venv_cli(
+    tmp_path: Path,
+) -> None:
+    module = _load_script("run_academic_optimization_benchmark.py")
+    root = tmp_path / "repo"
+    cli_path = root / ".venv" / "Scripts" / "ace-lite.cmd"
+    cli_path.parent.mkdir(parents=True, exist_ok=True)
+    cli_path.write_text("@echo off\n", encoding="utf-8")
+    assert module._cli_command(root=root) == [str(cli_path.resolve())]
 
 
 def test_academic_optimization_benchmark_script_resolves_baseline_summary_with_legacy_fallback(

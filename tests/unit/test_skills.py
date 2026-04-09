@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import textwrap
 from pathlib import Path
@@ -179,6 +179,15 @@ def test_select_skills_matches_manifest_specific_error_keywords_from_query_text(
     assert selected
     assert selected[0]["name"] == "android-audio"
     assert "error:anr" in selected[0]["matched"]
+
+
+def test_extract_error_keywords_supports_utf8_chinese_terms() -> None:
+    query = "修复维度不匹配和超时错误"
+    keywords = extract_error_keywords(query)
+    assert "不匹配" in keywords
+    assert "维度" in keywords
+    assert "超时" in keywords
+    assert "错误" in keywords
 
 
 def test_error_keyword_phrase_requires_exact_match() -> None:
@@ -406,6 +415,7 @@ def test_run_skills_can_reuse_precomputed_route(
         ("need cross-agent handoff with context sync for the next session", "handoff"),
         ("run release freeze review for the next rc build", "release"),
         ("benchmark tuning should improve latency and recall", "benchmark"),
+        ("analyze graphify architecture and borrow workflow ideas", "research"),
         ("refactor duplicated wallet formatting code", "refactor"),
         ("review the schema migration risk", "review"),
         ("search memory context from openmemory", "memory"),
@@ -418,7 +428,7 @@ def test_infer_intent_supports_specialized_labels(query: str, expected: str) -> 
 @pytest.mark.parametrize(
     ("query", "expected"),
     [
-        ("交接一下上下文并准备下次继续", "handoff"),
+        ("交接一下上下文并准备下次续接", "handoff"),
         ("发布前做一次兼容性检查", "release"),
         ("做一轮基准调优看召回和延迟", "benchmark"),
         ("重构重复代码但不要改行为", "refactor"),
@@ -427,6 +437,30 @@ def test_infer_intent_supports_specialized_labels(query: str, expected: str) -> 
     ],
 )
 def test_infer_intent_supports_chinese_labels(query: str, expected: str) -> None:
+    assert infer_intent(query) == expected
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        ("analyze graphify architecture and borrow workflow ideas", "research"),
+        ("compare a reference implementation and adapt the best-fit pattern", "research"),
+        ("分析 graphify 架构并借鉴流程设计", "research"),
+    ],
+)
+def test_infer_intent_supports_research_labels(query: str, expected: str) -> None:
+    assert infer_intent(query) == expected
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        ("交接一下上下文并准备下次续接", "handoff"),
+        ("分析 graphify 架构并借鉴流程设计", "research"),
+        ("重构重复代码但不要改行为", "refactor"),
+    ],
+)
+def test_infer_intent_supports_utf8_chinese_labels(query: str, expected: str) -> None:
     assert infer_intent(query) == expected
 
 
@@ -517,6 +551,28 @@ def test_duplication_query_routes_to_refactor_skill() -> None:
     assert infer_intent(query) == "refactor"
     assert selected
     assert selected[0]["name"] == "cross-agent-refactor-safeguards"
+
+
+def test_cross_project_borrowing_skill_routes_external_analysis_queries() -> None:
+    manifest = _repo_skill_manifest()
+    cases = [
+        "Analyze graphify architecture and borrow one workflow idea into ace-lite with a minimal validated patch",
+        "Compare an external reference repo against the current project, extract inspiration, and adapt the best-fit idea safely",
+        "分析 graphify 架构设计并借鉴一条可落地的流程优化到当前项目",
+    ]
+
+    for query in cases:
+        query_ctx = {
+            "query": query,
+            "intent": infer_intent(query),
+            "module": "",
+            "error_keywords": extract_error_keywords(query),
+        }
+        selected = select_skills(query_ctx, manifest, top_n=1)
+        assert selected, f"no skill selected for query: {query}"
+        assert (
+            selected[0]["name"] == "cross-project-borrowing-and-adaptation"
+        ), f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
 
 
 def test_module_hint_promotes_mem0_skill() -> None:
@@ -649,6 +705,8 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "Scenario Templates" in bugfix_text
     assert "Timeout or trace incident" in bugfix_text
     assert "Install-drift or MCP incident" in bugfix_text
+    assert "超时" in bugfix_text
+    assert "回归" in bugfix_text
 
     intake_text = (
         repo_root / "skills" / "cross-agent-intake-and-scope.md"
@@ -659,6 +717,8 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "metadata_only_routing" in intake_text
     assert "prompt_rendering_boundary_v1" in intake_text
     assert "verify_version_install_sync()" in intake_text
+    assert "范围不一致" in intake_text
+    assert "约束" in intake_text
 
     handoff_text = (
         repo_root / "skills" / "cross-agent-handoff-and-context-sync.md"
@@ -668,6 +728,8 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "metadata_only_routing" in handoff_text
     assert "prompt_rendering_boundary_v1" in handoff_text
     assert "ace-lite runtime doctor-mcp" in handoff_text
+    assert "交接" in handoff_text
+    assert "上下文同步" in handoff_text
 
     refactor_text = (
         repo_root / "skills" / "cross-agent-refactor-safeguards.md"
@@ -679,18 +741,31 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "selected_manifest_token_estimate_total" in refactor_text
     assert "prompt_rendering_boundary_v1" in refactor_text
     assert "replay_fingerprint" in refactor_text
+    assert "重构" in refactor_text
+    assert "去重" in refactor_text
 
     mem0_iteration_text = (
         repo_root / "skills" / "mem0-iteration-loop.md"
     ).read_text(encoding="utf-8")
     assert "Artifact Checklist" in mem0_iteration_text
     assert "embedding model and dimension" in mem0_iteration_text
+    assert "噪声" in mem0_iteration_text
+    assert "检索质量" in mem0_iteration_text
+
+    borrowing_text = (
+        repo_root / "skills" / "cross-project-borrowing-and-adaptation.md"
+    ).read_text(encoding="utf-8")
+    assert "Borrowing Matrix" in borrowing_text
+    assert "reference implementation" in borrowing_text
+    assert "minimal validated improvement" in borrowing_text
+    assert "accepted borrowing" in borrowing_text
+    assert "graphify" in borrowing_text.lower()
 
 
 @pytest.mark.parametrize(
     ("query", "expected_name"),
     [
-        ("交接一下上下文并准备下次继续", "cross-agent-handoff-and-context-sync"),
+        ("交接一下上下文并准备下次续接", "cross-agent-handoff-and-context-sync"),
         ("做一轮基准调优看召回和延迟", "cross-agent-benchmark-tuning-loop"),
         ("重构重复代码但不要改行为", "cross-agent-refactor-safeguards"),
         ("发布前做一次兼容性检查", "cross-agent-release-readiness"),
@@ -722,8 +797,8 @@ def test_cross_agent_benchmark_routes_feedback_queries() -> None:
         "Use benchmark tuning to compare precision and noise before rollout",
         "Run benchmark loop and record ace_feedback_record for selected paths",
         "Tune embedding rerank pool and scip provider, then capture trace_export evidence for latency regression review",
-        "Benchmark前先固定validation和agent_loop状态，并记录validation_result_v1与agent_loop_summary_v1",
-        "Benchmark比较前先固定validation_tests和agent_loop stop_reason，再对照precision、noise和latency",
+        "Benchmark 前先固定 validation 和 agent_loop 状态，并记录 validation_result_v1 与 agent_loop_summary_v1",
+        "Benchmark 比较前先固定 validation_tests 和 agent_loop stop_reason，再对照 precision、noise 和 latency",
     ]
 
     for query in cases:

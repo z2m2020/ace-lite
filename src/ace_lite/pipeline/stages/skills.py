@@ -11,6 +11,7 @@ from ace_lite.skills import load_sections, select_skills
 from ace_lite.token_estimator import estimate_tokens
 
 _DEFAULT_SKILL_TOP_N = 3
+
 _TROUBLESHOOT_TOKENS = (
     "error",
     "bug",
@@ -66,6 +67,36 @@ _BENCHMARK_TOKENS = (
     "性能",
     "噪声",
 )
+_RESEARCH_TOKENS = (
+    "analyze",
+    "analysis",
+    "compare",
+    "comparison",
+    "study",
+    "research",
+    "inspiration",
+    "inspired",
+    "borrow",
+    "borrowing",
+    "reference implementation",
+    "code taste",
+    "architecture review",
+    "workflow review",
+    "graphify",
+    "benchmark against",
+    "对标",
+    "借鉴",
+    "灵感",
+    "启发",
+    "分析",
+    "比较",
+    "拆解",
+    "复盘",
+    "参考实现",
+    "代码品味",
+    "架构设计",
+    "流程设计",
+)
 _REFACTOR_TOKENS = (
     "refactor",
     "cleanup",
@@ -102,26 +133,25 @@ _MEMORY_TOKENS = (
     "检索",
     "回忆",
 )
+_INTENT_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("troubleshoot", _TROUBLESHOOT_TOKENS),
+    ("handoff", _HANDOFF_TOKENS),
+    ("release", _RELEASE_TOKENS),
+    ("benchmark", _BENCHMARK_TOKENS),
+    ("research", _RESEARCH_TOKENS),
+    ("refactor", _REFACTOR_TOKENS),
+    ("review", _REVIEW_TOKENS),
+    ("memory", _MEMORY_TOKENS),
+)
 
 
 def infer_intent(query: str) -> str:
     """Infer the dominant skill-routing intent from a query string."""
 
     text = query.lower()
-    if any(token in text for token in _TROUBLESHOOT_TOKENS):
-        return "troubleshoot"
-    if any(token in text for token in _HANDOFF_TOKENS):
-        return "handoff"
-    if any(token in text for token in _RELEASE_TOKENS):
-        return "release"
-    if any(token in text for token in _BENCHMARK_TOKENS):
-        return "benchmark"
-    if any(token in text for token in _REFACTOR_TOKENS):
-        return "refactor"
-    if any(token in text for token in _REVIEW_TOKENS):
-        return "review"
-    if any(token in text for token in _MEMORY_TOKENS):
-        return "memory"
+    for intent, tokens in _INTENT_RULES:
+        if any(token in text for token in tokens):
+            return intent
     return "implement"
 
 
