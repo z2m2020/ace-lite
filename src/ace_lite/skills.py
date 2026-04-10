@@ -32,6 +32,24 @@ _ERROR_KEYWORD_BLOCKLIST = {
     "scope",
 }
 
+_SUSPICIOUS_METADATA_CODEPOINTS = {
+    0x59AB,
+    0x59E3,
+    0x5A34,
+    0x6D60,
+    0x6FB6,
+    0x7035,
+    0x934A,
+    0x9352,
+    0x935A,
+    0x9363,
+    0x9365,
+    0x93B7,
+    0x93CB,
+    0x940F,
+    0x95C1,
+}
+
 
 def build_skill_manifest(skills_dir: str | Path) -> list[dict[str, Any]]:
     root = Path(skills_dir)
@@ -373,6 +391,30 @@ def _lint_skill_entry(entry: dict[str, Any]) -> list[dict[str, str]]:
             }
         )
 
+    metadata_fields = (
+        ("name", [entry.get("name") or ""]),
+        ("description", [entry.get("description") or ""]),
+        ("intents", entry.get("intents") or []),
+        ("modules", entry.get("modules") or []),
+        ("topics", entry.get("topics") or []),
+        ("error_keywords", entry.get("error_keywords") or []),
+    )
+    for field_name, values in metadata_fields:
+        for value in values:
+            text = str(value or "").strip()
+            if not text:
+                continue
+            if _looks_like_mojibake_metadata(text):
+                issues.append(
+                    {
+                        "name": name,
+                        "path": path,
+                        "field": field_name,
+                        "keyword": text,
+                        "message": "suspicious mojibake-like metadata term; normalize to valid UTF-8 text",
+                    }
+                )
+
     for keyword in sorted(error_keywords):
         if keyword in _ERROR_KEYWORD_BLOCKLIST:
             issues.append(
@@ -395,6 +437,13 @@ def _lint_skill_entry(entry: dict[str, Any]) -> list[dict[str, str]]:
                 }
             )
     return issues
+
+
+def _looks_like_mojibake_metadata(value: str) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    return any(ord(char) in _SUSPICIOUS_METADATA_CODEPOINTS for char in text)
 
 
 def _matches_module_hint(module_hint: str, modules: list[str]) -> bool:

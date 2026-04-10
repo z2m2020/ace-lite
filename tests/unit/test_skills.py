@@ -271,6 +271,27 @@ def test_lint_skill_manifest_flags_missing_frontmatter_before_backfill(
     }
 
 
+def test_lint_skill_manifest_flags_mojibake_metadata_terms() -> None:
+    suspicious_one = "".join(chr(code) for code in (0x7035, 0x89C4, 0x7233))
+    suspicious_two = "".join(chr(code) for code in (0x934A, 0x7199, 0x58CC))
+    issues = lint_skill_manifest(
+        [
+            {
+                "name": "cross-project-borrowing-and-adaptation",
+                "path": "skills/cross-project-borrowing-and-adaptation.md",
+                "description": "borrow patterns from external repos",
+                "intents": ["research"],
+                "modules": ["architecture"],
+                "topics": ["graphify", suspicious_one, suspicious_two],
+                "error_keywords": [],
+            }
+        ]
+    )
+    assert len(issues) == 2
+    assert {item["field"] for item in issues} == {"topics"}
+    assert {item["keyword"] for item in issues} == {suspicious_one, suspicious_two}
+
+
 def test_repo_skills_pass_frontmatter_lint() -> None:
     issues = lint_skill_manifest(_repo_skill_manifest())
     assert issues == []
@@ -755,11 +776,21 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     borrowing_text = (
         repo_root / "skills" / "cross-project-borrowing-and-adaptation.md"
     ).read_text(encoding="utf-8")
+    assert "default_sections: [Workflow, Evidence Checklist, Borrowing Matrix, Borrowing Ledger, Output Contract]" in borrowing_text
+    assert "Evidence Checklist" in borrowing_text
     assert "Borrowing Matrix" in borrowing_text
+    assert "Borrowing Ledger" in borrowing_text
     assert "reference implementation" in borrowing_text
     assert "minimal validated improvement" in borrowing_text
     assert "accepted borrowing" in borrowing_text
+    assert "rejected borrowing" in borrowing_text
+    assert "deferred borrowing" in borrowing_text
+    assert "next candidate" in borrowing_text
     assert "graphify" in borrowing_text.lower()
+    assert "对标" in borrowing_text
+    assert "借鉴" in borrowing_text
+    assert "架构设计" in borrowing_text
+    assert "流程设计" in borrowing_text
 
 
 @pytest.mark.parametrize(
