@@ -19,6 +19,10 @@ from ace_lite.problem_surface_schema import (
 
 __all__ = [
     "SCHEMA_VERSION",
+    "extract_confidence_summary_input",
+    "extract_context_report_input",
+    "extract_problem_surface_payload",
+    "extract_validation_feedback_input",
     "build_problem_surface_payload",
     "dump_problem_surface_payload",
     "dumps_problem_surface_payload",
@@ -31,7 +35,7 @@ SCHEMA_VERSION = PROBLEM_SURFACE_SCHEMA_VERSION
 
 
 def _dict(value: Any) -> dict[str, Any]:
-    return dict(value) if isinstance(value, dict) else {}
+    return dict(value) if isinstance(value, Mapping) else {}
 
 
 def _list(value: Any) -> list[Any]:
@@ -53,16 +57,73 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _mapping_dict(value: Mapping[str, Any] | Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else _dict(value)
+
+
+def _dedup_warnings(items: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        warning = _str(item).strip()
+        if not warning or warning in seen:
+            continue
+        seen.add(warning)
+        deduped.append(warning)
+    return deduped
+
+
+def _unknown_str(value: Any) -> str:
+    return _str(value).strip() or "unknown"
+
+
+def _source_plan_dict(plan_payload: Mapping[str, Any] | Any) -> dict[str, Any]:
+    payload = _mapping_dict(plan_payload)
+    return _mapping_dict(payload.get("source_plan"))
+
+
+def _validation_dict(plan_payload: Mapping[str, Any] | Any) -> dict[str, Any]:
+    payload = _mapping_dict(plan_payload)
+    return _mapping_dict(payload.get("validation"))
+
+
+def _resolve_validation_feedback_summary(plan_payload: Mapping[str, Any] | Any) -> dict[str, Any]:
+    payload = _mapping_dict(plan_payload)
+    source_plan = _source_plan_dict(payload)
+    validate_steps = source_plan.get("steps")
+    if isinstance(validate_steps, list):
+        for step in validate_steps:
+            step_dict = _mapping_dict(step)
+            if _str(step_dict.get("stage")).strip() != "validate":
+                continue
+            summary = _mapping_dict(step_dict.get("validation_feedback_summary"))
+            if summary:
+                return summary
+
+    validation_payload = _validation_dict(payload)
+    for candidate in (
+        validation_payload.get("validation_feedback_summary"),
+        payload.get("validation_feedback_summary"),
+        validation_payload.get("summary"),
+        _mapping_dict(validation_payload.get("result")).get("summary"),
+        payload.get("validation_result"),
+    ):
+        summary = _mapping_dict(candidate)
+        if summary:
+            return summary
+    return {}
+
+
 def _normalize_context_surface(context_report: Mapping[str, Any] | Any) -> dict[str, Any]:
-    report = _dict(context_report)
+    report = _mapping_dict(context_report)
     summary = _dict(report.get("summary"))
     confidence_breakdown = _dict(report.get("confidence_breakdown"))
 
     return {
         "artifact": _str(report.get("schema_version")) or "context_report_v1",
-        "query": _str(report.get("query")),
-        "repo": _str(report.get("repo")),
-        "root": _str(report.get("root")),
+        "query": _unknown_str(report.get("query")),
+        "repo": _unknown_str(report.get("repo")),
+        "root": _unknown_str(report.get("root")),
         "candidate_file_count": _int(summary.get("candidate_file_count", 0)),
         "candidate_chunk_count": _int(summary.get("candidate_chunk_count", 0)),
         "validation_test_count": _int(summary.get("validation_test_count", 0)),
@@ -80,7 +141,7 @@ def _normalize_context_surface(context_report: Mapping[str, Any] | Any) -> dict[
 
 
 def _normalize_confidence_surface(confidence_summary: Mapping[str, Any] | Any) -> dict[str, Any]:
-    summary = _dict(confidence_summary)
+    summary = _mapping_dict(confidence_summary)
     return {
         "artifact": _str(summary.get("schema_version")) or "confidence_summary",
         "extracted_count": _int(summary.get("extracted_count", 0)),
@@ -92,17 +153,226 @@ def _normalize_confidence_surface(confidence_summary: Mapping[str, Any] | Any) -
 
 
 def _normalize_validation_surface(validation_feedback: Mapping[str, Any] | Any) -> dict[str, Any]:
-    summary = _dict(validation_feedback)
+    summary = _mapping_dict(validation_feedback)
     return {
         "artifact": _str(summary.get("schema_version")) or "validation_feedback_summary",
-        "status": _str(summary.get("status")) or "skipped",
+        "status": _unknown_str(summary.get("status")),
         "issue_count": _int(summary.get("issue_count", 0)),
-        "probe_status": _str(summary.get("probe_status")) or "disabled",
+        "probe_status": _unknown_str(summary.get("probe_status")),
         "probe_issue_count": _int(summary.get("probe_issue_count", 0)),
         "probe_executed_count": _int(summary.get("probe_executed_count", 0)),
         "selected_test_count": _int(summary.get("selected_test_count", 0)),
         "executed_test_count": _int(summary.get("executed_test_count", 0)),
     }
+
+
+def extract_context_report_input(
+    plan_payload: Mapping[str, Any] | Any,
+) -> tuple[dict[str, Any], list[str]]:
+    warnings: list[str] = []
+    try:
+        payload = _mapping_dict(plan_payload)
+        source_plan = _source_plan_dict(payload)
+        context_report = _mapping_dict(payload.get("context_report"))
+        if context_report:
+            return context_report, warnings
+
+        candidate_chunks = _list(source_plan.get("candidate_chunks")) or _list(
+            payload.get("candidate_chunks")
+        )
+        candidate_files = _list(source_plan.get("candidate_files")) or _list(
+            payload.get("candidate_files")
+        )
+        validation_tests = _list(source_plan.get("validation_tests")) or _list(
+            payload.get("validation_tests")
+        )
+        confidence_summary = _mapping_dict(source_plan.get("confidence_summary")) or _mapping_dict(
+            payload.get("confidence_summary")
+        )
+
+        unique_paths: set[str] = set()
+        for item in candidate_files:
+            item_dict = _mapping_dict(item)
+            path = _str(item_dict.get("path")).strip()
+            if path:
+                unique_paths.add(path)
+        for item in candidate_chunks:
+            item_dict = _mapping_dict(item)
+            path = _str(item_dict.get("path")).strip()
+            if path:
+                unique_paths.add(path)
+
+        degraded_reasons = [
+            _str(item).strip()
+            for item in _list(payload.get("degraded_reasons"))
+            if _str(item).strip()
+        ]
+        if payload.get("_plan_timeout_fallback"):
+            degraded_reasons.append("plan_timeout_fallback")
+
+        warnings.append("missing_context_report")
+        return {
+            "schema_version": "context_report_v1",
+            "query": _unknown_str(payload.get("query") or source_plan.get("query")),
+            "repo": _unknown_str(payload.get("repo") or source_plan.get("repo")),
+            "root": _unknown_str(payload.get("root") or source_plan.get("root")),
+            "summary": {
+                "candidate_file_count": len(unique_paths),
+                "candidate_chunk_count": len(candidate_chunks),
+                "validation_test_count": len(validation_tests),
+                "degraded_reason_count": len(degraded_reasons),
+            },
+            "confidence_breakdown": {
+                "total_count": _int(confidence_summary.get("total_count"), len(candidate_chunks)),
+            },
+            "degraded_reasons": degraded_reasons,
+            "warnings": ["context_report_inferred_from_plan_payload"],
+        }, warnings
+    except Exception as exc:
+        return {
+            "schema_version": "context_report_v1",
+            "query": "unknown",
+            "repo": "unknown",
+            "root": "unknown",
+            "summary": {},
+            "confidence_breakdown": {"total_count": 0},
+            "degraded_reasons": [],
+            "warnings": [f"context_report_extractor_error:{type(exc).__name__}"],
+        }, [f"context_report_extractor_error:{type(exc).__name__}"]
+
+
+def extract_confidence_summary_input(
+    plan_payload: Mapping[str, Any] | Any,
+) -> tuple[dict[str, Any], list[str]]:
+    warnings: list[str] = []
+    try:
+        payload = _mapping_dict(plan_payload)
+        source_plan = _source_plan_dict(payload)
+        confidence_summary = _mapping_dict(source_plan.get("confidence_summary")) or _mapping_dict(
+            payload.get("confidence_summary")
+        )
+        if confidence_summary:
+            return confidence_summary, warnings
+
+        context_report = _mapping_dict(payload.get("context_report"))
+        confidence_breakdown = _mapping_dict(context_report.get("confidence_breakdown"))
+        total_count = _int(confidence_breakdown.get("total_count"), 0)
+        warnings.append("missing_confidence_summary")
+        return {
+            "schema_version": "confidence_summary",
+            "extracted_count": _int(confidence_breakdown.get("extracted_count"), 0),
+            "inferred_count": _int(confidence_breakdown.get("inferred_count"), 0),
+            "ambiguous_count": _int(confidence_breakdown.get("ambiguous_count"), 0),
+            "unknown_count": _int(confidence_breakdown.get("unknown_count"), total_count),
+            "total_count": total_count,
+        }, warnings
+    except Exception as exc:
+        return {
+            "schema_version": "confidence_summary",
+            "extracted_count": 0,
+            "inferred_count": 0,
+            "ambiguous_count": 0,
+            "unknown_count": 0,
+            "total_count": 0,
+        }, [f"confidence_summary_extractor_error:{type(exc).__name__}"]
+
+
+def extract_validation_feedback_input(
+    plan_payload: Mapping[str, Any] | Any,
+) -> tuple[dict[str, Any], list[str]]:
+    warnings: list[str] = []
+    try:
+        summary = _resolve_validation_feedback_summary(plan_payload)
+        if summary:
+            return summary, warnings
+
+        warnings.append("missing_validation_feedback")
+        return {
+            "schema_version": "validation_feedback_summary",
+            "status": "unknown",
+            "issue_count": 0,
+            "probe_status": "unknown",
+            "probe_issue_count": 0,
+            "probe_executed_count": 0,
+            "selected_test_count": 0,
+            "executed_test_count": 0,
+        }, warnings
+    except Exception as exc:
+        return {
+            "schema_version": "validation_feedback_summary",
+            "status": "unknown",
+            "issue_count": 0,
+            "probe_status": "unknown",
+            "probe_issue_count": 0,
+            "probe_executed_count": 0,
+            "selected_test_count": 0,
+            "executed_test_count": 0,
+        }, [f"validation_feedback_extractor_error:{type(exc).__name__}"]
+
+
+def extract_problem_surface_payload(
+    plan_payload: Mapping[str, Any] | Any,
+    *,
+    git_sha: str = "",
+    phase: str = "problem_discovery",
+    generated_at: str | None = None,
+) -> dict[str, Any]:
+    try:
+        context_report, context_warnings = extract_context_report_input(plan_payload)
+        confidence_summary, confidence_warnings = extract_confidence_summary_input(plan_payload)
+        validation_feedback, validation_warnings = extract_validation_feedback_input(plan_payload)
+        payload = build_problem_surface_payload(
+            context_report=context_report,
+            confidence_summary=confidence_summary,
+            validation_feedback=validation_feedback,
+            git_sha=git_sha,
+            phase=phase,
+            generated_at=generated_at,
+        )
+        payload["warnings"] = _dedup_warnings(
+            _list(payload.get("warnings"))
+            + context_warnings
+            + confidence_warnings
+            + validation_warnings
+        )
+        return payload
+    except Exception as exc:
+        payload = build_problem_surface_payload(
+            context_report={
+                "schema_version": "context_report_v1",
+                "query": "unknown",
+                "repo": "unknown",
+                "root": "unknown",
+                "summary": {},
+                "confidence_breakdown": {"total_count": 0},
+            },
+            confidence_summary={
+                "schema_version": "confidence_summary",
+                "extracted_count": 0,
+                "inferred_count": 0,
+                "ambiguous_count": 0,
+                "unknown_count": 0,
+                "total_count": 0,
+            },
+            validation_feedback={
+                "schema_version": "validation_feedback_summary",
+                "status": "unknown",
+                "issue_count": 0,
+                "probe_status": "unknown",
+                "probe_issue_count": 0,
+                "probe_executed_count": 0,
+                "selected_test_count": 0,
+                "executed_test_count": 0,
+            },
+            git_sha=git_sha,
+            phase=phase,
+            generated_at=generated_at,
+        )
+        payload["warnings"] = _dedup_warnings(
+            _list(payload.get("warnings"))
+            + [f"problem_surface_extractor_error:{type(exc).__name__}"]
+        )
+        return payload
 
 
 def build_problem_surface_payload(
