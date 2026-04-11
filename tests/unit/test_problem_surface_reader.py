@@ -53,14 +53,54 @@ def test_problem_surface_reader_maps_freeze_and_summary_artifacts_to_documented_
     freeze_path = _write_json(
         tmp_path / "artifacts" / "release-freeze" / "freeze_regression.json",
         {
-            "task_success_mean": 0.88,
-            "retrieval_metrics_mean": {
-                "precision_at_k": 0.7,
-                "noise_rate": 0.2,
+            "generated_at": "2026-04-12T00:00:00+00:00",
+            "passed": False,
+            "tabiv3_matrix_summary": {
+                "latency_metrics_mean": {
+                    "latency_p95_ms": 120.0,
+                    "repomap_latency_p95_ms": 15.0,
+                }
             },
-            "memory_metrics_mean": {
-                "notes_hit_ratio": 0.55,
-                "capture_trigger_ratio": 0.4,
+            "concept_gate": {
+                "enabled": True,
+                "passed": False,
+                "metrics": {
+                    "precision_at_k": 0.7,
+                    "noise_rate": 0.2,
+                },
+                "failures": [],
+            },
+            "embedding_gate": {
+                "enabled": True,
+                "passed": True,
+                "means": {
+                    "embedding_enabled_ratio": 0.85,
+                },
+                "failures": [],
+            },
+            "validation_rich_benchmark": {
+                "retrieval_control_plane_gate_summary": {
+                    "gate_passed": True,
+                    "adaptive_router_shadow_coverage": 0.86,
+                    "risk_upgrade_precision_gain": 0.02,
+                },
+                "retrieval_frontier_gate_summary": {
+                    "gate_passed": True,
+                    "deep_symbol_case_recall": 0.93,
+                    "native_scip_loaded_rate": 0.78,
+                    "precision_at_k": 0.68,
+                    "noise_rate": 0.19,
+                },
+                "validation_probe_summary": {
+                    "validation_test_count": 5.0,
+                    "probe_enabled_ratio": 0.67,
+                    "probe_failure_rate": 0.1,
+                },
+                "source_plan_validation_feedback_summary": {
+                    "present_ratio": 1.0,
+                    "failure_rate": 0.2,
+                    "executed_test_count_mean": 0.75,
+                },
             },
         },
     )
@@ -84,19 +124,29 @@ def test_problem_surface_reader_maps_freeze_and_summary_artifacts_to_documented_
     assert pq001["status"] == "observed"
     assert pq001["artifact_paths"] == [str(freeze_path)]
     assert [entry["metric_name"] for entry in pq001["metric_entries"]] == [
-        "task_success_rate",
         "precision_at_k",
         "noise_rate",
     ]
 
+    pq002 = payload["surfaces"]["PQ-002"]
+    assert pq002["status"] == "observed"
+    assert pq002["artifact_paths"] == [str(freeze_path)]
+    assert [entry["metric_name"] for entry in pq002["metric_entries"]] == [
+        "adaptive_router_shadow_coverage",
+        "risk_upgrade_precision_gain",
+    ]
+
     pq004 = payload["surfaces"]["PQ-004"]
     assert pq004["status"] == "observed"
-    assert pq004["artifact_paths"] == [str(summary_path)]
-    assert pq004["metric_entries"][0]["metric_name"] == "validation_test_count"
-
-    pq005 = payload["surfaces"]["PQ-005"]
-    assert pq005["status"] == "observed"
-    assert pq005["artifact_paths"] == [str(freeze_path)]
+    assert pq004["artifact_paths"] == [str(freeze_path), str(summary_path)]
+    assert [entry["metric_name"] for entry in pq004["metric_entries"]] == [
+        "validation_coverage",
+        "validation_test_count",
+        "validation_test_count",
+        "probe_enabled_ratio",
+        "feedback_present_ratio",
+        "feedback_executed_test_count_mean",
+    ]
 
     pq006 = payload["surfaces"]["PQ-006"]
     assert pq006["status"] == "observed"

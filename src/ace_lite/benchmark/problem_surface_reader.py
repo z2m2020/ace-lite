@@ -2,11 +2,23 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+import math
 from pathlib import Path
 from typing import Any
 
 from ace_lite.problem_surface import validate_problem_surface_payload
 from ace_lite.problem_surface_schema import PROBLEM_SURFACE_SCHEMA_VERSION
+
+"""Read benchmark and freeze artifacts into a report-only problem surface payload.
+
+This module intentionally reuses the existing ``problem_surface_v1`` envelope and
+adds PQ-oriented entries under ``surfaces``. It supports:
+
+- benchmark ``results.json`` and ``summary.json`` metrics payloads
+- nested benchmark summary sections used by validation-rich artifacts
+- release-freeze ``freeze_regression.json`` payloads consumed by the repo's
+  freeze trend tooling
+"""
 
 PQ_SURFACE_SPECS: dict[str, dict[str, Any]] = {
     "PQ-001": {
@@ -15,15 +27,29 @@ PQ_SURFACE_SPECS: dict[str, dict[str, Any]] = {
     },
     "PQ-002": {
         "title": "quick_to_full_upgrade_worthiness",
-        "metric_names": ("quick_to_full_upgrade_rate",),
+        "metric_names": (
+            "quick_to_full_upgrade_rate",
+            "adaptive_router_shadow_coverage",
+            "risk_upgrade_precision_gain",
+        ),
     },
     "PQ-003": {
         "title": "evidence_strength_interpretability",
-        "metric_names": ("evidence_strength_score",),
+        "metric_names": (
+            "evidence_strength_score",
+            "deep_symbol_case_recall",
+            "native_scip_loaded_rate",
+        ),
     },
     "PQ-004": {
         "title": "validation_evidence_sufficiency",
-        "metric_names": ("validation_coverage", "validation_test_count"),
+        "metric_names": (
+            "validation_coverage",
+            "validation_test_count",
+            "probe_enabled_ratio",
+            "feedback_present_ratio",
+            "feedback_executed_test_count_mean",
+        ),
     },
     "PQ-005": {
         "title": "memory_coldstart_usefulness",
@@ -81,65 +107,185 @@ def _load_json(path: str | Path | None) -> tuple[str, dict[str, Any]]:
 
     try:
         payload = json.loads(source.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return str(source), {}
     return str(source), payload if isinstance(payload, dict) else {}
 
 
+def _dict(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
 def _coerce_float(value: Any) -> float | None:
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
         return None
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def _copy_metrics(
+    normalized: dict[str, float],
+    source: dict[str, Any],
+    *metric_names: str,
+) -> None:
+    for metric_name in metric_names:
+        number = _coerce_float(source.get(metric_name))
+        if number is not None:
+            normalized[metric_name] = number
 
 
 def _coerce_results_metrics(payload: dict[str, Any]) -> dict[str, float]:
-    metrics_raw = payload.get("metrics")
-    metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
     normalized: dict[str, float] = {}
+
+    metrics = _dict(payload.get("metrics"))
     for key, value in metrics.items():
         number = _coerce_float(value)
         if number is not None:
             normalized[str(key)] = number
+
+    control_plane = _dict(payload.get("retrieval_control_plane_gate_summary"))
+    frontier = _dict(payload.get("retrieval_frontier_gate_summary"))
+    validation_probe = _dict(payload.get("validation_probe_summary"))
+    source_plan_feedback = _dict(payload.get("source_plan_validation_feedback_summary"))
+    deep_symbol = _dict(payload.get("deep_symbol_summary"))
+    native_scip = _dict(payload.get("native_scip_summary"))
+
+    _copy_metrics(
+        normalized,
+        control_plane,
+        "adaptive_router_shadow_coverage",
+        "risk_upgrade_precision_gain",
+    )
+    _copy_metrics(
+        normalized,
+        frontier,
+        "deep_symbol_case_recall",
+        "native_scip_loaded_rate",
+        "precision_at_k",
+        "noise_rate",
+    )
+    _copy_metrics(normalized, validation_probe, "validation_test_count", "probe_enabled_ratio")
+    _copy_metrics(normalized, source_plan_feedback, "executed_test_count_mean")
+
+    feedback_present_ratio = _coerce_float(source_plan_feedback.get("present_ratio"))
+    if feedback_present_ratio is not None:
+        normalized["feedback_present_ratio"] = feedback_present_ratio
+        normalized.setdefault("feedback_capture_rate", feedback_present_ratio)
+
+    feedback_executed_test_count_mean = _coerce_float(
+        source_plan_feedback.get("executed_test_count_mean")
+    )
+    if feedback_executed_test_count_mean is not None:
+        normalized["feedback_executed_test_count_mean"] = feedback_executed_test_count_mean
+
+    deep_symbol_recall = _coerce_float(deep_symbol.get("recall"))
+    if deep_symbol_recall is not None:
+        normalized.setdefault("deep_symbol_case_recall", deep_symbol_recall)
+
+    native_scip_loaded_rate = _coerce_float(native_scip.get("loaded_rate"))
+    if native_scip_loaded_rate is not None:
+        normalized.setdefault("native_scip_loaded_rate", native_scip_loaded_rate)
+
     return normalized
 
 
 def _coerce_freeze_metrics(payload: dict[str, Any]) -> dict[str, float]:
     normalized: dict[str, float] = {}
 
+    payload = _dict(payload)
+
     task_success_mean = _coerce_float(payload.get("task_success_mean"))
     if task_success_mean is not None:
         normalized["task_success_rate"] = task_success_mean
 
-    mapping_sections = {
-        "retrieval_metrics_mean": (
-            "precision_at_k",
-            "noise_rate",
-            "latency_p95_ms",
-            "chunk_hit_at_k",
-        ),
-        "latency_metrics_mean": ("latency_p95_ms", "repomap_latency_p95_ms"),
-        "memory_metrics_mean": (
-            "notes_hit_ratio",
-            "profile_selected_mean",
-            "capture_trigger_ratio",
-        ),
-        "embedding_metrics_mean": (
-            "embedding_similarity_mean",
-            "embedding_rerank_ratio",
-            "embedding_cache_hit_ratio",
-            "embedding_fallback_ratio",
-            "embedding_enabled_ratio",
-        ),
-    }
+    _copy_metrics(
+        normalized,
+        _dict(payload.get("retrieval_metrics_mean")),
+        "precision_at_k",
+        "noise_rate",
+        "latency_p95_ms",
+        "chunk_hit_at_k",
+    )
+    _copy_metrics(
+        normalized,
+        _dict(payload.get("latency_metrics_mean")),
+        "latency_p95_ms",
+        "repomap_latency_p95_ms",
+    )
+    _copy_metrics(
+        normalized,
+        _dict(payload.get("memory_metrics_mean")),
+        "notes_hit_ratio",
+        "profile_selected_mean",
+        "capture_trigger_ratio",
+    )
+    _copy_metrics(
+        normalized,
+        _dict(payload.get("embedding_metrics_mean")),
+        "embedding_similarity_mean",
+        "embedding_rerank_ratio",
+        "embedding_cache_hit_ratio",
+        "embedding_fallback_ratio",
+        "embedding_enabled_ratio",
+    )
 
-    for section_name, metric_names in mapping_sections.items():
-        section_raw = payload.get(section_name)
-        section = section_raw if isinstance(section_raw, dict) else {}
-        for metric_name in metric_names:
-            number = _coerce_float(section.get(metric_name))
-            if number is not None:
-                normalized[metric_name] = number
+    tabiv3_means = _dict(_dict(payload.get("tabiv3_matrix_summary")).get("latency_metrics_mean"))
+    concept_metrics = _dict(_dict(payload.get("concept_gate")).get("metrics"))
+    embedding_means = _dict(_dict(payload.get("embedding_gate")).get("means"))
+    validation_rich = _dict(payload.get("validation_rich_benchmark"))
+    control_plane = _dict(validation_rich.get("retrieval_control_plane_gate_summary"))
+    frontier = _dict(validation_rich.get("retrieval_frontier_gate_summary"))
+    validation_probe = _dict(validation_rich.get("validation_probe_summary"))
+    source_plan_feedback = _dict(validation_rich.get("source_plan_validation_feedback_summary"))
+    deep_symbol = _dict(validation_rich.get("deep_symbol_summary"))
+    native_scip = _dict(validation_rich.get("native_scip_summary"))
+
+    _copy_metrics(normalized, tabiv3_means, "latency_p95_ms", "repomap_latency_p95_ms")
+    _copy_metrics(normalized, concept_metrics, "precision_at_k", "noise_rate")
+    _copy_metrics(normalized, embedding_means, "embedding_enabled_ratio")
+    _copy_metrics(
+        normalized,
+        control_plane,
+        "adaptive_router_shadow_coverage",
+        "risk_upgrade_precision_gain",
+    )
+    _copy_metrics(
+        normalized,
+        frontier,
+        "deep_symbol_case_recall",
+        "native_scip_loaded_rate",
+        "precision_at_k",
+        "noise_rate",
+    )
+    _copy_metrics(normalized, validation_probe, "validation_test_count", "probe_enabled_ratio")
+    _copy_metrics(normalized, source_plan_feedback, "executed_test_count_mean")
+
+    feedback_present_ratio = _coerce_float(source_plan_feedback.get("present_ratio"))
+    if feedback_present_ratio is not None:
+        normalized["feedback_present_ratio"] = feedback_present_ratio
+        normalized.setdefault("feedback_capture_rate", feedback_present_ratio)
+
+    feedback_executed_test_count_mean = _coerce_float(
+        source_plan_feedback.get("executed_test_count_mean")
+    )
+    if feedback_executed_test_count_mean is not None:
+        normalized["feedback_executed_test_count_mean"] = feedback_executed_test_count_mean
+
+    deep_symbol_recall = _coerce_float(deep_symbol.get("recall"))
+    if deep_symbol_recall is not None:
+        normalized.setdefault("deep_symbol_case_recall", deep_symbol_recall)
+
+    native_scip_loaded_rate = _coerce_float(native_scip.get("loaded_rate"))
+    if native_scip_loaded_rate is not None:
+        normalized.setdefault("native_scip_loaded_rate", native_scip_loaded_rate)
+
+    if "validation_coverage" not in normalized:
+        validation_test_count = normalized.get("validation_test_count")
+        if validation_test_count is not None:
+            normalized["validation_coverage"] = validation_test_count
 
     return normalized
 
