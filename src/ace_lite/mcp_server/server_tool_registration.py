@@ -281,6 +281,7 @@ def _register_feedback_tools(*, server: FastMCP, service: AceLiteMcpService) -> 
     def ace_feedback_record(
         query: str,
         selected_path: str,
+        candidate_paths: list[str] | None = None,
         repo: str | None = None,
         user_id: str | None = None,
         profile_key: str | None = None,
@@ -292,6 +293,7 @@ def _register_feedback_tools(*, server: FastMCP, service: AceLiteMcpService) -> 
         return service.feedback_record(
             query=query,
             selected_path=selected_path,
+            candidate_paths=candidate_paths,
             repo=repo,
             user_id=user_id,
             profile_key=profile_key,

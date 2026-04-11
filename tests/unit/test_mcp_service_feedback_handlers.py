@@ -32,6 +32,7 @@ def test_handle_feedback_record_and_stats_round_trip(tmp_path: Path) -> None:
     recorded = handle_feedback_record_request(
         query="openmemory 405 dimension mismatch",
         selected_path=str(selected),
+        candidate_paths=["src/sample.py", "src/other.py"],
         repo="demo-repo",
         user_id="mcp-user",
         profile_key="bugfix",
@@ -49,6 +50,8 @@ def test_handle_feedback_record_and_stats_round_trip(tmp_path: Path) -> None:
         (tmp_path / "context-map" / "profile.json").resolve()
     )
     assert recorded["recorded"]["event"]["selected_path"] == "src/sample.py"
+    assert recorded["recorded"]["event"]["candidate_count"] == 2
+    assert recorded["recorded"]["event"]["selected_in_candidates"] is True
     assert recorded["recorded"]["event"]["user_id"] == "mcp-user"
     assert recorded["recorded"]["event"]["profile_key"] == "bugfix"
 
@@ -74,6 +77,8 @@ def test_handle_feedback_record_and_stats_round_trip(tmp_path: Path) -> None:
     )
     assert stats["stats"]["matched_event_count"] == 1
     assert stats["stats"]["unique_paths"] == 1
+    assert stats["stats"]["capture_event_count"] == 1
+    assert stats["stats"]["capture_coverage"] == 1.0
     assert stats["stats"]["user_id_filter"] == "mcp-user"
     assert stats["stats"]["profile_key_filter"] == "bugfix"
 
@@ -100,6 +105,7 @@ def test_handle_feedback_record_mirrors_to_long_term_memory_when_enabled(
     recorded = handle_feedback_record_request(
         query="openmemory 405 dimension mismatch",
         selected_path=str(selected),
+        candidate_paths=None,
         repo="demo-repo",
         user_id="mcp-user",
         profile_key="bugfix",
@@ -125,6 +131,7 @@ def test_handle_feedback_record_requires_query_and_selected_path(
         handle_feedback_record_request(
             query=" ",
             selected_path="x.py",
+            candidate_paths=None,
             repo=None,
             user_id=None,
             profile_key=None,
@@ -139,6 +146,7 @@ def test_handle_feedback_record_requires_query_and_selected_path(
         handle_feedback_record_request(
             query="query",
             selected_path=" ",
+            candidate_paths=None,
             repo=None,
             user_id=None,
             profile_key=None,

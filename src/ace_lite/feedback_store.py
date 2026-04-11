@@ -107,6 +107,24 @@ def _normalize_terms(value: Any) -> list[str]:
     return out
 
 
+def _normalize_selected_paths(
+    values: Any,
+    *,
+    root_path: Path | None = None,
+) -> list[str]:
+    if not isinstance(values, (list, tuple)):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        normalized = _normalize_selected_path(item, root_path=root_path)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        out.append(normalized)
+    return out
+
+
 def _optional_positive_int(value: Any) -> int | None:
     if value is None:
         return None
@@ -161,8 +179,20 @@ def _normalize_event(
     position = _optional_positive_int(raw.get("position"))
     user_id = _normalize_text(raw.get("user_id") or user_id_override)
     profile_key = _normalize_text(raw.get("profile_key") or profile_key_override)
+    candidate_paths = _normalize_selected_paths(
+        raw.get("candidate_paths"),
+        root_path=root_path,
+    )
+    candidate_count = int(raw.get("candidate_count", len(candidate_paths)) or 0)
+    selected_in_candidates_raw = raw.get("selected_in_candidates")
+    selected_in_candidates = (
+        bool(selected_in_candidates_raw)
+        if selected_in_candidates_raw is not None
+        else (selected_path in candidate_paths if candidate_paths else None)
+    )
+    capture_mode = _normalize_text(raw.get("capture_mode"))
 
-    return {
+    normalized = {
         "query": query,
         "repo": repo,
         "user_id": user_id,
@@ -172,6 +202,14 @@ def _normalize_event(
         "captured_at": captured_at,
         "terms": terms,
     }
+    if candidate_paths:
+        normalized["candidate_paths"] = candidate_paths
+    if candidate_count > 0:
+        normalized["candidate_count"] = candidate_count
+        normalized["selected_in_candidates"] = selected_in_candidates
+    if capture_mode:
+        normalized["capture_mode"] = capture_mode
+    return normalized
 
 
 def _event_identity(event: dict[str, Any]) -> tuple[str, str, str, str, int | None]:
@@ -259,6 +297,7 @@ class SelectionFeedbackStore:
         user_id: str | None = None,
         profile_key: str | None = None,
         selected_path: str,
+        candidate_paths: list[str] | tuple[str, ...] | None = None,
         position: int | None = None,
         captured_at: str | None = None,
         root_path: str | Path | None = None,
@@ -276,6 +315,17 @@ class SelectionFeedbackStore:
         if not normalized_path:
             raise ValueError("selected_path cannot be empty")
 
+        normalized_root_path = _resolve_root_path(root_path)
+        normalized_candidate_paths = _normalize_selected_paths(
+            candidate_paths,
+            root_path=normalized_root_path,
+        )
+        selected_in_candidates = (
+            normalized_path in normalized_candidate_paths
+            if normalized_candidate_paths
+            else None
+        )
+
         event = {
             "query": normalized_query,
             "repo": normalized_repo,
@@ -288,6 +338,12 @@ class SelectionFeedbackStore:
                 str(item).lower()
                 for item in extract_terms(query=normalized_query, memory_stage={})
             ],
+            "candidate_paths": list(normalized_candidate_paths),
+            "candidate_count": len(normalized_candidate_paths),
+            "selected_in_candidates": selected_in_candidates,
+            "capture_mode": (
+                "bridge_capture" if normalized_candidate_paths else "direct_record"
+            ),
         }
         self._capture_store.record(
             {
@@ -310,7 +366,7 @@ class SelectionFeedbackStore:
                 long_term_capture = self._long_term_capture_service.capture_selection_feedback(
                     query=normalized_query,
                     repo=normalized_repo,
-                    root=str(_resolve_root_path(root_path) or Path.cwd().resolve()),
+                    root=str(normalized_root_path or Path.cwd().resolve()),
                     selected_path=normalized_path,
                     position=event["position"],
                     captured_at=event["captured_at"],
@@ -338,6 +394,7 @@ class SelectionFeedbackStore:
             "event": dict(event),
             "event_count": len(normalized_events),
             "pruned": pruned,
+            "capture_coverage": 1.0 if selected_in_candidates else 0.0 if normalized_candidate_paths else None,
         }
         if long_term_capture is not None:
             payload["long_term_capture"] = dict(long_term_capture)
@@ -588,7 +645,30 @@ class SelectionFeedbackStore:
             "unique_paths": len(rows),
             "top_n": limit,
             "paths": rows[:limit],
+            "capture_event_count": 0,
+            "capture_coverage": None,
+            "suggested_capture_points": [],
         }
+        bridge_events = [
+            event
+            for event in filtered
+            if int(event.get("candidate_count", 0) or 0) > 0
+        ]
+        if bridge_events:
+            matched_bridge = sum(
+                1 for event in bridge_events if bool(event.get("selected_in_candidates"))
+            )
+            payload["capture_event_count"] = len(bridge_events)
+            payload["capture_coverage"] = round(
+                float(matched_bridge) / float(len(bridge_events)),
+                6,
+            )
+        else:
+            payload["suggested_capture_points"] = [
+                "record feedback after a user opens a shortlisted file",
+                "record feedback after the agent cites a selected file:line",
+                "record feedback after editing a file chosen from ace_plan_quick",
+            ]
         payload.update(self._metadata_payload())
         return payload
 

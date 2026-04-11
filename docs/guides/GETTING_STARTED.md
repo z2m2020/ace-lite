@@ -49,9 +49,16 @@ Typical sequence for an agent:
 3. `ace_index` on first run or after large repo changes
 4. `ace_plan_quick` for a fast shortlist
 5. Read the top candidate files before treating the shortlist as evidence
-6. `ace_plan` only when the quick shortlist is still insufficient
-7. `ace_feedback_record` after the correct targets are confirmed
-8. `ace_memory_store` for durable project rules when needed
+6. If `ace_plan_quick` returns `upgrade_recommended=false`, keep reading the shortlist first; use `onboarding_view`, `candidate_details`, and `why_not_plan_yet` as the default guide
+7. `ace_plan` only when the quick shortlist is still insufficient or `upgrade_recommended=true`
+8. `ace_feedback_record` after the correct targets are confirmed
+9. `ace_memory_store` for durable project rules when needed
+
+Recent `ace_plan_quick` payloads also expose compact decision helpers:
+- `candidate_details`: per-file labels plus a compact role summary
+- `onboarding_view`: grouped `entrypoints`, `public_contracts`, `runtime_core`, `tests`, and `recommended_read_order` for repo familiarization
+- `upgrade_recommended`, `expected_incremental_value`, `expected_cost_ms_band`, `why_not_plan_yet`, `why_upgrade_now`: quick guidance on whether a full `ace_plan` is likely worth the extra latency
+- `ace_feedback_record` can also receive `candidate_paths` so a host can attach the shortlist it showed before the user confirmed the final file
 
 Discipline rules:
 
@@ -59,6 +66,7 @@ Discipline rules:
 - Prefer behavior + symptom + module boundary in the query text.
 - Final conclusions should cite `file:line`, not just tool output.
 - If `ace_plan` is too large or noisy, fall back to `ace_plan_quick` and manual read-based evidence closure.
+- For repo familiarization tasks, prefer quick-first reading order from `onboarding_view` before escalating to a full plan.
 
 Recommended query shape:
 

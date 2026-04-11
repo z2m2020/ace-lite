@@ -9,6 +9,55 @@ from ace_lite.memory_long_term.store import LongTermMemoryStore
 from ace_lite.memory_search_guardrails import build_memory_search_guardrails
 
 
+_ABSTRACT_QUERY_EXPANSIONS: dict[str, tuple[str, ...]] = {
+    "onboarding": ("onboarding", "familiarize", "overview", "entrypoint", "codebase"),
+    "familiarization": ("onboarding", "familiarize", "overview", "entrypoint", "codebase"),
+    "familiarize": ("onboarding", "familiarize", "overview", "entrypoint", "codebase"),
+    "feedback": ("feedback", "selection", "preference", "capture"),
+    "optimization": ("optimization", "optimize", "improve", "tuning"),
+    "memory": ("memory", "notes", "knowledge", "recall"),
+    "repo": ("repo", "repository", "codebase", "project"),
+    "repository": ("repo", "repository", "codebase", "project"),
+    "熟悉": ("熟悉", "上手", "入口", "导览"),
+    "反馈": ("反馈", "偏好", "选择", "闭环"),
+    "优化": ("优化", "改进", "调优"),
+}
+
+
+def _normalize_tokens(value: str) -> list[str]:
+    return [token for token in str(value or "").lower().split() if token]
+
+
+def _expand_query_tokens(tokens: list[str]) -> list[str]:
+    expanded: list[str] = []
+    seen: set[str] = set()
+    for token in tokens:
+        for candidate in (token, *_ABSTRACT_QUERY_EXPANSIONS.get(token, ())):
+            normalized = str(candidate or "").strip().lower()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            expanded.append(normalized)
+    return expanded
+
+
+def _row_search_blob(row: dict[str, Any]) -> str:
+    tag_values: list[str] = []
+    tags = row.get("tags")
+    if isinstance(tags, dict):
+        tag_values.extend(str(value) for value in tags.values() if value)
+    elif isinstance(tags, list):
+        tag_values.extend(str(value) for value in tags if value)
+    return " ".join(
+        [
+            str(row.get("text", "")),
+            str(row.get("query", "")),
+            " ".join(str(item) for item in row.get("matched_keywords", []) if item),
+            " ".join(tag_values),
+        ]
+    ).lower()
+
+
 def handle_memory_search(
     *,
     query: str,
@@ -22,29 +71,33 @@ def handle_memory_search(
         raise ValueError("query cannot be empty")
 
     namespace_filter = str(namespace or "").strip()
-    tokens = [token for token in normalized_query.lower().split() if token]
+    tokens = _normalize_tokens(normalized_query)
+    expanded_tokens = _expand_query_tokens(tokens)
+    namespace_rows = [
+        row
+        for row in notes
+        if not namespace_filter or str(row.get("namespace", "")).strip() == namespace_filter
+    ]
 
     scored: list[tuple[float, dict[str, Any]]] = []
-    for row in notes:
-        row_namespace = str(row.get("namespace", "")).strip()
-        if namespace_filter and row_namespace != namespace_filter:
-            continue
-        search_blob = " ".join(
-            [
-                str(row.get("text", "")),
-                str(row.get("query", "")),
-                " ".join(str(item) for item in row.get("matched_keywords", []) if item),
-            ]
-        ).lower()
+    for row in namespace_rows:
+        search_blob = _row_search_blob(row)
         if not search_blob.strip():
             continue
         if not tokens:
             score = 1.0
         else:
             hits = sum(1 for token in tokens if token in search_blob)
-            if hits <= 0:
+            expanded_hits = sum(
+                1 for token in expanded_tokens if token in search_blob
+            )
+            if hits <= 0 and expanded_hits <= 0:
                 continue
-            score = float(hits) / float(max(1, len(tokens)))
+            score = (
+                float(hits) / float(max(1, len(tokens)))
+                if hits > 0
+                else (float(expanded_hits) / float(max(1, len(expanded_tokens)))) * 0.6
+            )
         scored.append((score, row))
 
     scored.sort(
@@ -62,11 +115,17 @@ def handle_memory_search(
         "count": len(items),
         "items": items,
         "notes_path": str(path),
+        "cold_start": bool(namespace_filter and not namespace_rows and not items),
+        "recommended_next_step": (
+            "ace_plan_quick" if namespace_filter and not namespace_rows and not items else None
+        ),
     }
     payload.update(
         build_memory_search_guardrails(
             query=normalized_query,
             items=items,
+            namespace=namespace_filter or None,
+            namespace_note_count=len(namespace_rows),
         )
     )
     return payload

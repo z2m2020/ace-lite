@@ -47,6 +47,7 @@ def handle_feedback_record_request(
     *,
     query: str,
     selected_path: str,
+    candidate_paths: list[str] | None = None,
     repo: str | None,
     user_id: str | None,
     profile_key: str | None,
@@ -86,6 +87,7 @@ def handle_feedback_record_request(
         user_id=user_id,
         profile_key=profile_key,
         selected_path=normalized_selected_path,
+        candidate_paths=list(candidate_paths or []),
         position=position,
         root_path=root_path,
     )

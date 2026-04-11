@@ -224,6 +224,32 @@ def test_feedback_store_stats_and_export_support_scope_filters(tmp_path: Path) -
     assert stats["paths"][0]["selected_path"] == "src/b.py"
 
 
+def test_feedback_store_tracks_bridge_capture_coverage(tmp_path: Path) -> None:
+    profile_path = tmp_path / "profile.json"
+    store = SelectionFeedbackStore(profile_path=profile_path, max_entries=8)
+
+    payload = store.record(
+        query="bridge capture",
+        repo="demo",
+        selected_path="src/selected.py",
+        candidate_paths=["src/candidate.py", "src/selected.py"],
+        captured_at="2026-02-14T00:00:00+00:00",
+    )
+
+    assert payload["capture_coverage"] == 1.0
+    assert payload["event"]["candidate_count"] == 2
+    assert payload["event"]["selected_in_candidates"] is True
+
+    stats = store.stats(
+        repo="demo",
+        query_terms=["bridge"],
+        boost=FeedbackBoostConfig(boost_per_select=0.2, max_boost=0.5, decay_days=30.0),
+        top_n=5,
+    )
+    assert stats["capture_event_count"] == 1
+    assert stats["capture_coverage"] == 1.0
+
+
 def test_feedback_store_reads_legacy_profile_payload_when_durable_store_is_empty(
     tmp_path: Path,
 ) -> None:

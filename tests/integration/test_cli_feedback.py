@@ -35,6 +35,10 @@ def test_cli_feedback_record_stats_and_reset(tmp_path: Path) -> None:
             "cli-user",
             "--profile-key",
             "bugfix",
+            "--candidate-path",
+            "src/other.py",
+            "--candidate-path",
+            "src/demo.py",
             "--root",
             str(tmp_path),
             "--profile-path",
@@ -52,6 +56,8 @@ def test_cli_feedback_record_stats_and_reset(tmp_path: Path) -> None:
     assert record_payload["store_path"].endswith("preference_capture.db")
     assert record_payload["path"] == record_payload["store_path"]
     assert record_payload["event"]["selected_path"] == "src/demo.py"
+    assert record_payload["event"]["candidate_count"] == 2
+    assert record_payload["event"]["selected_in_candidates"] is True
     assert record_payload["event"]["user_id"] == "cli-user"
     assert record_payload["event"]["profile_key"] == "bugfix"
 
@@ -78,6 +84,8 @@ def test_cli_feedback_record_stats_and_reset(tmp_path: Path) -> None:
     assert stats_payload["store_path"].endswith("preference_capture.db")
     assert stats_payload["matched_event_count"] == 1
     assert stats_payload["unique_paths"] == 1
+    assert stats_payload["capture_event_count"] == 1
+    assert stats_payload["capture_coverage"] == 1.0
     assert stats_payload["user_id_filter"] == "cli-user"
     assert stats_payload["profile_key_filter"] == "bugfix"
 

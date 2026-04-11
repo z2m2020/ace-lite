@@ -138,10 +138,11 @@ Selection feedback is stored in the local durable feedback store, not in the MCP
 
 Typical lifecycle:
 
-1. The host calls `ace_feedback_record` after the user confirms the correct file.
+1. The host calls `ace_feedback_record` after the user confirms the correct file. If possible, also pass the shortlist as `candidate_paths`.
 2. The durable feedback store accumulates deterministic feedback events.
 3. You export the feedback events with `ace-lite feedback export`.
 4. You replay that snapshot into a clean feedback store with `ace-lite feedback replay --reset` for offline evaluation.
+5. Track `capture_coverage` in `ace_feedback_stats` to see whether the host is actually attaching shortlist context when feedback is recorded.
 
 ## WSL + Claude Code (reuse Windows-hosted services)
 

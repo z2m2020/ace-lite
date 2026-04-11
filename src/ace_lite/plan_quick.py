@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +23,29 @@ PLAN_QUICK_STEPS: tuple[str, ...] = (
     "Inspect candidate_files in order.",
     "Open highest-fused files and confirm symbol-level relevance.",
     "Escalate to ace_plan only after narrowing to concrete edit targets.",
+)
+_ONBOARDING_MARKERS: tuple[str, ...] = (
+    "onboarding",
+    "familiarize",
+    "familiarise",
+    "familiarization",
+    "familiarisation",
+    "understand",
+    "overview",
+    "read first",
+    "where to start",
+    "entrypoint",
+    "codebase",
+    "repo map",
+    "project structure",
+    "熟悉",
+    "先读",
+    "先看",
+    "入口",
+    "上手",
+    "导览",
+    "代码地图",
+    "架构概览",
 )
 
 _DOC_SYNC_MARKERS: tuple[str, ...] = (
@@ -145,9 +168,11 @@ def _query_flags(query: str) -> dict[str, bool]:
     lowered = str(query or "").lower().strip()
     has_doc_sync_markers = any(marker in lowered for marker in _DOC_SYNC_MARKERS)
     latest_sensitive = any(marker in lowered for marker in _LATEST_MARKERS)
+    onboarding = any(marker in lowered for marker in _ONBOARDING_MARKERS)
     return {
         "doc_sync": has_doc_sync_markers,
         "latest_sensitive": latest_sensitive,
+        "onboarding": onboarding,
     }
 
 
@@ -606,6 +631,8 @@ class PlanQuickScoredRow:
     recency_boost: float
     semantic_domain: str
     fused_score: float
+    labels: tuple[str, ...] = field(default_factory=tuple)
+    role: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -619,13 +646,312 @@ class PlanQuickScoredRow:
             "recency_boost": float(self.recency_boost),
             "semantic_domain": self.semantic_domain,
             "fused_score": float(self.fused_score),
+            "labels": list(self.labels),
+            "role": self.role,
         }
+
+
+def _normalize_path(path: str) -> str:
+    return str(path or "").strip().replace("\\", "/").lower()
+
+
+def _infer_candidate_labels(
+    *,
+    path: str,
+    module: str,
+    language: str,
+    semantic_domain: str,
+    repomap_neighbors: set[str] | None = None,
+) -> tuple[str, ...]:
+    normalized_path = _normalize_path(path)
+    stem = _path_stem(path)
+    labels: list[str] = []
+
+    if semantic_domain == "tests":
+        labels.append("test_entry")
+    if semantic_domain in {"docs", "reference", "markdown", "planning"} and (
+        stem in _DOC_ENTRYPOINT_BASENAMES
+        or any(
+            marker in normalized_path
+            for marker in ("schema", "contract", "interface", "overview", "architecture")
+        )
+    ):
+        labels.append("public_contract")
+    if any(
+        marker in normalized_path
+        for marker in (
+            "/cli",
+            "cli.py",
+            "/main.",
+            "/app.",
+            "/server.",
+            "/entrypoint",
+            "readme.md",
+        )
+    ):
+        labels.append("entrypoint")
+    if any(
+        marker in normalized_path
+        for marker in (
+            "orchestrator",
+            "evaluation",
+            "benchmark",
+            "runner",
+            "pipeline",
+        )
+    ):
+        labels.append("evaluation_orchestrator")
+    if any(
+        marker in normalized_path
+        for marker in (
+            "store",
+            "sqlite",
+            "ledger",
+            "snapshot",
+            "persist",
+            "cache",
+            "repository",
+            "db",
+        )
+    ):
+        labels.append("persistence_layer")
+    if semantic_domain == "code" and not labels:
+        labels.append("runtime_core")
+    if repomap_neighbors and normalized_path in repomap_neighbors:
+        labels.append("repomap_neighbor")
+
+    if "entrypoint" in labels:
+        role = "entrypoint"
+    elif "public_contract" in labels:
+        role = "public_contract"
+    elif "evaluation_orchestrator" in labels:
+        role = "evaluation_orchestrator"
+    elif "persistence_layer" in labels:
+        role = "persistence_layer"
+    elif "test_entry" in labels:
+        role = "test_entry"
+    elif "repomap_neighbor" in labels:
+        role = "repomap_neighbor"
+    elif semantic_domain != "code":
+        role = semantic_domain
+    else:
+        role = "runtime_core"
+
+    if not labels:
+        if _is_markdown_doc(path=path, language=language):
+            labels.append("public_contract")
+            role = "public_contract"
+        else:
+            labels.append("runtime_core")
+            role = "runtime_core"
+    return tuple(dict.fromkeys([*labels, role]))
+
+
+def _build_candidate_details(
+    rows: list[PlanQuickScoredRow],
+) -> list[dict[str, Any]]:
+    details: list[dict[str, Any]] = []
+    for row in rows:
+        label_list = list(row.labels)
+        if row.role not in label_list:
+            label_list.append(row.role)
+        details.append(
+            {
+                "path": row.path,
+                "module": row.module,
+                "language": row.language,
+                "semantic_domain": row.semantic_domain,
+                "labels": label_list,
+                "role": row.role,
+                "why": f"role:{row.role};domain:{row.semantic_domain}",
+            }
+        )
+    return details
+
+
+def _first_n_by_role(
+    details: list[dict[str, Any]],
+    *,
+    labels: set[str],
+    limit: int,
+) -> list[str]:
+    selected: list[str] = []
+    for item in details:
+        item_labels = {str(label).strip() for label in item.get("labels", [])}
+        if not item_labels.intersection(labels):
+            continue
+        path = str(item.get("path") or "").strip()
+        if path and path not in selected:
+            selected.append(path)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _build_recommended_read_order(
+    details: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    ordered: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    priority_labels = (
+        {"entrypoint"},
+        {"public_contract"},
+        {"evaluation_orchestrator", "runtime_core", "persistence_layer"},
+        {"test_entry"},
+    )
+    for label_group in priority_labels:
+        for item in details:
+            path = str(item.get("path") or "").strip()
+            if not path or path in seen:
+                continue
+            item_labels = {str(label).strip() for label in item.get("labels", [])}
+            if not item_labels.intersection(label_group):
+                continue
+            ordered.append(
+                {
+                    "path": path,
+                    "role": str(item.get("role") or "").strip(),
+                    "labels": list(item.get("labels") or []),
+                    "why": str(item.get("why") or "").strip(),
+                }
+            )
+            seen.add(path)
+    for item in details:
+        path = str(item.get("path") or "").strip()
+        if not path or path in seen:
+            continue
+        ordered.append(
+            {
+                "path": path,
+                "role": str(item.get("role") or "").strip(),
+                "labels": list(item.get("labels") or []),
+                "why": str(item.get("why") or "").strip(),
+            }
+        )
+        seen.add(path)
+    return ordered
+
+
+def _build_onboarding_view(
+    *,
+    query: str,
+    details: list[dict[str, Any]],
+) -> dict[str, Any]:
+    query_flags = _query_flags(query)
+    recommended_read_order = _build_recommended_read_order(details)
+    return {
+        "recommended": bool(query_flags.get("onboarding", False)),
+        "mode": "repository_onboarding"
+        if bool(query_flags.get("onboarding", False))
+        else "standard",
+        "entrypoints": _first_n_by_role(
+            details,
+            labels={"entrypoint"},
+            limit=3,
+        ),
+        "public_contracts": _first_n_by_role(
+            details,
+            labels={"public_contract"},
+            limit=3,
+        ),
+        "runtime_core": _first_n_by_role(
+            details,
+            labels={"runtime_core", "evaluation_orchestrator", "persistence_layer"},
+            limit=4,
+        ),
+        "tests": _first_n_by_role(
+            details,
+            labels={"test_entry"},
+            limit=3,
+        ),
+        "recommended_read_order": recommended_read_order[:6],
+    }
+
+
+def _estimate_plan_upgrade_cost_ms_band(
+    *,
+    index_cache: dict[str, Any],
+    unique_domains: int,
+    top_k: int,
+) -> dict[str, int]:
+    if str(index_cache.get("mode") or "").strip() == "full_build":
+        return {"min": 14000, "max": 25000}
+    if unique_domains >= 3 or top_k >= 6:
+        return {"min": 9000, "max": 18000}
+    return {"min": 5000, "max": 12000}
+
+
+def _build_upgrade_guidance(
+    *,
+    query: str,
+    rows: list[PlanQuickScoredRow],
+    candidate_domain_summary: dict[str, Any],
+    risk_hints: list[dict[str, Any]],
+    index_cache: dict[str, Any],
+) -> dict[str, Any]:
+    query_flags = _query_flags(query)
+    unique_domains = int(candidate_domain_summary.get("unique_domains", 0) or 0)
+    top_gap = (
+        float(rows[0].fused_score) - float(rows[1].fused_score)
+        if len(rows) >= 2
+        else 99.0
+    )
+    high_risk_codes = {
+        str(item.get("code") or "").strip()
+        for item in risk_hints
+        if str(item.get("severity") or "").strip() == "high"
+    }
+    concentrated = unique_domains <= 2 and top_gap >= 1.5
+    onboarding_ready = bool(query_flags.get("onboarding", False)) and any(
+        "entrypoint" in row.labels or "public_contract" in row.labels for row in rows[:4]
+    )
+
+    expected_incremental_value = "medium"
+    upgrade_recommended = True
+    why_not_plan_yet = ""
+    why_upgrade_now = ""
+
+    if concentrated and not high_risk_codes:
+        expected_incremental_value = "low"
+        upgrade_recommended = False
+        why_not_plan_yet = (
+            "quick already narrowed the candidate set to a small, high-confidence file list."
+        )
+    if onboarding_ready and unique_domains <= 3 and not high_risk_codes:
+        expected_incremental_value = "low"
+        upgrade_recommended = False
+        why_not_plan_yet = (
+            "This looks like repo onboarding, and quick already grouped entrypoints, contracts, and runtime files."
+        )
+    elif high_risk_codes or (unique_domains >= 3 and top_gap < 1.5):
+        expected_incremental_value = "high" if high_risk_codes else "medium"
+        upgrade_recommended = True
+        why_upgrade_now = (
+            "The shortlist still mixes multiple domains or carries high-risk hints, so full plan should add dependency-level evidence."
+        )
+    elif upgrade_recommended:
+        why_upgrade_now = (
+            "Quick has not fully narrowed the reading surface yet, so full plan may add useful dependency and symbol context."
+        )
+
+    return {
+        "upgrade_recommended": bool(upgrade_recommended),
+        "expected_incremental_value": expected_incremental_value,
+        "expected_cost_ms_band": _estimate_plan_upgrade_cost_ms_band(
+            index_cache=index_cache,
+            unique_domains=unique_domains,
+            top_k=len(rows),
+        ),
+        "why_not_plan_yet": why_not_plan_yet,
+        "why_upgrade_now": why_upgrade_now,
+    }
 
 
 def score_plan_quick_rows(
     *,
     query: str,
     rows: list[dict[str, Any]],
+    repomap_neighbors: set[str] | None = None,
     lexical_boost_per_hit: float = 5.0,
 ) -> list[PlanQuickScoredRow]:
     normalized_query = str(query or "").strip()
@@ -670,11 +996,61 @@ def score_plan_quick_rows(
                 recency_boost=recency_boost,
                 semantic_domain=semantic_domain,
                 fused_score=fused_score,
+                labels=_infer_candidate_labels(
+                    path=path,
+                    module=module,
+                    language=language,
+                    semantic_domain=semantic_domain,
+                    repomap_neighbors=repomap_neighbors,
+                ),
+                role="",
             )
         )
 
     scored.sort(key=lambda row: (-float(row.fused_score), str(row.path)))
-    return scored
+    normalized_scored: list[PlanQuickScoredRow] = []
+    for row in scored:
+        labels = tuple(row.labels)
+        role = next(
+            (
+                label
+                for label in labels
+                if label
+                in {
+                    "entrypoint",
+                    "public_contract",
+                    "evaluation_orchestrator",
+                    "persistence_layer",
+                    "test_entry",
+                    "repomap_neighbor",
+                    "runtime_core",
+                    "planning",
+                    "docs",
+                    "reference",
+                    "research",
+                    "reports",
+                    "markdown",
+                }
+            ),
+            "runtime_core",
+        )
+        normalized_scored.append(
+            PlanQuickScoredRow(
+                path=row.path,
+                module=row.module,
+                language=row.language,
+                score=row.score,
+                lexical_hits=row.lexical_hits,
+                lexical_boost=row.lexical_boost,
+                intent_boost=row.intent_boost,
+                recency_boost=row.recency_boost,
+                semantic_domain=row.semantic_domain,
+                fused_score=row.fused_score,
+                labels=labels,
+                role=role,
+            )
+        )
+    return normalized_scored
 
 
 def build_plan_quick(
@@ -783,6 +1159,34 @@ def build_plan_quick(
             }
         )
 
+    repomap_stage: dict[str, Any] | None = None
+    repomap_neighbors: set[str] = set()
+    if repomap_expand:
+        try:
+            repomap_stage = build_stage_repo_map(
+                index_files=files_map,
+                seed_candidates=pooled_candidates,
+                ranking_profile=str(ranking_profile or "graph").strip().lower() or "graph",
+                top_k=min(top_k, len(pooled_candidates)),
+                neighbor_limit=max(0, int(repomap_neighbor_limit)),
+                neighbor_depth=max(1, int(repomap_neighbor_depth)),
+                budget_tokens=max(1, int(budget_tokens)),
+                tokenizer_model=tokenizer_model,
+            )
+            repomap_neighbors = {
+                _normalize_path(item)
+                for item in repomap_stage.get("neighbor_paths", [])
+                if str(item).strip()
+            }
+        except Exception:
+            repomap_stage = {
+                "enabled": False,
+                "seed_paths": [],
+                "neighbor_paths": [],
+                "focused_files": [],
+                "error": "repomap_expand_failed",
+            }
+
     if not rows:
         # Safety fallback: if heuristic ranking yields nothing (for example, bad
         # language detection or indexing anomalies), fall back to a static repo
@@ -802,39 +1206,43 @@ def build_plan_quick(
         rescored_rows = score_plan_quick_rows(
             query=normalized_query,
             rows=rows,
+            repomap_neighbors=repomap_neighbors,
             lexical_boost_per_hit=5.0,
         )
     else:
         rescored_rows = score_plan_quick_rows(
             query=normalized_query,
             rows=rows,
+            repomap_neighbors=repomap_neighbors,
             lexical_boost_per_hit=0.0,
         )
 
     limited_rows = rescored_rows[:top_k]
     candidate_paths = [row.path for row in limited_rows if row.path]
+    if repomap_expand and isinstance(repomap_stage, dict) and not repomap_stage.get(
+        "focused_files"
+    ):
+        repomap_stage["focused_files"] = list(candidate_paths)
 
-    repomap_stage: dict[str, Any] | None = None
-    if repomap_expand:
-        try:
-            repomap_stage = build_stage_repo_map(
-                index_files=files_map,
-                seed_candidates=pooled_candidates,
-                ranking_profile=str(ranking_profile or "graph").strip().lower() or "graph",
-                top_k=min(top_k, len(pooled_candidates)),
-                neighbor_limit=max(0, int(repomap_neighbor_limit)),
-                neighbor_depth=max(1, int(repomap_neighbor_depth)),
-                budget_tokens=max(1, int(budget_tokens)),
-                tokenizer_model=tokenizer_model,
-            )
-        except Exception:
-            repomap_stage = {
-                "enabled": False,
-                "seed_paths": [],
-                "neighbor_paths": [],
-                "focused_files": candidate_paths,
-                "error": "repomap_expand_failed",
-            }
+    candidate_domain_summary = _build_candidate_domain_summary(limited_rows)
+    risk_hints = _build_plan_quick_risk_hints(
+        query=normalized_query,
+        rows=limited_rows,
+        retrieval_policy_profile=retrieval_policy_profile,
+        index_cache=dict(cache_info or {}),
+    )
+    candidate_details = _build_candidate_details(limited_rows)
+    onboarding_view = _build_onboarding_view(
+        query=normalized_query,
+        details=candidate_details,
+    )
+    upgrade_guidance = _build_upgrade_guidance(
+        query=normalized_query,
+        rows=limited_rows,
+        candidate_domain_summary=candidate_domain_summary,
+        risk_hints=risk_hints,
+        index_cache=dict(cache_info or {}),
+    )
 
     response: dict[str, Any] = {
         "query": normalized_query,
@@ -860,25 +1268,31 @@ def build_plan_quick(
                 (datetime.now(timezone.utc) - started_at).total_seconds() * 1000.0,
             )
         ),
-        "repomap_used_tokens": int(repo_map.get("used_tokens", 0) or 0) if ranking_source == "repomap" else 0,
-        "repomap_budget_tokens": int(repo_map.get("budget_tokens", budget_tokens) or 0) if ranking_source == "repomap" else int(budget_tokens),
+        "repomap_used_tokens": int(
+            repo_map.get("used_tokens", 0) or 0
+        )
+        if ranking_source == "repomap"
+        else int((repomap_stage or {}).get("used_tokens", 0) or 0),
+        "repomap_budget_tokens": int(
+            repo_map.get("budget_tokens", budget_tokens) or 0
+        )
+        if ranking_source == "repomap"
+        else int((repomap_stage or {}).get("budget_tokens", budget_tokens) or budget_tokens),
         "ranking_profile": str(
             repo_map.get("ranking_profile", "") or str(ranking_profile or "graph")
         )
         if ranking_source == "repomap"
         else str(ranking_profile or "graph"),
         "query_profile": _query_flags(normalized_query),
-        "candidate_domain_summary": _build_candidate_domain_summary(limited_rows),
+        "candidate_domain_summary": candidate_domain_summary,
+        "candidate_details": candidate_details,
+        "onboarding_view": onboarding_view,
         "suggested_query_refinements": _build_suggested_query_refinements(
             query=normalized_query,
             rows=limited_rows,
         ),
-        "risk_hints": _build_plan_quick_risk_hints(
-            query=normalized_query,
-            rows=limited_rows,
-            retrieval_policy_profile=retrieval_policy_profile,
-            index_cache=dict(cache_info or {}),
-        ),
+        "risk_hints": risk_hints,
+        **upgrade_guidance,
     }
     if include_rows:
         response["rows"] = [row.as_dict() for row in limited_rows]

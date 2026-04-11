@@ -41,6 +41,15 @@ ace-lite doctor
 - Run a small plan smoke: `ace-lite plan --query "where is config loaded" --repo ace-lite-engine --root . --skills-dir skills --memory-primary none --memory-secondary none`
 - Bench/regression (when changing retrieval): `ace-lite benchmark run ...` (see `docs/maintainers/BENCHMARKING.md`)
 
+## Quick-first familiarization
+
+For "where do I start reading this repo" tasks, prefer `ace_plan_quick` before a full `ace_plan`.
+
+Useful quick-plan fields:
+- `onboarding_view`: grouped entrypoints, contracts, runtime files, tests, and a recommended reading order
+- `candidate_details`: per-file role and labels
+- `upgrade_recommended` plus `why_not_plan_yet` / `why_upgrade_now`: compact guidance on whether a full plan is likely worth the extra cost
+
 ## Where to read next (by intent)
 
 - Getting started / operational: `docs/guides/GETTING_STARTED.md`

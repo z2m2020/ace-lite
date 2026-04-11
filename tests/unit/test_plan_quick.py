@@ -322,6 +322,53 @@ def test_score_plan_quick_rows_treats_docs_reference_as_reference_with_recency_b
     assert reference.fused_score > research.fused_score
 
 
+def test_score_plan_quick_rows_attaches_candidate_roles_and_labels() -> None:
+    rows = [
+        {
+            "path": "src/demo/cli.py",
+            "module": "demo.cli",
+            "language": "python",
+            "score": 4.0,
+        },
+        {
+            "path": "docs/reference/EVAL_REPORT_SCHEMA.md",
+            "module": "docs.reference.eval_report_schema",
+            "language": "markdown",
+            "score": 4.0,
+        },
+        {
+            "path": "src/demo/sqlite_store.py",
+            "module": "demo.sqlite_store",
+            "language": "python",
+            "score": 4.0,
+        },
+        {
+            "path": "tests/test_cli.py",
+            "module": "tests.test_cli",
+            "language": "python",
+            "score": 4.0,
+        },
+    ]
+
+    scored = {
+        row.path: row
+        for row in score_plan_quick_rows(
+            query="onboarding codebase where to start",
+            rows=rows,
+            lexical_boost_per_hit=0.0,
+        )
+    }
+
+    assert scored["src/demo/cli.py"].role == "entrypoint"
+    assert "entrypoint" in scored["src/demo/cli.py"].labels
+    assert scored["docs/reference/EVAL_REPORT_SCHEMA.md"].role == "public_contract"
+    assert "public_contract" in scored["docs/reference/EVAL_REPORT_SCHEMA.md"].labels
+    assert scored["src/demo/sqlite_store.py"].role == "persistence_layer"
+    assert "persistence_layer" in scored["src/demo/sqlite_store.py"].labels
+    assert scored["tests/test_cli.py"].role == "test_entry"
+    assert "test_entry" in scored["tests/test_cli.py"].labels
+
+
 def test_build_index_marks_generated_files(tmp_path: Path) -> None:
     _write_file(
         tmp_path / "pkg/contract/erc20_generated.py",
@@ -613,8 +660,18 @@ def test_build_plan_quick_adds_query_profile_risk_hints_and_full_build_reason(
         repomap_top_k=8,
     )
 
-    assert result["query_profile"] == {"doc_sync": True, "latest_sensitive": True}
+    assert result["query_profile"] == {
+        "doc_sync": True,
+        "latest_sensitive": True,
+        "onboarding": False,
+    }
     assert result["candidate_domain_summary"]["primary_domain"] == "planning"
+    assert result["candidate_details"][0]["role"] == "public_contract"
+    assert "public_contract" in result["candidate_details"][0]["labels"]
+    assert result["upgrade_recommended"] is False
+    assert result["expected_incremental_value"] == "low"
+    assert isinstance(result["expected_cost_ms_band"]["min"], int)
+    assert result["why_not_plan_yet"]
     assert isinstance(result["candidate_domain_summary"]["cross_domain_mix"], bool)
     assert result["candidate_domain_summary"]["domain_counts"]["planning"] >= 1
     assert len(result["suggested_query_refinements"]) >= 1
@@ -624,6 +681,59 @@ def test_build_plan_quick_adds_query_profile_risk_hints_and_full_build_reason(
     assert isinstance(result["risk_hints"], list)
     assert any(item["code"] == "index_cold_start" for item in result["risk_hints"])
     assert result["index_cache"]["full_build_reason"] == "cache_missing"
+
+
+def test_build_plan_quick_emits_onboarding_view_candidate_details_and_upgrade_guidance(
+    tmp_path: Path,
+) -> None:
+    _write_file(tmp_path / "src/hypergraph_memory_lab/cli.py", "def main():\n    return 0\n")
+    _write_file(
+        tmp_path / "docs/reference/HYPEREDGE_SCHEMA.md",
+        "# Hyperedge schema\n",
+    )
+    _write_file(
+        tmp_path / "src/hypergraph_memory_lab/sqlite_store.py",
+        "class SQLiteStore:\n    pass\n",
+    )
+    _write_file(tmp_path / "tests/test_cli.py", "def test_main():\n    assert True\n")
+
+    result = build_plan_quick(
+        query="repository onboarding where to start understanding the codebase",
+        root=tmp_path,
+        languages="python,markdown",
+        top_k_files=4,
+        repomap_top_k=8,
+    )
+
+    assert result["query_profile"]["onboarding"] is True
+    assert result["onboarding_view"]["recommended"] is True
+    assert result["onboarding_view"]["mode"] == "repository_onboarding"
+    assert "src/hypergraph_memory_lab/cli.py" in result["onboarding_view"]["entrypoints"]
+    assert (
+        "docs/reference/HYPEREDGE_SCHEMA.md"
+        in result["onboarding_view"]["public_contracts"]
+    )
+    assert (
+        "src/hypergraph_memory_lab/sqlite_store.py"
+        in result["onboarding_view"]["runtime_core"]
+    )
+    assert "tests/test_cli.py" in result["onboarding_view"]["tests"]
+    assert result["upgrade_recommended"] is False
+    assert result["expected_incremental_value"] == "low"
+    assert result["why_not_plan_yet"]
+
+    details = {item["path"]: item for item in result["candidate_details"]}
+    assert "entrypoint" in details["src/hypergraph_memory_lab/cli.py"]["labels"]
+    assert (
+        "public_contract"
+        in details["docs/reference/HYPEREDGE_SCHEMA.md"]["labels"]
+    )
+    assert (
+        "persistence_layer"
+        in details["src/hypergraph_memory_lab/sqlite_store.py"]["labels"]
+    )
+    assert "test_entry" in details["tests/test_cli.py"]["labels"]
+    assert result["onboarding_view"]["recommended_read_order"]
 
 
 def test_build_plan_quick_adds_secondary_doc_mix_risk_hint_for_docs_sync_query(
@@ -662,6 +772,8 @@ def test_build_plan_quick_risk_hints_flags_secondary_doc_mix_within_visible_rows
             recency_boost=4.0,
             semantic_domain="planning",
             fused_score=22.0 - (day * 0.1),
+            labels=("public_contract", "planning"),
+            role="public_contract",
         )
         for day in range(1, 8)
     ]
@@ -677,6 +789,8 @@ def test_build_plan_quick_risk_hints_flags_secondary_doc_mix_within_visible_rows
             recency_boost=0.0,
             semantic_domain="reports",
             fused_score=7.0,
+            labels=("reports",),
+            role="reports",
         )
     )
 
@@ -703,6 +817,8 @@ def test_build_plan_quick_risk_hints_skips_secondary_doc_mix_for_non_doc_sync_qu
             recency_boost=4.0,
             semantic_domain="planning",
             fused_score=22.0,
+            labels=("public_contract", "planning"),
+            role="public_contract",
         ),
         PlanQuickScoredRow(
             path="reports/2026-03-02_Weekly.md",
@@ -715,6 +831,8 @@ def test_build_plan_quick_risk_hints_skips_secondary_doc_mix_for_non_doc_sync_qu
             recency_boost=0.0,
             semantic_domain="reports",
             fused_score=7.0,
+            labels=("reports",),
+            role="reports",
         ),
     ]
 
@@ -741,6 +859,8 @@ def test_build_plan_quick_risk_hints_skips_secondary_doc_mix_outside_visible_row
             recency_boost=4.0,
             semantic_domain="planning",
             fused_score=22.0 - (day * 0.1),
+            labels=("public_contract", "planning"),
+            role="public_contract",
         )
         for day in range(1, 9)
     ]
@@ -756,6 +876,8 @@ def test_build_plan_quick_risk_hints_skips_secondary_doc_mix_outside_visible_row
             recency_boost=0.0,
             semantic_domain="reports",
             fused_score=7.0,
+            labels=("reports",),
+            role="reports",
         )
     )
 
@@ -814,8 +936,109 @@ def test_build_plan_quick_preserves_repomap_fallback_when_selection_is_empty(
 
     assert result["ranking_source"] == "repomap"
     assert result["candidate_files"] == ["src/fallback.py"]
-    assert result["repomap_used_tokens"] == 17
-    assert result["repomap_budget_tokens"] == 128
+
+
+def test_build_plan_quick_emits_onboarding_view_and_grouped_read_order(
+    tmp_path: Path,
+) -> None:
+    _write_file(tmp_path / "src/ace_lite/cli.py", "def main():\n    return 0\n")
+    _write_file(
+        tmp_path / "docs/reference/ARCHITECTURE_OVERVIEW.md",
+        "Architecture overview\n",
+    )
+    _write_file(
+        tmp_path / "src/ace_lite/orchestrator.py",
+        "class Orchestrator:\n    pass\n",
+    )
+    _write_file(tmp_path / "tests/test_cli.py", "def test_cli():\n    assert True\n")
+
+    result = build_plan_quick(
+        query="familiarize this codebase and tell me where to start",
+        root=tmp_path,
+        languages="python,markdown",
+        top_k_files=4,
+        repomap_top_k=8,
+    )
+
+    assert result["query_profile"]["onboarding"] is True
+    assert result["onboarding_view"]["recommended"] is True
+    assert result["onboarding_view"]["mode"] == "repository_onboarding"
+    assert "src/ace_lite/cli.py" in result["onboarding_view"]["entrypoints"]
+    assert (
+        "docs/reference/ARCHITECTURE_OVERVIEW.md"
+        in result["onboarding_view"]["public_contracts"]
+    )
+    assert result["onboarding_view"]["recommended_read_order"][0]["role"] in {
+        "entrypoint",
+        "public_contract",
+    }
+
+
+def test_build_plan_quick_marks_repomap_neighbors_and_requests_full_plan_when_mixed(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_file(tmp_path / "src/app.py", "def run():\n    return True\n")
+    _write_file(tmp_path / "docs/guide.md", "Guide\n")
+    _write_file(tmp_path / "research/notes.md", "Notes\n")
+
+    monkeypatch.setattr(
+        "ace_lite.plan_quick.build_stage_repo_map",
+        lambda **kwargs: {
+            "enabled": True,
+            "seed_paths": ["src/app.py"],
+            "neighbor_paths": ["docs/guide.md"],
+            "focused_files": ["src/app.py", "docs/guide.md"],
+            "used_tokens": 17,
+            "budget_tokens": 128,
+        },
+    )
+    monkeypatch.setattr(
+        "ace_lite.plan_quick.build_repo_map",
+        lambda **kwargs: {
+            "files": [
+                {
+                    "path": "src/app.py",
+                    "module": "app",
+                    "language": "python",
+                    "score": 9.0,
+                },
+                {
+                    "path": "docs/guide.md",
+                    "module": "docs.guide",
+                    "language": "markdown",
+                    "score": 8.5,
+                },
+                {
+                    "path": "research/notes.md",
+                    "module": "research.notes",
+                    "language": "markdown",
+                    "score": 8.0,
+                },
+            ],
+            "used_tokens": 17,
+            "budget_tokens": 128,
+            "ranking_profile": "graph",
+        },
+    )
+
+    result = build_plan_quick(
+        query="where to start understand the architecture and dependencies",
+        root=tmp_path,
+        languages="python,markdown",
+        top_k_files=3,
+        repomap_top_k=8,
+        repomap_expand=True,
+    )
+
+    assert isinstance(result["candidate_details"], list)
+    details = {item["path"]: item for item in result["candidate_details"]}
+    assert "repomap_neighbor" in details["docs/guide.md"]["labels"]
+    assert result["expected_incremental_value"] in {"medium", "high", "low"}
+    if result["upgrade_recommended"]:
+        assert result["why_upgrade_now"]
+    assert result["repomap_stage"]["used_tokens"] == 17
+    assert result["repomap_stage"]["budget_tokens"] == 128
 
 
 def test_repomap_base_scoring_penalizes_generated_files(tmp_path: Path) -> None:

@@ -593,9 +593,11 @@ class TestArchitectureSeamsAndGuardrailsGolden:
 
         expected_contract_tokens = (
             '"query_profile": _query_flags(normalized_query)',
-            '"candidate_domain_summary": _build_candidate_domain_summary(limited_rows)',
+            'candidate_domain_summary = _build_candidate_domain_summary(limited_rows)',
+            '"candidate_domain_summary": candidate_domain_summary',
             '"suggested_query_refinements": _build_suggested_query_refinements(',
-            '"risk_hints": _build_plan_quick_risk_hints(',
+            'risk_hints = _build_plan_quick_risk_hints(',
+            '"risk_hints": risk_hints',
             '"retrieval_policy_profile": retrieval_policy_profile',
             '"docs_enabled": bool(policy.get("docs_enabled", False))',
             '"full_build_reason"',

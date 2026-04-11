@@ -51,6 +51,8 @@ def build_memory_search_guardrails(
     *,
     query: str,
     items: list[dict[str, Any]],
+    namespace: str | None = None,
+    namespace_note_count: int | None = None,
 ) -> dict[str, Any]:
     lowered_query = str(query or "").lower()
     matched_terms = sorted({term for term in RECENCY_ALERT_TERMS if term in lowered_query})
@@ -95,10 +97,18 @@ def build_memory_search_guardrails(
             "message": message,
         }
 
+    cold_start = bool(
+        str(namespace or "").strip()
+        and int(namespace_note_count or 0) <= 0
+        and not items
+    )
+
     return {
         "disclaimer": MEMORY_SEARCH_DISCLAIMER,
         "staleness_warning": staleness_warning,
         "recency_alert": recency_alert,
+        "cold_start": cold_start,
+        "recommended_next_step": "ace_plan_quick" if cold_start else None,
     }
 
 

@@ -324,6 +324,12 @@ def _build_cli_dev_issue_resolution_workflow_hints(
     default=None,
     help="Optional runtime profile scope stored with the feedback event.",
 )
+@click.option(
+    "--candidate-path",
+    "candidate_paths",
+    multiple=True,
+    help="Optional shortlisted candidate path. Repeat to attach the quick shortlist used before selecting the final path.",
+)
 def feedback_record_command(
     selected_path: str,
     query: str,
@@ -334,6 +340,7 @@ def feedback_record_command(
     root: str | None,
     user_id: str | None,
     profile_key: str | None,
+    candidate_paths: tuple[str, ...],
 ) -> None:
     long_term_capture_service = _build_long_term_capture_service(root=root)
     store = SelectionFeedbackStore(
@@ -347,6 +354,7 @@ def feedback_record_command(
         user_id=user_id,
         profile_key=profile_key,
         selected_path=selected_path,
+        candidate_paths=candidate_paths,
         position=position,
         root_path=root,
     )
