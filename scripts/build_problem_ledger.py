@@ -9,6 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ace_lite.benchmark.problem_surface_reader import (
+    build_problem_surface_from_benchmark_artifacts,
+)
+
 SCHEMA_VERSION = "problem_ledger_v1"
 DEFAULT_PHASE = "report_only"
 DEFAULT_BASELINE = "unknown"
@@ -413,6 +417,7 @@ def build_problem_ledger(
     benchmark_artifacts_root: str = "",
     freeze_artifacts_root: str = "",
     gate_registry_path: str = "",
+    problem_surface_artifacts_root: str = "",
 ) -> dict[str, Any]:
     repo_root = Path(__file__).resolve().parents[1]
 
@@ -429,6 +434,11 @@ def build_problem_ledger(
     registry_path = (
         _resolve_path(root=repo_root, value=gate_registry_path)
         if str(gate_registry_path).strip()
+        else None
+    )
+    surface_root = (
+        _resolve_path(root=repo_root, value=problem_surface_artifacts_root)
+        if str(problem_surface_artifacts_root).strip()
         else None
     )
 
@@ -454,45 +464,61 @@ def build_problem_ledger(
     registry_payload = _load_json(registry_path) if registry_path is not None else {}
     registry_entries = _normalize_registry(registry_payload)
 
-    problems = [
-        _build_problem_entry(
+    # Load problem_surface_v1 from benchmark artifacts root if provided
+    problem_surface: dict[str, Any] = {}
+    if surface_root is not None and surface_root.exists():
+        surface_payload = build_problem_surface_from_benchmark_artifacts(
+            results_path=surface_root / "results.json"
+            if (surface_root / "results.json").exists()
+            else None,
+            freeze_regression_path=surface_root / "freeze_regression.json"
+            if (surface_root / "freeze_regression.json").exists()
+            else None,
+            summary_path=surface_root / "summary.json"
+            if (surface_root / "summary.json").exists()
+            else None,
+        )
+        if surface_payload:
+            problem_surface = surface_payload
+
+    def _build_with_surface(
+        spec: ProblemSpec,
+        registry_entry: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        entry = _build_problem_entry(
             spec=spec,
             benchmark_summary=benchmark_summary,
             freeze_summary=freeze_summary,
-            registry_entry=registry_entries.get(spec.problem_id),
+            registry_entry=registry_entry,
             benchmark_files=benchmark_files,
             freeze_files=freeze_files,
             gate_registry_path=registry_path,
         )
+        # Wire in problem_surface artifact paths for this PQ if available
+        surface_for_problem = problem_surface.get("surfaces", {}).get(spec.problem_id)
+        if surface_for_problem and isinstance(surface_for_problem, dict):
+            surface_paths = surface_for_problem.get("artifact_paths", [])
+            if surface_paths:
+                existing = entry.get("artifact_paths", [])
+                merged = sorted(set(existing + surface_paths))
+                entry["artifact_paths"] = merged
+        return entry
+
+    problems = [
+        _build_with_surface(spec, registry_entries.get(spec.problem_id))
         for spec in BASE_PROBLEM_SPECS
     ]
 
     if any(paths for paths in freeze_files.values()) or freeze_summary:
         freeze_spec = OPTIONAL_PROBLEM_SPECS[0]
         problems.append(
-            _build_problem_entry(
-                spec=freeze_spec,
-                benchmark_summary=benchmark_summary,
-                freeze_summary=freeze_summary,
-                registry_entry=registry_entries.get(freeze_spec.problem_id),
-                benchmark_files=benchmark_files,
-                freeze_files=freeze_files,
-                gate_registry_path=registry_path,
-            )
+            _build_with_surface(freeze_spec, registry_entries.get(freeze_spec.problem_id))
         )
 
     if registry_path is not None and (registry_path.exists() or registry_entries):
         registry_spec = OPTIONAL_PROBLEM_SPECS[1]
         problems.append(
-            _build_problem_entry(
-                spec=registry_spec,
-                benchmark_summary=benchmark_summary,
-                freeze_summary=freeze_summary,
-                registry_entry=registry_entries.get(registry_spec.problem_id),
-                benchmark_files=benchmark_files,
-                freeze_files=freeze_files,
-                gate_registry_path=registry_path,
-            )
+            _build_with_surface(registry_spec, registry_entries.get(registry_spec.problem_id))
         )
 
     return {
@@ -511,6 +537,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--benchmark-artifacts-root", default="")
     parser.add_argument("--freeze-artifacts-root", default="")
     parser.add_argument("--gate-registry-path", default="")
+    parser.add_argument(
+        "--problem-surface-artifacts-root",
+        default="",
+        help="Root directory containing benchmark/freeze artifacts for problem surface extraction.",
+    )
     parser.add_argument("--output", required=True)
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
@@ -520,6 +551,7 @@ def main(argv: list[str] | None = None) -> int:
         benchmark_artifacts_root=str(args.benchmark_artifacts_root),
         freeze_artifacts_root=str(args.freeze_artifacts_root),
         gate_registry_path=str(args.gate_registry_path),
+        problem_surface_artifacts_root=str(args.problem_surface_artifacts_root),
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
