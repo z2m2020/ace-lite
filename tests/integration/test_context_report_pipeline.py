@@ -16,16 +16,24 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
+from click.testing import CliRunner
 
+import ace_lite.cli as cli_module
 from ace_lite.context_report import (
     build_context_report_payload,
     render_context_report_markdown,
+    validate_context_report_payload,
 )
 from ace_lite.memory import NullMemoryProvider
 from ace_lite.pipeline.stages.source_plan import run_source_plan
 from ace_lite.pipeline.types import StageContext
+from ace_lite.retrieval_graph_view import (
+    build_retrieval_graph_view,
+    validate_retrieval_graph_view_payload,
+)
 
 
 # ----------------------------------------------------------------------
@@ -71,6 +79,66 @@ def _setup_mini_repo(root: Path) -> None:
         "    assert subtract(5, 3) == 2\n",
         encoding="utf-8",
     )
+
+
+def _seed_cli_root(root: Path) -> None:
+    (root / "skills").mkdir(parents=True, exist_ok=True)
+    (root / "src").mkdir(parents=True, exist_ok=True)
+    (root / "src" / "sample.py").write_text(
+        "def demo() -> int:\n    return 1\n",
+        encoding="utf-8",
+    )
+
+
+def _cli_env(root: Path) -> dict[str, str]:
+    return {"HOME": str(root), "USERPROFILE": str(root)}
+
+
+def _minimal_cli_plan_payload() -> dict[str, Any]:
+    return {
+        "query": "context report demo",
+        "repo": "demo",
+        "root": "/fake/root",
+        "candidate_chunks": [
+            {
+                "path": "src/sample.py",
+                "qualified_name": "demo",
+                "kind": "function",
+                "lineno": 1,
+                "end_lineno": 2,
+                "score": 9.5,
+                "evidence": {
+                    "role": "direct",
+                    "direct_retrieval": True,
+                    "neighbor_context": False,
+                    "hint_only": False,
+                    "hint_support": False,
+                    "reference_sidecar": False,
+                    "sources": ["direct_candidate"],
+                    "granularity": ["symbol"],
+                },
+                "evidence_confidence": "EXTRACTED",
+                "confidence_score": 1.0,
+            }
+        ],
+        "candidate_files": [{"path": "src/sample.py", "score": 9.5}],
+        "evidence_summary": {
+            "direct_count": 1.0,
+            "neighbor_context_count": 0.0,
+            "hint_only_count": 0.0,
+            "direct_ratio": 1.0,
+            "neighbor_context_ratio": 0.0,
+            "hint_only_ratio": 0.0,
+        },
+        "confidence_summary": {
+            "extracted_count": 1,
+            "inferred_count": 0,
+            "ambiguous_count": 0,
+            "unknown_count": 0,
+            "total_count": 1,
+        },
+        "stages": ["memory", "index", "repomap", "augment", "skills", "source_plan"],
+    }
 
 
 # ----------------------------------------------------------------------
@@ -338,3 +406,61 @@ def test_context_report_e2e_plan_payload_not_mutated(tmp_path: Path) -> None:
     payload_copy = json.dumps(plan_payload, sort_keys=True)
     build_context_report_payload(plan_payload)
     assert json.dumps(plan_payload, sort_keys=True) == payload_copy
+
+
+def test_cli_pipeline_payload_contracts_pass_schema_guards(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLI-emitted plan payload should build stable context and retrieval graph payloads."""
+    _seed_cli_root(tmp_path)
+    plan_payload = _minimal_cli_plan_payload()
+
+    def fake_create_memory_provider(**kwargs: Any) -> NullMemoryProvider:
+        return NullMemoryProvider()
+
+    def fake_run_plan(**kwargs: Any) -> dict[str, Any]:
+        return dict(plan_payload)
+
+    monkeypatch.setattr(cli_module, "create_memory_provider", fake_create_memory_provider)
+    monkeypatch.setattr(cli_module, "run_plan", fake_run_plan)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "plan",
+            "--query",
+            "context report demo",
+            "--repo",
+            "demo",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(tmp_path / "skills"),
+            "--languages",
+            "python",
+            "--memory-primary",
+            "none",
+            "--memory-secondary",
+            "none",
+            "--output-json",
+            "artifacts/plan.json",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0, f"CLI exit non-zero: {result.output}"
+
+    json_path = tmp_path / "artifacts" / "plan.json"
+    assert json_path.exists(), f"JSON not found at {json_path}: {result.output}"
+    cli_payload = json.loads(json_path.read_text(encoding="utf-8"))
+
+    context_payload = build_context_report_payload(cli_payload)
+    validated_context_payload = validate_context_report_payload(context_payload)
+    assert validated_context_payload["schema_version"] == "context_report_v1"
+
+    retrieval_graph_payload = build_retrieval_graph_view(cli_payload)
+    validated_retrieval_graph_payload = validate_retrieval_graph_view_payload(
+        retrieval_graph_payload
+    )
+    assert validated_retrieval_graph_payload["schema_version"] == "retrieval_graph_view_v1"
