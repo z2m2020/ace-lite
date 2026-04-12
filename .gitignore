@@ -34,3 +34,10 @@ tmp_runtime_repo/
 /~/.ace-lite/preference_capture.db
 /runtime-feedback/
 docs/code-review/
+
+# Local workspace noise
+/.sisyphus/
+/dist-check/
+/node_modules/
+/bun.lock
+/package.json
