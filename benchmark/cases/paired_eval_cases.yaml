@@ -1,0 +1,131 @@
+# Paired Eval Case Set v1 — quick_to_plan_incremental_utility_ratio
+#
+# Purpose: Measure whether upgrading from quick plan to full plan adds value.
+# Each "quick" case and "full" case share the same query to enable paired comparison.
+# Pairing key: case_id format "pq-{N}-{lane}" where N is the shared pair index.
+#
+# Utility metrics (computed by scripts/quick_to_plan_utility_summary.py):
+#   incremental_utility = (full_plan_task_success - quick_plan_task_success)
+#   utility_ratio = incremental_utility / incremental_cost_ms
+#
+# This case set is report-only (PQ-002); it does not change default benchmark lanes.
+
+cases:
+  # ── Pair 1: Simple file lookup ──────────────────────────────────────────────
+  - case_id: pq-1-quick
+    query: where is the CLI entrypoint defined
+    expected_keys: [cli, main, entrypoint]
+    filters:
+      include_paths:
+        - src/ace_lite/cli.py
+        - src/ace_lite/cli_app/
+    top_k: 4
+    comparison_lane: paired_eval
+    paired_eval_type: quick
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: pq-1-full
+    query: where is the CLI entrypoint defined
+    expected_keys: [cli, main, entrypoint]
+    filters:
+      include_paths:
+        - src/ace_lite/cli.py
+        - src/ace_lite/cli_app/
+    top_k: 8
+    comparison_lane: paired_eval
+    paired_eval_type: full
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  # ── Pair 2: Config resolution path ───────────────────────────────────────────
+  - case_id: pq-2-quick
+    query: how is the layered config resolved (home, repo, cwd)
+    expected_keys: [config, layered, resolve]
+    filters:
+      include_paths:
+        - src/ace_lite/config_model_shared.py
+        - src/ace_lite/runtime_settings.py
+    top_k: 4
+    comparison_lane: paired_eval
+    paired_eval_type: quick
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: pq-2-full
+    query: how is the layered config resolved (home, repo, cwd)
+    expected_keys: [config, layered, resolve]
+    filters:
+      include_paths:
+        - src/ace_lite/config_model_shared.py
+        - src/ace_lite/runtime_settings.py
+        - src/ace_lite/orchestrator.py
+    top_k: 8
+    comparison_lane: paired_eval
+    paired_eval_type: full
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  # ── Pair 3: Retrieval candidate ranking ──────────────────────────────────────
+  - case_id: pq-3-quick
+    query: how does candidate ranking work in the retrieval pipeline
+    expected_keys: [retrieval, ranking, candidate]
+    filters:
+      include_paths:
+        - src/ace_lite/retrieval_shared.py
+        - src/ace_lite/repomap/
+    top_k: 4
+    comparison_lane: paired_eval
+    paired_eval_type: quick
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: pq-3-full
+    query: how does candidate ranking work in the retrieval pipeline
+    expected_keys: [retrieval, ranking, candidate, rrf, fusion]
+    filters:
+      include_paths:
+        - src/ace_lite/retrieval_shared.py
+        - src/ace_lite/repomap/
+        - src/ace_lite/index_stage/
+    top_k: 8
+    comparison_lane: paired_eval
+    paired_eval_type: full
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  # ── Pair 4: Memory provider fallback ─────────────────────────────────────────
+  - case_id: pq-4-quick
+    query: how does memory fall back when MCP is unavailable
+    expected_keys: [memory, fallback, null]
+    filters:
+      include_paths:
+        - src/ace_lite/memory/
+        - src/ace_lite/mcp_server/
+    top_k: 4
+    comparison_lane: paired_eval
+    paired_eval_type: quick
+    task_success:
+      mode: positive
+      min_validation_tests: 1
+
+  - case_id: pq-4-full
+    query: how does memory fall back when MCP is unavailable
+    expected_keys: [memory, fallback, null, auto]
+    filters:
+      include_paths:
+        - src/ace_lite/memory/
+        - src/ace_lite/mcp_server/
+        - src/ace_lite/config_model_shared.py
+    top_k: 8
+    comparison_lane: paired_eval
+    paired_eval_type: full
+    task_success:
+      mode: positive
+      min_validation_tests: 1
