@@ -15,6 +15,7 @@ from ace_lite.benchmark.report_metrics import (
     format_optional_metric as _format_optional_metric,
     normalize_metrics as _normalize_metrics,
 )
+from ace_lite.benchmark.pq_overlay import resolve_benchmark_pq_003_overlay
 from ace_lite.benchmark.report_summary import copy_optional_summary_sections
 from ace_lite.cli_app.runtime_stats_enrichment_support import (
     attach_runtime_memory_ltm_signal_summary,
@@ -3763,6 +3764,9 @@ def build_results_summary(results: dict[str, Any]) -> dict[str, Any]:
     latency_alignment_summary = _build_ltm_latency_alignment_summary(results=results)
     if latency_alignment_summary:
         summary["ltm_latency_alignment_summary"] = latency_alignment_summary
+    pq_003_overlay = resolve_benchmark_pq_003_overlay(results)
+    if pq_003_overlay:
+        summary["pq_003_overlay"] = pq_003_overlay
 
     return summary
 

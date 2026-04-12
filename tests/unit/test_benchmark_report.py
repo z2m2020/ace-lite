@@ -3383,3 +3383,91 @@ def test_build_results_summary_includes_ltm_latency_alignment_summary() -> None:
         ][0]["feedback_signal"]
         == "helpful"
     )
+
+
+def test_build_results_summary_adds_pq_003_overlay_from_case_plan_confidence_summary() -> None:
+    summary = build_results_summary(
+        {
+            "generated_at": "2026-04-12T00:00:00Z",
+            "repo": "demo",
+            "phase": "phase1",
+            "metrics": {
+                "deep_symbol_case_recall": 0.8,
+                "native_scip_loaded_rate": 0.6,
+            },
+            "cases": [
+                {
+                    "plan": {
+                        "source_plan": {
+                            "confidence_summary": {
+                                "extracted_count": 3,
+                                "inferred_count": 1,
+                                "ambiguous_count": 1,
+                                "unknown_count": 0,
+                                "total_count": 5,
+                                "low_confidence_chunks": ["chunk-a"],
+                            }
+                        }
+                    }
+                },
+                {
+                    "plan": {
+                        "source_plan": {
+                            "confidence_summary": {
+                                "extracted_count": 1,
+                                "inferred_count": 2,
+                                "ambiguous_count": 0,
+                                "unknown_count": 1,
+                                "total_count": 4,
+                                "low_confidence_chunks": ["chunk-b"],
+                            }
+                        }
+                    }
+                },
+            ],
+        }
+    )
+
+    overlay = summary["pq_003_overlay"]
+    assert overlay["pq_id"] == "PQ-003"
+    assert overlay["gate_mode"] == "report_only"
+    assert overlay["pq_title"] == "evidence_strength_interpretability"
+    assert overlay["confidence_breakdown"] == {
+        "total_candidates": 9,
+        "extracted_count": 4,
+        "inferred_count": 3,
+        "ambiguous_count": 1,
+        "unknown_count": 1,
+        "extracted_ratio": 0.444444,
+        "inferred_ratio": 0.333333,
+        "ambiguous_ratio": 0.111111,
+        "unknown_ratio": 0.111111,
+    }
+    assert overlay["derived_metrics"] == {
+        "evidence_strength_score": 0.722222,
+        "deep_symbol_case_recall": 0.8,
+        "native_scip_loaded_rate": 0.6,
+    }
+    assert overlay["ratios"] == {
+        "hint_only_ratio": 0.111111,
+        "ambiguous_ratio": 0.111111,
+        "unknown_ratio": 0.111111,
+        "grounded_ratio": 0.777777,
+    }
+    assert overlay["low_confidence_chunks"] == ["chunk-a", "chunk-b"]
+
+
+def test_build_results_summary_omits_pq_003_overlay_without_confidence_summary() -> None:
+    summary = build_results_summary(
+        {
+            "generated_at": "2026-04-12T00:00:00Z",
+            "repo": "demo",
+            "metrics": {
+                "deep_symbol_case_recall": 0.8,
+                "native_scip_loaded_rate": 0.6,
+            },
+            "cases": [{"plan": {"source_plan": {}}}],
+        }
+    )
+
+    assert "pq_003_overlay" not in summary

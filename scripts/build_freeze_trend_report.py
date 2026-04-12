@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import json
@@ -8,6 +8,8 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from ace_lite.benchmark.pq_overlay import resolve_freeze_pq_003_overlay
 
 
 def _resolve_path(*, root: Path, value: str) -> Path:
@@ -609,6 +611,7 @@ def main() -> int:
 
     rows: list[dict[str, Any]] = []
     failure_counter: Counter[str] = Counter()
+    latest_pq_003_overlay: dict[str, Any] = {}
     for path in report_paths:
         payload = _load_json(path)
         if not payload:
@@ -616,6 +619,9 @@ def main() -> int:
         row = _extract_row(path=path, payload=payload)
         rows.append(row)
         failure_counter.update([str(item) for item in row.get("failure_signatures", [])])
+        overlay = resolve_freeze_pq_003_overlay(payload)
+        if isinstance(overlay, dict) and overlay:
+            latest_pq_003_overlay = dict(overlay)
 
     latest = rows[-1] if rows else {}
     previous = rows[-2] if len(rows) >= 2 else {}
@@ -638,6 +644,8 @@ def main() -> int:
         "suspect_files": suspect_files,
         "history": rows,
     }
+    if latest_pq_003_overlay:
+        payload["pq_003_overlay"] = latest_pq_003_overlay
 
     report_json = output_dir / "freeze_trend_report.json"
     report_md = output_dir / "freeze_trend_report.md"

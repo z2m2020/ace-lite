@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import importlib.util
 import json
@@ -40,6 +40,7 @@ def _write_report(
     validation_probe_summary: dict[str, object] | None = None,
     source_plan_validation_feedback_summary: dict[str, object] | None = None,
     source_plan_failure_signal_summary: dict[str, object] | None = None,
+    confidence_summary: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -105,6 +106,8 @@ def _write_report(
             benchmark_payload["source_plan_failure_signal_summary"] = (
                 source_plan_failure_signal_summary
             )
+        if confidence_summary is not None:
+            benchmark_payload["confidence_summary"] = confidence_summary
         payload["validation_rich_benchmark"] = benchmark_payload
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -167,6 +170,14 @@ def test_freeze_trend_report_main_writes_summary(
             "issue_count_mean": 0.25,
             "replay_cache_origin_ratio": 1.0,
         },
+        confidence_summary={
+            "extracted_count": 3,
+            "inferred_count": 1,
+            "ambiguous_count": 1,
+            "unknown_count": 0,
+            "total_count": 5,
+            "low_confidence_chunks": ["chunk-a"],
+        },
     )
     _write_report(
         report_b,
@@ -224,6 +235,14 @@ def test_freeze_trend_report_main_writes_summary(
             "issue_count_mean": 1.0,
             "replay_cache_origin_ratio": 1.0,
         },
+        confidence_summary={
+            "extracted_count": 2,
+            "inferred_count": 1,
+            "ambiguous_count": 1,
+            "unknown_count": 0,
+            "total_count": 4,
+            "low_confidence_chunks": ["chunk-b"],
+        },
     )
 
     def fake_git_diff(cmd, cwd, check, capture_output, text):
@@ -276,6 +295,29 @@ def test_freeze_trend_report_main_writes_summary(
         "src/ace_lite/index_stage/graph_lookup.py",
         "scripts/run_release_freeze_regression.py",
     ]
+    assert output["pq_003_overlay"]["confidence_breakdown"] == {
+        "total_candidates": 4,
+        "extracted_count": 2,
+        "inferred_count": 1,
+        "ambiguous_count": 1,
+        "unknown_count": 0,
+        "extracted_ratio": 0.5,
+        "inferred_ratio": 0.25,
+        "ambiguous_ratio": 0.25,
+        "unknown_ratio": 0.0,
+    }
+    assert output["pq_003_overlay"]["derived_metrics"] == {
+        "evidence_strength_score": 0.75,
+        "deep_symbol_case_recall": 0.84,
+        "native_scip_loaded_rate": 0.65,
+    }
+    assert output["pq_003_overlay"]["ratios"] == {
+        "hint_only_ratio": 0.25,
+        "ambiguous_ratio": 0.25,
+        "unknown_ratio": 0.0,
+        "grounded_ratio": 0.75,
+    }
+    assert output["pq_003_overlay"]["low_confidence_chunks"] == ["chunk-b"]
 
     markdown = (tmp_path / "trend" / "freeze_trend_report.md").read_text(encoding="utf-8")
     assert "Validation-rich Q2 gate: passed=False, shadow_coverage=0.7400, risk_upgrade_gain=-0.0300, latency_p95_ms=880.00" in markdown
