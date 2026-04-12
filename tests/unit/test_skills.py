@@ -15,6 +15,7 @@ from ace_lite.pipeline.stages.skills import (
 )
 from ace_lite.pipeline.types import StageContext
 from ace_lite.skills import (
+    build_skill_catalog,
     build_skill_manifest,
     lint_skill_manifest,
     load_sections,
@@ -59,6 +60,37 @@ def test_build_manifest_and_select(fake_skill_manifest: list[dict[str, Any]]) ->
     assert len(selected) == 1
     assert selected[0]["name"] == "mem0-codex-playbook"
     assert selected[0]["score"] >= 9
+
+
+def test_build_skill_catalog_renders_manifest_metadata() -> None:
+    catalog = build_skill_catalog(
+        [
+            {
+                "name": "cross-project-borrowing-and-adaptation",
+                "path": "skills/cross-project-borrowing-and-adaptation.md",
+                "description": "Borrow small, high-value patterns from a reference repo.",
+                "intents": ["research", "review"],
+                "modules": ["architecture", "docs"],
+                "topics": ["compare", "borrow"],
+                "default_sections": ["Workflow", "Borrowing Matrix"],
+                "priority": 2,
+                "token_estimate": 540,
+            }
+        ]
+    )
+
+    assert "# ACE-Lite Skill Catalog" in catalog
+    assert "## cross-project-borrowing-and-adaptation" in catalog
+    assert "`skills/cross-project-borrowing-and-adaptation.md`" in catalog
+    assert "- **Intents:** research, review" in catalog
+    assert "- **Default sections:** Workflow, Borrowing Matrix" in catalog
+    assert "- **Token estimate:** 540" in catalog
+
+
+def test_build_skill_catalog_handles_empty_manifest() -> None:
+    catalog = build_skill_catalog([])
+    assert catalog.startswith("# ACE-Lite Skill Catalog")
+    assert "_No skills discovered._" in catalog
 
 
 def test_load_sections_by_heading(tmp_path: Path) -> None:
@@ -786,6 +818,11 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "rejected borrowing" in borrowing_text
     assert "deferred borrowing" in borrowing_text
     assert "next candidate" in borrowing_text
+    assert "Source revision" in borrowing_text
+    assert "shallow clone" in borrowing_text
+    assert "local mirror" in borrowing_text
+    assert "source-project-specific registry" in borrowing_text
+    assert "Report path" in borrowing_text
     assert "graphify" in borrowing_text.lower()
     assert "对标" in borrowing_text
     assert "借鉴" in borrowing_text

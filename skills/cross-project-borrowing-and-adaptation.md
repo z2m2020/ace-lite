@@ -1,30 +1,33 @@
 ---
 name: cross-project-borrowing-and-adaptation
-description: Structured comparative analysis workflow for studying an external or reference repository, extracting transferable ideas, rejecting non-fit patterns, and adapting the best insight into a minimal validated improvement for the current project. Use when comparing architecture, tests, reports, or code taste across repositories to turn inspiration into concrete repository changes.
+description: Structured comparative analysis workflow for studying an external or reference repository, extracting transferable ideas, rejecting non-fit patterns, and adapting the best insight into a minimal validated improvement for the current project. Use when comparing architecture, tests, reports, or code taste across repositories and when you need to turn inspiration into a concrete, minimal, reversible repository change.
 intents: [research, review, refactor, implement]
 modules: [architecture, docs, report, benchmark]
 error_keywords: []
 default_sections: [Workflow, Evidence Checklist, Borrowing Matrix, Borrowing Ledger, Output Contract]
-topics: [compare, comparison, analyze, analysis, borrow, borrowing, inspiration, inspired, reference implementation, external repo, architecture review, workflow review, code taste, report contract, graphify, 对标, 借鉴, 灵感, 启发, 分析, 比较, 拆解, 复盘, 参考实现, 代码品味, 架构设计, 流程设计]
+topics: [compare, comparison, analyze, analysis, borrow, borrowing, inspiration, inspired, reference implementation, external repo, architecture review, workflow review, code taste, report contract, source revision, commit pin, shallow clone, local mirror, not a fit, graphify, 对标, 借鉴, 灵感, 启发, 分析, 比较, 拆解, 复盘, 参考实现, 代码品味, 架构设计, 流程设计]
 priority: 2
-token_estimate: 540
+token_estimate: 620
 ---
 
 # Workflow
 
-1. Name the source project, target project, and decision surface before reading code. Good surfaces are: stage boundaries, payload contracts, test shape, CLI/MCP ergonomics, report structure, or skill routing.
-2. Read only the highest-signal source artifacts first: architecture or README overview, entrypoint modules, validators or contract guards, report/export code, and one end-to-end test.
-3. In the target repo, recover current structure before proposing changes: architecture docs, the closest runtime module, the closest tests, and any public contract or schema notes.
-4. Fill the evidence checklist before proposing any adaptation. If the evidence is still weak, stay in analysis mode.
-5. Build a borrowing matrix before editing code. Force each candidate idea through fit, cost, and rollback checks.
-6. Borrow the smallest high-value idea first. Prefer helper extraction, contract hardening, naming alignment, report/readability improvements, or narrow regression guards over broad rewrites.
-7. Preserve what should remain project-specific. Do not copy source-repo abstractions, tooling, or automation just because they exist.
-8. Land one minimal improvement, validate it, then update the borrowing ledger with accepted, rejected, and deferred ideas.
+1. Name the source project, target project, source revision, and decision surface before reading code. Good surfaces are: stage boundaries, payload contracts, test shape, CLI/MCP ergonomics, report structure, or skill routing.
+2. Prefer a local shallow clone or local mirror of the source repo before deep analysis when the repo is non-trivial. Do not rely on README-only or search-snippet-only evidence if exact file citations matter.
+3. Read only the highest-signal source artifacts first: architecture or README overview, entrypoint modules, validators or contract guards, report/export code, and one end-to-end or golden test.
+4. In the target repo, recover current structure before proposing changes: architecture docs, the closest runtime module, the closest tests, and any public contract or schema notes.
+5. Decide early whether the likely adaptation is analysis-only or patch-worthy. If the safe adaptation is still ambiguous, stay in analysis mode and do not force a code change.
+6. Fill the evidence checklist before proposing any adaptation. If the evidence is still weak, stay in analysis mode.
+7. Build a borrowing matrix before editing code. Force each candidate idea through fit, cost, rollback, and "why not copy more" checks.
+8. Borrow the smallest high-value idea first. Prefer helper extraction, contract hardening, naming alignment, report/readability improvements, discoverability helpers, or narrow regression guards over broad rewrites.
+9. Preserve what should remain project-specific. Do not copy source-repo abstractions, tooling, product workflows, or registries just because they exist.
+10. Land one minimal improvement, validate it, then update the borrowing ledger with accepted, rejected, and deferred ideas.
 
 # Evidence Checklist
 
 Source evidence checklist:
 
+- Source revision, commit, or release tag pinned before conclusions are written
 - Overview doc showing the pipeline or stage order
 - One module that validates or normalizes boundary data
 - One human-facing report or summary module
@@ -42,6 +45,7 @@ Target evidence checklist:
 Readiness rule:
 
 - Do not promote a borrowing candidate into code until both source evidence and target evidence are concrete enough to cite exact files or tests.
+- If the source repo is large or actively changing, prefer local files from a shallow clone over browser summaries so the borrowing matrix cites stable evidence.
 
 # Borrowing Matrix
 
@@ -59,7 +63,7 @@ For each candidate idea, fill these fields before implementation:
 Quick filters:
 
 - Borrow if it clarifies boundaries, removes repetition, improves auditability, or creates a stronger regression guard.
-- Reject if it imports a foreign architecture, adds heavy dependencies, duplicates an existing subsystem, or hides behavior behind fragile prompt logic.
+- Reject if it imports a foreign architecture, adds heavy dependencies, duplicates an existing subsystem, hides behavior behind fragile prompt logic, or replaces a manifest/discovery model with a source-project-specific registry.
 - Defer if the idea is valid but requires a wider contract migration than the current task can safely absorb.
 
 # Borrowing Ledger
@@ -74,10 +78,12 @@ After each iteration, record the shortlist in this flat ledger:
 Ledger rule:
 
 - The ledger must distinguish "not a fit" from "good idea but too wide for this patch". This is what makes the skill reusable instead of turning it into one-off project notes.
+- When the source pattern is valuable but the source architecture is not, record that explicitly as "accept the habit, reject the hosting abstraction".
 
 # Prompt Template
 
 - Source project: <repo/path/revision>
+- Source revision: <commit/tag/date-pinned branch>
 - Target project: <repo/path/revision>
 - Comparison surface: <architecture/workflow/tests/report/skill routing/code taste>
 - Source evidence to inspect first: <files>
@@ -85,6 +91,7 @@ Ledger rule:
 - Borrowing matrix candidates: <1-3 concise bullets>
 - Preferred adaptation: <smallest patch worth landing now>
 - Validation plan: <focused tests/commands>
+- Report path: <repo-local .context/task doc path if applicable>
 - Non-goals: <what must not be copied>
 
 # Iteration Loop
@@ -96,15 +103,18 @@ Ledger rule:
    - rejected borrowing
    - deferred borrowing
    - next candidate
-4. If the same type of comparison repeats across tasks, update this skill's topics, prompt template, or workflow so future routing and execution improve.
-5. Prefer reusable heuristics over source-project trivia. The skill should capture the method, not just one case study.
+4. If the repo has a local context or handoff directory, persist the comparative report there once the evidence and ledger are stable.
+5. If the same type of comparison repeats across tasks, update this skill's topics, prompt template, or workflow so future routing and execution improve.
+6. Prefer reusable heuristics over source-project trivia. The skill should capture the method, not just one case study.
 
 # Output Contract
 
 - Structured comparison summary: 3-6 flat points
+- Pinned source revision and source/target comparison surface
 - Evidence checklist with exact source and target artifacts
 - Borrowing matrix for the shortlisted ideas
 - Borrowing ledger with accepted, rejected, and deferred ideas
-- Chosen adaptation with exact target files
+- Chosen adaptation with exact target files, or an explicit analysis-only conclusion
 - Validation evidence
+- Report path if a local context document was created
 - Next iteration candidate if more borrowing work is justified
