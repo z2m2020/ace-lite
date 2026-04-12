@@ -7,6 +7,7 @@ import pytest
 from ace_lite.retrieval_graph_view import (
     RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION,
     build_retrieval_graph_view,
+    validate_retrieval_graph_view_payload,
 )
 
 
@@ -450,3 +451,93 @@ def test_retrieval_graph_max_hops_no_warning_within_boundary() -> None:
     result = build_retrieval_graph_view(plan, max_hops=2)
     assert result["scope"]["max_hops"] == 2
     assert not any("max_hops_capped" in w for w in result["warnings"])
+
+
+# ----------------------------------------------------------------------
+# Schema guard tests
+# ----------------------------------------------------------------------
+
+
+def test_retrieval_graph_schema_guard_accepts_valid_payload() -> None:
+    payload = {
+        "ok": True,
+        "schema_version": RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION,
+        "repo": "test-repo",
+        "root": "/test/root",
+        "query": "find auth",
+        "scope": {"repo": "test-repo", "root": "/test/root", "limit": 50, "max_hops": 1},
+        "summary": {
+            "node_count": 3,
+            "edge_count": 2,
+            "node_limit_applied": False,
+            "max_hops": 1,
+            "limit": 50,
+        },
+        "nodes": [],
+        "edges": [],
+        "warnings": [],
+    }
+    validated = validate_retrieval_graph_view_payload(payload)
+    assert validated["schema_version"] == RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION
+
+
+def test_retrieval_graph_schema_guard_rejects_wrong_schema_version() -> None:
+    payload = {
+        "ok": True,
+        "schema_version": "wrong_version",
+        "repo": "test",
+        "root": "/test",
+        "query": "x",
+        "scope": {"repo": "test", "root": "/test", "limit": 50, "max_hops": 1},
+        "summary": {
+            "node_count": 0,
+            "edge_count": 0,
+            "node_limit_applied": False,
+            "max_hops": 1,
+            "limit": 50,
+        },
+        "nodes": [],
+        "edges": [],
+        "warnings": [],
+    }
+    with pytest.raises(ValueError, match="schema_version must be"):
+        validate_retrieval_graph_view_payload(payload)
+
+
+def test_retrieval_graph_schema_guard_rejects_missing_scope() -> None:
+    payload = {
+        "ok": True,
+        "schema_version": RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION,
+        "repo": "test",
+        "root": "/test",
+        "query": "x",
+        "summary": {
+            "node_count": 0,
+            "edge_count": 0,
+            "node_limit_applied": False,
+            "max_hops": 1,
+            "limit": 50,
+        },
+        "nodes": [],
+        "edges": [],
+        "warnings": [],
+    }
+    with pytest.raises(ValueError, match="scope is required"):
+        validate_retrieval_graph_view_payload(payload)
+
+
+def test_retrieval_graph_schema_guard_rejects_missing_summary_keys() -> None:
+    payload = {
+        "ok": True,
+        "schema_version": RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION,
+        "repo": "test",
+        "root": "/test",
+        "query": "x",
+        "scope": {"repo": "test", "root": "/test", "limit": 50, "max_hops": 1},
+        "summary": {"node_count": 0, "edge_count": 0},
+        "nodes": [],
+        "edges": [],
+        "warnings": [],
+    }
+    with pytest.raises(ValueError, match="summary.node_limit_applied is required"):
+        validate_retrieval_graph_view_payload(payload)

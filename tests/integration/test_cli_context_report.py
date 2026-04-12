@@ -9,6 +9,10 @@ from typing import Any
 from click.testing import CliRunner
 
 import ace_lite.cli as cli_module
+from ace_lite.context_report import (
+    build_context_report_payload,
+    validate_context_report_payload,
+)
 from ace_lite.memory import NullMemoryProvider
 
 
@@ -306,3 +310,54 @@ def test_cli_plan_context_report_creates_parent_directories(tmp_path: Path, monk
     assert result.exit_code == 0, f"CLI failed: {result.output}"
     report_path = tmp_path / "deeply" / "nested" / "path" / "report.md"
     assert report_path.exists()
+
+
+def test_cli_plan_context_report_payload_passes_schema_guard(tmp_path: Path, monkeypatch) -> None:
+    """CLI-generated plan payload produces a ContextReport that passes the schema guard."""
+    _seed_root(tmp_path)
+    plan_payload = _minimal_plan_payload()
+
+    def fake_create_memory_provider(**kwargs: Any) -> NullMemoryProvider:
+        return NullMemoryProvider()
+
+    def fake_run_plan(**kwargs: Any) -> dict[str, Any]:
+        return dict(plan_payload)
+
+    monkeypatch.setattr(cli_module, "create_memory_provider", fake_create_memory_provider)
+    monkeypatch.setattr(cli_module, "run_plan", fake_run_plan)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "plan",
+            "--query",
+            "schema guard test",
+            "--repo",
+            "demo",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(tmp_path / "skills"),
+            "--languages",
+            "python",
+            "--memory-primary",
+            "none",
+            "--memory-secondary",
+            "none",
+            "--output-json",
+            "artifacts/plan.json",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    json_path = tmp_path / "artifacts" / "plan.json"
+    assert json_path.exists(), f"JSON not found at {json_path}: {result.output}"
+    json_content = json.loads(json_path.read_text(encoding="utf-8"))
+
+    # Build and validate the ContextReport payload
+    context_payload = build_context_report_payload(json_content)
+    validated = validate_context_report_payload(context_payload)
+    assert validated["schema_version"] == "context_report_v1"
+    assert validated["ok"] is True

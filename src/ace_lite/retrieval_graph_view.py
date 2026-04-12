@@ -37,6 +37,7 @@ from ace_lite.plan_payload_view import (
 __all__ = [
     "RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION",
     "build_retrieval_graph_view",
+    "validate_retrieval_graph_view_payload",
 ]
 
 RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION = "retrieval_graph_view_v1"
@@ -376,3 +377,53 @@ def build_retrieval_graph_view(
         "edges": edges,
         "warnings": warnings,
     }
+
+
+# ----------------------------------------------------------------------
+# Schema guard
+# ----------------------------------------------------------------------
+
+
+def validate_retrieval_graph_view_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate a retrieval_graph_view_v1 payload against required keys and types.
+
+    Args:
+        payload: A dict conforming (or claimed to conform) to retrieval_graph_view_v1.
+
+    Returns:
+        The validated payload as a dict.
+
+    Raises:
+        ValueError: if a required key is missing or has an invalid type.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("retrieval_graph_view payload must be a dictionary")
+
+    if payload.get("schema_version") != RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION:
+        raise ValueError(
+            f"schema_version must be '{RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION}'; "
+            f"got {payload.get('schema_version')!r}"
+        )
+
+    _required_str_fields = ("repo", "root", "query")
+    for field in _required_str_fields:
+        value = payload.get(field)
+        if not isinstance(value, str):
+            raise ValueError(f"{field} must be a string; got {type(value).__name__}")
+
+    for key in ("scope", "summary", "nodes", "edges", "warnings"):
+        if key not in payload:
+            raise ValueError(f"{key} is required")
+        if key in ("scope", "summary") and not isinstance(payload[key], dict):
+            raise ValueError(f"{key} must be a dict")
+        if key in ("nodes", "edges", "warnings") and not isinstance(payload[key], list):
+            raise ValueError(f"{key} must be a list")
+
+    for key in ("limit", "max_hops"):
+        if key not in payload.get("scope", {}):
+            raise ValueError(f"scope.{key} is required")
+    for key in ("node_count", "edge_count", "node_limit_applied"):
+        if key not in payload.get("summary", {}):
+            raise ValueError(f"summary.{key} is required")
+
+    return dict(payload)
