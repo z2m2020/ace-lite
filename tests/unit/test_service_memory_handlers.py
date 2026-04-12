@@ -109,3 +109,126 @@ def test_handle_memory_search_reports_namespace_cold_start(
     assert payload["count"] == 0
     assert payload["cold_start"] is True
     assert payload["recommended_next_step"] == "ace_plan_quick"
+
+
+def test_handle_memory_search_includes_note_type_classification(tmp_path: Path) -> None:
+    """ASF-8912: Memory search results include note_type classification."""
+    from ace_lite.mcp_server.service_memory_handlers import handle_memory_search
+
+    notes_path = tmp_path / "context-map" / "memory_notes.jsonl"
+    recent = datetime.now(timezone.utc).isoformat()
+    payload = handle_memory_search(
+        query="project overview architecture note",
+        limit=5,
+        namespace=None,
+        path=notes_path,
+        notes=[
+            {
+                "text": "EXPL-01 must implement explainability for model decisions",
+                "namespace": "default",
+                "tags": {"req": "EXPL-01"},
+                "captured_at": recent,
+            },
+            {
+                "text": "General project overview and architecture",
+                "namespace": "default",
+                "tags": {"type": "project"},
+                "captured_at": recent,
+            },
+            {
+                "text": "Short note",
+                "namespace": "default",
+                "captured_at": recent,
+            },
+        ],
+    )
+
+    assert payload["ok"] is True
+    # At least 2 items should match (project overview and short note)
+    assert payload["count"] >= 2
+
+    # Check note types are included
+    for item in payload["items"]:
+        assert "_note_type" in item
+        assert item["_note_type"] in ("req_match", "task_constraint", "project_reminder", "weak_hint")
+
+    # Find req_match item
+    req_items = [i for i in payload["items"] if i.get("tags", {}).get("req") == "EXPL-01"]
+    if req_items:
+        assert req_items[0]["_note_type"] == "req_match"
+
+
+def test_handle_memory_store_accepts_task_level_slots(tmp_path: Path) -> None:
+    """ASF-8911: Memory store accepts task-level slots (req, contract, area, etc.)."""
+    from ace_lite.mcp_server.service_memory_handlers import handle_memory_store
+
+    notes_path = tmp_path / "context-map" / "memory_notes.jsonl"
+    rows: list[dict] = []
+
+    def mock_save(path: Path, data: list) -> None:
+        rows.extend(data)
+
+    payload = handle_memory_store(
+        text="EXPL-01 implementation constraints",
+        namespace="requirements",
+        tags={"priority": "high"},
+        path=notes_path,
+        rows=rows,
+        save_notes_fn=mock_save,
+        req="EXPL-01",
+        contract="explainability-v1",
+        area="model-decisions",
+        decision_type="constraint",
+        task_id="TASK-123",
+    )
+
+    assert payload["ok"] is True
+    stored = payload["stored"]
+
+    # Check slots are stored in tags
+    assert stored["tags"]["req"] == "EXPL-01"
+    assert stored["tags"]["contract"] == "explainability-v1"
+    assert stored["tags"]["area"] == "model-decisions"
+    assert stored["tags"]["decision_type"] == "constraint"
+    assert stored["tags"]["task_id"] == "TASK-123"
+
+    # Check slots are also at top level
+    assert stored["req"] == "EXPL-01"
+    assert stored["contract"] == "explainability-v1"
+
+
+def test_handle_memory_search_boosts_task_level_matches(tmp_path: Path) -> None:
+    """ASF-8911: Memory search boosts notes matching query req/contract IDs."""
+    from ace_lite.mcp_server.service_memory_handlers import handle_memory_search
+
+    notes_path = tmp_path / "context-map" / "memory_notes.jsonl"
+    recent = datetime.now(timezone.utc).isoformat()
+    payload = handle_memory_search(
+        query="information EXPL-01 specific",
+        limit=5,
+        namespace=None,
+        path=notes_path,
+        notes=[
+            {
+                "text": "Generic project information about the codebase",
+                "namespace": "default",
+                "tags": {"type": "project"},
+                "captured_at": recent,
+            },
+            {
+                "text": "EXPL-01 specific requirements for explainability",
+                "namespace": "default",
+                "tags": {"req": "EXPL-01"},
+                "captured_at": recent,
+            },
+        ],
+    )
+
+    assert payload["ok"] is True
+    assert payload["count"] == 2
+
+    # The EXPL-01 note should have higher score
+    req_item = next(i for i in payload["items"] if i.get("tags", {}).get("req") == "EXPL-01")
+    generic_item = next(i for i in payload["items"] if "type" in i.get("tags", {}))
+
+    assert req_item["_score"] > generic_item["_score"]

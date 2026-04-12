@@ -9,6 +9,9 @@ from typing import Any
 
 from ace_lite.pipeline.stages.skills import infer_intent
 
+# Requirement ID patterns: EXPL-01, REQ-01, TASK-01, etc.
+_REQ_ID_PATTERN = re.compile(r"\b([A-Z]{2,})-(\d+)\b", re.IGNORECASE)
+
 _DEFAULT_SHADOW_ARM_BY_POLICY: dict[str, str] = {
     "bugfix_test": "bugfix_dense",
     "doc_intent": "doc_intent_hybrid",
@@ -603,6 +606,12 @@ def resolve_retrieval_policy(
                 "latest",
                 "sync",
                 "update",
+                "requirements",
+                "milestone",
+                "phase",
+                "state",
+                "explainability",
+                "contract",
                 "文档",
                 "说明",
                 "同步",
@@ -612,11 +621,19 @@ def resolve_retrieval_policy(
                 "进展",
                 "报告",
                 "路线图",
+                "需求",
+                "里程碑",
+                "阶段",
+                "可解释性",
+                "合同",
+                "契约",
             )
         )
         where_lookup = lowered.strip().startswith("where ")
         where_lookup = where_lookup or lowered.strip().startswith(("在哪", "在哪里"))
-        if doc_markers and not is_definition_lookup and not has_bugfix_markers:
+        # Check for requirement ID patterns (e.g., EXPL-01, REQ-01)
+        has_req_id = bool(_REQ_ID_PATTERN.search(query))
+        if (doc_markers or has_req_id) and not is_definition_lookup and not has_bugfix_markers:
             selected = "doc_intent"
         elif (is_definition_lookup or where_lookup) and not has_bugfix_markers:
             selected = "general"

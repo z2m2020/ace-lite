@@ -48,6 +48,11 @@ def _row_search_blob(row: dict[str, Any]) -> str:
         tag_values.extend(str(value) for value in tags.values() if value)
     elif isinstance(tags, list):
         tag_values.extend(str(value) for value in tags if value)
+    # Include task-level slot values in search blob for better matching
+    for slot_key in ("req", "contract", "area", "decision_type", "task_id"):
+        slot_value = row.get(slot_key) or (tags.get(slot_key) if isinstance(tags, dict) else None)
+        if slot_value:
+            tag_values.append(str(slot_value))
     return " ".join(
         [
             str(row.get("text", "")),
@@ -56,6 +61,97 @@ def _row_search_blob(row: dict[str, Any]) -> str:
             " ".join(tag_values),
         ]
     ).lower()
+
+
+def _classify_note_type(row: dict[str, Any]) -> str:
+    """Classify memory note into task-level categories.
+
+    Returns one of:
+    - project_reminder: General project-level information
+    - task_constraint: Specific task-level constraints
+    - req_match: Requirement-specific note
+    - weak_hint: Low-confidence or generic hint
+    """
+    tags = row.get("tags")
+    tags_dict: dict[str, Any] = tags if isinstance(tags, dict) else {}
+
+    # Check for requirement-specific markers
+    if row.get("req") or row.get("requirement_id") or tags_dict.get("req") or tags_dict.get("requirement_id"):
+        return "req_match"
+
+    # Check for contract markers
+    if row.get("contract") or row.get("contract_id") or tags_dict.get("contract") or tags_dict.get("contract_id"):
+        return "task_constraint"
+
+    # Check for area/decision type markers
+    if (
+        row.get("area")
+        or row.get("decision_type")
+        or row.get("task_id")
+        or tags_dict.get("area")
+        or tags_dict.get("decision_type")
+        or tags_dict.get("task_id")
+    ):
+        return "task_constraint"
+
+    # Check if note has high specificity (long text with concrete details)
+    text = str(row.get("text", ""))
+    if len(text) > 200 and any(
+        marker in text.lower()
+        for marker in ("must", "should", "need to", "required", "constraint", "limitation")
+    ):
+        return "task_constraint"
+
+    # Check for generic project-level markers
+    if tags_dict.get("type") == "project" or tags_dict.get("category") == "overview":
+        return "project_reminder"
+
+    # Default to weak_hint for short or generic notes
+    if len(text) < 100:
+        return "weak_hint"
+
+    return "project_reminder"
+
+
+def _calculate_task_level_score(
+    row: dict[str, Any],
+    query: str,
+    base_score: float,
+) -> float:
+    """Boost score for task-level notes when query contains matching req/contract IDs."""
+    tags = row.get("tags")
+    tags_dict: dict[str, Any] = tags if isinstance(tags, dict) else {}
+    query_lower = str(query or "").lower()
+
+    boost = 0.0
+
+    # Extract req IDs from query (e.g., EXPL-01, REQ-01)
+    import re
+    req_ids = re.findall(r"\b([A-Z]{2,})-(\d+)\b", query, re.IGNORECASE)
+    req_id_strs = [f"{str(prefix).upper()}-{num}" for prefix, num in req_ids]
+
+    # Boost if note has matching req ID
+    note_req = row.get("req") or row.get("requirement_id") or tags_dict.get("req") or tags_dict.get("requirement_id")
+    if note_req and str(note_req).upper() in req_id_strs:
+        boost += 0.5  # Significant boost for req match
+
+    # Boost if note has matching contract
+    note_contract = row.get("contract") or row.get("contract_id") or tags_dict.get("contract") or tags_dict.get("contract_id")
+    if note_contract and str(note_contract).lower() in query_lower:
+        boost += 0.4
+
+    # Boost if note has matching area
+    note_area = row.get("area") or tags_dict.get("area")
+    if note_area and str(note_area).lower() in query_lower:
+        boost += 0.3
+
+    # Penalize generic project reminders when query has specific IDs
+    if req_id_strs and not (note_req or note_contract or note_area):
+        note_type = _classify_note_type(row)
+        if note_type == "project_reminder":
+            boost -= 0.2  # Slight penalty for generic reminders
+
+    return base_score + boost
 
 
 def handle_memory_search(
@@ -85,7 +181,7 @@ def handle_memory_search(
         if not search_blob.strip():
             continue
         if not tokens:
-            score = 1.0
+            base_score = 1.0
         else:
             hits = sum(1 for token in tokens if token in search_blob)
             expanded_hits = sum(
@@ -93,12 +189,14 @@ def handle_memory_search(
             )
             if hits <= 0 and expanded_hits <= 0:
                 continue
-            score = (
+            base_score = (
                 float(hits) / float(max(1, len(tokens)))
                 if hits > 0
                 else (float(expanded_hits) / float(max(1, len(expanded_tokens)))) * 0.6
             )
-        scored.append((score, row))
+        # Apply task-level scoring boost
+        final_score = _calculate_task_level_score(row, normalized_query, base_score)
+        scored.append((final_score, row))
 
     scored.sort(
         key=lambda item: (
@@ -107,7 +205,15 @@ def handle_memory_search(
         ),
         reverse=False,
     )
-    items = [row for _, row in scored[: max(1, int(limit))]]
+
+    # Add note_type classification to each item
+    items: list[dict[str, Any]] = []
+    for score, row in scored[: max(1, int(limit))]:
+        item = dict(row)
+        item["_note_type"] = _classify_note_type(row)
+        item["_score"] = round(score, 6)
+        items.append(item)
+
     payload = {
         "ok": True,
         "query": normalized_query,
@@ -139,18 +245,49 @@ def handle_memory_store(
     path: Path,
     rows: list[dict[str, Any]],
     save_notes_fn: Any,
+    # Task-level slots (ASF-8911)
+    req: str | None = None,
+    contract: str | None = None,
+    area: str | None = None,
+    decision_type: str | None = None,
+    task_id: str | None = None,
 ) -> dict[str, Any]:
     normalized_text = str(text or "").strip()
     if not normalized_text:
         raise ValueError("text cannot be empty")
 
+    # Merge explicit slots into tags
+    merged_tags = dict(tags or {})
+    if req:
+        merged_tags["req"] = req
+    if contract:
+        merged_tags["contract"] = contract
+    if area:
+        merged_tags["area"] = area
+    if decision_type:
+        merged_tags["decision_type"] = decision_type
+    if task_id:
+        merged_tags["task_id"] = task_id
+
     payload = {
         "text": normalized_text,
         "namespace": str(namespace or "").strip() or None,
-        "tags": dict(tags or {}),
+        "tags": merged_tags,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "source": "mcp.store",
     }
+    # Also store slots at top level for easy access
+    if req:
+        payload["req"] = req
+    if contract:
+        payload["contract"] = contract
+    if area:
+        payload["area"] = area
+    if decision_type:
+        payload["decision_type"] = decision_type
+    if task_id:
+        payload["task_id"] = task_id
+
     rows.append(payload)
     save_notes_fn(path, rows)
     return {

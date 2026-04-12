@@ -667,11 +667,11 @@ def test_build_plan_quick_adds_query_profile_risk_hints_and_full_build_reason(
         repomap_top_k=8,
     )
 
-    assert result["query_profile"] == {
-        "doc_sync": True,
-        "latest_sensitive": True,
-        "onboarding": False,
-    }
+    assert result["query_profile"]["doc_sync"] is True
+    assert result["query_profile"]["latest_sensitive"] is True
+    assert result["query_profile"]["onboarding"] is False
+    assert "has_req_id" in result["query_profile"]
+    assert "req_ids" in result["query_profile"]
     assert result["candidate_domain_summary"]["primary_domain"] == "planning"
     assert result["candidate_details"][0]["role"] == "public_contract"
     assert "public_contract" in result["candidate_details"][0]["labels"]
@@ -1089,3 +1089,78 @@ def test_build_plan_quick_emits_outcome_label_and_upgrade_outcome_hint(
     # upgrade_outcome_hint values must match the top-level upgrade guidance
     assert hint["expected_incremental_value"] == result["expected_incremental_value"]
     assert hint["upgrade_recommended"] == result["upgrade_recommended"]
+
+
+def test_classify_path_domain_recognizes_hidden_planning_dirs() -> None:
+    """ASF-8902: .planning/, .plans/, milestones/, phases/, state/ are recognized as planning domain."""
+    from ace_lite.plan_quick import _classify_path_domain
+
+    assert _classify_path_domain(".planning/REQUIREMENTS.md") == "planning"
+    assert _classify_path_domain(".plans/roadmap.md") == "planning"
+    assert _classify_path_domain("milestones/phase-1.md") == "planning"
+    assert _classify_path_domain("phases/current.md") == "planning"
+    assert _classify_path_domain("state/status.md") == "planning"
+    assert _classify_path_domain("src/.planning/state.md") == "planning"
+    assert _classify_path_domain("docs/.milestones/goal.md") == "planning"
+
+
+def test_query_flags_extracts_req_ids() -> None:
+    """ASF-8901: Query flags extract requirement IDs like EXPL-01, REQ-01."""
+    from ace_lite.plan_quick import _query_flags
+
+    flags = _query_flags("What is the status of EXPL-01 and REQ-02?")
+    assert flags["has_req_id"] is True
+    assert "EXPL-01" in flags["req_ids"]
+    assert "REQ-02" in flags["req_ids"]
+
+    flags_no_req = _query_flags("What is the status of planning?")
+    assert flags_no_req["has_req_id"] is False
+    assert flags_no_req["req_ids"] == []
+
+
+def test_query_flags_extracts_req_ids_case_insensitively() -> None:
+    """ASF-8901: Requirement IDs are normalized even when query casing varies."""
+    from ace_lite.plan_quick import _query_flags
+
+    flags = _query_flags("what is the status of expl-01 and Req-02?")
+    assert flags["has_req_id"] is True
+    assert "EXPL-01" in flags["req_ids"]
+    assert "REQ-02" in flags["req_ids"]
+
+
+def test_candidate_details_includes_picked_because(tmp_path: Path) -> None:
+    """ASF-8904: Candidate details include picked_because with concise explanation."""
+    _write_file(tmp_path / ".planning/REQUIREMENTS.md", "# Requirements\n")
+    _write_file(tmp_path / "src/main.py", "def main():\n    pass\n")
+
+    result = build_plan_quick(
+        query="EXPL-01 requirements",
+        root=tmp_path,
+        languages="python,markdown",
+        top_k_files=3,
+        repomap_top_k=8,
+    )
+
+    assert "candidate_details" in result
+    for detail in result["candidate_details"]:
+        assert "picked_because" in detail
+        assert isinstance(detail["picked_because"], str)
+        assert len(detail["picked_because"]) > 0
+
+
+def test_suggested_refinements_includes_domain_mixed_for_req_ids(tmp_path: Path) -> None:
+    """ASF-8903: Query with requirement IDs gets domain_mixed refinement suggestion."""
+    _write_file(tmp_path / ".planning/REQUIREMENTS.md", "# Requirements\n")
+    _write_file(tmp_path / "src/main.py", "def main():\n    pass\n")
+
+    result = build_plan_quick(
+        query="EXPL-01 requirements",
+        root=tmp_path,
+        languages="python,markdown",
+        top_k_files=3,
+        repomap_top_k=8,
+    )
+
+    refinements = result.get("suggested_query_refinements", [])
+    codes = [r["code"] for r in refinements]
+    assert "domain_mixed" in codes

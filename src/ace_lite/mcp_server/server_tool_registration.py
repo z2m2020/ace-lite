@@ -260,12 +260,22 @@ def _register_memory_tools(*, server: FastMCP, service: AceLiteMcpService) -> No
         namespace: str | None = None,
         tags: dict[str, str] | None = None,
         notes_path: str | None = None,
+        req: str | None = None,
+        contract: str | None = None,
+        area: str | None = None,
+        decision_type: str | None = None,
+        task_id: str | None = None,
     ) -> dict[str, Any]:
         return service.memory_store(
             text=text,
             namespace=namespace,
             tags=tags,
             notes_path=notes_path,
+            req=req,
+            contract=contract,
+            area=area,
+            decision_type=decision_type,
+            task_id=task_id,
         )
 
     @_tool(server, "ace_memory_wipe")

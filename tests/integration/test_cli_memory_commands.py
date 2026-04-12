@@ -101,6 +101,43 @@ def test_cli_memory_store_search_and_wipe(tmp_path: Path) -> None:
     assert search_all_payload["items"][0]["namespace"] == "repo:b"
 
 
+def test_cli_memory_store_accepts_task_level_slots(tmp_path: Path) -> None:
+    runner = CliRunner()
+    notes_path = tmp_path / "context-map" / "memory_notes.jsonl"
+
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "memory",
+            "store",
+            "EXPL-01 trace constraints",
+            "--namespace",
+            "repo:a",
+            "--req",
+            "EXPL-01",
+            "--contract",
+            "trace-v1",
+            "--area",
+            "retrieval",
+            "--decision-type",
+            "constraint",
+            "--task-id",
+            "TASK-123",
+            "--notes-path",
+            str(notes_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["stored"]["tags"]["req"] == "EXPL-01"
+    assert payload["stored"]["tags"]["contract"] == "trace-v1"
+    assert payload["stored"]["tags"]["area"] == "retrieval"
+    assert payload["stored"]["tags"]["decision_type"] == "constraint"
+    assert payload["stored"]["tags"]["task_id"] == "TASK-123"
+    assert payload["stored"]["req"] == "EXPL-01"
+
+
 def test_cli_memory_vacuum_prunes_expired_notes_idempotent(tmp_path: Path) -> None:
     runner = CliRunner()
     notes_path = tmp_path / "context-map" / "memory_notes.jsonl"

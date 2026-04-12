@@ -629,6 +629,12 @@ class SelectionFeedbackStore:
         )
         limit = max(1, int(top_n))
 
+        # ASF-8913: Calculate decision-value metrics
+        decision_metrics = self._calculate_decision_metrics(
+            events=filtered,
+            now=now,
+        )
+
         payload = {
             "ok": True,
             "repo_filter": normalized_repo,
@@ -648,6 +654,8 @@ class SelectionFeedbackStore:
             "capture_event_count": 0,
             "capture_coverage": None,
             "suggested_capture_points": [],
+            # ASF-8913: Decision-value metrics
+            "decision_metrics": decision_metrics,
         }
         bridge_events = [
             event
@@ -671,6 +679,100 @@ class SelectionFeedbackStore:
             ]
         payload.update(self._metadata_payload())
         return payload
+
+    def _calculate_decision_metrics(
+        self,
+        *,
+        events: list[dict[str, Any]],
+        now: float,
+    ) -> dict[str, Any]:
+        """ASF-8913: Calculate decision-value metrics for feedback events.
+
+        Metrics:
+        - final_selected_paths_attach_rate: % of selections that were in candidates
+        - shortlist_to_selection_precision: precision of shortlist for selections
+        - feedback_reuse_lift: estimated lift from feedback reuse
+        - selection_replay_precision_delta: precision delta for replayed selections
+        """
+        if not events:
+            return {
+                "final_selected_paths_attach_rate": None,
+                "shortlist_to_selection_precision": None,
+                "feedback_reuse_lift": None,
+                "selection_replay_precision_delta": None,
+            }
+
+        # final_selected_paths_attach_rate: % of selections that were in candidates
+        events_with_candidates = [
+            e for e in events
+            if int(e.get("candidate_count", 0) or 0) > 0
+        ]
+        if events_with_candidates:
+            attached_count = sum(
+                1 for e in events_with_candidates
+                if bool(e.get("selected_in_candidates"))
+            )
+            attach_rate = float(attached_count) / float(len(events_with_candidates))
+        else:
+            attach_rate = None
+
+        # shortlist_to_selection_precision: of selections in candidates, avg position
+        positions = [
+            int(e.get("position") or 0)
+            for e in events_with_candidates
+            if e.get("position") and int(e.get("position") or 0) > 0
+        ]
+        if positions:
+            avg_position = sum(positions) / len(positions)
+            # Precision: lower position is better, so invert (1/position)
+            precision = 1.0 / max(1.0, avg_position)
+        else:
+            precision = None
+
+        # feedback_reuse_lift: estimated based on repeat selections
+        path_counts: dict[str, int] = {}
+        for e in events:
+            path = str(e.get("selected_path") or "").strip()
+            if path:
+                path_counts[path] = path_counts.get(path, 0) + 1
+        repeat_selections = sum(1 for c in path_counts.values() if c > 1)
+        if path_counts:
+            reuse_lift = float(repeat_selections) / float(len(path_counts))
+        else:
+            reuse_lift = None
+
+        # selection_replay_precision_delta: compare recent vs older precision
+        recent_events = [
+            e for e in events
+            if (_parse_iso_timestamp(e.get("captured_at")) > now - 7 * 86400)
+        ]
+        older_events = [
+            e for e in events
+            if (_parse_iso_timestamp(e.get("captured_at")) <= now - 7 * 86400)
+        ]
+        recent_positions = [
+            int(e.get("position") or 0)
+            for e in recent_events
+            if e.get("position") and int(e.get("position") or 0) > 0
+        ]
+        older_positions = [
+            int(e.get("position") or 0)
+            for e in older_events
+            if e.get("position") and int(e.get("position") or 0) > 0
+        ]
+        if recent_positions and older_positions:
+            recent_precision = 1.0 / max(1.0, sum(recent_positions) / len(recent_positions))
+            older_precision = 1.0 / max(1.0, sum(older_positions) / len(older_positions))
+            precision_delta = recent_precision - older_precision
+        else:
+            precision_delta = None
+
+        return {
+            "final_selected_paths_attach_rate": round(attach_rate, 6) if attach_rate is not None else None,
+            "shortlist_to_selection_precision": round(precision, 6) if precision is not None else None,
+            "feedback_reuse_lift": round(reuse_lift, 6) if reuse_lift is not None else None,
+            "selection_replay_precision_delta": round(precision_delta, 6) if precision_delta is not None else None,
+        }
 
     def _load_legacy_events(self) -> list[dict[str, Any]]:
         payload = self._store.load()

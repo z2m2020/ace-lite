@@ -63,6 +63,12 @@ _DOC_SYNC_MARKERS: tuple[str, ...] = (
     "sync",
     "update",
     "latest",
+    "requirements",
+    "milestone",
+    "phase",
+    "state",
+    "explainability",
+    "contract",
     "文档",
     "说明",
     "同步",
@@ -72,6 +78,13 @@ _DOC_SYNC_MARKERS: tuple[str, ...] = (
     "进展",
     "报告",
     "路线图",
+    "需求",
+    "里程碑",
+    "阶段",
+    "状态",
+    "可解释性",
+    "合同",
+    "契约",
 )
 _LATEST_MARKERS: tuple[str, ...] = (
     "latest",
@@ -89,9 +102,14 @@ _DOC_PREFERRED_PREFIXES: tuple[str, ...] = (
     "docs/",
     "doc/",
     "planning/",
+    ".planning/",
     "plans/",
+    ".plans/",
     "repos/",
     "reports/",
+    "milestones/",
+    "phases/",
+    "state/",
 )
 _DOC_PRIMARY_NAME_MARKERS: tuple[str, ...] = (
     "progress",
@@ -162,6 +180,15 @@ _QUERY_REFINEMENT_STOPWORDS: frozenset[str] = frozenset(
     }
 )
 _PATH_DATE_PATTERN = re.compile(r"(?<!\d)((?:19|20)\d{2})-(\d{2})-(\d{2})(?!\d)")
+# Requirement ID patterns: EXPL-01, REQ-01, TASK-01, etc.
+_REQ_ID_PATTERN = re.compile(r"\b([A-Z]{2,})-(\d+)\b", re.IGNORECASE)
+
+
+def _extract_req_ids(query: str) -> list[str]:
+    """Extract requirement IDs like EXPL-01, REQ-01 from query."""
+    normalized = str(query or "").strip()
+    matches = _REQ_ID_PATTERN.findall(normalized)
+    return [f"{str(prefix).upper()}-{num}" for prefix, num in matches]
 
 
 def _query_flags(query: str) -> dict[str, bool]:
@@ -169,16 +196,25 @@ def _query_flags(query: str) -> dict[str, bool]:
     has_doc_sync_markers = any(marker in lowered for marker in _DOC_SYNC_MARKERS)
     latest_sensitive = any(marker in lowered for marker in _LATEST_MARKERS)
     onboarding = any(marker in lowered for marker in _ONBOARDING_MARKERS)
+    req_ids = _extract_req_ids(query)
     return {
         "doc_sync": has_doc_sync_markers,
         "latest_sensitive": latest_sensitive,
         "onboarding": onboarding,
+        "has_req_id": bool(req_ids),
+        "req_ids": req_ids,
     }
 
 
 def _classify_path_domain(path: str) -> str:
     normalized = str(path or "").strip().replace("\\", "/").lower()
-    if normalized.startswith(("planning/", "plans/")) or "/planning/" in normalized:
+    if normalized.startswith(("planning/", "plans/", ".planning/", ".plans/")) or "/planning/" in normalized or "/.planning/" in normalized:
+        return "planning"
+    if normalized.startswith(("milestones/", ".milestones/")) or "/milestones/" in normalized or "/.milestones/" in normalized:
+        return "planning"
+    if normalized.startswith(("phases/", ".phases/")) or "/phases/" in normalized or "/.phases/" in normalized:
+        return "planning"
+    if normalized.startswith(("state/", ".state/")) or "/state/" in normalized or "/.state/" in normalized:
         return "planning"
     if normalized.startswith("repos/"):
         return "repos"
@@ -351,7 +387,8 @@ def _build_plan_quick_risk_hints(
                     "code": "doc_sync_policy_mismatch",
                     "severity": "medium",
                     "message": "query 更像文档同步任务, 但当前 retrieval policy 未落到 doc_intent。",
-                    "action": "建议追加 docs/planning/progress/status 之类的目录或状态词, 或直接限制目标子目录。",
+                    "action": "追加 docs/planning/progress/status 关键词, 或限制到 docs/ 目录。",
+                    "next_step": "修改 query: 添加 'docs planning' 前缀",
                 }
             )
         if len(top_domains) >= 3 and any(
@@ -363,6 +400,7 @@ def _build_plan_quick_risk_hints(
                     "severity": "high",
                     "message": "前排候选混入多个语义域, 结果可能需要人工纠偏。",
                     "action": "优先阅读前 3 个 markdown/docs/planning 候选, 再决定是否升级到 ace_plan。",
+                    "next_step": "查看前3个候选文件, 如不稳则运行 ace_plan",
                 }
             )
         if any(item.semantic_domain in {"reports", "research"} for item in visible_rows):
@@ -372,6 +410,7 @@ def _build_plan_quick_risk_hints(
                     "severity": "medium",
                     "message": "前排候选仍混入周报或研究类文档, 当前状态入口可能还没有完全收敛。",
                     "action": "优先查看 planning/progress/status/sync 文档; 如仍不稳, 在 query 中追加 planning progress status current latest。",
+                    "next_step": "追加关键词: planning progress status",
                 }
             )
         if top_rows and not any(
@@ -385,20 +424,34 @@ def _build_plan_quick_risk_hints(
                     "severity": "medium",
                     "message": "文档同步 query 的前排结果缺少 markdown 入口文档。",
                     "action": "建议把 query 收紧到 docs planning repo progress status latest, 或直接指定 markdown 目录。",
+                    "next_step": "添加关键词: docs planning latest",
                 }
             )
     if str(index_cache.get("mode") or "").strip() == "full_build":
+        full_build_reason = str(
+            index_cache.get("full_build_reason")
+            or index_cache.get("reason")
+            or "cache_missing"
+        )
+        # ASF-8921: Improved cold-start messaging
+        if full_build_reason == "cache_missing":
+            message = "首次使用: 正在建立索引, 后续查询将更快。"
+            action = "这是首次运行, 索引建立后下次查询将使用缓存。如需预热可运行: ace-lite index"
+        elif full_build_reason == "index_stale":
+            message = "索引已过期: 正在增量更新, 请稍候。"
+            action = "索引正在更新, 完成后将恢复 cache_only 模式。"
+        else:
+            message = "本次 quick plan 触发了 full build, 首轮耗时会偏高。"
+            action = "若仓库无本地改动, 后续再次运行通常会转为 cache_only; 也可先执行 ace-lite index 预热索引。"
+
         hints.append(
             {
                 "code": "index_cold_start",
                 "severity": "low",
-                "message": "本次 quick plan 触发了 full build, 首轮耗时会偏高。",
-                "action": "若仓库无本地改动, 后续再次运行通常会转为 cache_only; 也可先执行 ace_index 预热索引。",
-                "reason": str(
-                    index_cache.get("full_build_reason")
-                    or index_cache.get("reason")
-                    or "cache_missing"
-                ),
+                "message": message,
+                "action": action,
+                "reason": full_build_reason,
+                "is_first_time": full_build_reason == "cache_missing",
             }
         )
     return hints
@@ -518,14 +571,81 @@ def _append_query_refinement(
     )
 
 
+def _build_mixed_top_k_candidates(
+    *,
+    rows: list[PlanQuickScoredRow],
+    top_k: int = 8,
+    ensure_docs: int = 2,
+    ensure_code: int = 2,
+) -> list[PlanQuickScoredRow]:
+    """Ensure mixed domain coverage in top-k results for design/doc intent queries.
+
+    This provides a lightweight mixed-top-k fallback that guarantees at least
+    some docs/planning and code files appear in the first screen, reducing
+    the need for users to manually refine queries.
+    """
+    if not rows:
+        return []
+
+    doc_domains = {"docs", "planning", "reference", "markdown"}
+    code_domains = {"code"}
+    test_domains = {"tests"}
+
+    docs_rows: list[PlanQuickScoredRow] = []
+    code_rows: list[PlanQuickScoredRow] = []
+    test_rows: list[PlanQuickScoredRow] = []
+    other_rows: list[PlanQuickScoredRow] = []
+
+    for row in rows:
+        if row.semantic_domain in doc_domains:
+            docs_rows.append(row)
+        elif row.semantic_domain in code_domains:
+            code_rows.append(row)
+        elif row.semantic_domain in test_domains:
+            test_rows.append(row)
+        else:
+            other_rows.append(row)
+
+    # Build mixed result ensuring minimum coverage from each domain
+    mixed: list[PlanQuickScoredRow] = []
+    seen_paths: set[str] = set()
+
+    # Take top docs up to ensure_docs limit
+    for row in docs_rows[:ensure_docs]:
+        if row.path not in seen_paths:
+            mixed.append(row)
+            seen_paths.add(row.path)
+
+    # Take top code up to ensure_code limit
+    for row in code_rows[:ensure_code]:
+        if row.path not in seen_paths:
+            mixed.append(row)
+            seen_paths.add(row.path)
+
+    # Fill remaining slots from original ranking
+    for row in rows:
+        if row.path not in seen_paths and len(mixed) < top_k:
+            mixed.append(row)
+            seen_paths.add(row.path)
+
+    return mixed[:top_k]
+
+
 def _build_suggested_query_refinements(
     *,
     query: str,
     rows: list[PlanQuickScoredRow],
 ) -> list[dict[str, Any]]:
     query_flags = _query_flags(query)
+    # Also enable refinements for requirement ID queries
+    is_req_query = bool(query_flags.get("has_req_id", False)) or any(
+        marker in str(query or "").lower()
+        for marker in ("requirements", "milestone", "phase", "contract", "explainability")
+    )
     if not (
-        bool(query_flags.get("doc_sync", False)) or bool(query_flags.get("latest_sensitive", False))
+        bool(query_flags.get("doc_sync", False))
+        or bool(query_flags.get("latest_sensitive", False))
+        or is_req_query
     ):
         return []
     raw_tokens = [token for token in str(query or "").strip().lower().split() if token]
@@ -587,6 +707,29 @@ def _build_suggested_query_refinements(
             strategy="bias_repo_progress_docs",
             target_domains=["repos", "reports", "planning"],
         )
+
+    # Add domain-mixed strategy for design/doc intent with requirement IDs
+    # This is inserted at the beginning for high priority
+    if bool(query_flags.get("has_req_id", False)) or any(
+        marker in str(query or "").lower()
+        for marker in ("requirements", "milestone", "phase", "contract", "explainability")
+    ):
+        # Build domain_mixed refinement manually and insert at beginning
+        domain_mixed_query = _build_refinement_query(
+            fixed_tokens=["docs", "planning", "requirements"],
+            topic_tokens=topic_tokens,
+        )
+        if domain_mixed_query:
+            domain_mixed_refinement: dict[str, Any] = {
+                "code": "domain_mixed",
+                "query": domain_mixed_query,
+                "reason": "Design/requirements clarification tasks benefit from mixed docs+code first screen.",
+                "reason_code": "domain_mixed",
+                "strategy": "domain_mixed_top_k",
+                "added_terms": ["docs", "planning", "requirements"],
+                "target_domains": ["docs", "planning", "code"],
+            }
+            refinements.insert(0, domain_mixed_refinement)
 
     return refinements[:3]
 
@@ -719,9 +862,71 @@ def _infer_candidate_labels(
     return tuple(dict.fromkeys([*labels, role]))
 
 
+def _build_picked_because(
+    *,
+    row: PlanQuickScoredRow,
+    query_flags: dict[str, bool],
+) -> str:
+    """Build a concise, actionable explanation for why this file was picked.
+
+    Returns short phrases like:
+    - "lexical match + intent boost"
+    - "ID match (EXPL-01)"
+    - "test lock + lexical"
+    - "entrypoint role + domain match"
+    """
+    reasons: list[str] = []
+
+    # Check for requirement ID match
+    if bool(query_flags.get("has_req_id", False)) and query_flags.get("req_ids"):
+        req_ids = query_flags.get("req_ids", [])
+        normalized_path = str(row.path or "").lower()
+        for req_id in req_ids:
+            if str(req_id).lower() in normalized_path:
+                reasons.append(f"ID match ({req_id})")
+                break
+
+    # Lexical hits
+    if row.lexical_hits > 0:
+        reasons.append("lexical match")
+
+    # Intent boost (doc sync intent)
+    if row.intent_boost > 0:
+        if row.semantic_domain in {"planning", "docs"}:
+            reasons.append("planning domain")
+        else:
+            reasons.append("intent boost")
+
+    # Recency boost
+    if row.recency_boost > 0:
+        reasons.append("recency")
+
+    # Role-based reasons
+    if row.role == "entrypoint":
+        reasons.append("entrypoint")
+    elif row.role == "public_contract":
+        reasons.append("public contract")
+    elif row.role == "test_entry":
+        reasons.append("test lock")
+
+    # Domain match for doc queries
+    if bool(query_flags.get("doc_sync", False)):
+        if row.semantic_domain in {"planning", "docs", "reference"}:
+            if "planning domain" not in reasons:
+                reasons.append("domain match")
+
+    if not reasons:
+        reasons.append("fused score")
+
+    return " + ".join(reasons[:3])
+
+
 def _build_candidate_details(
     rows: list[PlanQuickScoredRow],
+    *,
+    query: str = "",
 ) -> list[dict[str, Any]]:
+    query_flags = _query_flags(query)
     details: list[dict[str, Any]] = []
     for row in rows:
         label_list = list(row.labels)
@@ -736,6 +941,7 @@ def _build_candidate_details(
                 "labels": label_list,
                 "role": row.role,
                 "why": f"role:{row.role};domain:{row.semantic_domain}",
+                "picked_because": _build_picked_because(row=row, query_flags=query_flags),
             }
         )
     return details
@@ -1177,7 +1383,23 @@ def build_plan_quick(
             lexical_boost_per_hit=0.0,
         )
 
-    limited_rows = rescored_rows[:top_k]
+    # Apply domain-mixed strategy for design/doc intent queries with requirement IDs
+    query_flags = _query_flags(normalized_query)
+    if bool(query_flags.get("has_req_id", False)) or (
+        bool(query_flags.get("doc_sync", False))
+        and any(
+            marker in normalized_query.lower()
+            for marker in ("requirements", "milestone", "phase", "contract", "explainability")
+        )
+    ):
+        limited_rows = _build_mixed_top_k_candidates(
+            rows=rescored_rows,
+            top_k=top_k,
+            ensure_docs=2,
+            ensure_code=2,
+        )
+    else:
+        limited_rows = rescored_rows[:top_k]
     candidate_paths = [row.path for row in limited_rows if row.path]
     if (
         repomap_expand
@@ -1193,7 +1415,7 @@ def build_plan_quick(
         retrieval_policy_profile=retrieval_policy_profile,
         index_cache=dict(cache_info or {}),
     )
-    candidate_details = _build_candidate_details(limited_rows)
+    candidate_details = _build_candidate_details(limited_rows, query=normalized_query)
     onboarding_view = _build_onboarding_view(
         query=normalized_query,
         details=candidate_details,

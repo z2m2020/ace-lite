@@ -132,6 +132,11 @@ def memory_search_command(
 @click.argument("text")
 @click.option("--namespace", default="", help="Optional namespace tag for this note.")
 @click.option("--tag", "tags", multiple=True, help="Add metadata tag in k=v format.")
+@click.option("--req", default="", help="Optional requirement ID such as EXPL-01.")
+@click.option("--contract", default="", help="Optional contract or schema identifier.")
+@click.option("--area", default="", help="Optional area or module label.")
+@click.option("--decision-type", default="", help="Optional decision type such as constraint.")
+@click.option("--task-id", default="", help="Optional task identifier.")
 @click.option(
     "--notes-path",
     default="context-map/memory_notes.jsonl",
@@ -143,6 +148,11 @@ def memory_store_command(
     namespace: str,
     tags: tuple[str, ...],
     notes_path: str,
+    req: str,
+    contract: str,
+    area: str,
+    decision_type: str,
+    task_id: str,
 ) -> None:
     normalized_text = str(text or "").strip()
     if not normalized_text:
@@ -150,13 +160,34 @@ def memory_store_command(
 
     path = Path(notes_path).expanduser()
     rows = _load_notes(path)
+    merged_tags = _parse_tags(tags)
+    if str(req).strip():
+        merged_tags["req"] = str(req).strip()
+    if str(contract).strip():
+        merged_tags["contract"] = str(contract).strip()
+    if str(area).strip():
+        merged_tags["area"] = str(area).strip()
+    if str(decision_type).strip():
+        merged_tags["decision_type"] = str(decision_type).strip()
+    if str(task_id).strip():
+        merged_tags["task_id"] = str(task_id).strip()
     payload = {
         "text": normalized_text,
         "namespace": str(namespace or "").strip() or None,
-        "tags": _parse_tags(tags),
+        "tags": merged_tags,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "source": "cli.store",
     }
+    if str(req).strip():
+        payload["req"] = str(req).strip()
+    if str(contract).strip():
+        payload["contract"] = str(contract).strip()
+    if str(area).strip():
+        payload["area"] = str(area).strip()
+    if str(decision_type).strip():
+        payload["decision_type"] = str(decision_type).strip()
+    if str(task_id).strip():
+        payload["task_id"] = str(task_id).strip()
     rows.append(payload)
     _save_notes(path, rows)
     echo_json({"ok": True, "stored": payload, "notes_path": str(path)})

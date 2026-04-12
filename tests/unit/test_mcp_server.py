@@ -150,6 +150,12 @@ def test_build_mcp_server_exposes_stable_tool_metadata_and_schema(tmp_path: Path
     assert (
         tools["ace_memory_store"].parameters["properties"]["tags"]["anyOf"][0]["type"] == "object"
     )
+    for field in ("req", "contract", "area", "decision_type", "task_id"):
+        schema = tools["ace_memory_store"].parameters["properties"][field]
+        if "type" in schema:
+            assert schema["type"] == "string"
+        else:
+            assert schema["anyOf"][0]["type"] == "string"
 
 
 def test_mcp_service_health_surfaces_request_stats(tmp_path: Path, monkeypatch) -> None:
@@ -454,6 +460,31 @@ def test_mcp_service_memory_store_search_and_wipe(tmp_path: Path) -> None:
         notes_path=str(notes_path),
     )
     assert after["count"] == 0
+
+
+def test_mcp_service_memory_store_persists_task_level_slots(tmp_path: Path) -> None:
+    service = _make_service(tmp_path)
+    notes_path = tmp_path / "context-map" / "memory_notes.task.jsonl"
+
+    stored = service.memory_store(
+        text="EXPL-01 trace rendering must stay on stderr.",
+        namespace="retrieval",
+        tags={"type": "constraint"},
+        notes_path=str(notes_path),
+        req="EXPL-01",
+        contract="trace-render-v1",
+        area="retrieval",
+        decision_type="constraint",
+        task_id="TASK-89",
+    )
+    assert stored["ok"] is True
+    assert stored["stored"]["tags"]["req"] == "EXPL-01"
+    assert stored["stored"]["tags"]["contract"] == "trace-render-v1"
+    assert stored["stored"]["tags"]["area"] == "retrieval"
+    assert stored["stored"]["tags"]["decision_type"] == "constraint"
+    assert stored["stored"]["tags"]["task_id"] == "TASK-89"
+    assert stored["stored"]["req"] == "EXPL-01"
+    assert stored["stored"]["contract"] == "trace-render-v1"
 
 
 def test_mcp_service_feedback_record_and_stats(tmp_path: Path) -> None:

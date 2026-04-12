@@ -508,6 +508,11 @@ class AceLiteMcpService:
         namespace: str | None = None,
         tags: dict[str, str] | None = None,
         notes_path: str | None = None,
+        req: str | None = None,
+        contract: str | None = None,
+        area: str | None = None,
+        decision_type: str | None = None,
+        task_id: str | None = None,
     ) -> dict[str, Any]:
         def _operation() -> dict[str, Any]:
             path = self._resolve_notes_path(notes_path=notes_path)
@@ -519,6 +524,11 @@ class AceLiteMcpService:
                 path=path,
                 rows=rows,
                 save_notes_fn=self._save_notes,
+                req=req,
+                contract=contract,
+                area=area,
+                decision_type=decision_type,
+                task_id=task_id,
             )
 
         return self._run_tracked("ace_memory_store", _operation)

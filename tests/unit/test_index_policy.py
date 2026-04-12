@@ -93,6 +93,19 @@ def test_resolve_retrieval_policy_selects_doc_intent_for_doc_sync_queries() -> N
     assert payload["docs_enabled"] is True
 
 
+def test_resolve_retrieval_policy_selects_doc_intent_for_lowercase_requirement_ids() -> None:
+    payload = resolve_retrieval_policy(
+        query="explain expl-01 trace contract behavior",
+        retrieval_policy="auto",
+        policy_version="v1",
+        cochange_enabled=True,
+        embedding_enabled=True,
+    )
+
+    assert payload["name"] == "doc_intent"
+    assert payload["docs_enabled"] is True
+
+
 def test_resolve_retrieval_policy_keeps_general_for_chinese_definition_lookup() -> None:
     payload = resolve_retrieval_policy(
         query="RequestException 类在哪里定义",

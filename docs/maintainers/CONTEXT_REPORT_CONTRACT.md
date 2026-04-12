@@ -91,10 +91,10 @@ The `schema_version` field is required and must equal `context_report_v1`. The s
 
 ```bash
 # Generate a context report as part of the plan pipeline
-ace-lite plan --query "fix validation flow" --repo ace-lite --root . --output artifacts/context-reports/2026-04-11/
+ace-lite plan --query "fix validation flow" --repo ace-lite --root . --context-report-path artifacts/context-reports/2026-04-11/context_report.md
 ```
 
-The report is written to `artifacts/context-reports/YYYY-MM-DD/context_report.md` (markdown) or the equivalent JSON artifact.
+The report is written to the path passed in `--context-report-path`, for example `artifacts/context-reports/YYYY-MM-DD/context_report.md`.
 
 ### Programmatic
 
