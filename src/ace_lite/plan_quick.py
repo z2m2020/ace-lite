@@ -200,9 +200,7 @@ def _classify_path_domain(path: str) -> str:
 def _is_markdown_doc(*, path: str, language: str) -> bool:
     normalized_path = str(path or "").strip().replace("\\", "/").lower()
     normalized_language = str(language or "").strip().lower()
-    return normalized_language in _MARKDOWN_LANGUAGES or normalized_path.endswith(
-        (".md", ".mdx")
-    )
+    return normalized_language in _MARKDOWN_LANGUAGES or normalized_path.endswith((".md", ".mdx"))
 
 
 def _extract_path_date(path: str) -> date | None:
@@ -256,12 +254,8 @@ def _doc_sync_intent_boost(*, path: str, language: str, query_flags: dict[str, b
     normalized_path = str(path or "").strip().replace("\\", "/").lower()
     normalized_language = str(language or "").strip().lower()
     semantic_domain = _classify_path_domain(path)
-    primary_hits = sum(
-        1 for marker in _DOC_PRIMARY_NAME_MARKERS if marker in normalized_path
-    )
-    secondary_hits = sum(
-        1 for marker in _DOC_SECONDARY_NAME_MARKERS if marker in normalized_path
-    )
+    primary_hits = sum(1 for marker in _DOC_PRIMARY_NAME_MARKERS if marker in normalized_path)
+    secondary_hits = sum(1 for marker in _DOC_SECONDARY_NAME_MARKERS if marker in normalized_path)
     is_entrypoint = _is_doc_entrypoint_path(
         path=path,
         semantic_domain=semantic_domain,
@@ -304,12 +298,8 @@ def _latest_doc_intent_boost(
     if not _is_markdown_doc(path=path, language=language):
         return 0.0
     normalized_path = str(path or "").strip().replace("\\", "/").lower()
-    primary_hits = sum(
-        1 for marker in _DOC_PRIMARY_NAME_MARKERS if marker in normalized_path
-    )
-    secondary_hits = sum(
-        1 for marker in _DOC_SECONDARY_NAME_MARKERS if marker in normalized_path
-    )
+    primary_hits = sum(1 for marker in _DOC_PRIMARY_NAME_MARKERS if marker in normalized_path)
+    secondary_hits = sum(1 for marker in _DOC_SECONDARY_NAME_MARKERS if marker in normalized_path)
     is_entrypoint = _is_doc_entrypoint_path(
         path=path,
         semantic_domain=domain,
@@ -353,9 +343,7 @@ def _build_plan_quick_risk_hints(
     visible_rows = rows[:8]
     if bool(query_flags.get("doc_sync", False)):
         top_domains = {
-            _classify_path_domain(item.path)
-            for item in top_rows
-            if str(item.path or "").strip()
+            _classify_path_domain(item.path) for item in top_rows if str(item.path or "").strip()
         }
         if retrieval_policy_profile != "doc_intent":
             hints.append(
@@ -377,9 +365,7 @@ def _build_plan_quick_risk_hints(
                     "action": "优先阅读前 3 个 markdown/docs/planning 候选, 再决定是否升级到 ace_plan。",
                 }
             )
-        if any(
-            item.semantic_domain in {"reports", "research"} for item in visible_rows
-        ):
+        if any(item.semantic_domain in {"reports", "research"} for item in visible_rows):
             hints.append(
                 {
                     "code": "secondary_doc_mix",
@@ -439,21 +425,15 @@ def build_plan_quick_policy_observability(
         "docs_enabled": bool(policy.get("docs_enabled", False)),
         "repomap_enabled": bool(policy.get("repomap_enabled", False)),
         "graph_lookup_enabled": bool(policy.get("graph_lookup_enabled", False)),
-        "chunk_semantic_rerank_enabled": bool(
-            policy.get("chunk_semantic_rerank_enabled", False)
-        ),
-        "semantic_rerank_time_budget_ms": int(
-            policy.get("semantic_rerank_time_budget_ms", 0) or 0
-        ),
+        "chunk_semantic_rerank_enabled": bool(policy.get("chunk_semantic_rerank_enabled", False)),
+        "semantic_rerank_time_budget_ms": int(policy.get("semantic_rerank_time_budget_ms", 0) or 0),
     }
 
 
 def _build_candidate_domain_summary(
     rows: list[PlanQuickScoredRow],
 ) -> dict[str, Any]:
-    domain_counts = Counter(
-        row.semantic_domain for row in rows if str(row.path or "").strip()
-    )
+    domain_counts = Counter(row.semantic_domain for row in rows if str(row.path or "").strip())
     ranked_domains = sorted(domain_counts.items(), key=lambda item: (-item[1], item[0]))
     markdown_count = sum(
         1 for row in rows if _is_markdown_doc(path=row.path, language=row.language)
@@ -468,11 +448,10 @@ def _build_candidate_domain_summary(
         for path_date in [_extract_path_date(row.path)]
         if path_date is not None
     ]
-    latest_doc_candidates.sort(key=lambda item: (str(item["date"]), str(item["path"])), reverse=True)
-    domains = [
-        {"domain": domain, "count": int(count)}
-        for domain, count in ranked_domains
-    ]
+    latest_doc_candidates.sort(
+        key=lambda item: (str(item["date"]), str(item["path"])), reverse=True
+    )
+    domains = [{"domain": domain, "count": int(count)} for domain, count in ranked_domains]
     dominant_domain = domains[0]["domain"] if domains else None
     return {
         "top_k_considered": len(rows),
@@ -483,9 +462,7 @@ def _build_candidate_domain_summary(
         "cross_domain_mix": bool(len(domains) > 1),
         "top_domains": [item["domain"] for item in domains[:3]],
         "domain_counts": {domain: int(count) for domain, count in ranked_domains},
-        "markdown_ratio": (
-            float(markdown_count) / float(len(rows)) if rows else 0.0
-        ),
+        "markdown_ratio": (float(markdown_count) / float(len(rows)) if rows else 0.0),
         "latest_doc_candidates": latest_doc_candidates[:3],
         "domains": domains,
     }
@@ -527,9 +504,7 @@ def _append_query_refinement(
     if any(item.get("query") == normalized_query for item in refinements):
         return
     query_tokens = [token for token in normalized_query.lower().split() if token]
-    added_terms = [
-        token for token in query_tokens if token not in set(_dedupe_tokens(raw_tokens))
-    ]
+    added_terms = [token for token in query_tokens if token not in set(_dedupe_tokens(raw_tokens))]
     refinements.append(
         {
             "code": str(code or "").strip(),
@@ -550,14 +525,11 @@ def _build_suggested_query_refinements(
 ) -> list[dict[str, Any]]:
     query_flags = _query_flags(query)
     if not (
-        bool(query_flags.get("doc_sync", False))
-        or bool(query_flags.get("latest_sensitive", False))
+        bool(query_flags.get("doc_sync", False)) or bool(query_flags.get("latest_sensitive", False))
     ):
         return []
     raw_tokens = [token for token in str(query or "").strip().lower().split() if token]
-    topic_tokens = [
-        token for token in raw_tokens if token not in _QUERY_REFINEMENT_STOPWORDS
-    ]
+    topic_tokens = [token for token in raw_tokens if token not in _QUERY_REFINEMENT_STOPWORDS]
     domain_summary = _build_candidate_domain_summary(rows)
     ranked_domains = [
         str(item.get("domain", "") or "")
@@ -891,11 +863,7 @@ def _build_upgrade_guidance(
 ) -> dict[str, Any]:
     query_flags = _query_flags(query)
     unique_domains = int(candidate_domain_summary.get("unique_domains", 0) or 0)
-    top_gap = (
-        float(rows[0].fused_score) - float(rows[1].fused_score)
-        if len(rows) >= 2
-        else 99.0
-    )
+    top_gap = float(rows[0].fused_score) - float(rows[1].fused_score) if len(rows) >= 2 else 99.0
     high_risk_codes = {
         str(item.get("code") or "").strip()
         for item in risk_hints
@@ -920,19 +888,13 @@ def _build_upgrade_guidance(
     if onboarding_ready and unique_domains <= 3 and not high_risk_codes:
         expected_incremental_value = "low"
         upgrade_recommended = False
-        why_not_plan_yet = (
-            "This looks like repo onboarding, and quick already grouped entrypoints, contracts, and runtime files."
-        )
+        why_not_plan_yet = "This looks like repo onboarding, and quick already grouped entrypoints, contracts, and runtime files."
     elif high_risk_codes or (unique_domains >= 3 and top_gap < 1.5):
         expected_incremental_value = "high" if high_risk_codes else "medium"
         upgrade_recommended = True
-        why_upgrade_now = (
-            "The shortlist still mixes multiple domains or carries high-risk hints, so full plan should add dependency-level evidence."
-        )
+        why_upgrade_now = "The shortlist still mixes multiple domains or carries high-risk hints, so full plan should add dependency-level evidence."
     elif upgrade_recommended:
-        why_upgrade_now = (
-            "Quick has not fully narrowed the reading surface yet, so full plan may add useful dependency and symbol context."
-        )
+        why_upgrade_now = "Quick has not fully narrowed the reading surface yet, so full plan may add useful dependency and symbol context."
 
     return {
         "upgrade_recommended": bool(upgrade_recommended),
@@ -1097,9 +1059,7 @@ def build_plan_quick(
     if isinstance(cache_info, dict) and str(cache_info.get("mode") or "") == "full_build":
         cache_info = dict(cache_info)
         cache_info["full_build_reason"] = str(
-            cache_info.get("full_build_reason")
-            or cache_info.get("reason")
-            or "cache_missing"
+            cache_info.get("full_build_reason") or cache_info.get("reason") or "cache_missing"
         )
     repo_map: dict[str, Any] = {}
     files_map = snapshot.files_map
@@ -1219,8 +1179,10 @@ def build_plan_quick(
 
     limited_rows = rescored_rows[:top_k]
     candidate_paths = [row.path for row in limited_rows if row.path]
-    if repomap_expand and isinstance(repomap_stage, dict) and not repomap_stage.get(
-        "focused_files"
+    if (
+        repomap_expand
+        and isinstance(repomap_stage, dict)
+        and not repomap_stage.get("focused_files")
     ):
         repomap_stage["focused_files"] = list(candidate_paths)
 
@@ -1268,14 +1230,10 @@ def build_plan_quick(
                 (datetime.now(timezone.utc) - started_at).total_seconds() * 1000.0,
             )
         ),
-        "repomap_used_tokens": int(
-            repo_map.get("used_tokens", 0) or 0
-        )
+        "repomap_used_tokens": int(repo_map.get("used_tokens", 0) or 0)
         if ranking_source == "repomap"
         else int((repomap_stage or {}).get("used_tokens", 0) or 0),
-        "repomap_budget_tokens": int(
-            repo_map.get("budget_tokens", budget_tokens) or 0
-        )
+        "repomap_budget_tokens": int(repo_map.get("budget_tokens", budget_tokens) or 0)
         if ranking_source == "repomap"
         else int((repomap_stage or {}).get("budget_tokens", budget_tokens) or budget_tokens),
         "ranking_profile": str(
@@ -1293,6 +1251,13 @@ def build_plan_quick(
         ),
         "risk_hints": risk_hints,
         **upgrade_guidance,
+        # ALH1-0202.T1: report-only outcome logging fields
+        "outcome_label": "plan_quick_success",
+        "upgrade_outcome_hint": {
+            "expected_incremental_value": upgrade_guidance["expected_incremental_value"],
+            "expected_cost_ms_band": upgrade_guidance["expected_cost_ms_band"],
+            "upgrade_recommended": upgrade_guidance["upgrade_recommended"],
+        },
     }
     if include_rows:
         response["rows"] = [row.as_dict() for row in limited_rows]
