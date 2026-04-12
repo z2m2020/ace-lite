@@ -238,9 +238,7 @@ def build_runtime_git_doctor_payload(
     ]
     issue_type = _classify_git_error(errors[0]) if errors else ""
     reasons = {
-        str(item.get("reason") or "").strip()
-        for item in (head, worktree)
-        if isinstance(item, dict)
+        str(item.get("reason") or "").strip() for item in (head, worktree) if isinstance(item, dict)
     }
     recommendations: list[str] = []
 
@@ -311,10 +309,13 @@ def build_runtime_version_sync_payload(
         ok = True
         recommendations = []
 
+    repair_steps = ["python -m pip install -e .[dev]"] if not ok else []
+
     return {
         "ok": ok,
         "event": "runtime_doctor_version_sync",
         "reason": reason,
+        "reason_code": reason,
         "dist_name": str(info.get("dist_name") or dist_name),
         "version": str(info.get("version") or ""),
         "source": str(info.get("source") or ""),
@@ -322,6 +323,8 @@ def build_runtime_version_sync_payload(
         "installed_version": installed_version,
         "drifted": drifted,
         "recommendations": recommendations,
+        "repair_steps": repair_steps,
+        "修复步骤": repair_steps,
     }
 
 
@@ -365,9 +368,7 @@ def build_runtime_doctor_payload(
     runtime_stats = load_runtime_stats_summary(
         db_path=stats_db_path,
         user_id=user_id,
-        home_path=os.environ.get("HOME")
-        or os.environ.get("USERPROFILE")
-        or Path.home(),
+        home_path=os.environ.get("HOME") or os.environ.get("USERPROFILE") or Path.home(),
     )
     cache_report = verify_stage_artifact_cache(
         repo_root=root,

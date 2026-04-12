@@ -59,6 +59,25 @@ class HealthPayload(TypedDict):
     timestamp: str
 
 
+def _build_install_drift_guidance(version_info: dict[str, Any]) -> dict[str, Any] | None:
+    reason_code = str(version_info.get("reason_code") or "").strip()
+    if reason_code != "install_drift":
+        return None
+    repair_steps = ["python -m pip install -e .[dev]"]
+    return {
+        "triggered": True,
+        "reason_code": reason_code,
+        "message": (
+            "Installed package metadata does not match pyproject.toml. "
+            "Reinstall the editable package to resync entry points and metadata."
+        ),
+        "pyproject_version": str(version_info.get("pyproject_version") or "").strip(),
+        "installed_version": str(version_info.get("installed_version") or "").strip(),
+        "repair_steps": repair_steps,
+        "修复步骤": repair_steps,
+    }
+
+
 def resolve_runtime_source_tree(*, module_path: str | Path) -> dict[str, str]:
     resolved_module_path = Path(module_path).resolve()
     current = resolved_module_path.parent
@@ -96,9 +115,7 @@ def build_runtime_identity_payload(
     startup_head_commit = str(startup.get("head_commit") or "").strip()
     current_head_commit = str(current.get("head_commit") or "").strip()
     head_changed_since_start = bool(
-        startup_head_commit
-        and current_head_commit
-        and startup_head_commit != current_head_commit
+        startup_head_commit and current_head_commit and startup_head_commit != current_head_commit
     )
     stale_reason = "git_head_changed_since_start" if head_changed_since_start else ""
     git_repo_available = bool(startup.get("enabled") or current.get("enabled"))
@@ -134,15 +151,26 @@ def build_health_response_payload(
     memory_primary = str(config.memory_primary or "none").strip().lower() or "none"
     memory_secondary = str(config.memory_secondary or "none").strip().lower() or "none"
     memory_disabled = memory_primary == "none" and memory_secondary == "none"
+    normalized_version_info = dict(version_info or {})
+    if (
+        bool(normalized_version_info.get("drifted"))
+        and not str(normalized_version_info.get("reason_code") or "").strip()
+    ):
+        normalized_version_info["reason_code"] = "install_drift"
+    install_drift_guidance = _build_install_drift_guidance(normalized_version_info)
+    stale_repair_steps = [
+        "Restart the long-lived stdio MCP process so it reloads the current checkout.",
+    ]
     warnings: list[str] = []
     recommendations: list[str] = []
-    if bool(version_info.get("drifted")):
+    if bool(normalized_version_info.get("drifted")):
         warnings.append(
             "Version drift detected: pyproject.toml="
-            f"{version_info.get('pyproject_version')} but installed metadata="
-            f"{version_info.get('installed_version')} (dist={version_info.get('dist_name')}). "
+            f"{normalized_version_info.get('pyproject_version')} but installed metadata="
+            f"{normalized_version_info.get('installed_version')} (dist={normalized_version_info.get('dist_name')}). "
             "Run: python -m pip install -e .[dev]"
         )
+        recommendations.append("python -m pip install -e .[dev]")
     if memory_disabled:
         warnings.append(
             "Memory providers are disabled (ACE_LITE_MEMORY_PRIMARY/SECONDARY are none)."
@@ -165,28 +193,32 @@ def build_health_response_payload(
     staleness_warning = (
         {
             "triggered": True,
+            "stale_reason": str(runtime_identity.get("stale_reason") or "").strip()
+            or "git_head_changed_since_start",
             "reason": str(runtime_identity.get("stale_reason") or "").strip()
             or "git_head_changed_since_start",
+            "reason_code": "stale_process",
             "message": (
                 "The source tree visible to this process changed after startup. "
                 "Restart the long-lived stdio MCP process to load the latest code."
             ),
             "startup_head_commit": str(runtime_identity.get("startup_head_commit") or "").strip(),
             "current_head_commit": str(runtime_identity.get("current_head_commit") or "").strip(),
+            "repair_steps": stale_repair_steps,
+            "修复步骤": stale_repair_steps,
         }
         if bool(runtime_identity.get("stale_process_suspected"))
         else None
     )
-    timestamp = (
-        now_iso_fn()
-        if now_iso_fn is not None
-        else datetime.now(timezone.utc).isoformat()
-    )
+    timestamp = now_iso_fn() if now_iso_fn is not None else datetime.now(timezone.utc).isoformat()
     return {
         "ok": True,
         "server_name": config.server_name,
         "version": version,
-        "version_info": version_info,
+        "version_info": {
+            **normalized_version_info,
+            "install_drift_guidance": install_drift_guidance,
+        },
         "default_root": str(config.default_root),
         "default_repo": config.default_repo,
         "default_skills_dir": str(config.default_skills_dir),
@@ -199,14 +231,12 @@ def build_health_response_payload(
         "mcp_base_url": config.mcp_base_url,
         "rest_base_url": config.rest_base_url,
         "embedding_enabled": bool(config.embedding_enabled),
-        "embedding_provider": str(config.embedding_provider or "hash").strip().lower()
-        or "hash",
+        "embedding_provider": str(config.embedding_provider or "hash").strip().lower() or "hash",
         "embedding_model": str(config.embedding_model or "hash-v1").strip() or "hash-v1",
         "embedding_dimension": max(1, int(config.embedding_dimension)),
         "embedding_index_path": str(config.embedding_index_path or "").strip()
         or "context-map/embeddings/index.json",
-        "ollama_base_url": str(config.ollama_base_url or "").strip()
-        or "http://localhost:11434",
+        "ollama_base_url": str(config.ollama_base_url or "").strip() or "http://localhost:11434",
         "user_id": config.user_id,
         "app": config.app,
         "runtime_identity": runtime_identity,

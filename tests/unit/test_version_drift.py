@@ -12,6 +12,8 @@ def test_get_version_info_no_drift(monkeypatch) -> None:
     assert info["version"] == "1.2.3"
     assert info["drifted"] is False
     assert info["source"] == "pyproject"
+    assert info["reason_code"] == "ok"
+    assert info["repair_steps"] == []
 
 
 def test_get_version_info_detects_drift(monkeypatch) -> None:
@@ -21,6 +23,8 @@ def test_get_version_info_detects_drift(monkeypatch) -> None:
     assert info["version"] == "1.2.3"
     assert info["installed_version"] == "0.9.9"
     assert info["drifted"] is True
+    assert info["reason_code"] == "install_drift"
+    assert info["repair_steps"] == ["python -m pip install -e .[dev]"]
 
 
 def test_get_version_info_metadata_missing(monkeypatch) -> None:
@@ -34,6 +38,8 @@ def test_get_version_info_metadata_missing(monkeypatch) -> None:
     assert info["version"] == "1.2.3"
     assert info["installed_version"] is None
     assert info["drifted"] is False
+    assert info["reason_code"] == "missing_installed_metadata"
+    assert info["repair_steps"] == ["python -m pip install -e .[dev]"]
 
 
 def test_verify_version_install_sync_returns_info_when_aligned(monkeypatch) -> None:

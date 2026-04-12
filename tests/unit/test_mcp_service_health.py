@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ace_lite.mcp_server.config import AceLiteMcpConfig
 from ace_lite.mcp_server.service_health import (
+    RuntimeIdentityPayload,
     build_health_response_payload,
     build_runtime_identity_payload,
 )
@@ -19,7 +20,7 @@ def _make_config(tmp_path: Path) -> AceLiteMcpConfig:
     )
 
 
-def _runtime_identity(*, stale: bool = False) -> dict[str, object]:
+def _runtime_identity(*, stale: bool = False) -> RuntimeIdentityPayload:
     return build_runtime_identity_payload(
         pid=42,
         process_started_at="2026-03-26T00:00:00+00:00",
@@ -94,7 +95,17 @@ def test_build_health_payload_surfaces_version_drift_warning(
     assert payload["memory_ready"] is True
     assert payload["warnings"]
     assert "Version drift detected" in payload["warnings"][0]
-    assert payload["recommendations"] == []
+    assert payload["recommendations"] == ["python -m pip install -e .[dev]"]
+    assert payload["version_info"]["reason_code"] == "install_drift"
+    assert payload["version_info"]["install_drift_guidance"] == {
+        "triggered": True,
+        "reason_code": "install_drift",
+        "message": "Installed package metadata does not match pyproject.toml. Reinstall the editable package to resync entry points and metadata.",
+        "pyproject_version": "0.3.44",
+        "installed_version": "0.3.39",
+        "repair_steps": ["python -m pip install -e .[dev]"],
+        "修复步骤": ["python -m pip install -e .[dev]"],
+    }
     assert payload["request_stats"]["active_request_count"] == 1
 
 
@@ -126,10 +137,20 @@ def test_build_health_payload_adds_structured_stale_process_warning(
     assert payload["runtime_identity"]["stale_process_suspected"] is True
     assert payload["staleness_warning"] == {
         "triggered": True,
+        "stale_reason": "git_head_changed_since_start",
         "reason": "git_head_changed_since_start",
+        "reason_code": "stale_process",
         "message": "The source tree visible to this process changed after startup. Restart the long-lived stdio MCP process to load the latest code.",
         "startup_head_commit": "old123",
         "current_head_commit": "new456",
+        "repair_steps": [
+            "Restart the long-lived stdio MCP process so it reloads the current checkout.",
+        ],
+        "修复步骤": [
+            "Restart the long-lived stdio MCP process so it reloads the current checkout.",
+        ],
     }
     assert any("Runtime code appears stale" in item for item in payload["warnings"])
-    assert any("Restart the stdio MCP server/session" in item for item in payload["recommendations"])
+    assert any(
+        "Restart the stdio MCP server/session" in item for item in payload["recommendations"]
+    )

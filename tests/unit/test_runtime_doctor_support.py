@@ -17,11 +17,22 @@ from ace_lite.runtime_stats_store import DurableStatsStore
 
 
 def test_runtime_doctor_support_facade_reexports_doctor_helpers() -> None:
-    assert build_runtime_cache_doctor_payload is runtime_doctor_support.build_runtime_cache_doctor_payload
-    assert build_runtime_cache_vacuum_payload is runtime_doctor_support.build_runtime_cache_vacuum_payload
+    assert (
+        build_runtime_cache_doctor_payload
+        is runtime_doctor_support.build_runtime_cache_doctor_payload
+    )
+    assert (
+        build_runtime_cache_vacuum_payload
+        is runtime_doctor_support.build_runtime_cache_vacuum_payload
+    )
     assert build_runtime_doctor_payload is runtime_doctor_support.build_runtime_doctor_payload
-    assert build_runtime_git_doctor_payload is runtime_doctor_support.build_runtime_git_doctor_payload
-    assert build_runtime_version_sync_payload is runtime_doctor_support.build_runtime_version_sync_payload
+    assert (
+        build_runtime_git_doctor_payload is runtime_doctor_support.build_runtime_git_doctor_payload
+    )
+    assert (
+        build_runtime_version_sync_payload
+        is runtime_doctor_support.build_runtime_version_sync_payload
+    )
 
 
 def test_build_runtime_git_doctor_payload_accepts_non_git_repo(tmp_path: Path) -> None:
@@ -80,7 +91,10 @@ def test_build_runtime_version_sync_payload_detects_install_drift() -> None:
 
     assert payload["ok"] is False
     assert payload["reason"] == "install_drift"
+    assert payload["reason_code"] == "install_drift"
     assert payload["recommendations"]
+    assert payload["repair_steps"] == ["python -m pip install -e .[dev]"]
+    assert payload["修复步骤"] == ["python -m pip install -e .[dev]"]
 
 
 def test_collect_runtime_doctor_degraded_reason_codes_normalizes_doctor_failures() -> None:

@@ -97,6 +97,15 @@ def get_version_info(*, dist_name: str = _DIST_NAME) -> dict[str, object]:
         if pyproject_version
         else ("installed_metadata" if installed_version else "unknown")
     )
+    if not installed_version:
+        reason_code = "missing_installed_metadata"
+        repair_steps = ["python -m pip install -e .[dev]"]
+    elif drifted:
+        reason_code = "install_drift"
+        repair_steps = ["python -m pip install -e .[dev]"]
+    else:
+        reason_code = "ok"
+        repair_steps = []
     return {
         "version": effective,
         "source": source,
@@ -104,6 +113,8 @@ def get_version_info(*, dist_name: str = _DIST_NAME) -> dict[str, object]:
         "installed_version": installed_version,
         "dist_name": dist_name,
         "drifted": drifted,
+        "reason_code": reason_code,
+        "repair_steps": repair_steps,
     }
 
 
@@ -122,8 +133,7 @@ def verify_version_install_sync(*, dist_name: str = _DIST_NAME) -> dict[str, obj
 
     if not installed_version:
         raise RuntimeError(
-            "Installed metadata is missing for "
-            f"{dist_name}; run: python -m pip install -e .[dev]"
+            f"Installed metadata is missing for {dist_name}; run: python -m pip install -e .[dev]"
         )
     if pyproject_version and installed_version != pyproject_version:
         raise RuntimeError(
