@@ -41,6 +41,8 @@ from ace_lite.plan_timeout import (
     resolve_plan_timeout_seconds,
 )
 from ace_lite.context_report import write_context_report_markdown
+from ace_lite.cli_app.progress import echo_progress, echo_done, clear_progress
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.scoring_config import (
     HYBRID_BM25_WEIGHT,
     HYBRID_COMBINED_SCALE,
@@ -58,8 +60,27 @@ def _cli_module():
 @click.command(
     "plan",
     help="Build a source plan from memory->index->repomap->augment->skills->source_plan.",
+    epilog=get_help_template("plan"),
 )
 @click.option("--query", required=True, help="User query for planning.")
+@click.option(
+    "--progress/--no-progress",
+    default=True,
+    show_default=True,
+    help="Show progress indicators during execution.",
+)
+@click.option(
+    "--quick/--no-quick",
+    default=False,
+    show_default=True,
+    help="Use quick mode: skip memory/skill stages, use index-only retrieval.",
+)
+@click.option(
+    "--dry-run/--no-dry-run",
+    default=False,
+    show_default=True,
+    help="Validate parameters and show effective config without executing.",
+)
 @click.option(
     "--timeout-seconds",
     default=None,
@@ -88,6 +109,9 @@ def _cli_module():
 def plan_command(
     ctx: click.Context,
     query: str,
+    progress: bool,
+    quick: bool,
+    dry_run: bool,
     timeout_seconds: float | None,
     output_json: str | None,
     context_report_path: str | None,
@@ -213,6 +237,65 @@ def plan_command(
 ) -> None:
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    # Handle --quick mode
+    if quick:
+        from ace_lite.cli_app.commands.plan_quick import run_plan_quick
+
+        if progress:
+            click.echo("Running in quick mode (skipping memory/skill stages)")
+        echo_progress("Building quick plan...")
+        payload = run_plan_quick(
+            query=query,
+            root=root,
+            top_k=top_k_files,
+            languages=languages,
+            tokenizer_model=tokenizer_model,
+        )
+        if progress:
+            clear_progress()
+            echo_done("Quick plan built")
+        payload["_quick_mode"] = True
+        if output_json:
+            target = Path(str(output_json)).expanduser()
+            if not target.is_absolute():
+                target = Path(root) / target
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        echo_json(payload)
+        return
+
+    # Handle --dry-run mode
+    if dry_run:
+        if progress:
+            click.echo("Running in dry-run mode (validating parameters only)")
+        # Validate config loading
+        config = _load_command_config(root)
+        # Show effective configuration
+        dry_run_info = {
+            "ok": True,
+            "event": "plan_dry_run",
+            "query": query,
+            "repo": repo,
+            "root": str(Path(root).resolve()),
+            "effective_config": {
+                "top_k_files": top_k_files,
+                "timeout_seconds": timeout_seconds,
+                "retrieval_preset": retrieval_preset,
+                "languages": languages,
+                "lsp_enabled": lsp_enabled,
+                "embedding_enabled": embedding_enabled,
+                "repomap_enabled": repomap_enabled,
+                "cochange_enabled": cochange_enabled,
+            },
+            "message": "Dry run successful. Configuration is valid.",
+        }
+        if progress:
+            echo_done("Dry run completed")
+        if verbose:
+            click.echo(json.dumps(dry_run_info, ensure_ascii=False, indent=2), err=True)
+        echo_json(dry_run_info)
+        return
 
     config = _load_command_config(root)
     repomap_signal_weights_payload: dict[str, float] | None = None
@@ -417,8 +500,14 @@ def plan_command(
         retrieval_policy=_to_retrieval_policy(resolved["retrieval_policy"]),
     )
 
+    if progress:
+        click.echo("Building source plan...")
+        echo_progress("Loading memory...")
+
     def _run_plan_payload():
-        return cli_module.run_plan(
+        if progress:
+            echo_progress("Building index candidates...")
+        result = cli_module.run_plan(
             query=query,
             repo=repo,
             root=root,
@@ -429,6 +518,9 @@ def plan_command(
             memory_provider=memory_provider,
             **run_plan_kwargs,
         )
+        if progress:
+            echo_progress("Generating source plan...")
+        return result
 
     execution = execute_timed_plan_with_fallback(
         run_payload=_run_plan_payload,
@@ -454,6 +546,14 @@ def plan_command(
             },
         ),
     )
+
+    if progress:
+        if execution.timed_out:
+            clear_progress()
+            click.echo("Plan timed out, using fallback suggestions")
+        else:
+            clear_progress()
+            echo_done("Plan built")
 
     if execution.timed_out:
         payload = build_plan_timeout_fallback_payload(

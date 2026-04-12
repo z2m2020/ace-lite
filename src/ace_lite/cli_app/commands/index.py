@@ -6,6 +6,8 @@ from pathlib import Path
 import click
 
 from ace_lite.cli_app.output import echo_json
+from ace_lite.cli_app.progress import echo_progress, echo_done, clear_progress
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.index_cache import build_or_refresh_index
 from ace_lite.indexer import build_index
 from ace_lite.indexing_resilience import (
@@ -15,12 +17,18 @@ from ace_lite.indexing_resilience import (
 from ace_lite.parsers.languages import parse_language_csv
 
 
-@click.command("index", help="Build distilled project index and save as JSON.")
+@click.command("index", help="Build distilled project index and save as JSON.", epilog=get_help_template("index"))
 @click.option(
     "--root",
     required=True,
     type=click.Path(path_type=str),
     help="Repository root path.",
+)
+@click.option(
+    "--progress/--no-progress",
+    default=True,
+    show_default=True,
+    help="Show progress indicators during indexing.",
 )
 @click.option(
     "--languages",
@@ -100,6 +108,7 @@ from ace_lite.parsers.languages import parse_language_csv
 )
 def index_command(
     root: str,
+    progress: bool,
     languages: str,
     output: str,
     incremental: bool,
@@ -122,6 +131,13 @@ def index_command(
         or float(subprocess_batch_timeout or 0.0) > 0.0
     )
 
+    if progress:
+        click.echo("Building index...")
+        if incremental:
+            echo_progress("Checking existing index...")
+        else:
+            echo_progress("Scanning files...")
+
     cache_info: dict[str, object] | None = None
     if effective_batch_mode:
         config = IndexingResilienceConfig(
@@ -133,6 +149,8 @@ def index_command(
             subprocess_batch=bool(subprocess_batch),
             subprocess_batch_timeout_seconds=float(subprocess_batch_timeout or 0.0) or None,
         )
+        if progress:
+            echo_progress("Indexing with resilience mode...")
         payload = build_index_with_resilience(
             root,
             languages=enabled_languages,
@@ -143,6 +161,8 @@ def index_command(
         cache_path = output_path
         if not cache_path.is_absolute():
             cache_path = Path(root) / cache_path
+        if progress:
+            echo_progress("Building index cache...")
         payload, cache_info = build_or_refresh_index(
             root_dir=root,
             cache_path=str(cache_path),
@@ -155,6 +175,12 @@ def index_command(
     output_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+
+    if progress:
+        clear_progress()
+        file_count = int(payload.get("file_count") or 0)
+        echo_done(f"Index built ({file_count} files)")
+
     echo_json(
         {
             "ok": True,

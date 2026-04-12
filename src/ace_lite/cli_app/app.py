@@ -17,6 +17,7 @@ from ace_lite.cli_app.commands.feedback import feedback_group
 from ace_lite.cli_app.commands.index import index_command
 from ace_lite.cli_app.commands.memory import memory_group
 from ace_lite.cli_app.commands.plan import plan_command
+from ace_lite.cli_app.commands.plan_quick import plan_quick_command
 from ace_lite.cli_app.commands.profile import profile_group
 from ace_lite.cli_app.commands.repomap import repomap_group
 from ace_lite.cli_app.commands.runtime import runtime_group
@@ -33,6 +34,7 @@ def cli() -> None:
 
 
 cli.add_command(plan_command)
+cli.add_command(plan_quick_command)
 cli.add_command(index_command)
 cli.add_command(repomap_group)
 cli.add_command(benchmark_group)

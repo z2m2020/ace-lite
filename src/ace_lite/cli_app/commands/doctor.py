@@ -4,10 +4,39 @@ import sys
 
 import click
 
+from ace_lite.cli_app.cli_enhancements import OutputFormatter
 from ace_lite.cli_app.commands import runtime as runtime_module
+from ace_lite.cli_app.runtime_doctor_support import (
+    build_runtime_doctor_payload,
+    persist_runtime_doctor_invocation,
+)
 
 
-@click.command("doctor", help="Grouped runtime diagnostics (alias for `runtime doctor`).")
+# Doctor command help examples
+DOCTOR_HELP_EXAMPLES = """
+Examples:
+  # Run full diagnostics
+  ace-lite doctor --root=.
+
+  # Fast diagnostics (skip heavy checks like MCP probe)
+  ace-lite doctor --fast --root=.
+
+  # Output as table format
+  ace-lite doctor --root=. --output-format=table
+
+  # Check specific repo
+  ace-lite doctor --root=/path/to/repo
+
+See also:
+  docs/guides/GETTING_STARTED.md    Quick start guide
+  docs/guides/DIAGNOSTICS.md        Diagnostics guide
+"""
+
+
+@click.command(
+    "doctor",
+    help="Grouped runtime diagnostics (alias for `runtime doctor`).",
+)
 @click.option("--root", default=".", show_default=True, help="Repository root path.")
 @click.option(
     "--config-file",
@@ -107,6 +136,19 @@ from ace_lite.cli_app.commands import runtime as runtime_module
     show_default=True,
     help="Persist doctor degraded reasons as a synthetic runtime invocation in durable stats.",
 )
+@click.option(
+    "--fast/--no-fast",
+    default=False,
+    show_default=True,
+    help="Fast mode: skip MCP self-test probe for quicker diagnostics.",
+)
+@click.option(
+    "--output-format",
+    default="json",
+    type=click.Choice(["json", "table"], case_sensitive=False),
+    show_default=True,
+    help="Output format: json (default) or table (human-readable).",
+)
 def doctor_command(
     root: str,
     config_file: str,
@@ -126,8 +168,15 @@ def doctor_command(
     payload_root: str,
     temp_root: str,
     record_runtime_event: bool,
+    fast: bool,
+    output_format: str,
 ) -> None:
-    runtime_module.runtime_doctor_command.callback(
+    # In fast mode, skip MCP self-test probe
+    effective_probe_endpoints = probe_endpoints and not fast
+    effective_require_memory = require_memory and not fast
+
+    # Build doctor payload directly
+    payload = build_runtime_doctor_payload(
         root=root,
         config_file=config_file,
         skills_dir=skills_dir,
@@ -136,8 +185,8 @@ def doctor_command(
         mcp_name=mcp_name,
         runtime_profile=runtime_profile,
         use_snapshot=use_snapshot,
-        require_memory=require_memory,
-        probe_endpoints=probe_endpoints,
+        require_memory=effective_require_memory,
+        probe_endpoints=effective_probe_endpoints,
         current_path=current_path,
         last_known_good_path=last_known_good_path,
         stats_db_path=stats_db_path,
@@ -145,8 +194,32 @@ def doctor_command(
         cache_db_path=cache_db_path,
         payload_root=payload_root,
         temp_root=temp_root,
-        record_runtime_event=record_runtime_event,
     )
+
+    # Handle runtime event recording
+    if record_runtime_event:
+        payload["runtime_event_recording"] = persist_runtime_doctor_invocation(
+            root=root,
+            payload=payload,
+            stats_db_path=stats_db_path,
+            profile_key=runtime_profile,
+        )
+
+    # Add fast mode info to payload
+    if fast:
+        payload["_fast_mode"] = True
+
+    # Format output based on output-format option
+    if output_format == "table":
+        click.echo(OutputFormatter.format_doctor_table(payload))
+    else:
+        # Import echo_json for JSON output
+        from ace_lite.cli_app.output import echo_json
+        echo_json(payload)
+
+    # Exit with error code if checks failed
+    if not bool(payload.get("ok")):
+        raise click.ClickException("Runtime doctor checks failed")
 
 
 __all__ = ["doctor_command"]

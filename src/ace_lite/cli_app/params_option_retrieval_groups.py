@@ -12,9 +12,26 @@ from ace_lite.cli_app.params_option_catalog import (
     HYBRID_FUSION_CHOICES,
     REMOTE_SLOT_POLICY_CHOICES,
     RETRIEVAL_PRESET_CHOICES,
+    RETRIEVAL_PRESETS,
 )
 from ace_lite.cli_app.params_option_registry import OptionDescriptor
 from ace_lite.repomap.ranking import RANKING_PROFILES
+
+
+def _build_retrieval_preset_help() -> str:
+    """Build detailed help text for retrieval presets."""
+    presets = {
+        "none": "No preset (use explicit flags)",
+        "balanced-v1": "Balanced precision/recall for general use",
+        "precision-v1": "Higher precision, fewer candidates",
+        "recall-v1": "Higher recall, more candidates",
+    }
+    lines = ["Named retrieval preset overriding candidate/repomap tuning (explicit flags win)."]
+    lines.append("Presets:")
+    for name, desc in presets.items():
+        lines.append(f"  {name}: {desc}")
+    return "\n".join(lines)
+
 
 SHARED_CHUNK_OPTION_DESCRIPTORS: tuple[OptionDescriptor, ...] = (
     (
@@ -211,7 +228,7 @@ SHARED_CANDIDATE_OPTION_DESCRIPTORS: tuple[OptionDescriptor, ...] = (
             "default": "none",
             "show_default": True,
             "type": click.Choice(list(RETRIEVAL_PRESET_CHOICES), case_sensitive=False),
-            "help": "Named retrieval preset overriding candidate/repomap tuning (explicit flags win).",
+            "help": _build_retrieval_preset_help(),
         },
     ),
     (
