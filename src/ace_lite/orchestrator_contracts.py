@@ -1,0 +1,526 @@
+"""Orchestrator Type Contracts for ACE-Lite
+
+This module provides typed interfaces and contracts for the orchestrator
+to reduce dict fallback patterns and improve type safety.
+
+PRD-91 QO-2101/QO-2102: Orchestrator Typed Contracts
+
+Key improvements:
+1. TypedDict definitions for all payload structures
+2. Type-safe accessor functions
+3. Validation with helpful error messages
+4. Backward compatibility with existing dict-based code
+"""
+
+from __future__ import annotations
+
+from typing import Any, TypedDict
+
+
+# =============================================================================
+# Core Payload TypedDicts
+# =============================================================================
+
+
+class PlanRequestPayload(TypedDict, total=False):
+    """Payload structure for plan requests."""
+
+    query: str
+    root: str
+    top_k: int
+    ranking_profile: str
+    budget_tokens: int
+    language: str | None
+    skip_stages: list[str]
+    force_stages: list[str]
+    context: dict[str, Any]
+
+
+class PlanResponsePayload(TypedDict, total=False):
+    """Payload structure for plan responses."""
+
+    schema_version: str
+    query: str
+    plan: str
+    confidence: float
+    stage_metrics: list[dict[str, Any]]
+    candidates: list[dict[str, Any]]
+
+
+class StageStatePayload(TypedDict, total=False):
+    """Payload structure for stage states."""
+
+    stage_name: str
+    enabled: bool
+    status: str  # pending, running, completed, failed
+    started_at: float | None
+    completed_at: float | None
+    metrics: dict[str, Any]
+    result: dict[str, Any] | None
+    error: str | None
+
+
+class RetrievalContextPayload(TypedDict, total=False):
+    """Payload structure for retrieval context."""
+
+    query: str
+    candidates: list[dict[str, Any]]
+    rankings: list[str]
+    selected: list[str]
+    rejected: list[str]
+    total_tokens: int
+
+
+class MemoryConfigPayload(TypedDict, total=False):
+    """Payload structure for memory configuration."""
+
+    namespace: str | None
+    root: str | None
+    notes_path: str | None
+    db_path: str | None
+    profile_path: str | None
+
+
+class RetrievalConfigPayload(TypedDict, total=False):
+    """Payload structure for retrieval configuration."""
+
+    top_k: int
+    budget_tokens: int
+    language: str | None
+    ranking_profile: str
+    signal_weights: dict[str, float]
+
+
+# =============================================================================
+# Type-Safe Accessors
+# =============================================================================
+
+
+def get_optional(data: dict[str, Any], key: str, default: Any = None) -> Any:
+    """Get an optional value from a dict with a default.
+
+    This is a safe accessor that won't raise KeyError.
+    """
+    return data.get(key, default)
+
+
+def get_required(data: dict[str, Any], key: str, context: str = "") -> Any:
+    """Get a required value from a dict.
+
+    Raises:
+        KeyError: If the key is not found
+
+    Args:
+        data: The dict to access
+        key: The key to look up
+        context: Additional context for error messages
+    """
+    if key not in data:
+        raise KeyError(
+            f"Required key '{key}' not found in payload"
+            + (f" ({context})" if context else "")
+        )
+    return data[key]
+
+
+def get_typed(data: dict[str, Any], key: str, expected_type: type, default: Any) -> Any:
+    """Get a value with type checking.
+
+    Args:
+        data: The dict to access
+        key: The key to look up
+        expected_type: The expected type of the value
+        default: Default value if key not found or type mismatch
+
+    Returns:
+        The value if it matches the expected type, otherwise the default
+    """
+    value = data.get(key, default)
+    if isinstance(value, expected_type):
+        return value
+    return default
+
+
+def get_str(data: dict[str, Any], key: str, default: str = "") -> str:
+    """Get a string value with default."""
+    return get_typed(data, key, str, default)
+
+
+def get_int(data: dict[str, Any], key: str, default: int = 0) -> int:
+    """Get an integer value with default."""
+    value = data.get(key, default)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
+
+
+def get_float(data: dict[str, Any], key: str, default: float = 0.0) -> float:
+    """Get a float value with default."""
+    value = data.get(key, default)
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default
+
+
+def get_bool(data: dict[str, Any], key: str, default: bool = False) -> bool:
+    """Get a boolean value with default."""
+    value = data.get(key, default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ("true", "1", "yes", "on")
+    return default
+
+
+def get_list(data: dict[str, Any], key: str, default: list | None = None) -> list:
+    """Get a list value with default."""
+    if default is None:
+        default = []
+    return get_typed(data, key, list, default)
+
+
+def get_dict(data: dict[str, Any], key: str, default: dict | None = None) -> dict:
+    """Get a dict value with default."""
+    if default is None:
+        default = {}
+    return get_typed(data, key, dict, default)
+
+
+# =============================================================================
+# Validation Functions
+# =============================================================================
+
+
+class ValidationError(Exception):
+    """Raised when payload validation fails."""
+
+    def __init__(self, message: str, key: str | None = None):
+        super().__init__(message)
+        self.key = key
+
+
+def validate_payload(
+    data: dict[str, Any],
+    required_keys: list[str],
+    payload_name: str = "payload",
+) -> None:
+    """Validate that a payload has all required keys.
+
+    Args:
+        data: The payload to validate
+        required_keys: List of required key names
+        payload_name: Name of the payload for error messages
+
+    Raises:
+        ValidationError: If a required key is missing
+    """
+    for key in required_keys:
+        if key not in data:
+            raise ValidationError(
+                f"Missing required key '{key}' in {payload_name}",
+                key=key,
+            )
+
+
+def validate_plan_request(data: dict[str, Any]) -> PlanRequestPayload:
+    """Validate a plan request payload.
+
+    Args:
+        data: The payload to validate
+
+    Returns:
+        The validated payload
+
+    Raises:
+        ValidationError: If validation fails
+    """
+    validate_payload(data, ["query"], "PlanRequestPayload")
+    return data  # type: ignore
+
+
+def validate_plan_response(data: dict[str, Any]) -> PlanResponsePayload:
+    """Validate a plan response payload.
+
+    Args:
+        data: The payload to validate
+
+    Returns:
+        The validated payload
+
+    Raises:
+        ValidationError: If validation fails
+    """
+    # Response may have various structures, just check it's a dict
+    if not isinstance(data, dict):
+        raise ValidationError(
+            f"Expected dict for PlanResponsePayload, got {type(data).__name__}"
+        )
+    return data  # type: ignore
+
+
+# =============================================================================
+# Builder Functions
+# =============================================================================
+
+
+def build_stage_state(
+    stage_name: str,
+    status: str,
+    **kwargs: Any,
+) -> StageStatePayload:
+    """Build a stage state payload.
+
+    Args:
+        stage_name: Name of the stage
+        status: Current status (pending, running, completed, failed)
+        **kwargs: Additional fields to include
+
+    Returns:
+        A new stage state payload
+    """
+    import time
+
+    payload: StageStatePayload = {
+        "stage_name": stage_name,
+        "enabled": kwargs.get("enabled", True),
+        "status": status,
+        "started_at": kwargs.get("started_at", time.time() if status == "running" else None),
+        "completed_at": kwargs.get("completed_at", time.time() if status in ("completed", "failed") else None),
+        "metrics": kwargs.get("metrics", {}),
+        "result": kwargs.get("result"),
+        "error": kwargs.get("error"),
+    }
+    return payload
+
+
+def build_retrieval_candidate(
+    path: str,
+    score: float,
+    rank: int,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Build a retrieval candidate entry.
+
+    Args:
+        path: File path of the candidate
+        score: Relevance score
+        rank: Rank position
+        **kwargs: Additional fields
+
+    Returns:
+        A new candidate dict
+    """
+    return {
+        "path": path,
+        "score": float(score),
+        "rank": int(rank),
+        "source": kwargs.get("source", "retrieval"),
+        "language": kwargs.get("language"),
+        "lines": kwargs.get("lines"),
+        "preview": kwargs.get("preview"),
+    }
+
+
+# =============================================================================
+# Contract Adapters
+# =============================================================================
+
+
+class PlanRequestAdapter:
+    """Adapter for PlanRequestPayload with type-safe accessors."""
+
+    def __init__(self, payload: dict[str, Any]):
+        self._payload = payload
+
+    @property
+    def query(self) -> str:
+        """Get the query string."""
+        return get_str(self._payload, "query", "")
+
+    @property
+    def root(self) -> str:
+        """Get the root path."""
+        return get_str(self._payload, "root", ".")
+
+    @property
+    def top_k(self) -> int:
+        """Get the top K value."""
+        return get_int(self._payload, "top_k", 8)
+
+    @property
+    def budget_tokens(self) -> int:
+        """Get the budget tokens value."""
+        return get_int(self._payload, "budget_tokens", 800)
+
+    @property
+    def language(self) -> str | None:
+        """Get the language filter."""
+        return get_optional(self._payload, "language")
+
+    @property
+    def skip_stages(self) -> list[str]:
+        """Get the stages to skip."""
+        return get_list(self._payload, "skip_stages")
+
+    @property
+    def force_stages(self) -> list[str]:
+        """Get the stages to force."""
+        return get_list(self._payload, "force_stages")
+
+    @property
+    def ranking_profile(self) -> str:
+        """Get the ranking profile."""
+        return get_str(self._payload, "ranking_profile", "heuristic")
+
+    @property
+    def context(self) -> dict[str, Any]:
+        """Get the context dict."""
+        return get_dict(self._payload, "context", {})
+
+
+class PlanResponseAdapter:
+    """Adapter for PlanResponsePayload with type-safe accessors."""
+
+    def __init__(self, payload: dict[str, Any]):
+        self._payload = payload
+
+    @property
+    def schema_version(self) -> str:
+        """Get the schema version."""
+        return get_str(self._payload, "schema_version", "unknown")
+
+    @property
+    def query(self) -> str:
+        """Get the original query."""
+        return get_str(self._payload, "query", "")
+
+    @property
+    def plan(self) -> str:
+        """Get the generated plan."""
+        return get_str(self._payload, "plan", "")
+
+    @property
+    def confidence(self) -> float:
+        """Get the confidence score."""
+        return get_float(self._payload, "confidence", 0.0)
+
+    @property
+    def stage_metrics(self) -> list[dict[str, Any]]:
+        """Get the stage metrics."""
+        return get_list(self._payload, "stage_metrics")
+
+    @property
+    def candidates(self) -> list[dict[str, Any]]:
+        """Get the candidates."""
+        return get_list(self._payload, "candidates")
+
+    def get_candidate_paths(self) -> list[str]:
+        """Get just the candidate paths."""
+        return [c.get("path", "") for c in self.candidates if c.get("path")]
+
+    def get_candidate_scores(self) -> list[float]:
+        """Get just the candidate scores."""
+        return [c.get("score", 0.0) for c in self.candidates]
+
+
+class StageStateAdapter:
+    """Adapter for StageStatePayload with type-safe accessors."""
+
+    def __init__(self, payload: dict[str, Any]):
+        self._payload = payload
+
+    @property
+    def stage_name(self) -> str:
+        """Get the stage name."""
+        return get_str(self._payload, "stage_name", "unknown")
+
+    @property
+    def enabled(self) -> bool:
+        """Check if the stage is enabled."""
+        return get_bool(self._payload, "enabled", True)
+
+    @property
+    def status(self) -> str:
+        """Get the current status."""
+        return get_str(self._payload, "status", "pending")
+
+    @property
+    def is_running(self) -> bool:
+        """Check if the stage is running."""
+        return self.status == "running"
+
+    @property
+    def is_completed(self) -> bool:
+        """Check if the stage is completed."""
+        return self.status == "completed"
+
+    @property
+    def is_failed(self) -> bool:
+        """Check if the stage has failed."""
+        return self.status == "failed"
+
+    @property
+    def elapsed_time(self) -> float | None:
+        """Get the elapsed time in seconds."""
+        started = self._payload.get("started_at")
+        completed = self._payload.get("completed_at")
+        if started and completed:
+            return completed - started
+        return None
+
+    @property
+    def result(self) -> dict[str, Any] | None:
+        """Get the stage result."""
+        return get_optional(self._payload, "result")
+
+    @property
+    def error(self) -> str | None:
+        """Get the error message."""
+        return get_optional(self._payload, "error")
+
+
+# =============================================================================
+# Exports
+# =============================================================================
+
+__all__ = [
+    # TypedDicts
+    "PlanRequestPayload",
+    "PlanResponsePayload",
+    "StageStatePayload",
+    "RetrievalContextPayload",
+    "MemoryConfigPayload",
+    "RetrievalConfigPayload",
+    # Accessors
+    "get_optional",
+    "get_required",
+    "get_typed",
+    "get_str",
+    "get_int",
+    "get_float",
+    "get_bool",
+    "get_list",
+    "get_dict",
+    # Validation
+    "ValidationError",
+    "validate_payload",
+    "validate_plan_request",
+    "validate_plan_response",
+    # Builders
+    "build_stage_state",
+    "build_retrieval_candidate",
+    # Adapters
+    "PlanRequestAdapter",
+    "PlanResponseAdapter",
+    "StageStateAdapter",
+]
