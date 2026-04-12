@@ -8,6 +8,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.64] - 2026-04-12
+
+### Added
+
+- Added task-level note slots to `ace_memory_store` across CLI and MCP surfaces so requirement, contract, area, decision type, and task ID metadata can be captured explicitly.
+- Added a reproducible replay benchmark under `benchmark/session_feedback_2026_04_12/` plus a maintainer guide for session feedback capture.
+
+### Changed
+
+- Hardened `plan_quick` and retrieval policy intent detection so requirement IDs such as `EXPL-01` and `req-02` are recognized case-insensitively and normalized consistently.
+- Updated maintainer documentation to reflect the real `--context-report-path` and `feedback_record` public contracts.
+
 ## [0.3.63] - 2026-04-08
 
 ### Added
