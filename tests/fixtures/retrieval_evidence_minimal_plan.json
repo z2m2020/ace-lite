@@ -1,0 +1,60 @@
+{
+  "candidate_chunks": [
+    {
+      "confidence_score": 1.0,
+      "end_lineno": 2,
+      "evidence": {
+        "direct_retrieval": true,
+        "granularity": [
+          "symbol"
+        ],
+        "hint_only": false,
+        "hint_support": false,
+        "neighbor_context": false,
+        "reference_sidecar": false,
+        "role": "direct",
+        "sources": [
+          "direct_candidate"
+        ]
+      },
+      "evidence_confidence": "EXTRACTED",
+      "kind": "function",
+      "lineno": 1,
+      "path": "src/sample.py",
+      "qualified_name": "demo",
+      "score": 9.5
+    }
+  ],
+  "candidate_files": [
+    {
+      "path": "src/sample.py",
+      "score": 9.5
+    }
+  ],
+  "confidence_summary": {
+    "ambiguous_count": 0,
+    "extracted_count": 1,
+    "inferred_count": 0,
+    "total_count": 1,
+    "unknown_count": 0
+  },
+  "evidence_summary": {
+    "direct_count": 1.0,
+    "direct_ratio": 1.0,
+    "hint_only_count": 0.0,
+    "hint_only_ratio": 0.0,
+    "neighbor_context_count": 0.0,
+    "neighbor_context_ratio": 0.0
+  },
+  "query": "context report demo",
+  "repo": "demo",
+  "root": "/fake/root",
+  "stages": [
+    "memory",
+    "index",
+    "repomap",
+    "augment",
+    "skills",
+    "source_plan"
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "edges": [
+    {
+      "confidence": 1.0,
+      "id": "src/sample.py->src/sample.py::demo",
+      "kind": "grouping",
+      "predicate": "contains_chunk",
+      "source": "src/sample.py",
+      "target": "src/sample.py::demo"
+    }
+  ],
+  "nodes": [
+    {
+      "chunk_count": 1,
+      "id": "src/sample.py",
+      "kind": "file",
+      "label": "sample.py",
+      "path": "src/sample.py",
+      "score": 9.5,
+      "source": "source_plan"
+    },
+    {
+      "confidence_score": 1.0,
+      "end_lineno": 2,
+      "evidence_confidence": "EXTRACTED",
+      "id": "src/sample.py::demo",
+      "kind": "function",
+      "label": "demo",
+      "lineno": 1,
+      "path": "src/sample.py",
+      "score": 9.5,
+      "source": "source_plan"
+    }
+  ],
+  "ok": true,
+  "query": "context report demo",
+  "repo": "demo",
+  "root": "/fake/root",
+  "schema_version": "retrieval_graph_view_v1",
+  "scope": {
+    "limit": 50,
+    "max_hops": 1,
+    "repo": "demo",
+    "root": "/fake/root"
+  },
+  "summary": {
+    "edge_count": 1,
+    "limit": 50,
+    "max_hops": 1,
+    "node_count": 2,
+    "node_limit_applied": false
+  },
+  "warnings": []
+}

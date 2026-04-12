@@ -1,0 +1,73 @@
+{
+  "confidence_breakdown": {
+    "ambiguous_count": 0,
+    "extracted_count": 1,
+    "inferred_count": 0,
+    "total_count": 1,
+    "unknown_count": 0
+  },
+  "core_nodes": [
+    {
+      "id": "src/sample.py",
+      "kind": "file",
+      "label": "sample.py",
+      "path": "src/sample.py",
+      "reason": "top candidate file",
+      "score": 9.5,
+      "source": "source_plan"
+    },
+    {
+      "confidence_reason": null,
+      "evidence_confidence": "EXTRACTED",
+      "id": "src/sample.py::demo",
+      "kind": "function",
+      "label": "demo",
+      "path": "src/sample.py",
+      "reason": "top-1 chunk",
+      "score": 9.5,
+      "source": "source_plan"
+    }
+  ],
+  "inputs": {
+    "has_observability": false,
+    "has_source_plan": true,
+    "has_validation": false
+  },
+  "knowledge_gaps": [
+    {
+      "code": "missing_validation_tests",
+      "message": "source_plan.validation_tests is empty",
+      "severity": "medium"
+    }
+  ],
+  "ok": true,
+  "query": "context report demo",
+  "repo": "demo",
+  "root": "/fake/root",
+  "schema_version": "context_report_v1",
+  "suggested_questions": [
+    {
+      "path": "src/sample.py",
+      "question": "Which top candidate file should be inspected first?",
+      "type": "entrypoint",
+      "why": "Top source_plan candidate controls the likely edit boundary."
+    },
+    {
+      "question": "How to add validation tests for the top candidate?",
+      "type": "validation",
+      "why": "validation_tests is empty; without tests the plan cannot self-verify."
+    }
+  ],
+  "summary": {
+    "candidate_chunk_count": 1,
+    "candidate_file_count": 1,
+    "degraded_reason_count": 0,
+    "has_validation_payload": false,
+    "stage_count": 6,
+    "validation_test_count": 0
+  },
+  "surprising_connections": [],
+  "warnings": [
+    "surprising_connections_unavailable: no stable graph-boost signal"
+  ]
+}
