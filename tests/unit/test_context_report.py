@@ -20,6 +20,7 @@ from ace_lite.context_report import (
     SCHEMA_VERSION,
     build_context_report_payload,
     render_context_report_markdown,
+    validate_context_report_payload,
     write_context_report_markdown,
 )
 
@@ -647,3 +648,70 @@ def test_write_byte_count_reasonable(tmp_path):
     assert result["byte_count"] > 0
     # byte_count is computed from the string encoded as UTF-8
     assert result["byte_count"] <= len(output_path.read_bytes()) + 10
+
+
+# ----------------------------------------------------------------------
+# Schema guard tests
+# ----------------------------------------------------------------------
+
+
+def test_context_report_schema_guard_accepts_valid_payload() -> None:
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "query": "fix auth flow",
+        "repo": "test-repo",
+        "root": "/test/root",
+        "summary": {"candidate_file_count": 3},
+        "core_nodes": [],
+        "warnings": [],
+    }
+    validated = validate_context_report_payload(payload)
+    assert validated["schema_version"] == SCHEMA_VERSION
+    assert validated["query"] == "fix auth flow"
+
+
+def test_context_report_schema_guard_rejects_missing_schema_version() -> None:
+    payload = {
+        "query": "fix auth flow",
+        "repo": "test-repo",
+        "root": "/test/root",
+        "summary": {},
+        "core_nodes": [],
+        "warnings": [],
+    }
+    with pytest.raises(ValueError, match="schema_version must be"):
+        validate_context_report_payload(payload)
+
+
+def test_context_report_schema_guard_rejects_wrong_schema_version() -> None:
+    payload = {
+        "schema_version": "wrong_version",
+        "query": "fix auth flow",
+        "repo": "test-repo",
+        "root": "/test/root",
+        "summary": {},
+        "core_nodes": [],
+        "warnings": [],
+    }
+    with pytest.raises(ValueError, match="schema_version must be"):
+        validate_context_report_payload(payload)
+
+
+def test_context_report_schema_guard_rejects_missing_core_nodes() -> None:
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "query": "fix auth flow",
+        "repo": "test-repo",
+        "root": "/test/root",
+        "summary": {},
+        "warnings": [],
+    }
+    with pytest.raises(ValueError, match="core_nodes must be a list"):
+        validate_context_report_payload(payload)
+
+
+def test_context_report_schema_guard_rejects_non_dict_payload() -> None:
+    with pytest.raises(ValueError, match="must be a dictionary"):
+        validate_context_report_payload(None)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="must be a dictionary"):
+        validate_context_report_payload("not a dict")  # type: ignore[arg-type]

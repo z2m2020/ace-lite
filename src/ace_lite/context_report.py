@@ -30,6 +30,7 @@ from ace_lite.plan_payload_view import (
 __all__ = [
     "build_context_report_payload",
     "render_context_report_markdown",
+    "validate_context_report_payload",
     "write_context_report_markdown",
 ]
 
@@ -783,6 +784,47 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
         "inputs": inputs,
         "warnings": warnings,
     }
+
+
+# ----------------------------------------------------------------------
+# Schema guard
+# ----------------------------------------------------------------------
+
+
+def validate_context_report_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate a context_report_v1 payload against required keys and types.
+
+    Args:
+        payload: A dict conforming (or claimed to conform) to context_report_v1.
+
+    Returns:
+        The validated payload as a dict.
+
+    Raises:
+        ValueError: if a required key is missing or has an invalid type.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("context_report payload must be a dictionary")
+
+    _required_str_fields = ("schema_version", "query", "repo", "root")
+    for field in _required_str_fields:
+        value = payload.get(field)
+        if not isinstance(value, str):
+            raise ValueError(f"{field} must be a string; got {type(value).__name__}")
+
+    if payload.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError(
+            f"schema_version must be '{SCHEMA_VERSION}'; got {payload.get('schema_version')!r}"
+        )
+
+    if not isinstance(payload.get("summary"), dict):
+        raise ValueError("summary must be a dict")
+    if not isinstance(payload.get("core_nodes"), list):
+        raise ValueError("core_nodes must be a list")
+    if not isinstance(payload.get("warnings"), list):
+        raise ValueError("warnings must be a list")
+
+    return dict(payload)
 
 
 # ----------------------------------------------------------------------
