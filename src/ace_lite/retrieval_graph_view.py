@@ -343,6 +343,16 @@ def build_retrieval_graph_view(
         len(candidate_files) + len(candidate_chunks) + len(index_files) > resolved_limit
     )
 
+    warnings = [*node_warnings, *edge_warnings]
+    if node_limit_applied:
+        warnings.append(
+            f"node_limit_applied: truncated from "
+            f"{len(candidate_files) + len(candidate_chunks) + len(index_files)} "
+            f"to {resolved_limit} nodes"
+        )
+    if resolved_max_hops < _int(max_hops, 1):
+        warnings.append(f"max_hops_capped: requested {max_hops}, capped at {resolved_max_hops}")
+
     return {
         "ok": True,
         "schema_version": RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION,
@@ -364,5 +374,5 @@ def build_retrieval_graph_view(
         },
         "nodes": nodes,
         "edges": edges,
-        "warnings": [*node_warnings, *edge_warnings],
+        "warnings": warnings,
     }

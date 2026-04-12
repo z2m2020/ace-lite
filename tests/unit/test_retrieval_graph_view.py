@@ -380,3 +380,73 @@ def test_repomap_focused_adds_source_repomap():
     result = build_retrieval_graph_view(plan)
     node_sources = {n["source"] for n in result["nodes"]}
     assert "repomap" in node_sources
+
+
+# ----------------------------------------------------------------------
+# Truncation governance tests
+# ----------------------------------------------------------------------
+
+
+def test_retrieval_graph_truncation_warning_applied() -> None:
+    """When more candidates exist than limit, node_limit_applied is True and a warning is emitted."""
+    plan = {
+        "query": "truncate test",
+        "repo": "test",
+        "root": "/test",
+        "candidate_files": [
+            {"path": f"src/file{i}.py", "score": 10.0 - i * 0.1} for i in range(60)
+        ],
+        "candidate_chunks": [],
+        "index": {"candidate_files": []},
+    }
+    result = build_retrieval_graph_view(plan, limit=10)
+    assert result["summary"]["node_limit_applied"] is True
+    assert any("node_limit_applied" in w for w in result["warnings"])
+
+
+def test_retrieval_graph_no_truncation_warning_when_within_limit() -> None:
+    """When fewer candidates than limit, no truncation warning is emitted."""
+    plan = {
+        "query": "no truncate test",
+        "repo": "test",
+        "root": "/test",
+        "candidate_files": [{"path": "src/one.py", "score": 9.0}],
+        "candidate_chunks": [],
+        "index": {"candidate_files": []},
+    }
+    result = build_retrieval_graph_view(plan, limit=50)
+    assert result["summary"]["node_limit_applied"] is False
+    assert not any("node_limit_applied" in w for w in result["warnings"])
+
+
+def test_retrieval_graph_max_hops_boundary_warning() -> None:
+    """When max_hops exceeds 3, a warning is emitted and value is capped at 3."""
+    plan = {
+        "query": "max hops test",
+        "repo": "test",
+        "root": "/test",
+        "candidate_files": [],
+        "candidate_chunks": [],
+        "index": {"candidate_files": []},
+        "repomap": {"focused_files": ["a.py", "b.py"]},
+    }
+    result = build_retrieval_graph_view(plan, max_hops=10)
+    assert result["scope"]["max_hops"] == 3
+    assert result["summary"]["max_hops"] == 3
+    assert any("max_hops_capped" in w for w in result["warnings"])
+
+
+def test_retrieval_graph_max_hops_no_warning_within_boundary() -> None:
+    """When max_hops is within 1-3, no capping warning is emitted."""
+    plan = {
+        "query": "max hops ok",
+        "repo": "test",
+        "root": "/test",
+        "candidate_files": [],
+        "candidate_chunks": [],
+        "index": {"candidate_files": []},
+        "repomap": {"focused_files": ["a.py"]},
+    }
+    result = build_retrieval_graph_view(plan, max_hops=2)
+    assert result["scope"]["max_hops"] == 2
+    assert not any("max_hops_capped" in w for w in result["warnings"])
