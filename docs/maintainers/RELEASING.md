@@ -589,10 +589,12 @@ Use the following headings in a release checkpoint or PR comment:
 ## Required Checks
 
 - Benchmark thresholds:
+- Phase 2 QuickFirst overlay (`artifacts/checkpoints/phase2/latest/phase2_quickfirst_overlay.json`): Phase 2 artifacts complete, report-only signals present
 - Smoke summary (`artifacts/smoke/latest/smoke_summary.json`): healthy = true (Phase 2: report-only; not a release gate):
   - timed_out = false
   - file_count > 0
   - step_count > 0
+- Phase 2 QuickFirst overlay (`artifacts/checkpoints/phase2/latest/phase2_quickfirst_overlay.json`): Phase 2 artifacts are complete and all report-only
 - Validation-rich task success / validation evidence (if used):
   - task_success_rate / precision_at_k / noise_rate / validation_test_count:
   - delta vs previous summary:
