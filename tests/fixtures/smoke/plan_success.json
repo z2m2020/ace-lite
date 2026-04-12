@@ -1,0 +1,37 @@
+{
+  "schema_version": "source_plan_v1",
+  "query": "fix openmemory 405 dimension mismatch",
+  "repo": "mem0",
+  "root": "F:/deployed/mem0",
+  "elapsed_ms": 1243.5,
+  "_plan_timeout_fallback": false,
+  "source_plan": {
+    "candidate_files": [
+      "src/openmemory/embeddings.py",
+      "src/openmemory/vector_store.py",
+      "tests/test_embeddings.py"
+    ],
+    "steps": [
+      {
+        "id": "step_1",
+        "action": "update_embeddings_config",
+        "file": "src/openmemory/embeddings.py",
+        "description": "Update embedding dimension in config"
+      },
+      {
+        "id": "step_2",
+        "action": "run_tests",
+        "file": "tests/test_embeddings.py",
+        "description": "Verify dimension mismatch is resolved"
+      }
+    ],
+    "validation": {
+      "passed": true,
+      "tests_run": 12,
+      "tests_passed": 12
+    }
+  },
+  "quick_plan": {
+    "hit": true
+  }
+}

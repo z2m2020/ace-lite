@@ -1,0 +1,15 @@
+{
+  "schema_version": "source_plan_v1",
+  "query": "fix openmemory 405 dimension mismatch",
+  "repo": "mem0",
+  "root": "F:/deployed/mem0",
+  "_plan_timeout_fallback": true,
+  "source_plan": {
+    "candidate_files": [],
+    "steps": [],
+    "validation": null
+  },
+  "observability": {
+    "elapsed_ms": 5002.1
+  }
+}
