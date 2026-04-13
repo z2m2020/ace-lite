@@ -78,21 +78,9 @@ class SourcePlanReplayService:
 
         summary = _coerce_mapping(source_plan_stage.get("failure_signal_summary"))
         if not summary:
-            steps = _coerce_list(source_plan_stage.get("steps"))
-            validate_step = next(
-                (
-                    item
-                    for item in steps
-                    if isinstance(item, dict)
-                    and str(item.get("stage") or "").strip() == "validate"
-                ),
-                {},
+            summary = self.extract_source_plan_validation_feedback_summary(
+                source_plan_stage
             )
-            validate_step_payload = _coerce_mapping(validate_step)
-            feedback_summary = _coerce_mapping(
-                validate_step_payload.get("validation_feedback_summary")
-            )
-            summary = dict(feedback_summary) if feedback_summary else {}
 
         normalized = dict(default_summary)
         normalized.update(summary)
@@ -106,6 +94,28 @@ class SourcePlanReplayService:
         )
         normalized["source"] = str(normalized.get("source") or "source_plan")
         return normalized
+
+    def extract_source_plan_validation_feedback_summary(
+        self,
+        source_plan_stage: Any,
+    ) -> dict[str, Any]:
+        if not isinstance(source_plan_stage, dict):
+            return {}
+        steps = _coerce_list(source_plan_stage.get("steps"))
+        validate_step = next(
+            (
+                item
+                for item in steps
+                if isinstance(item, dict)
+                and str(item.get("stage") or "").strip() == "validate"
+            ),
+            {},
+        )
+        validate_step_payload = _coerce_mapping(validate_step)
+        validation_feedback_summary = _coerce_mapping(
+            validate_step_payload.get("validation_feedback_summary")
+        )
+        return dict(validation_feedback_summary) if validation_feedback_summary else {}
 
     def default_plan_replay_cache_info(self, *, root: str) -> dict[str, Any]:
         enabled = bool(self.config.plan_replay_cache.enabled)

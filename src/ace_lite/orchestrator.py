@@ -413,32 +413,12 @@ class AceOrchestrator:
             policy_version=str(self._config.retrieval.policy_version)
         )
 
-    @staticmethod
     def _extract_source_plan_validation_feedback_summary(
+        self,
         source_plan_stage: Any,
     ) -> dict[str, Any]:
-        if not isinstance(source_plan_stage, dict):
-            return {}
-        steps_value = source_plan_stage.get("steps")
-        steps: list[Any] = list(steps_value) if isinstance(steps_value, list) else []
-        validate_step = next(
-            (
-                item
-                for item in steps
-                if isinstance(item, dict)
-                and str(item.get("stage") or "").strip() == "validate"
-            ),
-            {},
-        )
-        validation_feedback_summary = (
-            validate_step.get("validation_feedback_summary")
-            if isinstance(validate_step, dict)
-            else None
-        )
-        return (
-            dict(validation_feedback_summary)
-            if isinstance(validation_feedback_summary, dict)
-            else {}
+        return self._source_plan_replay_service.extract_source_plan_validation_feedback_summary(
+            source_plan_stage
         )
 
     def _capture_long_term_stage_observation(

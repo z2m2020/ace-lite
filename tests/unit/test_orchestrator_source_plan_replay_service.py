@@ -88,6 +88,63 @@ def test_default_plan_replay_cache_info_uses_service_contract(tmp_path: Path) ->
     assert payload["failure_signal_summary"]["source"] == "source_plan"
 
 
+def test_extract_source_plan_validation_feedback_summary_reads_validate_step_payload(
+    tmp_path: Path,
+) -> None:
+    service = _build_service(root=tmp_path)
+
+    summary = service.extract_source_plan_validation_feedback_summary(
+        {
+            "steps": [
+                {"stage": "index", "validation_feedback_summary": {"retry_count": 9}},
+                {
+                    "stage": "validate",
+                    "validation_feedback_summary": {
+                        "status": "failed",
+                        "issue_count": 2,
+                        "probe_status": "failed",
+                    },
+                },
+            ]
+        }
+    )
+
+    assert summary == {
+        "status": "failed",
+        "issue_count": 2,
+        "probe_status": "failed",
+    }
+
+
+def test_extract_source_plan_failure_signal_summary_falls_back_to_validation_feedback_summary(
+    tmp_path: Path,
+) -> None:
+    service = _build_service(root=tmp_path)
+
+    summary = service.extract_source_plan_failure_signal_summary(
+        {
+            "steps": [
+                {
+                    "stage": "validate",
+                    "validation_feedback_summary": {
+                        "status": "failed",
+                        "issue_count": 2,
+                        "probe_status": "failed",
+                        "probe_issue_count": 1,
+                    },
+                }
+            ]
+        }
+    )
+
+    assert summary["status"] == "failed"
+    assert summary["issue_count"] == 2
+    assert summary["probe_status"] == "failed"
+    assert summary["probe_issue_count"] == 1
+    assert summary["has_failure"] is True
+    assert summary["source"] == "source_plan"
+
+
 def test_store_and_load_replayed_source_plan_round_trip(tmp_path: Path) -> None:
     cache_path = tmp_path / "context-map" / "custom-plan-replay.json"
     service = _build_service(
