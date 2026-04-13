@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import click
@@ -121,6 +122,7 @@ def index_command(
     subprocess_batch: bool,
     subprocess_batch_timeout: float,
 ) -> None:
+    progress = bool(progress and sys.stderr.isatty())
     enabled_languages = parse_language_csv(languages)
     effective_batch_mode = bool(
         batch_mode
@@ -132,7 +134,7 @@ def index_command(
     )
 
     if progress:
-        click.echo("Building index...")
+        click.echo("Building index...", err=True)
         if incremental:
             echo_progress("Checking existing index...")
         else:

@@ -355,6 +355,7 @@ def build_runtime_doctor_payload(
     )
     from ace_lite.cli_app.runtime_command_support import collect_runtime_mcp_doctor_payload
 
+    requested_root = Path(root).resolve()
     bundle = resolve_runtime_settings_bundle(
         root=root,
         config_file=config_file,
@@ -395,6 +396,16 @@ def build_runtime_doctor_payload(
         timeout_seconds=timeout_seconds,
     )
     version_sync = build_runtime_version_sync_payload()
+    if requested_root.exists() and not (requested_root / "pyproject.toml").exists():
+        version_sync = {
+            **version_sync,
+            "ok": True,
+            "reason": "not_python_project",
+            "reason_code": "not_python_project",
+            "recommendations": [],
+            "repair_steps": [],
+            "淇姝ラ": [],
+        }
     plugins_payload = (
         resolved.snapshot.get("plan", {}).get("plugins", {})
         if isinstance(resolved.snapshot.get("plan"), dict)

@@ -45,6 +45,13 @@ def _json_load_mapping(value: str) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _row_value(row: Any, key: str, default: Any = None) -> Any:
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
+
+
 def _counter_delta(stats: RuntimeInvocationStats) -> dict[str, int]:
     return {
         "invocation_count": 1,
@@ -255,17 +262,21 @@ class DurableStatsStore:
                 "total_latency_ms": row["total_latency_ms"],
                 "started_at": row["started_at"],
                 "finished_at": row["finished_at"],
-                "contract_error_code": row["contract_error_code"],
-                "degraded_reason_codes": _json_load_list(row["degraded_reason_codes"]),
-                "stage_latencies": _json_load_list(row["stage_latency_json"]),
-                "learning_router_rollout_decision": _json_load_mapping(
-                    row["learning_router_rollout_json"]
+                "contract_error_code": _row_value(row, "contract_error_code", ""),
+                "degraded_reason_codes": _json_load_list(
+                    _row_value(row, "degraded_reason_codes", "[]")
                 ),
-                "plan_replay_hit": bool(row["plan_replay_hit"]),
-                "plan_replay_safe_hit": bool(row["plan_replay_safe_hit"]),
-                "plan_replay_store_written": bool(row["plan_replay_store_written"]),
-                "trace_exported": bool(row["trace_exported"]),
-                "trace_export_failed": bool(row["trace_export_failed"]),
+                "stage_latencies": _json_load_list(_row_value(row, "stage_latency_json", "[]")),
+                "learning_router_rollout_decision": _json_load_mapping(
+                    _row_value(row, "learning_router_rollout_json", "{}")
+                ),
+                "plan_replay_hit": bool(_row_value(row, "plan_replay_hit", 0)),
+                "plan_replay_safe_hit": bool(_row_value(row, "plan_replay_safe_hit", 0)),
+                "plan_replay_store_written": bool(
+                    _row_value(row, "plan_replay_store_written", 0)
+                ),
+                "trace_exported": bool(_row_value(row, "trace_exported", 0)),
+                "trace_export_failed": bool(_row_value(row, "trace_export_failed", 0)),
             }
         )
 

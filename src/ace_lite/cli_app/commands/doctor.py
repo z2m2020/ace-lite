@@ -219,7 +219,7 @@ def doctor_command(
 
     # Exit with error code if checks failed
     if not bool(payload.get("ok")):
-        raise click.ClickException("Runtime doctor checks failed")
+        raise click.exceptions.Exit(1)
 
 
 __all__ = ["doctor_command"]

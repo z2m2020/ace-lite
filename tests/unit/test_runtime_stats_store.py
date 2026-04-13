@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 from ace_lite.runtime_stats import RuntimeInvocationStats, RuntimeStageLatency
 from ace_lite.runtime_stats_schema import (
     RUNTIME_STATS_DEFAULT_EVENT_CLASS,
     RUNTIME_STATS_DOCTOR_EVENT_CLASS,
+    RUNTIME_STATS_INVOCATIONS_TABLE,
 )
 from ace_lite.runtime_stats_store import DurableStatsStore
 
@@ -201,3 +203,69 @@ def test_durable_stats_store_can_filter_invocations_by_event_class(tmp_path: Pat
 
     assert [item.invocation_id for item in visible] == ["inv-runtime"]
     assert [item.invocation_id for item in doctor_only] == ["inv-doctor"]
+
+
+def test_durable_stats_store_load_invocation_tolerates_legacy_rows_missing_new_columns(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "legacy-runtime-stats.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE {table_name} (
+            invocation_id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            repo_key TEXT NOT NULL,
+            profile_key TEXT NOT NULL,
+            event_class TEXT NOT NULL,
+            settings_fingerprint TEXT NOT NULL,
+            status TEXT NOT NULL,
+            contract_error_code TEXT NOT NULL DEFAULT '',
+            degraded_reason_codes TEXT NOT NULL DEFAULT '[]',
+            stage_latency_json TEXT NOT NULL DEFAULT '[]',
+            total_latency_ms REAL NOT NULL,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL
+        )
+        """
+        .format(table_name=RUNTIME_STATS_INVOCATIONS_TABLE)
+    )
+    conn.execute(
+        """
+        INSERT INTO {table_name}(
+            invocation_id, session_id, repo_key, profile_key, event_class,
+            settings_fingerprint, status, contract_error_code, degraded_reason_codes,
+            stage_latency_json, total_latency_ms, started_at, finished_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """.format(table_name=RUNTIME_STATS_INVOCATIONS_TABLE),
+        (
+            "legacy-inv",
+            "legacy-session",
+            "repo-alpha",
+            "bugfix",
+            RUNTIME_STATS_DEFAULT_EVENT_CLASS,
+            "fp-legacy",
+            "succeeded",
+            "",
+            '["git_unavailable"]',
+            "[]",
+            12.5,
+            "2026-03-19T00:00:00+00:00",
+            "2026-03-19T00:00:01+00:00",
+        ),
+    )
+    conn.commit()
+
+    store = DurableStatsStore(db_path=db_path)
+    loaded = store._load_invocation(conn, "legacy-inv")
+    conn.close()
+
+    assert loaded is not None
+    assert loaded.invocation_id == "legacy-inv"
+    assert loaded.learning_router_rollout_decision == {}
+    assert loaded.plan_replay_hit is False
+    assert loaded.plan_replay_safe_hit is False
+    assert loaded.plan_replay_store_written is False
+    assert loaded.trace_exported is False
+    assert loaded.trace_export_failed is False

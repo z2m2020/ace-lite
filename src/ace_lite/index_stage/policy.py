@@ -716,7 +716,7 @@ def resolve_retrieval_policy(
     if normalized_version.startswith("v2"):
         payload["index_parallel_enabled"] = True
         if int(payload.get("index_parallel_time_budget_ms", 0) or 0) <= 0:
-            payload["index_parallel_time_budget_ms"] = 120
+            payload["index_parallel_time_budget_ms"] = 250
     return payload
 
 

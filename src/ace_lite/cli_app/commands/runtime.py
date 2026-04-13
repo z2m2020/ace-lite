@@ -966,7 +966,7 @@ def runtime_doctor_command(
         )
     echo_json(payload)
     if not bool(payload.get("ok")):
-        raise click.ClickException("Runtime doctor checks failed")
+        raise click.exceptions.Exit(1)
 
 
 @runtime_group.command("setup-codex-mcp")
