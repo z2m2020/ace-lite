@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from collections import deque
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -86,8 +87,12 @@ class AceLiteMcpService:
     def __init__(self, *, config: AceLiteMcpConfig) -> None:
         self._config = config
         self._process_id = os.getpid()
+        self._parent_process_id = os.getppid()
         self._process_started_at_dt = datetime.now(timezone.utc)
         self._process_started_at = self._process_started_at_dt.isoformat()
+        self._startup_cwd = str(Path.cwd())
+        self._python_executable = str(sys.executable or "").strip()
+        self._command_line = [str(item) for item in sys.argv if str(item).strip()]
         self._runtime_source_tree = resolve_runtime_source_tree(module_path=__file__)
         self._startup_head_snapshot = self._collect_runtime_head_snapshot()
         self._stats_lock = Lock()
@@ -147,6 +152,19 @@ class AceLiteMcpService:
 
     def _request_stats_payload(self) -> dict[str, Any]:
         with self._stats_lock:
+            current_request_runtime_ms = 0.0
+            if self._active_request_count > 0 and self._last_request_started_at:
+                try:
+                    started_dt = datetime.fromisoformat(self._last_request_started_at)
+                    current_request_runtime_ms = max(
+                        0.0,
+                        round(
+                            (datetime.now(timezone.utc) - started_dt).total_seconds() * 1000.0,
+                            3,
+                        ),
+                    )
+                except ValueError:
+                    current_request_runtime_ms = 0.0
             return {
                 "active_request_count": int(self._active_request_count),
                 "total_request_count": int(self._total_request_count),
@@ -160,6 +178,7 @@ class AceLiteMcpService:
                     if isinstance(self._last_request_error, dict)
                     else None
                 ),
+                "current_request_runtime_ms": current_request_runtime_ms,
                 "slow_request_threshold_ms": _SLOW_REQUEST_THRESHOLD_MS,
                 "recent_requests": list(self._recent_requests),
             }
@@ -209,8 +228,12 @@ class AceLiteMcpService:
             dict[str, Any],
             build_runtime_identity_payload(
                 pid=self._process_id,
+                parent_pid=self._parent_process_id,
                 process_started_at=self._process_started_at,
                 process_uptime_seconds=uptime_seconds,
+                current_working_directory=self._startup_cwd,
+                python_executable=self._python_executable,
+                command_line=self._command_line,
                 source_root=str(self._runtime_source_tree.get("source_root") or "").strip(),
                 pyproject_path=str(self._runtime_source_tree.get("pyproject_path") or "").strip(),
                 module_path=str(self._runtime_source_tree.get("module_path") or "").strip(),

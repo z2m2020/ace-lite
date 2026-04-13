@@ -10,8 +10,12 @@ from ace_lite.mcp_server.config import AceLiteMcpConfig
 
 class RuntimeIdentityPayload(TypedDict):
     pid: int
+    parent_pid: int
     process_started_at: str
     process_uptime_seconds: float
+    current_working_directory: str
+    python_executable: str
+    command_line: list[str]
     source_root: str
     pyproject_path: str
     module_path: str
@@ -102,8 +106,12 @@ def resolve_runtime_source_tree(*, module_path: str | Path) -> dict[str, str]:
 def build_runtime_identity_payload(
     *,
     pid: int,
+    parent_pid: int,
     process_started_at: str,
     process_uptime_seconds: float,
+    current_working_directory: str,
+    python_executable: str,
+    command_line: list[str] | tuple[str, ...],
     source_root: str,
     pyproject_path: str,
     module_path: str,
@@ -121,8 +129,12 @@ def build_runtime_identity_payload(
     git_repo_available = bool(startup.get("enabled") or current.get("enabled"))
     return {
         "pid": max(0, int(pid)),
+        "parent_pid": max(0, int(parent_pid)),
         "process_started_at": str(process_started_at or "").strip(),
         "process_uptime_seconds": max(0.0, round(float(process_uptime_seconds), 3)),
+        "current_working_directory": str(current_working_directory or "").strip(),
+        "python_executable": str(python_executable or "").strip(),
+        "command_line": [str(item) for item in command_line if str(item).strip()],
         "source_root": str(source_root or "").strip(),
         "pyproject_path": str(pyproject_path or "").strip(),
         "module_path": str(module_path or "").strip(),
@@ -189,6 +201,16 @@ def build_health_response_payload(
         )
         recommendations.append(
             "Restart the stdio MCP server/session after git pull or pip install -e updates."
+        )
+    current_request_runtime_ms = float(request_stats.get("current_request_runtime_ms") or 0.0)
+    active_request_count = int(request_stats.get("active_request_count") or 0)
+    if active_request_count > 0 and current_request_runtime_ms >= 30000.0:
+        warnings.append(
+            "A MCP request has been running for over 30s inside the current process. "
+            "This usually indicates a blocked stdio/session or a slow local operation."
+        )
+        recommendations.append(
+            "Inspect health.request_stats.recent_requests and restart the stdio MCP server/session if the request remains stuck."
         )
     staleness_warning = (
         {

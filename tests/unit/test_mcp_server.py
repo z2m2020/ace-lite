@@ -216,6 +216,7 @@ def test_mcp_service_health_surfaces_request_stats(tmp_path: Path, monkeypatch) 
     assert payload["request_stats"]["total_request_count"] == 1
     assert payload["request_stats"]["last_request_tool"] == "ace_memory_store"
     assert payload["request_stats"]["last_request_status"] == "running"
+    assert payload["request_stats"]["current_request_runtime_ms"] >= 0.0
     assert payload["request_stats"]["last_request_started_at"]
 
     release.set()
@@ -230,6 +231,9 @@ def test_mcp_service_health_surfaces_request_stats(tmp_path: Path, monkeypatch) 
     assert payload_after["request_stats"]["last_request_status"] == "ok"
     assert payload_after["request_stats"]["last_request_error"] is None
     assert payload_after["request_stats"]["recent_requests"][-1]["tool"] == "ace_memory_store"
+    assert payload_after["runtime_identity"]["parent_pid"] >= 0
+    assert payload_after["runtime_identity"]["python_executable"]
+    assert isinstance(payload_after["runtime_identity"]["command_line"], list)
 
 
 def test_mcp_service_health_records_recent_request_errors_and_slow_flags(

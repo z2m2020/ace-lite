@@ -23,8 +23,12 @@ def _make_config(tmp_path: Path) -> AceLiteMcpConfig:
 def _runtime_identity(*, stale: bool = False) -> RuntimeIdentityPayload:
     return build_runtime_identity_payload(
         pid=42,
+        parent_pid=7,
         process_started_at="2026-03-26T00:00:00+00:00",
         process_uptime_seconds=12.5,
+        current_working_directory="F:/deployed/ace-lite-engine-open-20260311",
+        python_executable="C:/Python/python.exe",
+        command_line=["python", "-m", "ace_lite.mcp_server", "--transport", "stdio"],
         source_root="F:/deployed/ace-lite-engine-open-20260311",
         pyproject_path="F:/deployed/ace-lite-engine-open-20260311/pyproject.toml",
         module_path="F:/deployed/ace-lite-engine-open-20260311/src/ace_lite/mcp_server/service.py",
@@ -68,6 +72,14 @@ def test_build_health_payload_reports_memory_disabled_recommendations(
         "Set ACE_LITE_MCP_BASE_URL / ACE_LITE_REST_BASE_URL to your OpenMemory endpoint",
     ]
     assert payload["runtime_identity"]["pid"] == 42
+    assert payload["runtime_identity"]["parent_pid"] == 7
+    assert payload["runtime_identity"]["command_line"] == [
+        "python",
+        "-m",
+        "ace_lite.mcp_server",
+        "--transport",
+        "stdio",
+    ]
     assert payload["staleness_warning"] is None
     assert payload["timestamp"] == "2026-03-14T00:00:00+00:00"
 
@@ -153,4 +165,29 @@ def test_build_health_payload_adds_structured_stale_process_warning(
     assert any("Runtime code appears stale" in item for item in payload["warnings"])
     assert any(
         "Restart the stdio MCP server/session" in item for item in payload["recommendations"]
+    )
+
+
+def test_build_health_payload_adds_long_running_request_warning(
+    tmp_path: Path,
+) -> None:
+    config = _make_config(tmp_path)
+
+    payload = build_health_response_payload(
+        config=config,
+        request_stats={
+            "active_request_count": 1,
+            "current_request_runtime_ms": 30500.0,
+            "recent_requests": [],
+        },
+        version="0.3.65",
+        version_info={"drifted": False},
+        runtime_identity=_runtime_identity(),
+        now_iso_fn=lambda: "2026-03-26T00:00:00+00:00",
+    )
+
+    assert any("running for over 30s" in item for item in payload["warnings"])
+    assert any(
+        "Inspect health.request_stats.recent_requests" in item
+        for item in payload["recommendations"]
     )
