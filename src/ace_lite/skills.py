@@ -479,7 +479,100 @@ def _lint_skill_entry(entry: dict[str, Any]) -> list[dict[str, str]]:
                     "message": "do not duplicate the same term across error_keywords and intents/modules/topics",
                 }
             )
+    issues.extend(_lint_default_sections(entry))
+    issues.extend(_lint_token_estimate(entry))
     return issues
+
+
+def _lint_default_sections(entry: dict[str, Any]) -> list[dict[str, str]]:
+    issues: list[dict[str, str]] = []
+    name = str(entry.get("name") or "").strip() or "(unknown)"
+    path = str(entry.get("path") or "").strip()
+    default_sections = [
+        str(item).strip() for item in (entry.get("default_sections") or []) if str(item).strip()
+    ]
+    if not path or not default_sections:
+        return issues
+
+    markdown_body = _read_skill_body(path)
+    if not markdown_body:
+        return issues
+
+    headings = {heading.lower() for heading in _extract_headings(markdown_body)}
+    for section_name in default_sections:
+        if section_name.lower() not in headings:
+            issues.append(
+                {
+                    "name": name,
+                    "path": path,
+                    "field": "default_sections",
+                    "keyword": section_name,
+                    "message": "default_sections references a heading that does not exist in the markdown body",
+                }
+            )
+    return issues
+
+
+def _lint_token_estimate(entry: dict[str, Any]) -> list[dict[str, str]]:
+    issues: list[dict[str, str]] = []
+    if "token_estimate" in (entry.get("_missing_frontmatter") or []):
+        return issues
+
+    name = str(entry.get("name") or "").strip() or "(unknown)"
+    path = str(entry.get("path") or "").strip()
+    if not path:
+        return issues
+
+    markdown_body = _read_skill_body(path)
+    if not markdown_body:
+        return issues
+
+    declared = to_int(entry.get("token_estimate"), default=None)
+    if declared is None:
+        return issues
+    if declared <= 0:
+        return [
+            {
+                "name": name,
+                "path": path,
+                "field": "token_estimate",
+                "keyword": str(declared),
+                "message": "token_estimate must be a positive integer",
+            }
+        ]
+
+    estimated = _estimate_skill_token_estimate(
+        markdown_body=markdown_body,
+        default_sections=to_string_list(entry.get("default_sections") or []),
+    )
+    if estimated < 32:
+        return issues
+
+    lower_bound = max(8, estimated // 8)
+    upper_bound = max(estimated * 8, 256)
+    if declared < lower_bound or declared > upper_bound:
+        issues.append(
+            {
+                "name": name,
+                "path": path,
+                "field": "token_estimate",
+                "keyword": str(declared),
+                "message": (
+                    "token_estimate looks suspicious relative to the current markdown body; "
+                    f"declared={declared}, estimated≈{estimated}"
+                ),
+            }
+        )
+    return issues
+
+
+def _read_skill_body(path: str) -> str:
+    candidate = Path(path)
+    if not candidate.exists() or not candidate.is_file():
+        return ""
+    text = candidate.read_text(encoding="utf-8", errors="replace")
+    _, body = _split_frontmatter(text)
+    return body
 
 
 def _looks_like_mojibake_metadata(value: str) -> bool:

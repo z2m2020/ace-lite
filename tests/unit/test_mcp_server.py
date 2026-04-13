@@ -49,6 +49,30 @@ def _write_sample_repo(tmp_path: Path) -> None:
     )
 
 
+def _write_sample_skill(skills_dir: Path, *, name: str = "ace-dev") -> Path:
+    skill_path = skills_dir / f"{name}.md"
+    skill_path.write_text(
+        (
+            "---\n"
+            f"name: {name}\n"
+            "description: Analyze repository structure.\n"
+            "intents:\n"
+            "  - onboarding\n"
+            "modules:\n"
+            "  - repository\n"
+            "default_sections:\n"
+            "  - Overview\n"
+            "priority: 5\n"
+            "token_estimate: 42\n"
+            "---\n\n"
+            "# Overview\n\n"
+            "Use this skill to inspect repository structure.\n"
+        ),
+        encoding="utf-8",
+    )
+    return skill_path
+
+
 def _minimal_retrieval_plan() -> dict[str, object]:
     return {
         "query": "implement adder",
@@ -147,6 +171,9 @@ def test_build_mcp_server_exposes_stable_tool_metadata_and_schema(tmp_path: Path
     assert tools["ace_plan"].parameters["properties"]["plugins_enabled"]["default"] is False
     assert tools["ace_plan_quick"].parameters["required"] == ["query"]
     assert tools["ace_index"].parameters["properties"]["resume"]["default"] is False
+    assert tools["ace_skills_catalog"].parameters.get("required", []) == []
+    assert "root" in tools["ace_skills_catalog"].parameters["properties"]
+    assert "skills_dir" in tools["ace_skills_catalog"].parameters["properties"]
     assert (
         tools["ace_memory_store"].parameters["properties"]["tags"]["anyOf"][0]["type"] == "object"
     )
@@ -242,6 +269,31 @@ def test_mcp_service_index_writes_output(tmp_path: Path) -> None:
     assert isinstance(payload, dict)
     assert isinstance(payload.get("files"), dict)
     assert result["file_count"] >= 1
+
+
+def test_mcp_service_skills_catalog_returns_markdown_catalog(tmp_path: Path) -> None:
+    service = _make_service(tmp_path)
+    _write_sample_skill(tmp_path / "skills")
+
+    payload = service.skills_catalog(root=str(tmp_path))
+
+    assert payload["ok"] is True
+    assert payload["root"] == str(tmp_path.resolve())
+    assert payload["skills_dir"] == str((tmp_path / "skills").resolve())
+    assert payload["skill_count"] == 1
+    assert payload["markdown"].startswith("# ACE-Lite Skill Catalog")
+    assert "## ace-dev" in payload["markdown"]
+    assert "- **Intents:** onboarding" in payload["markdown"]
+
+
+def test_mcp_service_skills_catalog_empty_dir_returns_no_skills_message(tmp_path: Path) -> None:
+    service = _make_service(tmp_path)
+
+    payload = service.skills_catalog(root=str(tmp_path))
+
+    assert payload["ok"] is True
+    assert payload["skill_count"] == 0
+    assert "_No skills discovered._" in payload["markdown"]
 
 
 def test_mcp_service_memory_graph_view_reads_long_term_graph(tmp_path: Path) -> None:

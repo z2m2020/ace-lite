@@ -324,6 +324,60 @@ def test_lint_skill_manifest_flags_mojibake_metadata_terms() -> None:
     assert {item["keyword"] for item in issues} == {suspicious_one, suspicious_two}
 
 
+def test_lint_skill_manifest_flags_missing_default_section_heading(tmp_path: Path) -> None:
+    (tmp_path / "bad-sections.md").write_text(
+        textwrap.dedent(
+            """
+            ---
+            name: bad-sections
+            description: sample
+            default_sections: [Workflow, Missing]
+            token_estimate: 100
+            ---
+            # Workflow
+            Existing section.
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_skill_manifest(tmp_path)
+    issues = lint_skill_manifest(manifest)
+
+    assert any(
+        item["field"] == "default_sections" and item["keyword"] == "Missing"
+        for item in issues
+    )
+
+
+def test_lint_skill_manifest_flags_suspicious_token_estimate(tmp_path: Path) -> None:
+    (tmp_path / "bad-tokens.md").write_text(
+        textwrap.dedent(
+            """
+            ---
+            name: bad-tokens
+            description: sample
+            default_sections: [Workflow]
+            token_estimate: 1
+            ---
+            # Workflow
+            This section contains enough content to make the declared token estimate
+            obviously suspicious for linting purposes and should trigger a warning.
+
+            Additional lines make the estimate less noisy and keep the test stable.
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_skill_manifest(tmp_path)
+    issues = lint_skill_manifest(manifest)
+
+    assert any(item["field"] == "token_estimate" and item["keyword"] == "1" for item in issues)
+
+
 def test_repo_skills_pass_frontmatter_lint() -> None:
     issues = lint_skill_manifest(_repo_skill_manifest())
     assert issues == []

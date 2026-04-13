@@ -10,6 +10,7 @@ MCP_TOOL_DESCRIPTIONS: dict[str, str] = {
     "ace_health": "Return ACE-Lite MCP server health and default runtime settings.",
     "ace_index": "Build repository distilled index and persist it under context-map.",
     "ace_repomap_build": "Build repo map JSON/Markdown artifacts from current repository index.",
+    "ace_skills_catalog": "Render the read-only skill catalog as markdown from manifest metadata.",
     "ace_plan_quick": "Fast candidate-file plan from index + repomap (for low-latency first pass).",
     "ace_plan": "Run ACE-Lite deterministic pipeline and return source plan payload.",
     "ace_memory_search": "Search local ACE-Lite notes memory by lexical matching.",
@@ -91,6 +92,13 @@ def _register_core_tools(*, server: FastMCP, service: AceLiteMcpService) -> None
             output_json=output_json,
             output_md=output_md,
         )
+
+    @_tool(server, "ace_skills_catalog")
+    def ace_skills_catalog(
+        root: str | None = None,
+        skills_dir: str | None = None,
+    ) -> dict[str, Any]:
+        return service.skills_catalog(root=root, skills_dir=skills_dir)
 
     @_tool(server, "ace_plan_quick")
     def ace_plan_quick(

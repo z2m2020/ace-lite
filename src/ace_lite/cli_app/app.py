@@ -21,6 +21,7 @@ from ace_lite.cli_app.commands.plan_quick import plan_quick_command
 from ace_lite.cli_app.commands.profile import profile_group
 from ace_lite.cli_app.commands.repomap import repomap_group
 from ace_lite.cli_app.commands.runtime import runtime_group
+from ace_lite.cli_app.commands.skills import skills_group
 from ace_lite.cli_app.commands.workspace import workspace_group
 from ace_lite.version import get_version
 
@@ -42,6 +43,7 @@ cli.add_command(demo_command)
 cli.add_command(feedback_group)
 cli.add_command(profile_group)
 cli.add_command(memory_group)
+cli.add_command(skills_group)
 cli.add_command(runtime_group)
 cli.add_command(doctor_command)
 cli.add_command(workspace_group)

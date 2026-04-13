@@ -71,6 +71,7 @@ from ace_lite.mcp_server.service_retrieval_graph_view_handlers import (
 from ace_lite.parsers.languages import parse_language_csv
 from ace_lite.plan_quick import build_plan_quick
 from ace_lite.repomap.builder import build_repo_map
+from ace_lite.skills import build_skill_catalog, build_skill_manifest
 from ace_lite.vcs_history import collect_git_head_snapshot
 from ace_lite.version import get_version, get_version_info
 
@@ -246,6 +247,26 @@ class AceLiteMcpService:
                 resolve_output_path_fn=self._resolve_output_path,
             ),
         )
+
+    def skills_catalog(
+        self,
+        *,
+        root: str | None = None,
+        skills_dir: str | None = None,
+    ) -> dict[str, Any]:
+        def _operation() -> dict[str, Any]:
+            root_path = self._resolve_root(root)
+            skills_path = self._resolve_skills_dir(root_path=root_path, skills_dir=skills_dir)
+            manifest = build_skill_manifest(skills_path)
+            return {
+                "ok": True,
+                "root": str(root_path),
+                "skills_dir": str(skills_path),
+                "skill_count": len(manifest),
+                "markdown": build_skill_catalog(manifest),
+            }
+
+        return self._run_tracked("ace_skills_catalog", _operation)
 
     def plan_quick(
         self,
