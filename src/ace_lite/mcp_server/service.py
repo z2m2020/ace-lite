@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import logging
 import os
+from collections import deque
 from collections.abc import Callable
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
@@ -22,6 +22,7 @@ from ace_lite.indexing_resilience import build_index_with_resilience
 from ace_lite.mcp_server.config import AceLiteMcpConfig
 from ace_lite.mcp_server.file_support import (
     append_note,
+    iter_notes,
     load_notes,
     resolve_config_pack_path,
     resolve_notes_path,
@@ -29,6 +30,7 @@ from ace_lite.mcp_server.file_support import (
     resolve_root,
     resolve_skills_dir,
     save_notes,
+    wipe_notes,
 )
 from ace_lite.mcp_server.plan_request import resolve_plan_request_options
 from ace_lite.mcp_server.service_dev_feedback_handlers import (
@@ -58,7 +60,6 @@ from ace_lite.mcp_server.service_memory_handlers import (
     handle_memory_graph_view,
     handle_memory_search,
     handle_memory_store,
-    handle_memory_wipe,
 )
 from ace_lite.mcp_server.service_plan_handlers import (
     handle_plan_quick_request,
@@ -77,6 +78,8 @@ from ace_lite.vcs_history import collect_git_head_snapshot
 from ace_lite.version import get_version, get_version_info
 
 logger = logging.getLogger(__name__)
+_RECENT_REQUEST_LIMIT = 10
+_SLOW_REQUEST_THRESHOLD_MS = 1000.0
 
 
 class AceLiteMcpService:
@@ -94,13 +97,15 @@ class AceLiteMcpService:
         self._last_request_finished_at = ""
         self._last_request_tool = ""
         self._last_request_elapsed_ms = 0.0
+        self._last_request_status = "idle"
+        self._last_request_error: dict[str, Any] | None = None
+        self._recent_requests: deque[dict[str, Any]] = deque(maxlen=_RECENT_REQUEST_LIMIT)
 
     @property
     def config(self) -> AceLiteMcpConfig:
         return self._config
 
-    @contextmanager
-    def _track_request(self, tool_name: str):
+    def _begin_request(self, tool_name: str) -> tuple[float, str]:
         started = perf_counter()
         started_at = datetime.now(timezone.utc).isoformat()
         with self._stats_lock:
@@ -108,15 +113,37 @@ class AceLiteMcpService:
             self._total_request_count += 1
             self._last_request_tool = str(tool_name or "").strip()
             self._last_request_started_at = started_at
-        try:
-            yield
-        finally:
-            finished_at = datetime.now(timezone.utc).isoformat()
-            elapsed_ms = round((perf_counter() - started) * 1000.0, 3)
-            with self._stats_lock:
-                self._active_request_count = max(0, self._active_request_count - 1)
-                self._last_request_finished_at = finished_at
-                self._last_request_elapsed_ms = elapsed_ms
+            self._last_request_status = "running"
+            self._last_request_error = None
+        return started, started_at
+
+    def _finish_request(
+        self,
+        *,
+        tool_name: str,
+        started: float,
+        started_at: str,
+        status: str,
+        error: dict[str, Any] | None,
+    ) -> None:
+        finished_at = datetime.now(timezone.utc).isoformat()
+        elapsed_ms = round((perf_counter() - started) * 1000.0, 3)
+        request_record = {
+            "tool": str(tool_name or "").strip(),
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "elapsed_ms": elapsed_ms,
+            "status": status,
+            "slow": bool(elapsed_ms >= _SLOW_REQUEST_THRESHOLD_MS),
+            "error": dict(error) if isinstance(error, dict) else None,
+        }
+        with self._stats_lock:
+            self._active_request_count = max(0, self._active_request_count - 1)
+            self._last_request_finished_at = finished_at
+            self._last_request_elapsed_ms = elapsed_ms
+            self._last_request_status = status
+            self._last_request_error = dict(error) if isinstance(error, dict) else None
+            self._recent_requests.append(request_record)
 
     def _request_stats_payload(self) -> dict[str, Any]:
         with self._stats_lock:
@@ -127,6 +154,14 @@ class AceLiteMcpService:
                 "last_request_started_at": str(self._last_request_started_at or "").strip(),
                 "last_request_finished_at": str(self._last_request_finished_at or "").strip(),
                 "last_request_elapsed_ms": float(self._last_request_elapsed_ms),
+                "last_request_status": str(self._last_request_status or "idle"),
+                "last_request_error": (
+                    dict(self._last_request_error)
+                    if isinstance(self._last_request_error, dict)
+                    else None
+                ),
+                "slow_request_threshold_ms": _SLOW_REQUEST_THRESHOLD_MS,
+                "recent_requests": list(self._recent_requests),
             }
 
     def _run_tracked(
@@ -134,8 +169,26 @@ class AceLiteMcpService:
         tool_name: str,
         operation: Callable[[], Any],
     ) -> dict[str, Any]:
-        with self._track_request(tool_name):
+        started, started_at = self._begin_request(tool_name)
+        status = "ok"
+        error_payload: dict[str, Any] | None = None
+        try:
             return cast(dict[str, Any], operation())
+        except Exception as exc:
+            status = "error"
+            error_payload = {
+                "type": exc.__class__.__name__,
+                "message": str(exc),
+            }
+            raise
+        finally:
+            self._finish_request(
+                tool_name=tool_name,
+                started=started,
+                started_at=started_at,
+                status=status,
+                error=error_payload,
+            )
 
     def _collect_runtime_head_snapshot(self) -> dict[str, Any]:
         source_root = str(self._runtime_source_tree.get("source_root") or "").strip()
@@ -419,13 +472,12 @@ class AceLiteMcpService:
     ) -> dict[str, Any]:
         def _operation() -> dict[str, Any]:
             path = self._resolve_notes_path(notes_path=notes_path)
-            notes = self._load_notes(path)
             return handle_memory_search(
                 query=query,
                 limit=limit,
                 namespace=namespace,
                 path=path,
-                notes=notes,
+                notes=self._iter_notes(path),
             )
 
         return self._run_tracked("ace_memory_search", _operation)
@@ -563,13 +615,14 @@ class AceLiteMcpService:
     ) -> dict[str, Any]:
         def _operation() -> dict[str, Any]:
             path = self._resolve_notes_path(notes_path=notes_path)
-            rows = self._load_notes(path)
-            return handle_memory_wipe(
-                namespace=namespace,
-                path=path,
-                rows=rows,
-                save_notes_fn=self._save_notes,
-            )
+            removed_count, remaining_count = self._wipe_notes(path, namespace)
+            return {
+                "ok": True,
+                "namespace": str(namespace or "").strip() or None,
+                "removed_count": removed_count,
+                "remaining_count": remaining_count,
+                "notes_path": str(path),
+            }
 
         return self._run_tracked("ace_memory_wipe", _operation)
 
@@ -966,6 +1019,14 @@ class AceLiteMcpService:
     @staticmethod
     def _append_note(path: Path, row: dict[str, Any]) -> None:
         append_note(path, row)
+
+    @staticmethod
+    def _iter_notes(path: Path):
+        return iter_notes(path)
+
+    @staticmethod
+    def _wipe_notes(path: Path, namespace: str | None) -> tuple[int, int]:
+        return wipe_notes(path, namespace)
 
 
 __all__ = ["AceLiteMcpService"]

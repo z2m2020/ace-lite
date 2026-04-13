@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -159,7 +160,7 @@ def handle_memory_search(
     limit: int,
     namespace: str | None,
     path: Path,
-    notes: list[dict[str, Any]],
+    notes: Iterable[dict[str, Any]],
 ) -> dict[str, Any]:
     normalized_query = str(query or "").strip()
     if not normalized_query:
@@ -168,14 +169,12 @@ def handle_memory_search(
     namespace_filter = str(namespace or "").strip()
     tokens = _normalize_tokens(normalized_query)
     expanded_tokens = _expand_query_tokens(tokens)
-    namespace_rows = [
-        row
-        for row in notes
-        if not namespace_filter or str(row.get("namespace", "")).strip() == namespace_filter
-    ]
-
+    namespace_note_count = 0
     scored: list[tuple[float, dict[str, Any]]] = []
-    for row in namespace_rows:
+    for row in notes:
+        if namespace_filter and str(row.get("namespace", "")).strip() != namespace_filter:
+            continue
+        namespace_note_count += 1
         search_blob = _row_search_blob(row)
         if not search_blob.strip():
             continue
@@ -220,9 +219,11 @@ def handle_memory_search(
         "count": len(items),
         "items": items,
         "notes_path": str(path),
-        "cold_start": bool(namespace_filter and not namespace_rows and not items),
+        "cold_start": bool(namespace_filter and namespace_note_count == 0 and not items),
         "recommended_next_step": (
-            "ace_plan_quick" if namespace_filter and not namespace_rows and not items else None
+            "ace_plan_quick"
+            if namespace_filter and namespace_note_count == 0 and not items
+            else None
         ),
     }
     payload.update(
@@ -230,7 +231,7 @@ def handle_memory_search(
             query=normalized_query,
             items=items,
             namespace=namespace_filter or None,
-            namespace_note_count=len(namespace_rows),
+            namespace_note_count=namespace_note_count,
         )
     )
     return payload

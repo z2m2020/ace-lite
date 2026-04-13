@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -66,20 +67,23 @@ def resolve_notes_path(*, notes_path: str | None, default_notes_path: Path) -> P
 
 
 def load_notes(path: Path) -> list[dict[str, Any]]:
+    return list(iter_notes(path))
+
+
+def iter_notes(path: Path) -> Iterator[dict[str, Any]]:
     if not path.exists() or not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        raw = line.strip()
-        if not raw:
-            continue
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
+        return
+    with path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            raw = line.strip()
+            if not raw:
+                continue
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                yield payload
 
 
 def save_notes(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -97,8 +101,28 @@ def append_note(path: Path, row: dict[str, Any]) -> None:
             fh.write("\n")
 
 
+def wipe_notes(path: Path, namespace: str | None) -> tuple[int, int]:
+    namespace_filter = str(namespace or "").strip()
+    with _NOTES_WRITE_LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing_rows = list(iter_notes(path))
+        if namespace_filter:
+            remaining = [
+                row
+                for row in existing_rows
+                if str(row.get("namespace", "")).strip() != namespace_filter
+            ]
+        else:
+            remaining = []
+        removed = len(existing_rows) - len(remaining)
+        content = "\n".join(json.dumps(row, ensure_ascii=False) for row in remaining)
+        path.write_text((content + "\n") if content else "", encoding="utf-8")
+        return max(0, int(removed)), len(remaining)
+
+
 __all__ = [
     "append_note",
+    "iter_notes",
     "load_notes",
     "resolve_config_pack_path",
     "resolve_notes_path",
@@ -106,4 +130,5 @@ __all__ = [
     "resolve_root",
     "resolve_skills_dir",
     "save_notes",
+    "wipe_notes",
 ]

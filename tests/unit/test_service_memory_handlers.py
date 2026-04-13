@@ -223,6 +223,29 @@ def test_handle_memory_store_supports_append_only_persistence(tmp_path: Path) ->
     assert appended[0]["namespace"] == "runtime"
 
 
+def test_handle_memory_search_accepts_iterable_notes(tmp_path: Path) -> None:
+    from ace_lite.mcp_server.service_memory_handlers import handle_memory_search
+
+    notes_path = tmp_path / "context-map" / "memory_notes.jsonl"
+    payload = handle_memory_search(
+        query="refresh token",
+        limit=5,
+        namespace="auth",
+        path=notes_path,
+        notes=(
+            row
+            for row in [
+                {"text": "refresh token bug", "namespace": "auth", "tags": {"type": "bug"}},
+                {"text": "unrelated build note", "namespace": "build", "tags": {}},
+            ]
+        ),
+    )
+
+    assert payload["ok"] is True
+    assert payload["count"] == 1
+    assert payload["items"][0]["namespace"] == "auth"
+
+
 def test_handle_memory_search_boosts_task_level_matches(tmp_path: Path) -> None:
     """ASF-8911: Memory search boosts notes matching query req/contract IDs."""
     from ace_lite.mcp_server.service_memory_handlers import handle_memory_search

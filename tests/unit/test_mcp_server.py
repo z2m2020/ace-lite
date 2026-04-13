@@ -215,6 +215,7 @@ def test_mcp_service_health_surfaces_request_stats(tmp_path: Path, monkeypatch) 
     assert payload["request_stats"]["active_request_count"] == 1
     assert payload["request_stats"]["total_request_count"] == 1
     assert payload["request_stats"]["last_request_tool"] == "ace_memory_store"
+    assert payload["request_stats"]["last_request_status"] == "running"
     assert payload["request_stats"]["last_request_started_at"]
 
     release.set()
@@ -226,6 +227,47 @@ def test_mcp_service_health_surfaces_request_stats(tmp_path: Path, monkeypatch) 
     assert payload_after["request_stats"]["total_request_count"] == 1
     assert payload_after["request_stats"]["last_request_finished_at"]
     assert payload_after["request_stats"]["last_request_elapsed_ms"] >= 0.0
+    assert payload_after["request_stats"]["last_request_status"] == "ok"
+    assert payload_after["request_stats"]["last_request_error"] is None
+    assert payload_after["request_stats"]["recent_requests"][-1]["tool"] == "ace_memory_store"
+
+
+def test_mcp_service_health_records_recent_request_errors_and_slow_flags(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    service = _make_service(tmp_path)
+    times = iter((10.0, 11.25, 20.0, 20.2))
+    monkeypatch.setattr(mcp_service_module, "perf_counter", lambda: next(times))
+
+    ok_payload = service._run_tracked("ace_demo", lambda: {"ok": True})
+    assert ok_payload["ok"] is True
+
+    with pytest.raises(RuntimeError, match="boom"):
+        service._run_tracked(
+            "ace_fail",
+            lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+    payload = service.health()["request_stats"]
+    assert payload["last_request_tool"] == "ace_fail"
+    assert payload["last_request_status"] == "error"
+    assert payload["last_request_error"] == {
+        "type": "RuntimeError",
+        "message": "boom",
+    }
+    assert payload["slow_request_threshold_ms"] == 1000.0
+    assert len(payload["recent_requests"]) == 2
+    assert payload["recent_requests"][0]["tool"] == "ace_demo"
+    assert payload["recent_requests"][0]["slow"] is True
+    assert payload["recent_requests"][0]["status"] == "ok"
+    assert payload["recent_requests"][1]["tool"] == "ace_fail"
+    assert payload["recent_requests"][1]["slow"] is False
+    assert payload["recent_requests"][1]["status"] == "error"
+    assert payload["recent_requests"][1]["error"] == {
+        "type": "RuntimeError",
+        "message": "boom",
+    }
 
 
 def test_mcp_service_health_surfaces_stale_runtime_warning(tmp_path: Path) -> None:
@@ -558,6 +600,55 @@ def test_mcp_service_memory_store_avoids_full_notes_reload(tmp_path: Path) -> No
     assert stored["ok"] is True
     persisted = notes_path.read_text(encoding="utf-8").splitlines()
     assert len([line for line in persisted if line.strip()]) == 1
+
+
+def test_mcp_service_memory_search_avoids_full_notes_reload(tmp_path: Path) -> None:
+    service = _make_service(tmp_path)
+    notes_path = tmp_path / "context-map" / "memory_notes.search.jsonl"
+    notes_path.parent.mkdir(parents=True, exist_ok=True)
+    notes_path.write_text(
+        '{"text":"refresh token bug","namespace":"auth","tags":{"type":"bug"}}\n',
+        encoding="utf-8",
+    )
+
+    def _unexpected_load(_path: Path) -> list[dict[str, object]]:
+        raise AssertionError("memory_search should stream notes instead of full reload")
+
+    service._load_notes = _unexpected_load  # type: ignore[method-assign]
+
+    searched = service.memory_search(
+        query="refresh token",
+        limit=5,
+        namespace="auth",
+        notes_path=str(notes_path),
+    )
+
+    assert searched["ok"] is True
+    assert searched["count"] == 1
+
+
+def test_mcp_service_memory_wipe_avoids_full_notes_reload(tmp_path: Path) -> None:
+    service = _make_service(tmp_path)
+    notes_path = tmp_path / "context-map" / "memory_notes.wipe.jsonl"
+    notes_path.parent.mkdir(parents=True, exist_ok=True)
+    notes_path.write_text(
+        (
+            '{"text":"auth note","namespace":"auth","tags":{}}\n'
+            '{"text":"repo note","namespace":"repo","tags":{}}\n'
+        ),
+        encoding="utf-8",
+    )
+
+    def _unexpected_load(_path: Path) -> list[dict[str, object]]:
+        raise AssertionError("memory_wipe should stream/rewrite notes without full reload")
+
+    service._load_notes = _unexpected_load  # type: ignore[method-assign]
+
+    wiped = service.memory_wipe(namespace="auth", notes_path=str(notes_path))
+
+    assert wiped["ok"] is True
+    assert wiped["removed_count"] == 1
+    assert wiped["remaining_count"] == 1
 
 
 def test_mcp_service_feedback_record_and_stats(tmp_path: Path) -> None:
