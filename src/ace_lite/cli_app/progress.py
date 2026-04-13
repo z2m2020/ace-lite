@@ -2,7 +2,7 @@
 
 Provides simple progress indicators for long-running operations.
 
-PRD-91: Plan/Index进度显示
+PRD-91: Plan/index progress display.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 import time
 from collections.abc import Generator
+from typing import Any
 
 
 class SpinnerProgress:
@@ -23,13 +24,18 @@ class SpinnerProgress:
     SPINNER_CHARS = ("-", "\\", "|", "/")
     DEFAULT_DELAY = 0.1
 
-    def __init__(self, message: str = "Working...", delay: float = DEFAULT_DELAY, stream=None):
+    def __init__(
+        self,
+        message: str = "Working...",
+        delay: float = DEFAULT_DELAY,
+        stream: Any = None,
+    ) -> None:
         """Initialize spinner.
 
         Args:
-            message: Message to display alongside spinner
-            delay: Delay between spinner updates (seconds)
-            stream: Output stream (default: stderr)
+            message: Message to display alongside spinner.
+            delay: Delay between spinner updates in seconds.
+            stream: Output stream. Defaults to stderr.
         """
         self.message = message
         self.delay = delay
@@ -37,15 +43,14 @@ class SpinnerProgress:
         self._running = False
         self._index = 0
 
-    def __enter__(self):
+    def __enter__(self) -> SpinnerProgress:
         """Start the spinner."""
         self._running = True
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
         """Stop the spinner."""
         self._running = False
-        # Clear the line
         self.stream.write("\r" + " " * (len(self.message) + 5) + "\r")
         self.stream.flush()
         return False
@@ -61,25 +66,15 @@ class SpinnerProgress:
 
 
 class ProgressContext:
-    """Context manager for staged progress tracking.
+    """Context manager for staged progress tracking."""
 
-    Usage:
-        with ProgressContext("Building plan") as ctx:
-            ctx.stage("Loading memory...")
-            load_memory()
-            ctx.stage("Building index...")
-            build_index()
-            ctx.stage("Generating plan...")
-            generate_plan()
-    """
-
-    def __init__(self, title: str, verbose: bool = True, stream=None):
+    def __init__(self, title: str, verbose: bool = True, stream: Any = None) -> None:
         """Initialize progress context.
 
         Args:
-            title: Overall task title
-            verbose: Whether to show progress output
-            stream: Output stream (default: stderr)
+            title: Overall task title.
+            verbose: Whether to show progress output.
+            stream: Output stream. Defaults to stderr.
         """
         self.title = title
         self.verbose = verbose
@@ -87,7 +82,7 @@ class ProgressContext:
         self.current_stage: str | None = None
         self._start_time: float | None = None
 
-    def __enter__(self):
+    def __enter__(self) -> ProgressContext:
         """Start progress tracking."""
         self._start_time = time.time()
         if self.verbose:
@@ -95,97 +90,65 @@ class ProgressContext:
             self.stream.flush()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
         """Finish progress tracking."""
         if self.verbose:
             elapsed = time.time() - (self._start_time or 0)
             if exc_type is None:
-                self.stream.write(f"\r✓ {self.title} (completed in {elapsed:.1f}s)\n")
+                self.stream.write(f"\r[ok] {self.title} (completed in {elapsed:.1f}s)\n")
             else:
-                self.stream.write(f"\r✗ {self.title} (failed after {elapsed:.1f}s)\n")
+                self.stream.write(f"\r[error] {self.title} (failed after {elapsed:.1f}s)\n")
             self.stream.flush()
         return False
 
     def stage(self, message: str) -> None:
-        """Mark entering a new stage.
-
-        Args:
-            message: Stage description
-        """
+        """Mark entering a new stage."""
         self.current_stage = message
         if self.verbose:
-            self.stream.write(f"\r  → {message}...")
+            self.stream.write(f"\r  -> {message}...")
             self.stream.flush()
 
 
-def echo_progress(message: str, stream=None) -> None:
-    """Simple progress echo to stderr.
-
-    Args:
-        message: Progress message
-        stream: Output stream (default: stderr)
-    """
+def echo_progress(message: str, stream: Any = None) -> None:
+    """Write a progress update to stderr."""
     target = stream or sys.stderr
-    target.write(f"\r  → {message}")
+    target.write(f"\r  -> {message}")
     target.flush()
 
 
-def clear_progress(stream=None) -> None:
-    """Clear the current progress line.
-
-    Args:
-        stream: Output stream (default: stderr)
-    """
+def clear_progress(stream: Any = None) -> None:
+    """Clear the current progress line."""
     target = stream or sys.stderr
     target.write("\r" + " " * 80 + "\r")
     target.flush()
 
 
-def echo_done(message: str | None = None, stream=None) -> None:
-    """Echo a completion message.
-
-    Args:
-        message: Optional completion message
-        stream: Output stream (default: stderr)
-    """
+def echo_done(message: str | None = None, stream: Any = None) -> None:
+    """Write a completion message."""
     target = stream or sys.stderr
     msg = message or "Done"
-    target.write(f"\r✓ {msg}\n")
+    target.write(f"\r[ok] {msg}\n")
     target.flush()
 
 
-def echo_error(message: str, stream=None) -> None:
-    """Echo an error message.
-
-    Args:
-        message: Error message
-        stream: Output stream (default: stderr)
-    """
+def echo_error(message: str, stream: Any = None) -> None:
+    """Write an error message."""
     target = stream or sys.stderr
-    target.write(f"\r✗ {message}\n")
+    target.write(f"\r[error] {message}\n")
     target.flush()
 
 
-def progress_iter(items: list, message: str = "Processing", stream=None) -> Generator:
-    """Yield items with progress indication.
-
-    Args:
-        items: Items to iterate over
-        message: Progress message template (use {i} and {total})
-        stream: Output stream (default: stderr)
-
-    Yields:
-        Items from the input list
-
-    Usage:
-        for item in progress_iter(files, "Indexing {i}/{total}"):
-            process(item)
-    """
+def progress_iter(
+    items: list[Any],
+    message: str = "Processing",
+    stream: Any = None,
+) -> Generator[Any, None, None]:
+    """Yield items while emitting simple progress text."""
     total = len(items)
     target = stream or sys.stderr
 
     for i, item in enumerate(items, 1):
-        target.write(f"\r  → {message.format(i=i, total=total)}")
+        target.write(f"\r  -> {message.format(i=i, total=total)}")
         target.flush()
         yield item
 

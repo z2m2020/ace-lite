@@ -2,23 +2,20 @@
 
 Centralized documentation URLs for help text and examples.
 
-PRD-91: Help文档跳转统一入口
+PRD-91: Unified doc entrypoint for help text.
 """
 
 from __future__ import annotations
 
-# Base paths
 DOCS_BASE = "docs/guides"
 DOCS_ROOT = "docs"
 
-# Guide links (relative paths for local docs)
 GUIDES = {
     "getting_started": f"{DOCS_BASE}/GETTING_STARTED.md",
     "configuration": f"{DOCS_BASE}/CONFIGURATION.md",
     "troubleshooting": f"{DOCS_BASE}/TROUBLESHOOTING.md",
 }
 
-# Command-specific guide links
 COMMAND_GUIDES = {
     "plan": f"{DOCS_BASE}/PLAN_GUIDE.md",
     "index": f"{DOCS_BASE}/INDEXING.md",
@@ -32,7 +29,6 @@ COMMAND_GUIDES = {
     "demo": f"{DOCS_BASE}/DEMO.md",
 }
 
-# Quick reference links
 QUICK_REFERENCE = {
     "examples": f"{DOCS_BASE}/EXAMPLES.md",
     "cheatsheet": f"{DOCS_BASE}/CHEATSHEET.md",
@@ -40,30 +36,15 @@ QUICK_REFERENCE = {
 
 
 def get_command_guide(command: str) -> str | None:
-    """Get the guide link for a command.
-
-    Args:
-        command: Command name
-
-    Returns:
-        Guide path or None if not found
-    """
+    """Get the guide link for a command."""
     return COMMAND_GUIDES.get(command.lower())
 
 
 def get_guide(name: str) -> str | None:
-    """Get a general guide link.
-
-    Args:
-        name: Guide name
-
-    Returns:
-        Guide path or None if not found
-    """
+    """Get a general guide link."""
     return GUIDES.get(name.lower())
 
 
-# Help text templates
 HELP_TEMPLATES = {
     "getting_started": """
 See also:
@@ -73,36 +54,29 @@ See also:
     "plan": """
 See also:
   docs/guides/GETTING_STARTED.md    Quick start guide
-  docs/guides/PLAN_GUIDE.md        Plan command guide
+  docs/guides/PLAN_GUIDE.md         Plan command guide
   docs/guides/RETRIEVAL_PROFILES.md Retrieval profiles guide
 """,
     "index": """
 See also:
   docs/guides/GETTING_STARTED.md    Quick start guide
-  docs/guides/INDEXING.md         Indexing guide
+  docs/guides/INDEXING.md           Indexing guide
 """,
     "doctor": """
 See also:
   docs/guides/GETTING_STARTED.md    Quick start guide
-  docs/guides/DIAGNOSTICS.md       Diagnostics guide
+  docs/guides/DIAGNOSTICS.md        Diagnostics guide
 """,
     "repomap": """
 See also:
   docs/guides/GETTING_STARTED.md    Quick start guide
-  docs/guides/REPOMAP.md           RepoMap guide
+  docs/guides/REPOMAP.md            RepoMap guide
 """,
 }
 
 
 def get_help_template(command: str) -> str:
-    """Get the help 'See also' template for a command.
-
-    Args:
-        command: Command name
-
-    Returns:
-        Help template string
-    """
+    """Get the help 'See also' template for a command."""
     return HELP_TEMPLATES.get(
         command.lower(),
         HELP_TEMPLATES.get("getting_started", ""),
