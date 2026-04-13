@@ -3,6 +3,7 @@ from __future__ import annotations
 import click
 
 from ace_lite.cli_app.config_resolve import _load_command_config, _resolve_from_config
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.output import echo_json
 from ace_lite.cli_app.params import _to_csv_languages, _to_int
 from ace_lite.indexer import build_index
@@ -11,7 +12,11 @@ from ace_lite.repomap.builder import write_repo_map
 from ace_lite.repomap.ranking import RANKING_PROFILES
 
 
-@click.group("repomap", help="Build prompt-friendly repository map outputs.")
+@click.group(
+    "repomap",
+    help="Build prompt-friendly repository map outputs.",
+    epilog=get_help_template("repomap"),
+)
 def repomap_group() -> None:
     pass
 

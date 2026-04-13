@@ -35,6 +35,7 @@ See also:
 @click.command(
     "doctor",
     help="Grouped runtime diagnostics (alias for `runtime doctor`).",
+    epilog=DOCTOR_HELP_EXAMPLES,
 )
 @click.option("--root", default=".", show_default=True, help="Repository root path.")
 @click.option(
