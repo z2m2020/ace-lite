@@ -147,6 +147,74 @@ class MemoryContextService:
             "warning": ";".join(warnings) if warnings else None,
         }
 
+    def build_profile_payload(
+        self,
+        *,
+        root: str,
+        tokenizer_model: str,
+    ) -> dict[str, Any]:
+        if not self.config.memory.profile.enabled:
+            return {"enabled": False, "facts": [], "selected_count": 0}
+        try:
+            store = self.resolve_profile_store(root=root)
+            return store.build_injection(
+                top_n=self.config.memory.profile.top_n,
+                token_budget=self.config.memory.profile.token_budget,
+                tokenizer_model=tokenizer_model,
+            )
+        except Exception as exc:
+            logger.warning(
+                "memory.profile.inject.error",
+                extra={"error": str(exc)},
+            )
+            return {
+                "enabled": True,
+                "error": str(exc),
+                "facts": [],
+                "selected_count": 0,
+                "selected_est_tokens_total": 0,
+            }
+
+    def build_capture_payload(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        namespace: str | None,
+        matched_keywords: list[str],
+        triggered: bool,
+        reason: str,
+        query_length: int,
+    ) -> dict[str, Any]:
+        capture_enabled = bool(self.config.memory.capture.enabled)
+        payload: dict[str, Any] = {
+            "enabled": capture_enabled,
+            "triggered": False,
+            "namespace": namespace,
+            "matched_keywords": [],
+            "captured_items": 0,
+            "reason": reason,
+            "query_length": query_length,
+            "warning": None,
+        }
+        if capture_enabled and triggered:
+            return {
+                **payload,
+                **self.capture_memory_signal(
+                    query=query,
+                    repo=repo,
+                    root=root,
+                    namespace=namespace,
+                    matched_keywords=matched_keywords,
+                ),
+                "reason": reason,
+                "query_length": query_length,
+            }
+        if capture_enabled:
+            payload["matched_keywords"] = list(matched_keywords)
+        return payload
+
     def capture_long_term_stage_observation(
         self,
         *,

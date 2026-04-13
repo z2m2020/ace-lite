@@ -25,12 +25,16 @@ def _build_service(
                     auto_tag_mode=auto_tag_mode,
                 ),
                 profile=SimpleNamespace(
+                    enabled=False,
                     path=str(root / "profile.json"),
+                    top_n=3,
+                    token_budget=128,
                     expiry_enabled=False,
                     ttl_days=30,
                     max_age_days=365,
                 ),
                 capture=SimpleNamespace(
+                    enabled=False,
                     notes_path=str(root / "memory_notes.jsonl"),
                 ),
                 notes=SimpleNamespace(
@@ -106,6 +110,58 @@ def test_capture_memory_signal_downgrades_notes_append_error(tmp_path: Path) -> 
     assert payload["triggered"] is True
     assert payload["captured_items"] == 1
     assert "notes_append_error" in str(payload["warning"] or "")
+
+
+def test_build_profile_payload_injects_facts_deterministically(tmp_path: Path) -> None:
+    service = _build_service(root=tmp_path)
+    service.config.memory.profile.enabled = True
+    service.config.memory.profile.top_n = 2
+    service.config.memory.profile.token_budget = 20
+    store = ProfileStore(path=tmp_path / "profile.json")
+    store.add_fact("beta preference", confidence=0.7)
+    store.add_fact("alpha preference", confidence=0.9)
+    store.add_fact("gamma preference", confidence=0.4)
+
+    payload = service.build_profile_payload(
+        root=str(tmp_path),
+        tokenizer_model="gpt-4o-mini",
+    )
+
+    assert payload["enabled"] is True
+    assert payload["selected_count"] == 2
+    assert [fact["text"] for fact in payload["facts"]] == [
+        "alpha preference",
+        "beta preference",
+    ]
+
+
+def test_build_capture_payload_preserves_reason_for_non_triggered_capture(
+    tmp_path: Path,
+) -> None:
+    service = _build_service(root=tmp_path)
+    service.config.memory.capture.enabled = True
+
+    payload = service.build_capture_payload(
+        query="fix auth bug now",
+        repo="demo",
+        root=str(tmp_path),
+        namespace="repo:demo",
+        matched_keywords=["fix"],
+        triggered=False,
+        reason="min_query_length_guard",
+        query_length=16,
+    )
+
+    assert payload == {
+        "enabled": True,
+        "triggered": False,
+        "namespace": "repo:demo",
+        "matched_keywords": ["fix"],
+        "captured_items": 0,
+        "reason": "min_query_length_guard",
+        "query_length": 16,
+        "warning": None,
+    }
 
 
 def test_capture_long_term_stage_observation_passes_session_run_id(tmp_path: Path) -> None:

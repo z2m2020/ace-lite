@@ -760,55 +760,22 @@ class AceOrchestrator:
         if not self._config.memory.profile.enabled:
             payload["profile"] = {"enabled": False, "facts": [], "selected_count": 0}
         else:
-            try:
-                store = self._resolve_profile_store(root=root)
-                profile_payload = store.build_injection(
-                    top_n=self._config.memory.profile.top_n,
-                    token_budget=self._config.memory.profile.token_budget,
-                    tokenizer_model=self._tokenizer_model,
-                )
-                payload["profile"] = profile_payload
-            except Exception as exc:
-                logger.warning(
-                    "memory.profile.inject.error",
-                    extra={"error": str(exc)},
-                )
-                payload["profile"] = {
-                    "enabled": True,
-                    "error": str(exc),
-                    "facts": [],
-                    "selected_count": 0,
-                    "selected_est_tokens_total": 0,
-                }
+            payload["profile"] = self._memory_context_service.build_profile_payload(
+                root=root,
+                tokenizer_model=self._tokenizer_model,
+            )
 
         extraction = self._signal_extractor.extract(query)
-        capture_enabled = bool(self._config.memory.capture.enabled)
-        capture_payload: dict[str, Any] = {
-            "enabled": capture_enabled,
-            "triggered": False,
-            "namespace": container_tag,
-            "matched_keywords": [],
-            "captured_items": 0,
-            "reason": extraction.reason,
-            "query_length": extraction.query_length,
-            "warning": None,
-        }
-        if capture_enabled and extraction.triggered:
-            capture_payload = {
-                **capture_payload,
-                **self._capture_memory_signal(
-                    query=query,
-                    repo=repo,
-                    root=root,
-                    namespace=container_tag,
-                    matched_keywords=list(extraction.matched_keywords),
-                ),
-                "reason": extraction.reason,
-                "query_length": extraction.query_length,
-            }
-        elif capture_enabled:
-            capture_payload["matched_keywords"] = list(extraction.matched_keywords)
-        payload["capture"] = capture_payload
+        payload["capture"] = self._memory_context_service.build_capture_payload(
+            query=query,
+            repo=repo,
+            root=root,
+            namespace=container_tag,
+            matched_keywords=list(extraction.matched_keywords),
+            triggered=bool(extraction.triggered),
+            reason=extraction.reason,
+            query_length=extraction.query_length,
+        )
         return payload
 
     def _run_index(self, *, ctx: StageContext) -> dict[str, Any]:
