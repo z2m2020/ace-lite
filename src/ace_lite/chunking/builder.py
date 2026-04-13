@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any
 
 from ace_lite.chunking.disclosure_policy import (
-    CHUNK_DISCLOSURE_CHOICES,
     is_skeleton_disclosure,
     normalize_chunk_disclosure,
     resolve_chunk_disclosure,

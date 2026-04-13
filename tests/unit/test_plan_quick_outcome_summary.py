@@ -7,8 +7,6 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 
 def _load_module():
     script_path = Path(__file__).resolve().parents[2] / "scripts" / "plan_quick_outcome_summary.py"

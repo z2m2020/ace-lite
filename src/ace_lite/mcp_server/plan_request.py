@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, TypedDict
+from typing import Any
 
 from ace_lite.entrypoint_runtime import (
     EmbeddingRuntimeKwargs,

@@ -12,7 +12,6 @@ from ace_lite.cli_app.params_option_catalog import (
     HYBRID_FUSION_CHOICES,
     REMOTE_SLOT_POLICY_CHOICES,
     RETRIEVAL_PRESET_CHOICES,
-    RETRIEVAL_PRESETS,
 )
 from ace_lite.cli_app.params_option_registry import OptionDescriptor
 from ace_lite.repomap.ranking import RANKING_PROFILES

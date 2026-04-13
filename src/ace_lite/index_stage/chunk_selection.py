@@ -13,7 +13,6 @@ from ace_lite.chunking.robust_signature import (
 )
 from ace_lite.chunking.types import (
     CONTEXTUAL_CHUNKING_SIDECAR_KEY,
-    RETRIEVAL_CONTEXT_SIDECAR_KEY,
     resolve_retrieval_context_text,
     strip_internal_chunk_sidecars,
 )

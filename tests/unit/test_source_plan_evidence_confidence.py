@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from ace_lite.source_plan.evidence_confidence import (
     annotate_chunk_confidence,
     build_confidence_summary,

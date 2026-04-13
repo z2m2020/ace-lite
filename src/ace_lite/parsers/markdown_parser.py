@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
 
 from ace_lite.parsers.base import ImportEntry, ReferenceEntry, SymbolEntry
 

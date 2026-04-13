@@ -334,7 +334,6 @@ def benchmark_codecs(
     Returns:
         Dict of benchmark results keyed by codec name
     """
-    import time
 
     from ace_lite.performance_benchmark import BenchmarkConfig, BenchmarkRunner
 

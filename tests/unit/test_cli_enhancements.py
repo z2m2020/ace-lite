@@ -11,13 +11,8 @@ from ace_lite.cli_app.cli_enhancements import (
     OutputFormatter,
     ParameterValidationError,
     validate_all_retrieval_params,
-    validate_budget_tokens,
-    validate_chunk_per_file_limit,
-    validate_chunk_token_budget,
-    validate_chunk_top_k,
     validate_float_param,
     validate_int_param,
-    validate_min_candidate_score,
     validate_timeout_seconds,
     validate_top_k_files,
 )

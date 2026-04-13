@@ -5,7 +5,6 @@ Tests verify the optimization utilities for the indexer module (QO-1103).
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest

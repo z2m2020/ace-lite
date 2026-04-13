@@ -9,8 +9,6 @@ PRD-91: Doctor 默认路径兼容性回归测试
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
 
 import pytest
 from click.testing import CliRunner

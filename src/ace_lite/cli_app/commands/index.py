@@ -10,7 +10,6 @@ from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.output import echo_json
 from ace_lite.cli_app.progress import clear_progress, echo_done, echo_progress
 from ace_lite.index_cache import build_or_refresh_index
-from ace_lite.indexer import build_index
 from ace_lite.indexing_resilience import (
     IndexingResilienceConfig,
     build_index_with_resilience,

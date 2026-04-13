@@ -15,7 +15,6 @@ from typing import Any, cast
 
 import click
 
-from ace_lite.cli_app.cli_enhancements import HelpExamples, OutputFormatter
 from ace_lite.cli_app.output import echo_json
 from ace_lite.plan_quick import build_plan_quick
 

@@ -19,9 +19,7 @@ from ace_lite.cli_app.config_resolve_defaults import (
 from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.output import echo_json
 from ace_lite.cli_app.params import (
-    _to_candidate_ranker,
     _to_float_dict,
-    _to_hybrid_fusion_mode,
     _to_retrieval_policy,
     _with_shared_plan_options,
 )

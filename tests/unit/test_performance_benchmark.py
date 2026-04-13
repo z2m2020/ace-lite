@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 from ace_lite.performance_benchmark import (
     BenchmarkComparison,
     BenchmarkConfig,
@@ -16,7 +14,6 @@ from ace_lite.performance_benchmark import (
     BenchmarkRunner,
     TuningRecommendation,
     benchmark_json_serialization,
-    benchmark_parallel_processing,
     determine_optimization,
 )
 

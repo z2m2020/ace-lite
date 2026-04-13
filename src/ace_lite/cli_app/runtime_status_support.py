@@ -28,7 +28,6 @@ from ace_lite.cli_app.runtime_status_health_support import (
     build_runtime_degraded_services,
     build_runtime_service_health,
 )
-from ace_lite.dev_feedback_taxonomy import get_dev_feedback_reason_family
 from ace_lite.runtime_paths import DEFAULT_USER_RUNTIME_DB_PATH, resolve_user_runtime_db_path
 from ace_lite.runtime_stats_schema import (
     RUNTIME_STATS_DOCTOR_EVENT_CLASS,

@@ -58,7 +58,6 @@ from ace_lite.config_sections import (
     TokenizerSectionSpec,
     TraceSectionSpec,
 )
-from ace_lite.config_value_normalizers import validate_choice_value
 from ace_lite.pydantic_utils import StrictModel as _StrictModel
 from ace_lite.runtime.scheduler import CronSchedule
 from ace_lite.shared_plan_runtime_config import (

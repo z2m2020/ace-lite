@@ -5,7 +5,6 @@ from pathlib import PurePosixPath, PureWindowsPath
 from ace_lite.runtime_paths import (
     DEFAULT_REPO_RUNTIME_CACHE_DB_PATH,
     DEFAULT_USER_PREFERENCE_CAPTURE_DB_PATH,
-    DEFAULT_USER_RUNTIME_DB_PATH,
     resolve_repo_runtime_cache_db_path,
     resolve_user_preference_capture_db_path,
     resolve_user_runtime_db_path,
