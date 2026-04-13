@@ -33,3 +33,9 @@ def test_memory_gate_skips_short_non_question() -> None:
 def test_memory_gate_allows_default_long_query() -> None:
     decision = decide_memory_retrieval(query="what did we decide about memory namespace tags?")
     assert decision.should_retrieve is True
+
+
+def test_memory_gate_treats_fullwidth_question_mark_as_question() -> None:
+    decision = decide_memory_retrieval(query="这是测试吗\uff1f")
+    assert decision.should_retrieve is True
+    assert decision.reason == "default"

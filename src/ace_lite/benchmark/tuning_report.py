@@ -172,7 +172,8 @@ def build_benchmark_tuning_report(
                 recommendation_id="recall_recovery",
                 confidence="medium",
                 rationale=(
-                    "当前 benchmark 暴露出召回或依赖覆盖不足；先扩大检索/切块预算，作为离线试验候选。"
+                    "Current benchmark exposes recall or dependency coverage gaps; "
+                    "increase retrieval and chunk budgets first as a report-only experiment."
                 ),
                 overlay_entries=[
                     (("plan", "retrieval", "top_k_files"), min(top_k_files + 2, 32)),
@@ -187,7 +188,8 @@ def build_benchmark_tuning_report(
                 recommendation_id="precision_noise_balance",
                 confidence="medium",
                 rationale=(
-                    "噪声偏高且精度偏低；优先提高候选门槛并轻微收紧文件召回范围，保持 report-only 试验。"
+                    "Noise is high while precision is low; raise the candidate threshold "
+                    "and slightly narrow file recall while keeping the experiment report-only."
                 ),
                 overlay_entries=[
                     (
@@ -212,7 +214,8 @@ def build_benchmark_tuning_report(
                 recommendation_id="latency_recovery",
                 confidence="low",
                 rationale=(
-                    "延迟已偏高，但召回侧指标仍稳定；可尝试小幅收紧上下文预算观察收益。"
+                    "Latency is elevated but recall signals remain stable; try a small "
+                    "reduction in context budgets and observe the trade-off."
                 ),
                 overlay_entries=[
                     (
@@ -237,7 +240,8 @@ def build_benchmark_tuning_report(
                 recommendation_id="graph_signal_promotion",
                 confidence="low",
                 rationale=(
-                    "图源加载覆盖已具备基础，但依赖召回仍偏低；可离线试验小幅提升 `scip.base_weight`。"
+                    "Graph sources are sufficiently loaded but dependency recall is still low; "
+                    "trial a small increase to `scip.base_weight` in a report-only pass."
                 ),
                 overlay_entries=[
                     (
@@ -250,12 +254,14 @@ def build_benchmark_tuning_report(
 
     if embedding_fallback_ratio > 0.15:
         operational_notes.append(
-            "embedding_fallback_ratio 偏高；优先排查 embedding provider/index 健康度，再考虑调高语义权重。"
+            "embedding_fallback_ratio is elevated; inspect embedding provider and index health "
+            "before increasing semantic weight."
         )
 
     if not recommendations:
         operational_notes.append(
-            "当前 summary 未触发保守型离线调参规则；建议继续积累多组 benchmark 对比样本后再生成候选 overlay。"
+            "Current summary does not trigger any conservative offline tuning rule; "
+            "accumulate more benchmark comparisons before generating another candidate overlay."
         )
 
     return BenchmarkTuningReport(

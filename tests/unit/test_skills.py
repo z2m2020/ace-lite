@@ -919,8 +919,8 @@ def test_cross_agent_benchmark_routes_feedback_queries() -> None:
         "Use benchmark tuning to compare precision and noise before rollout",
         "Run benchmark loop and record ace_feedback_record for selected paths",
         "Tune embedding rerank pool and scip provider, then capture trace_export evidence for latency regression review",
-        "Benchmark 前先固定 validation 和 agent_loop 状态，并记录 validation_result_v1 与 agent_loop_summary_v1",
-        "Benchmark 比较前先固定 validation_tests 和 agent_loop stop_reason，再对照 precision、noise 和 latency",
+        "Benchmark 前先固定 validation 和 agent_loop 状态, 并记录 validation_result_v1 与 agent_loop_summary_v1",
+        "Benchmark 比较前先固定 validation_tests 和 agent_loop stop_reason, 再对照 precision、noise 和 latency",
     ]
 
     for query in cases:

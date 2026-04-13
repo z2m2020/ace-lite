@@ -42,7 +42,7 @@ _FORCE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b(what did (i|we)|did i (tell|say|mention))\b", re.IGNORECASE),
     re.compile(r"\b(my (name|email|phone|address|birthday|preference))\b", re.IGNORECASE),
     # Chinese variants (minimal set)
-    re.compile(r"(你记得|之前|上次|以前|还记得|我之前|我上次)"),
+    re.compile(r"(你还记得|你记得|之前|上次|以前|我上次|我之前|你之前)"),
 )
 
 
@@ -78,11 +78,10 @@ def decide_memory_retrieval(*, query: str) -> MemoryGateDecision:
     # For very short non-question messages, skip by default.
     has_cjk = bool(re.search(r"[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]", text))
     min_len = 6 if has_cjk else 15
-    if len(text) < min_len and "?" not in text and "？" not in text:
+    if len(text) < min_len and "?" not in text and "\uff1f" not in text:
         return MemoryGateDecision(False, "short_non_question")
 
     return MemoryGateDecision(True, "default")
 
 
 __all__ = ["MemoryGateDecision", "decide_memory_retrieval"]
-

@@ -15,9 +15,9 @@ unchanged.
 Taxonomy (PRD R8503):
 - EXTRACTED / 1.0: direct symbol hit, direct import/reference, exact rg hit,
   SCIP reference, test path evidence
-- INFERRED / 0.6–0.9: cochange, graph_lookup, semantic rerank, skills route,
+- INFERRED / 0.6-0.9: cochange, graph_lookup, semantic rerank, skills route,
   memory hint, neighbor context, graph_prior
-- AMBIGUOUS / 0.1–0.5: hint-only, stale memory, fallback ranker, budget
+- AMBIGUOUS / 0.1-0.5: hint-only, stale memory, fallback ranker, budget
   truncation, missing direct evidence
 - UNKNOWN / 0.0: cannot identify evidence source
 """
@@ -89,7 +89,7 @@ def _classify_chunk_confidence(chunk: dict[str, Any]) -> tuple[str, float, str]:
     if role == "direct":
         return "EXTRACTED", 0.95, "direct retrieval without test hint"
 
-    # ---- INFERRED (0.6–0.9) ----
+    # ---- INFERRED (0.6-0.9) ----
     # Neighbor context (focused file context)
     if role == "neighbor_context":
         # Check for additional graph signals
@@ -122,7 +122,7 @@ def _classify_chunk_confidence(chunk: dict[str, Any]) -> tuple[str, float, str]:
     if _float(score_breakdown.get("coverage_boost", 0.0)) > 0:
         return "INFERRED", 0.70, "boosted by coverage signal"
 
-    # ---- AMBIGUOUS (0.1–0.5) ----
+    # ---- AMBIGUOUS (0.1-0.5) ----
     # Hint-only: role is hint_only with test hint signal (check BEFORE test_hint INFERRED)
     if role == "hint_only" and has_test_hint:
         return "AMBIGUOUS", 0.35, "hint-only with test signal"
