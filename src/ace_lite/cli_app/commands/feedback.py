@@ -8,6 +8,7 @@ from typing import Any
 
 import click
 
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.output import echo_json
 from ace_lite.cli_app.runtime_command_support import DEFAULT_RUNTIME_STATS_DB_PATH
 from ace_lite.dev_feedback_runtime_linkage import (
@@ -20,7 +21,11 @@ from ace_lite.issue_report_store import IssueReportStore
 from ace_lite.memory_long_term import build_long_term_capture_service_from_runtime
 
 
-@click.group("feedback", help="Record and inspect selection feedback for reranking.")
+@click.group(
+    "feedback",
+    help="Record and inspect selection feedback for reranking.",
+    epilog=get_help_template("feedback"),
+)
 def feedback_group() -> None:
     return None
 

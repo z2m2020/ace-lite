@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.orchestrator_factory import run_plan
 from ace_lite.cli_app.output import echo_json
 from ace_lite.demo_repo import seed_demo_repo
@@ -26,7 +27,11 @@ def _resolve_skills_dir(*, configured: str | None) -> str:
     return "skills"
 
 
-@click.command("demo", help="One-command demo: seed a tiny repo and run a plan.")
+@click.command(
+    "demo",
+    help="One-command demo: seed a tiny repo and run a plan.",
+    epilog=get_help_template("demo"),
+)
 @click.option(
     "--output",
     "output_dir",

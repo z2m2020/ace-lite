@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import click
 
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.output import echo_json
 from ace_lite.profile_store import ProfileStore
 
 
-@click.group("profile", help="Manage local user profile facts/preferences.")
+@click.group(
+    "profile",
+    help="Manage local user profile facts/preferences.",
+    epilog=get_help_template("profile"),
+)
 def profile_group() -> None:
     return None
 

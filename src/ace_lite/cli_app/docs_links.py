@@ -56,6 +56,21 @@ See also:
   docs/guides/GETTING_STARTED.md    Quick start guide
   docs/guides/BENCHMARK.md          Benchmark guide
 """,
+    "demo": """
+See also:
+  docs/guides/GETTING_STARTED.md    Quick start guide
+  docs/guides/DEMO.md               Demo guide
+""",
+    "feedback": """
+See also:
+  docs/guides/GETTING_STARTED.md    Quick start guide
+  docs/guides/FEEDBACK.md           Feedback guide
+""",
+    "memory": """
+See also:
+  docs/guides/GETTING_STARTED.md    Quick start guide
+  docs/guides/MEMORY.md             Memory guide
+""",
     "plan": """
 See also:
   docs/guides/GETTING_STARTED.md    Quick start guide
@@ -66,6 +81,11 @@ See also:
 See also:
   docs/guides/GETTING_STARTED.md    Quick start guide
   docs/guides/PLAN_QUICK.md         Plan quick guide
+""",
+    "profile": """
+See also:
+  docs/guides/GETTING_STARTED.md    Quick start guide
+  docs/guides/PROFILE.md            Profile guide
 """,
     "index": """
 See also:
@@ -81,6 +101,11 @@ See also:
 See also:
   docs/guides/GETTING_STARTED.md    Quick start guide
   docs/guides/REPOMAP.md            RepoMap guide
+""",
+    "workspace": """
+See also:
+  docs/guides/GETTING_STARTED.md    Quick start guide
+  docs/guides/WORKSPACE.md          Workspace guide
 """,
 }
 

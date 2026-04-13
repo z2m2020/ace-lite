@@ -10,6 +10,7 @@ from typing import Any, cast
 
 import click
 
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.output import echo_json
 from ace_lite.parsers.languages import parse_language_csv
 
@@ -146,7 +147,11 @@ def _write_agent_hints_target(path: Path, text: str) -> int:
     return len(text.encode("utf-8"))
 
 
-@click.group("workspace", help="Workspace-level validation and multi-repo planning.")
+@click.group(
+    "workspace",
+    help="Workspace-level validation and multi-repo planning.",
+    epilog=get_help_template("workspace"),
+)
 def workspace_group() -> None:
     return None
 

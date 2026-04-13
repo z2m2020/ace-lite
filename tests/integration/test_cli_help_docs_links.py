@@ -70,3 +70,58 @@ def test_benchmark_run_help_includes_docs_links() -> None:
     assert "See also:" in result.output
     assert "docs/guides/GETTING_STARTED.md" in result.output
     assert "docs/guides/BENCHMARK.md" in result.output
+
+
+def test_demo_help_includes_docs_links() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["demo", "--help"])
+
+    assert result.exit_code == 0
+    assert "See also:" in result.output
+    assert "docs/guides/GETTING_STARTED.md" in result.output
+    assert "docs/guides/DEMO.md" in result.output
+
+
+def test_memory_help_includes_docs_links() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["memory", "--help"])
+
+    assert result.exit_code == 0
+    assert "See also:" in result.output
+    assert "docs/guides/GETTING_STARTED.md" in result.output
+    assert "docs/guides/MEMORY.md" in result.output
+
+
+def test_feedback_help_includes_docs_links() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["feedback", "--help"])
+
+    assert result.exit_code == 0
+    assert "See also:" in result.output
+    assert "docs/guides/GETTING_STARTED.md" in result.output
+    assert "docs/guides/FEEDBACK.md" in result.output
+
+
+def test_profile_help_includes_docs_links() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["profile", "--help"])
+
+    assert result.exit_code == 0
+    assert "See also:" in result.output
+    assert "docs/guides/GETTING_STARTED.md" in result.output
+    assert "docs/guides/PROFILE.md" in result.output
+
+
+def test_workspace_help_includes_docs_links() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["workspace", "--help"])
+
+    assert result.exit_code == 0
+    assert "See also:" in result.output
+    assert "docs/guides/GETTING_STARTED.md" in result.output
+    assert "docs/guides/WORKSPACE.md" in result.output

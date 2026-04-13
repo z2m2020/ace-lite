@@ -9,6 +9,7 @@ from typing import Any
 
 import click
 
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.output import echo_json
 from ace_lite.memory import prune_memory_notes_rows
 from ace_lite.memory_long_term.graph_view import build_long_term_graph_view
@@ -53,7 +54,11 @@ def _save_notes(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_text((content + "\n") if content else "", encoding="utf-8")
 
 
-@click.group("memory", help="Manage local memory notes (local-first).")
+@click.group(
+    "memory",
+    help="Manage local memory notes (local-first).",
+    epilog=get_help_template("memory"),
+)
 def memory_group() -> None:
     return None
 
