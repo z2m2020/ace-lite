@@ -35,6 +35,7 @@ from ace_lite.cli_app.config_resolve_defaults import (
     PLAN_MEMORY_POSTPROCESS_DEFAULTS,
     PLAN_MEMORY_PROFILE_DEFAULTS,
 )
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.orchestrator_factory import create_memory_provider, create_orchestrator
 from ace_lite.cli_app.output import echo_json
 from ace_lite.cli_app.params import (
@@ -184,7 +185,11 @@ def benchmark_tune_report_command(
     echo_json(outputs)
 
 
-@benchmark_group.command("run", help="Run benchmark cases and write JSON/Markdown reports.")
+@benchmark_group.command(
+    "run",
+    help="Run benchmark cases and write JSON/Markdown reports.",
+    epilog=get_help_template("benchmark"),
+)
 @click.option(
     "--cases",
     "cases_path",

@@ -15,6 +15,7 @@ from typing import Any, cast
 
 import click
 
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.output import echo_json
 from ace_lite.plan_quick import build_plan_quick
 
@@ -42,6 +43,7 @@ See also:
 @click.command(
     "plan-quick",
     help="Build a quick source plan using index-based retrieval (no memory/skill stages).",
+    epilog=get_help_template("plan-quick"),
 )
 @click.option(
     "--query",

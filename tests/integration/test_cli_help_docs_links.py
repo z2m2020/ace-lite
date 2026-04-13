@@ -17,6 +17,17 @@ def test_plan_help_includes_docs_links() -> None:
     assert "docs/guides/RETRIEVAL_PROFILES.md" in result.output
 
 
+def test_plan_quick_help_includes_docs_links() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["plan-quick", "--help"])
+
+    assert result.exit_code == 0
+    assert "See also:" in result.output
+    assert "docs/guides/GETTING_STARTED.md" in result.output
+    assert "docs/guides/PLAN_QUICK.md" in result.output
+
+
 def test_index_help_includes_docs_links() -> None:
     runner = CliRunner()
 
@@ -48,3 +59,14 @@ def test_repomap_help_includes_docs_links() -> None:
     assert "See also:" in result.output
     assert "docs/guides/GETTING_STARTED.md" in result.output
     assert "docs/guides/REPOMAP.md" in result.output
+
+
+def test_benchmark_run_help_includes_docs_links() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["benchmark", "run", "--help"])
+
+    assert result.exit_code == 0
+    assert "See also:" in result.output
+    assert "docs/guides/GETTING_STARTED.md" in result.output
+    assert "docs/guides/BENCHMARK.md" in result.output

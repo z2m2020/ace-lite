@@ -51,11 +51,21 @@ See also:
   docs/guides/GETTING_STARTED.md    Quick start guide
   docs/guides/CHEATSHEET.md         Command cheatsheet
 """,
+    "benchmark": """
+See also:
+  docs/guides/GETTING_STARTED.md    Quick start guide
+  docs/guides/BENCHMARK.md          Benchmark guide
+""",
     "plan": """
 See also:
   docs/guides/GETTING_STARTED.md    Quick start guide
   docs/guides/PLAN_GUIDE.md         Plan command guide
   docs/guides/RETRIEVAL_PROFILES.md Retrieval profiles guide
+""",
+    "plan-quick": """
+See also:
+  docs/guides/GETTING_STARTED.md    Quick start guide
+  docs/guides/PLAN_QUICK.md         Plan quick guide
 """,
     "index": """
 See also:
