@@ -278,7 +278,7 @@ class TestExceptionContext:
     def test_no_exception(self):
         """Test that no exception returns context without error."""
         with ExceptionContext(operation_name="test") as ctx:
-            result = 42
+            _ = 42
 
         assert ctx.error_payload is None
 

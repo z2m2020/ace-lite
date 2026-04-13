@@ -47,16 +47,16 @@ def _write_latency_slo_summary(
             "source_plan": {"mean_ms": 0.1, "p95_ms": 0.2},
             "total": {"mean_ms": total_p95 - 4.0, "median_ms": total_p95 - 3.0, "p95_ms": total_p95},
         },
-        "slo_budget_summary": {
-            "case_count": 10,
-            "downgrade_case_count": int(round(downgrade_case_rate * 10)),
-            "downgrade_case_rate": downgrade_case_rate,
-            "signals": {
-                "embedding_adaptive_budget_ratio": {
-                    "count": int(round(adaptive_budget_rate * 10)),
-                    "rate": adaptive_budget_rate,
-                }
-            },
+                "slo_budget_summary": {
+                    "case_count": 10,
+                    "downgrade_case_count": round(downgrade_case_rate * 10),
+                    "downgrade_case_rate": downgrade_case_rate,
+                    "signals": {
+                        "embedding_adaptive_budget_ratio": {
+                            "count": round(adaptive_budget_rate * 10),
+                            "rate": adaptive_budget_rate,
+                        }
+                    },
         },
         "workload_buckets": [
             {
@@ -75,7 +75,7 @@ def _write_latency_slo_summary(
                 },
                 "slo_budget_summary": {
                     "case_count": 5,
-                    "downgrade_case_count": int(round(downgrade_case_rate * 5)),
+                    "downgrade_case_count": round(downgrade_case_rate * 5),
                     "downgrade_case_rate": downgrade_case_rate,
                 },
             },
@@ -95,7 +95,7 @@ def _write_latency_slo_summary(
                 },
                 "slo_budget_summary": {
                     "case_count": 5,
-                    "downgrade_case_count": int(round(downgrade_case_rate * 5)),
+                    "downgrade_case_count": round(downgrade_case_rate * 5),
                     "downgrade_case_rate": downgrade_case_rate,
                 },
             },

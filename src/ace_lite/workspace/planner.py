@@ -236,8 +236,6 @@ def _score_repo(
     matched_context_set = {term for term in query_terms if term in context_blob}
     matched_summary_set = {term for term in query_terms if term in summary_blob}
     matched_name = tuple(sorted(matched_name_set))
-    matched_context = tuple(sorted(matched_context_set))
-    matched_summary = tuple(sorted(matched_summary_set))
     matched_terms = tuple(sorted(matched_name_set | matched_context_set | matched_summary_set))
 
     name_hits = len(matched_name)

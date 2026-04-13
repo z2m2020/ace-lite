@@ -254,9 +254,9 @@ def _base_score(
     if path.startswith("src/"):
         score += 2
     if generated and score > 0:
-        score = max(1, int(round(score * 0.15)))
+        score = max(1, round(score * 0.15))
     if dependency and score > 0:
-        score = max(1, int(round(score * 0.35)))
+        score = max(1, round(score * 0.35))
     return score
 
 

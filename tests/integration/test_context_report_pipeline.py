@@ -290,7 +290,6 @@ def test_context_report_e2e_minimal_repo(tmp_path: Path) -> None:
     knowledge_gaps = report_payload["knowledge_gaps"]
     assert isinstance(knowledge_gaps, list)
     # No validation tests in our setup, so should have missing_validation_tests gap
-    gap_codes = {g["code"] for g in knowledge_gaps}
     # It's OK if there are or aren't gaps - just verify structure
     for gap in knowledge_gaps:
         assert "code" in gap

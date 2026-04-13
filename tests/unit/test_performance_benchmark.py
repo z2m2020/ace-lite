@@ -231,7 +231,7 @@ class TestBenchmarkRunner:
             call_count += 1
             return call_count
 
-        result = runner.run("counting", counting_func, warmup=True)
+        runner.run("counting", counting_func, warmup=True)
 
         # Should have 2 warmup + 3 actual = 5 calls
         assert call_count == 5
@@ -247,7 +247,7 @@ class TestBenchmarkRunner:
             call_count += 1
             return call_count
 
-        result = runner.run("counting", counting_func, warmup=False)
+        runner.run("counting", counting_func, warmup=False)
 
         # Should have only 3 actual calls
         assert call_count == 3

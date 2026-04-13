@@ -202,7 +202,6 @@ def build_index_stage_result(
         fusion_mode=fusion_mode,
         rrf_k=int(hybrid_re2_rrf_k),
     )
-    selected_fusion_mode = str(selection_observability["fusion_mode"])
     chunk_semantic_pool_effective = int(
         chunk_semantic_rerank_payload.get("rerank_pool_effective", 0) or 0
     )

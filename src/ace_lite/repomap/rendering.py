@@ -182,7 +182,7 @@ def _estimate_neighbor_reserve_tokens(
     header_tokens = estimate_tokens_fn(neighbor_header, model=tokenizer_model)
     reserve_cap = min(
         max(1, total_budget - 1),
-        max(int(header_tokens), int(round(total_budget * 0.6))),
+        max(header_tokens, round(total_budget * 0.6)),
     )
     reserved = int(header_tokens)
     included_any = False
