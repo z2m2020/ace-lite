@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import click
 
@@ -591,6 +591,22 @@ def _record_benchmark_validation_preference_event(
         "evidence_summary": evidence_summary,
         "task_success_summary": task_success_summary,
     }
+    missing_validation_rate_value = validation_summary.get(
+        "missing_validation_rate", 0.0
+    )
+    evidence_insufficient_rate_value = validation_summary.get(
+        "evidence_insufficient_rate", 0.0
+    )
+    missing_validation_rate = (
+        float(missing_validation_rate_value)
+        if isinstance(missing_validation_rate_value, (int, float, str))
+        else 0.0
+    )
+    evidence_insufficient_rate = (
+        float(evidence_insufficient_rate_value)
+        if isinstance(evidence_insufficient_rate_value, (int, float, str))
+        else 0.0
+    )
     generated_at = str(results.get("generated_at") or "").strip()
     session_key = session_id or generated_at or "benchmark"
     durable_store = DurablePreferenceCaptureStore(
@@ -608,13 +624,11 @@ def _record_benchmark_validation_preference_event(
             "target_path": "_benchmark/validation_summary",
             "value_text": (
                 "missing_validation_rate={missing:.4f} evidence_insufficient_rate={insufficient:.4f}".format(
-                    missing=float(validation_summary["missing_validation_rate"]),
-                    insufficient=float(
-                        validation_summary["evidence_insufficient_rate"]
-                    ),
+                    missing=missing_validation_rate,
+                    insufficient=evidence_insufficient_rate,
                 )
             ),
-            "weight": float(validation_summary["missing_validation_rate"]),
+            "weight": missing_validation_rate,
             "payload": {
                 "generated_at": generated_at,
                 "session_id": session_id,
@@ -830,7 +844,7 @@ def run_benchmark_and_write_outputs(
     )
     outputs = write_results_fn(results, output_dir=output_dir)
     echo_json_fn(outputs)
-    return results
+    return cast(dict[str, Any], results)
 
 
 __all__ = [

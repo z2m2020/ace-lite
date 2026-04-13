@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Callable
+from typing import Any
 
 from ace_lite.orchestrator_replay import (
     build_augment_replay_fingerprint,
     build_index_replay_fingerprint,
     build_memory_replay_fingerprint,
     build_orchestrator_plan_replay_key,
-    build_repomap_replay_fingerprint,
     build_repo_inputs_replay_fingerprint,
+    build_repomap_replay_fingerprint,
     build_skills_replay_fingerprint,
 )
 from ace_lite.pipeline.contracts import validate_stage_output
@@ -21,6 +22,21 @@ from ace_lite.plan_replay_cache import (
     normalize_plan_query,
     store_cached_plan,
 )
+
+
+def _coerce_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _coerce_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 @dataclass(slots=True)
@@ -34,10 +50,12 @@ class SourcePlanReplayService:
     def resolve_plan_replay_cache_path(self, *, root: str) -> Path:
         configured = str(self.config.plan_replay_cache.cache_path or "").strip()
         if not configured:
-            return default_plan_replay_cache_path(root=root)
-        return self.resolve_repo_relative_path_fn(
-            root=root,
-            configured_path=configured,
+            return Path(default_plan_replay_cache_path(root=root))
+        return Path(
+            self.resolve_repo_relative_path_fn(
+                root=root,
+                configured_path=configured,
+            )
         )
 
     def extract_source_plan_failure_signal_summary(
@@ -58,17 +76,9 @@ class SourcePlanReplayService:
         if not isinstance(source_plan_stage, dict):
             return dict(default_summary)
 
-        summary = (
-            dict(source_plan_stage.get("failure_signal_summary"))
-            if isinstance(source_plan_stage.get("failure_signal_summary"), dict)
-            else {}
-        )
+        summary = _coerce_mapping(source_plan_stage.get("failure_signal_summary"))
         if not summary:
-            steps = (
-                source_plan_stage.get("steps")
-                if isinstance(source_plan_stage.get("steps"), list)
-                else []
-            )
+            steps = _coerce_list(source_plan_stage.get("steps"))
             validate_step = next(
                 (
                     item
@@ -78,10 +88,9 @@ class SourcePlanReplayService:
                 ),
                 {},
             )
-            feedback_summary = (
-                validate_step.get("validation_feedback_summary")
-                if isinstance(validate_step.get("validation_feedback_summary"), dict)
-                else {}
+            validate_step_payload = _coerce_mapping(validate_step)
+            feedback_summary = _coerce_mapping(
+                validate_step_payload.get("validation_feedback_summary")
             )
             summary = dict(feedback_summary) if feedback_summary else {}
 
@@ -92,8 +101,8 @@ class SourcePlanReplayService:
             in {"failed", "degraded", "timeout"}
             or str(normalized.get("probe_status") or "").strip().lower()
             in {"failed", "degraded", "timeout"}
-            or int(normalized.get("issue_count", 0) or 0) > 0
-            or int(normalized.get("probe_issue_count", 0) or 0) > 0
+            or _coerce_int(normalized.get("issue_count", 0)) > 0
+            or _coerce_int(normalized.get("probe_issue_count", 0)) > 0
         )
         normalized["source"] = str(normalized.get("source") or "source_plan")
         return normalized
@@ -232,7 +241,8 @@ class SourcePlanReplayService:
         repomap_payload = repomap_stage if isinstance(repomap_stage, dict) else {}
         augment_payload = augment_stage if isinstance(augment_stage, dict) else {}
         skills_payload = skills_stage if isinstance(skills_stage, dict) else {}
-        return build_orchestrator_plan_replay_key(
+        return str(
+            build_orchestrator_plan_replay_key(
             query=query,
             repo=repo,
             root=root,
@@ -263,19 +273,20 @@ class SourcePlanReplayService:
                 "lsp_top_n": int(self.config.lsp.top_n),
                 "lsp_xref_top_n": int(self.config.lsp.xref_top_n),
             },
+            )
         )
 
     @staticmethod
     def build_memory_replay_fingerprint(*, memory_payload: dict[str, Any]) -> str:
-        return build_memory_replay_fingerprint(memory_payload=memory_payload)
+        return str(build_memory_replay_fingerprint(memory_payload=memory_payload))
 
     @staticmethod
     def build_index_replay_fingerprint(*, index_payload: dict[str, Any]) -> str:
-        return build_index_replay_fingerprint(index_payload=index_payload)
+        return str(build_index_replay_fingerprint(index_payload=index_payload))
 
     @staticmethod
     def build_repomap_replay_fingerprint(*, repomap_payload: dict[str, Any]) -> str:
-        return build_repomap_replay_fingerprint(repomap_payload=repomap_payload)
+        return str(build_repomap_replay_fingerprint(repomap_payload=repomap_payload))
 
     @staticmethod
     def build_repo_inputs_replay_fingerprint(
@@ -284,19 +295,21 @@ class SourcePlanReplayService:
         index_payload: dict[str, Any],
         repomap_payload: dict[str, Any],
     ) -> str:
-        return build_repo_inputs_replay_fingerprint(
-            root=root,
-            index_payload=index_payload,
-            repomap_payload=repomap_payload,
+        return str(
+            build_repo_inputs_replay_fingerprint(
+                root=root,
+                index_payload=index_payload,
+                repomap_payload=repomap_payload,
+            )
         )
 
     @staticmethod
     def build_augment_replay_fingerprint(*, augment_payload: dict[str, Any]) -> str:
-        return build_augment_replay_fingerprint(augment_payload=augment_payload)
+        return str(build_augment_replay_fingerprint(augment_payload=augment_payload))
 
     @staticmethod
     def build_skills_replay_fingerprint(*, skills_payload: dict[str, Any]) -> str:
-        return build_skills_replay_fingerprint(skills_payload=skills_payload)
+        return str(build_skills_replay_fingerprint(skills_payload=skills_payload))
 
 
 __all__ = ["SourcePlanReplayService"]

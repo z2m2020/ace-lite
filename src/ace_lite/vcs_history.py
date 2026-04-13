@@ -174,22 +174,22 @@ def collect_git_head_snapshot(
     )
     head_ref = ""
     reason = "ok"
-    error = None
+    ref_error: str | None = None
     if ref_timed_out:
         reason = "partial"
-        error = "head_ref_timeout"
+        ref_error = "head_ref_timeout"
     elif ref_code == 0:
         head_ref = str(ref_stdout or "").strip()
     elif ref_code != 0:
         reason = "partial"
-        error = str(ref_stderr or ref_stdout or "").strip()[:240] or f"git_returncode:{ref_code}"
+        ref_error = str(ref_stderr or ref_stdout or "").strip()[:240] or f"git_returncode:{ref_code}"
 
     return {
         "enabled": True,
         "reason": reason,
         "head_commit": str(head_stdout or "").strip(),
         "head_ref": head_ref,
-        "error": error,
+        "error": ref_error,
         "elapsed_ms": round((perf_counter() - started) * 1000.0, 3),
         "timeout_seconds": float(resolved_timeout),
     }

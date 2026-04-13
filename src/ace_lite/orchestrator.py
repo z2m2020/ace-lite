@@ -5,7 +5,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.exceptions import StageContractError
 from ace_lite.memory import (
@@ -204,18 +204,20 @@ class AceOrchestrator:
         end_date: str | None = None,
         filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        request_payload = build_plan_request_payload(
+            query=query,
+            repo=repo,
+            root=root,
+            time_range=time_range,
+            start_date=start_date,
+            end_date=end_date,
+            filters=filters,
+        )
+        validated_request_payload = validate_plan_request(
+            cast(dict[str, Any], request_payload)
+        )
         request = PlanRequestAdapter(
-            validate_plan_request(
-                build_plan_request_payload(
-                    query=query,
-                    repo=repo,
-                    root=root,
-                    time_range=time_range,
-                    start_date=start_date,
-                    end_date=end_date,
-                    filters=filters,
-                )
-            )
+            cast(dict[str, Any], validated_request_payload)
         )
         query = request.query
         repo = request.repo
@@ -417,11 +419,8 @@ class AceOrchestrator:
     ) -> dict[str, Any]:
         if not isinstance(source_plan_stage, dict):
             return {}
-        steps = (
-            source_plan_stage.get("steps")
-            if isinstance(source_plan_stage.get("steps"), list)
-            else []
-        )
+        steps_value = source_plan_stage.get("steps")
+        steps: list[Any] = list(steps_value) if isinstance(steps_value, list) else []
         validate_step = next(
             (
                 item
@@ -431,9 +430,14 @@ class AceOrchestrator:
             ),
             {},
         )
+        validation_feedback_summary = (
+            validate_step.get("validation_feedback_summary")
+            if isinstance(validate_step, dict)
+            else None
+        )
         return (
-            dict(validate_step.get("validation_feedback_summary"))
-            if isinstance(validate_step.get("validation_feedback_summary"), dict)
+            dict(validation_feedback_summary)
+            if isinstance(validation_feedback_summary, dict)
             else {}
         )
 

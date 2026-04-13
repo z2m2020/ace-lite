@@ -14,22 +14,23 @@ Current gate is intentionally incremental. The blocking checks stay repo-wide,
 while the report-only hotspot summary now tracks the current post-backlog
 maintainability set:
 
-- `src/ace_lite/cli_app/runtime_command_support.py`
-- `src/ace_lite/pipeline/stages/index.py`
 - `src/ace_lite/orchestrator.py`
-- `src/ace_lite/cli_app/params_option_retrieval_groups.py`
-- `src/ace_lite/cli_app/orchestrator_factory_misc_payloads.py`
-- `src/ace_lite/cli_app/orchestrator_factory_memory_payload.py`
+- `src/ace_lite/orchestrator_contracts.py`
+- `src/ace_lite/runtime_settings.py`
+- `src/ace_lite/plan_quick.py`
+- `src/ace_lite/plan_quick_strategies.py`
 - `src/ace_lite/benchmark/report.py`
+- `src/ace_lite/benchmark/report_observability.py`
 - `src/ace_lite/benchmark/summaries.py`
 
-The prior facade-centric hotspots (`cli_app/orchestrator_factory_support.py`
-and `cli_app/params_option_groups.py`) were retired after the 2026-03-18
-helper-extraction waves. The remaining CLI assembly concentration now lives in
-the extracted support modules listed above, while earlier report-only hotspots
-such as `benchmark/case_evaluation.py`, `cli_app/orchestrator_factory.py`,
-`config_models.py`, `runtime.py`, and `mcp_server/service.py` remain retired or
-demoted.
+The prior facade-centric hotspots (`cli_app/orchestrator_factory_support.py`,
+`cli_app/params_option_groups.py`, and the first-wave CLI payload helpers) were
+retired after the 2026-03-18 helper-extraction waves. As of 2026-04-13 the
+remaining concentration risk shifted to typed orchestration boundaries,
+runtime-setting projection, and the `plan_quick` plus benchmark-report stacks.
+Earlier report-only hotspots such as `benchmark/case_evaluation.py`,
+`cli_app/orchestrator_factory.py`, `config_models.py`, `runtime.py`, and
+`mcp_server/service.py` remain retired or demoted.
 
 For the benchmark report stack, keep `src/ace_lite/benchmark/report.py` as the
 assembly shell and move report-only summary sections into support modules such
@@ -76,9 +77,10 @@ These suites freeze three contracts that are easy to drift during refactors:
 - freeze gates: passed (see `artifacts/release-freeze/s12-*`)
 - coverage gate: `fail_under = 83` (unchanged)
 
-## Hotspot Refresh (2026-03-18)
+## Hotspot Refresh (2026-04-13)
 
-- report-only hotspot targets were refreshed to match the post-Phase-5 CLI facade split
+- report-only hotspot targets were refreshed to match the current 0.3.65
+  maintainability risks after the first seam-extraction wave
 - blocking quality commands and coverage gate are unchanged
 - maintainers should update `benchmark/quality/hotspot_baseline.json` together
   with `scripts/run_quality_gate.py` whenever a refactor wave moves the largest
@@ -92,11 +94,16 @@ python scripts/validate_docs_cli_snippets.py
 python scripts/run_precommit_validation.py --staged
 pre-commit install
 python scripts/run_quality_gate.py --root . --output-dir artifacts/quality/latest --pip-audit-baseline benchmark/quality/pip_audit_baseline.json --fail-on-new-vulns --friction-log artifacts/friction/events.jsonl
+python scripts/run_quality_gate.py --root . --output-dir artifacts/quality/hotspots --hotspot-path src/ace_lite/orchestrator.py --hotspot-path src/ace_lite/plan_quick.py
 python scripts/build_friction_report.py --events-path artifacts/friction/events.jsonl --output-dir artifacts/friction/latest
 python scripts/log_friction_event.py --stage planning --expected "ace_plan_quick returns focused candidates" --actual "results include noisy files" --root-cause retrieval-noise --manual-fix "tighten query terms + rerun ace_plan" --severity medium --time-cost-min 4 --tag mcp --tag retrieval
 ```
 
 `run_quality_gate.py` now also emits report-only hotspot `ruff` and `mypy` results for the tracked hotspot file set. These hotspot checks are observability-only and do not flip the overall gate result, but they give maintainers a stable way to track whether the highest-risk files are converging.
+
+When a refactor wave is working through the hotspot backlog incrementally, use
+`--hotspot-path` to narrow the report-only hotspot checks and summary to the
+current batch without changing the repo-wide blocking gate.
 
 ## Tuning Workflow (Config Packs)
 

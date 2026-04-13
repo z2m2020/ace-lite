@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.chunking.types import (
     CONTEXTUAL_CHUNKING_SIDECAR_KEY,
@@ -26,7 +26,7 @@ def _chunk_key(item: dict[str, Any]) -> tuple[str, int, int, str]:
 def _positive_breakdown_value(score_breakdown: dict[str, Any], key: str) -> bool:
     try:
         return float(score_breakdown.get(key, 0.0) or 0.0) > 0.0
-    except Exception:
+    except (TypeError, ValueError):
         return False
 
 
@@ -52,16 +52,10 @@ def _build_granularity_evidence(item: dict[str, Any]) -> list[str]:
     ):
         granularity.append("robust_signature")
 
-    contextual_sidecar = (
-        item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
-        if isinstance(item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY), dict)
-        else {}
-    )
-    references = (
-        contextual_sidecar.get("references")
-        if isinstance(contextual_sidecar.get("references"), list)
-        else []
-    )
+    raw_contextual_sidecar = item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
+    contextual_sidecar = raw_contextual_sidecar if isinstance(raw_contextual_sidecar, dict) else {}
+    raw_references = contextual_sidecar.get("references")
+    references = raw_references if isinstance(raw_references, list) else []
     if any(str(value).strip() for value in references):
         granularity.append("reference_sidecar")
 
@@ -98,9 +92,10 @@ def annotate_source_plan_grounding(
 
         payload = dict(item)
         path = str(payload.get("path") or "").strip()
+        raw_score_breakdown = payload.get("score_breakdown")
         score_breakdown = (
-            payload.get("score_breakdown")
-            if isinstance(payload.get("score_breakdown"), dict)
+            cast(dict[str, Any], raw_score_breakdown)
+            if isinstance(raw_score_breakdown, dict)
             else {}
         )
         key = _chunk_key(payload)
@@ -177,9 +172,8 @@ def summarize_source_plan_grounding(chunks: list[dict[str, Any]]) -> dict[str, f
             neighbor_count += 1
         elif role == "hint_only":
             hint_only_count += 1
-        granularity = (
-            evidence.get("granularity") if isinstance(evidence.get("granularity"), list) else []
-        )
+        raw_granularity = evidence.get("granularity")
+        granularity = raw_granularity if isinstance(raw_granularity, list) else []
         normalized_granularity = {
             str(value).strip()
             for value in granularity

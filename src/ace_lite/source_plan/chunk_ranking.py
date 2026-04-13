@@ -11,10 +11,10 @@ from ace_lite.chunking.types import (
 
 
 def _chunk_granularity_signals(item: dict[str, Any]) -> tuple[int, int, int, int, int]:
-    evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
-    evidence_granularity = (
-        evidence.get("granularity") if isinstance(evidence.get("granularity"), list) else []
-    )
+    raw_evidence = item.get("evidence")
+    evidence = raw_evidence if isinstance(raw_evidence, dict) else {}
+    raw_granularity = evidence.get("granularity")
+    evidence_granularity = raw_granularity if isinstance(raw_granularity, list) else []
     granularity = {
         str(value).strip()
         for value in evidence_granularity
@@ -94,7 +94,7 @@ def rank_source_plan_chunks(
                 continue
             try:
                 normalized[key] = float(raw_score or 0.0)
-            except Exception:
+            except (TypeError, ValueError):
                 continue
         return normalized
 
@@ -109,7 +109,7 @@ def rank_source_plan_chunks(
         try:
             lineno = int(item.get("lineno") or 0)
             end_lineno = int(item.get("end_lineno") or lineno)
-        except Exception:
+        except (TypeError, ValueError):
             return
 
         if lineno <= 0:
@@ -131,13 +131,7 @@ def rank_source_plan_chunks(
                 CONTEXTUAL_CHUNKING_SIDECAR_KEY,
             ):
                 value = source.get(field)
-                if field == "skeleton":
-                    if isinstance(value, dict):
-                        target[field] = dict(value)
-                elif field == "robust_signature_summary":
-                    if isinstance(value, dict):
-                        target[field] = dict(value)
-                elif field == CONTEXTUAL_CHUNKING_SIDECAR_KEY:
+                if field == "skeleton" or field == "robust_signature_summary" or field == CONTEXTUAL_CHUNKING_SIDECAR_KEY:
                     if isinstance(value, dict):
                         target[field] = dict(value)
                 elif field == RETRIEVAL_CONTEXT_SIDECAR_KEY:
@@ -183,7 +177,7 @@ def rank_source_plan_chunks(
 
         try:
             raw_score = max(0.0, float(item.get("score") or 0.0))
-        except Exception:
+        except (TypeError, ValueError):
             raw_score = 0.0
 
         contribution = raw_score * max(0.0, float(weight))
@@ -274,11 +268,8 @@ def pack_source_plan_chunks(
         focused_rank[normalized] = len(focused_rank)
 
     def closure_bonus(item: dict[str, Any]) -> float:
-        breakdown = (
-            item.get("score_breakdown")
-            if isinstance(item.get("score_breakdown"), dict)
-            else {}
-        )
+        raw_breakdown = item.get("score_breakdown")
+        breakdown = raw_breakdown if isinstance(raw_breakdown, dict) else {}
         return max(0.0, float(breakdown.get("graph_closure_bonus", 0.0) or 0.0))
 
     graph_closure_bonus_candidate_count = sum(
@@ -295,7 +286,7 @@ def pack_source_plan_chunks(
 
     while len(packed) < limit:
         best_item: dict[str, Any] | None = None
-        best_sort_key: tuple[float, float, int, float, tuple[int, int, int, int, int], str, int, str] | None = None
+        best_sort_key: tuple[float, float, int, float, tuple[int, ...], str, int, str] | None = None
         best_closure_pack = False
         best_focused_uncovered = False
         best_priority_identity: tuple[float, float, int] | None = None
@@ -317,12 +308,13 @@ def pack_source_plan_chunks(
                 1.0 if path in focused_rank and path not in packed_paths else 0.0
             )
             granularity_signals = _chunk_granularity_signals(item)
+            granularity_rank = tuple(-value for value in granularity_signals)
             sort_key = (
                 -closure_pack,
                 -focused_uncovered,
                 focused_rank.get(path, len(focused_rank) + 1024),
                 -(float(item.get("score") or 0.0) + _chunk_granularity_bias(item)),
-                tuple(-value for value in granularity_signals),
+                granularity_rank,
                 path,
                 int(item.get("lineno") or 0),
                 str(item.get("qualified_name") or ""),
@@ -392,7 +384,7 @@ def pack_source_plan_chunks(
         "graph_closure_preferred_count": int(graph_closure_preferred_count),
         "granularity_preferred_count": int(granularity_preferred_count),
         "focused_file_promoted_count": int(focused_file_promoted_count),
-        "packed_path_count": int(len(packed_paths)),
+        "packed_path_count": len(packed_paths),
         "reason": (
             "disabled_by_policy"
             if not enabled

@@ -4,16 +4,21 @@ import hashlib
 import importlib.metadata
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.parsers.base import ImportEntry, ParseResult, ReferenceEntry, SymbolEntry
-from ace_lite.parsers.markdown_parser import parse_markdown
 from ace_lite.parsers.languages import detect_language, module_name, normalize_languages
+from ace_lite.parsers.markdown_parser import parse_markdown
 
+tree_sitter_get_parser: Any | None
 try:
-    from tree_sitter_language_pack import get_parser
+    from tree_sitter_language_pack import get_parser as _tree_sitter_get_parser
 except Exception:  # pragma: no cover
-    get_parser = None
+    tree_sitter_get_parser = None
+else:  # pragma: no cover
+    tree_sitter_get_parser = _tree_sitter_get_parser
+
+get_parser: Any | None = tree_sitter_get_parser
 
 
 def _is_generated_code(*, language: str, relative_path: str, source_text: str) -> bool:
@@ -34,17 +39,16 @@ def _is_generated_code(*, language: str, relative_path: str, source_text: str) -
         if basename.startswith(("mock_", "zz_generated.")):
             return True
 
-    if language == "python":
-        if basename.endswith(("_pb2.py", "_pb2_grpc.py", "_grpc.py", "_generated.py")):
-            return True
+    if language == "python" and basename.endswith(("_pb2.py", "_pb2_grpc.py", "_grpc.py", "_generated.py")):
+        return True
 
-    if language in {"javascript", "typescript", "tsx"}:
-        if basename.endswith((".generated.ts", ".generated.tsx", ".generated.js", ".generated.jsx")):
-            return True
+    if language in {"javascript", "typescript", "tsx"} and basename.endswith(
+        (".generated.ts", ".generated.tsx", ".generated.js", ".generated.jsx")
+    ):
+        return True
 
-    if language == "c_sharp":
-        if basename.endswith((".designer.cs", ".generated.cs", ".g.cs", ".g.i.cs")):
-            return True
+    if language == "c_sharp" and basename.endswith((".designer.cs", ".generated.cs", ".g.cs", ".g.i.cs")):
+        return True
 
     header_lines = source_text.splitlines()[:32]
     header = "\n".join(header_lines).lower()
@@ -68,11 +72,9 @@ def _is_generated_code(*, language: str, relative_path: str, source_text: str) -
         return True
 
     path_lower = str(relative_path or "").lower()
-    if "/generated/" in path_lower or "/gen/" in path_lower:
-        if "generated" in header or "do not edit" in header:
-            return True
-
-    return False
+    return ("/generated/" in path_lower or "/gen/" in path_lower) and (
+        "generated" in header or "do not edit" in header
+    )
 
 
 class TreeSitterEngine:
@@ -129,12 +131,12 @@ class TreeSitterEngine:
             result.symbols.extend(symbols)
             result.imports.extend(imports)
             result.references.extend(references)
-            return result.to_index_entry(path=relative_path)
+            return cast(dict[str, Any] | None, result.to_index_entry(path=relative_path))
 
         parser = self._resolve_parser(language)
         if parser is None:
             result.parse_error = "tree-sitter parser unavailable"
-            return result.to_index_entry(path=relative_path)
+            return cast(dict[str, Any] | None, result.to_index_entry(path=relative_path))
 
         try:
             tree = parser.parse(source_text.encode("utf-8", errors="replace"))
@@ -146,7 +148,7 @@ class TreeSitterEngine:
         except Exception as exc:  # pragma: no cover
             result.parse_error = f"parse_error: {exc}"
 
-        return result.to_index_entry(path=relative_path)
+        return cast(dict[str, Any] | None, result.to_index_entry(path=relative_path))
 
     def _resolve_parser(self, language: str) -> Any | None:
         if language in self._parsers:

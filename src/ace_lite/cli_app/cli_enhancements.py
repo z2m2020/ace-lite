@@ -11,9 +11,7 @@ PRD-91 CLI Quality Improvements
 
 from __future__ import annotations
 
-import sys
 from typing import Any
-
 
 # =============================================================================
 # Parameter Range Validators
@@ -178,8 +176,8 @@ def validate_all_retrieval_params(
 
     Returns a dict of validated values.
     """
-    validated = {}
-    errors = []
+    validated: dict[str, Any] = {}
+    errors: list[str] = []
 
     if top_k_files is not None:
         try:
@@ -429,7 +427,7 @@ class OutputFormatter:
         for row in filtered:
             rows.append(" | ".join(str(row.get(col, "")).ljust(widths[col]) for col in columns))
 
-        return "\n".join([header, separator] + rows)
+        return "\n".join([header, separator, *rows])
 
     @staticmethod
     def format_key_value(data: dict[str, Any], indent: int = 0) -> str:
@@ -517,19 +515,19 @@ class OutputFormatter:
 # =============================================================================
 
 __all__ = [
-    "ParameterValidationError",
     "PARAM_RANGES",
-    "validate_int_param",
-    "validate_float_param",
-    "validate_top_k_files",
-    "validate_min_candidate_score",
-    "validate_timeout_seconds",
-    "validate_budget_tokens",
-    "validate_chunk_top_k",
-    "validate_chunk_per_file_limit",
-    "validate_chunk_token_budget",
-    "validate_all_retrieval_params",
     "ErrorMessage",
     "HelpExamples",
     "OutputFormatter",
+    "ParameterValidationError",
+    "validate_all_retrieval_params",
+    "validate_budget_tokens",
+    "validate_chunk_per_file_limit",
+    "validate_chunk_token_budget",
+    "validate_chunk_top_k",
+    "validate_float_param",
+    "validate_int_param",
+    "validate_min_candidate_score",
+    "validate_timeout_seconds",
+    "validate_top_k_files",
 ]

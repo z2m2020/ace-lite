@@ -9,8 +9,9 @@ from urllib.parse import urlparse
 from urllib.request import Request
 
 from ace_lite.http_utils import safe_urlopen
-from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.pipeline.types import StageEvent
+from ace_lite.plugin_integration_manager import PluginIntegrationManager
+from ace_lite.plugin_integration_status import PluginIntegrationStatus
 
 DEFAULT_MOCK_ENDPOINT = "mock://mcp"
 
@@ -220,9 +221,9 @@ def _call_mcp_hook(
                 headers=headers,
             )
             latency_ms = (perf_counter() - started) * 1000.0
-            status = None
+            success_status: PluginIntegrationStatus | None = None
             if integration_manager is not None and integration_id:
-                status = integration_manager.finish_call(
+                success_status = integration_manager.finish_call(
                     integration_id,
                     success=True,
                     latency_ms=latency_ms,
@@ -233,7 +234,9 @@ def _call_mcp_hook(
                 "error": None,
                 "attempts": attempts,
                 "transport": "http_jsonrpc",
-                "integration_state": status.state if status is not None else None,
+                "integration_state": (
+                    success_status.state if success_status is not None else None
+                ),
                 "decision_reason": None if decision is None else decision.reason,
                 "response": response_payload,
             }
@@ -248,9 +251,9 @@ def _call_mcp_hook(
             latency_ms = (perf_counter() - started) * 1000.0
             last_error = f"{exc.__class__.__name__}:{exc}"
             if attempt >= retries:
-                status = None
+                failure_status: PluginIntegrationStatus | None = None
                 if integration_manager is not None and integration_id:
-                    status = integration_manager.finish_call(
+                    failure_status = integration_manager.finish_call(
                         integration_id,
                         success=False,
                         error=last_error,
@@ -262,7 +265,9 @@ def _call_mcp_hook(
                     "error": last_error,
                     "attempts": attempts,
                     "transport": "http_jsonrpc",
-                    "integration_state": status.state if status is not None else None,
+                    "integration_state": (
+                        failure_status.state if failure_status is not None else None
+                    ),
                     "decision_reason": None if decision is None else decision.reason,
                     "response": None,
                 }

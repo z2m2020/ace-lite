@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import Any, cast
 
 import click
 
@@ -138,9 +139,9 @@ def plan_quick_command(
 
     try:
         payload = build_plan_quick(
-            normalized_query=query,
-            root_path=str(root_path),
-            top_k=top_k,
+            query=query,
+            root=str(root_path),
+            top_k_files=top_k,
             languages=languages,
             tokenizer_model=tokenizer_model,
         )
@@ -196,12 +197,15 @@ def run_plan_quick(
     Returns:
         Plan quick payload dict
     """
-    return build_plan_quick(
-        normalized_query=query,
-        root_path=root,
-        top_k=top_k,
-        languages=languages,
-        tokenizer_model=tokenizer_model,
+    return cast(
+        dict[str, Any],
+        build_plan_quick(
+            query=query,
+            root=root,
+            top_k_files=top_k,
+            languages=languages,
+            tokenizer_model=tokenizer_model,
+        ),
     )
 
 

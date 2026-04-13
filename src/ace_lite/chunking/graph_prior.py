@@ -169,9 +169,10 @@ def apply_query_aware_graph_prior(
         source_row = by_symbol_id.get(source_id)
         if not isinstance(source_row, dict):
             continue
+        source_breakdown_value = source_row.get("score_breakdown")
         source_breakdown = (
-            source_row.get("score_breakdown")
-            if isinstance(source_row.get("score_breakdown"), dict)
+            source_breakdown_value
+            if isinstance(source_breakdown_value, dict)
             else {}
         )
         seed_strength = max(
@@ -220,9 +221,10 @@ def apply_query_aware_graph_prior(
     affected_symbol_ids.update(transfer_count)
     affected_symbol_ids.update(hub_penalties)
     for symbol_id in sorted(affected_symbol_ids):
-        row = by_symbol_id.get(symbol_id)
-        if not isinstance(row, dict):
+        row_value = by_symbol_id.get(symbol_id)
+        if not isinstance(row_value, dict):
             continue
+        row = row_value
         boost = float(graph_additions.get(symbol_id, 0.0) or 0.0)
         if boost > 0.0:
             row["score"] = round(float(row.get("score", 0.0) or 0.0) + boost, 6)

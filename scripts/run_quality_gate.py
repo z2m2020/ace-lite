@@ -18,13 +18,13 @@ RUFF_TARGETS = ["src/ace_lite", "scripts", "tests"]
 BANDIT_TARGETS = ["src/ace_lite"]
 
 HOTSPOT_TARGETS = [
-    "src/ace_lite/cli_app/runtime_command_support.py",
-    "src/ace_lite/pipeline/stages/index.py",
     "src/ace_lite/orchestrator.py",
-    "src/ace_lite/cli_app/params_option_retrieval_groups.py",
-    "src/ace_lite/cli_app/orchestrator_factory_misc_payloads.py",
-    "src/ace_lite/cli_app/orchestrator_factory_memory_payload.py",
+    "src/ace_lite/orchestrator_contracts.py",
+    "src/ace_lite/runtime_settings.py",
+    "src/ace_lite/plan_quick.py",
+    "src/ace_lite/plan_quick_strategies.py",
     "src/ace_lite/benchmark/report.py",
+    "src/ace_lite/benchmark/report_observability.py",
     "src/ace_lite/benchmark/summaries.py",
 ]
 
@@ -928,6 +928,16 @@ def main() -> int:
         help="Report-only hotspot baseline metadata file.",
     )
     parser.add_argument(
+        "--hotspot-path",
+        action="append",
+        dest="hotspot_paths",
+        default=None,
+        help=(
+            "Limit report-only hotspot summary and ruff/mypy hotspot checks to a specific "
+            "repo-relative path. Repeat for multiple paths."
+        ),
+    )
+    parser.add_argument(
         "--fail-on-new-vulns",
         action="store_true",
         help="Fail when pip-audit reports vulnerabilities not present in baseline.",
@@ -974,6 +984,7 @@ def main() -> int:
         friction_log_path=friction_log_path,
         capture_friction=bool(args.capture_friction),
         include_hotspot_checks=bool(args.include_hotspot_checks),
+        hotspot_paths=list(args.hotspot_paths) if isinstance(args.hotspot_paths, list) else None,
     )
 
     summary_path = output_dir / "summary.json"

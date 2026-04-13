@@ -8,7 +8,6 @@ from typing import Any
 from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
 from ace_lite.runtime_stats_schema import (
     RUNTIME_STATS_DEFAULT_EVENT_CLASS,
-    RUNTIME_STATS_DEGRADED_REASON_CODES,
     RUNTIME_STATS_DOCTOR_EVENT_CLASS,
     RUNTIME_STATS_EVENT_CLASS_VALUES,
     RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_DECISION_VALUES,
@@ -211,7 +210,6 @@ def normalize_runtime_stage_latencies(value: Any) -> tuple[RuntimeStageLatency, 
 def normalize_runtime_degraded_reason_codes(value: Any) -> tuple[str, ...]:
     rows = value if isinstance(value, (list, tuple, set)) else ()
     normalized: set[str] = set()
-    allowed = set(RUNTIME_STATS_DEGRADED_REASON_CODES)
     for item in rows:
         reason = normalize_dev_feedback_reason_code(
             _normalize_text(item, max_len=128).lower(),
@@ -219,7 +217,7 @@ def normalize_runtime_degraded_reason_codes(value: Any) -> tuple[str, ...]:
         )
         if not reason:
             continue
-        normalized.add(reason if reason in allowed else reason)
+        normalized.add(reason)
     return tuple(sorted(normalized))
 
 
@@ -334,6 +332,7 @@ def build_learning_router_rollout_decision_payload(
         if isinstance(router.get("online_bandit"), dict)
         else {}
     )
+    online_bandit_payload = online_bandit if isinstance(online_bandit, dict) else {}
 
     phase = "report_only"
     if phase not in RUNTIME_STATS_LEARNING_ROUTER_ROLLOUT_PHASE_VALUES:
@@ -389,9 +388,9 @@ def build_learning_router_rollout_decision_payload(
         "router_source": router_source,
         "shadow_arm_id": shadow_arm_id,
         "shadow_source": shadow_source,
-        "online_bandit_requested": bool(online_bandit.get("requested", False)),
-        "online_bandit_eligible": bool(online_bandit.get("eligible", False)),
-        "online_bandit_active": bool(online_bandit.get("active", False)),
+        "online_bandit_requested": bool(online_bandit_payload.get("requested", False)),
+        "online_bandit_eligible": bool(online_bandit_payload.get("eligible", False)),
+        "online_bandit_active": bool(online_bandit_payload.get("active", False)),
         "evidence_card_count": evidence_card_count,
         "validation_card_present": validation_card_present,
         "validation_feedback_present": validation_feedback_present,

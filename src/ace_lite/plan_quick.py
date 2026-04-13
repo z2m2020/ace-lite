@@ -198,7 +198,7 @@ def _extract_req_ids(query: str) -> list[str]:
     return [f"{str(prefix).upper()}-{num}" for prefix, num in matches]
 
 
-def _query_flags(query: str) -> dict[str, bool]:
+def _query_flags(query: str) -> dict[str, Any]:
     flags = IntentStrategyRegistry.get_instance().detect_intent(query)
     return {
         "doc_sync": flags.doc_sync,
@@ -210,13 +210,14 @@ def _query_flags(query: str) -> dict[str, bool]:
 
 
 def _classify_path_domain(path: str) -> str:
-    return DomainStrategyRegistry.classify(path)
+    return str(DomainStrategyRegistry.classify(path))
 
 
 def _is_markdown_doc(*, path: str, language: str) -> bool:
-    return NormalizationUtils.is_markdown_language(
-        language
-    ) or NormalizationUtils.is_markdown_path(path)
+    return bool(
+        NormalizationUtils.is_markdown_language(language)
+        or NormalizationUtils.is_markdown_path(path)
+    )
 
 
 def _extract_path_date(path: str) -> date | None:
@@ -231,7 +232,7 @@ def _extract_path_date(path: str) -> date | None:
 
 
 def _path_stem(path: str) -> str:
-    return NormalizationUtils.extract_path_stem(path)
+    return str(NormalizationUtils.extract_path_stem(path))
 
 
 def _is_doc_entrypoint_path(*, path: str, semantic_domain: str) -> bool:
@@ -276,13 +277,15 @@ def _query_flags_as_registry_flags(query_flags: dict[str, Any]) -> QueryFlags:
     )
 
 
-def _doc_sync_intent_boost(*, path: str, language: str, query_flags: dict[str, bool]) -> float:
+def _doc_sync_intent_boost(*, path: str, language: str, query_flags: dict[str, Any]) -> float:
     flags = _query_flags_as_registry_flags(query_flags)
-    return BoostStrategyRegistry.get_instance().calculate_doc_sync_boost(
-        path=path,
-        language=language,
-        flags=flags,
-        context={},
+    return float(
+        BoostStrategyRegistry.get_instance().calculate_doc_sync_boost(
+            path=path,
+            language=language,
+            flags=flags,
+            context={},
+        )
     )
 
 
@@ -290,15 +293,17 @@ def _latest_doc_intent_boost(
     *,
     path: str,
     language: str,
-    query_flags: dict[str, bool],
+    query_flags: dict[str, Any],
     newest_dated_doc: date | None,
 ) -> float:
     flags = _query_flags_as_registry_flags(query_flags)
-    return BoostStrategyRegistry.get_instance().calculate_latest_doc_boost(
-        path=path,
-        language=language,
-        flags=flags,
-        context={"newest_dated_doc": newest_dated_doc},
+    return float(
+        BoostStrategyRegistry.get_instance().calculate_latest_doc_boost(
+            path=path,
+            language=language,
+            flags=flags,
+            context={"newest_dated_doc": newest_dated_doc},
+        )
     )
 
 
@@ -815,7 +820,12 @@ def _build_picked_because(
 
     # Check for requirement ID match
     if bool(query_flags.get("has_req_id", False)) and query_flags.get("req_ids"):
-        req_ids = query_flags.get("req_ids", [])
+        req_ids_raw: Any = query_flags.get("req_ids", [])
+        req_ids: list[str] = (
+            [str(item) for item in req_ids_raw if str(item).strip()]
+            if isinstance(req_ids_raw, list)
+            else []
+        )
         normalized_path = str(row.path or "").lower()
         for req_id in req_ids:
             if str(req_id).lower() in normalized_path:
@@ -1193,7 +1203,7 @@ def build_plan_quick(
     snapshot = load_retrieval_index_snapshot(
         root_dir=str(root_path),
         cache_path=str(cache_path),
-        languages=languages_parsed,
+        languages=languages_parsed or [],
         incremental=bool(index_incremental),
         fail_open=False,
         include_index_hash=False,

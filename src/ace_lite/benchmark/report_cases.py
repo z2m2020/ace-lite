@@ -324,8 +324,8 @@ def _append_plan_replay_cache_details(lines: list[str], *, case: dict[str, Any])
             "- plan_replay_cache: "
             + ", ".join(
                 [
-                    f"stage={str(plan_replay_cache.get('stage', '') or '(none)')}",
-                    f"reason={str(plan_replay_cache.get('reason', '') or '(none)')}",
+                    f"stage={plan_replay_cache.get('stage', '') or '(none)'!s}",
+                    f"reason={plan_replay_cache.get('reason', '') or '(none)'!s}",
                     f"stored={bool(plan_replay_cache.get('stored', False))}",
                 ]
             )
@@ -336,22 +336,16 @@ def _append_chunk_guard_details(lines: list[str], *, case: dict[str, Any]) -> No
     chunk_guard = case.get("chunk_guard")
     if not isinstance(chunk_guard, dict) or not chunk_guard:
         return
-    retained_refs = (
-        chunk_guard.get("retained_refs")
-        if isinstance(chunk_guard.get("retained_refs"), list)
-        else []
-    )
-    filtered_refs = (
-        chunk_guard.get("filtered_refs")
-        if isinstance(chunk_guard.get("filtered_refs"), list)
-        else []
-    )
+    retained_refs_raw = chunk_guard.get("retained_refs")
+    retained_refs = retained_refs_raw if isinstance(retained_refs_raw, list) else []
+    filtered_refs_raw = chunk_guard.get("filtered_refs")
+    filtered_refs = filtered_refs_raw if isinstance(filtered_refs_raw, list) else []
     lines.append(
         "- chunk_guard: "
         + ", ".join(
             [
-                f"mode={str(chunk_guard.get('mode', '') or '(none)')}",
-                f"reason={str(chunk_guard.get('reason', '') or '(none)')}",
+                f"mode={chunk_guard.get('mode', '') or '(none)'!s}",
+                f"reason={chunk_guard.get('reason', '') or '(none)'!s}",
                 f"candidate_pool={int(chunk_guard.get('candidate_pool', 0) or 0)}",
                 f"filtered_count={int(chunk_guard.get('filtered_count', 0) or 0)}",
                 f"retained_count={int(chunk_guard.get('retained_count', 0) or 0)}",
@@ -374,7 +368,7 @@ def _append_chunk_guard_expectation(lines: list[str], *, case: dict[str, Any]) -
         "- chunk_guard_expectation: "
         + ", ".join(
             [
-                f"scenario={str(chunk_guard_expectation.get('scenario', '') or '(none)')}",
+                f"scenario={chunk_guard_expectation.get('scenario', '') or '(none)'!s}",
                 "expected_retained_hit={value}".format(
                     value=bool(
                         chunk_guard_expectation.get("expected_retained_hit", False)
@@ -420,23 +414,20 @@ def _append_subgraph_payload_details(lines: list[str], *, case: dict[str, Any]) 
     subgraph_payload = case.get("subgraph_payload")
     if not isinstance(subgraph_payload, dict) or not subgraph_payload:
         return
-    edge_counts = (
-        subgraph_payload.get("edge_counts")
-        if isinstance(subgraph_payload.get("edge_counts"), dict)
-        else {}
-    )
+    edge_counts_raw = subgraph_payload.get("edge_counts")
+    edge_counts = edge_counts_raw if isinstance(edge_counts_raw, dict) else {}
     lines.append(
         "- subgraph_payload: "
         + ", ".join(
             [
                 f"enabled={bool(subgraph_payload.get('enabled', False))}",
-                f"reason={str(subgraph_payload.get('reason', '') or '(none)')}",
+                f"reason={subgraph_payload.get('reason', '') or '(none)'!s}",
                 f"seed_path_count={int(subgraph_payload.get('seed_path_count', 0) or 0)}",
                 f"edge_type_count={int(subgraph_payload.get('edge_type_count', 0) or 0)}",
                 f"edge_total_count={int(subgraph_payload.get('edge_total_count', 0) or 0)}",
                 "edge_counts={value}".format(
                     value=";".join(
-                        f"{str(key)}={int(value or 0)}" for key, value in edge_counts.items()
+                        f"{key!s}={int(value or 0)}" for key, value in edge_counts.items()
                     )
                     or "(none)"
                 ),
@@ -629,12 +620,12 @@ def _append_graph_lookup_details(lines: list[str], *, case: dict[str, Any]) -> N
                     value=int(graph_lookup.get("boosted_count", 0) or 0)
                 ),
                 "weights=scip:{scip}|xref:{xref}|query_xref:{query}|symbol:{symbol}|import:{imports}|coverage:{coverage}".format(
-                    scip=f"{float(((graph_lookup.get('weights', {}) or {}).get('scip', 0.0) or 0.0)):.4f}",
-                    xref=f"{float(((graph_lookup.get('weights', {}) or {}).get('xref', 0.0) or 0.0)):.4f}",
-                    query=f"{float(((graph_lookup.get('weights', {}) or {}).get('query_xref', 0.0) or 0.0)):.4f}",
-                    symbol=f"{float(((graph_lookup.get('weights', {}) or {}).get('symbol', 0.0) or 0.0)):.4f}",
-                    imports=f"{float(((graph_lookup.get('weights', {}) or {}).get('import', 0.0) or 0.0)):.4f}",
-                    coverage=f"{float(((graph_lookup.get('weights', {}) or {}).get('coverage', 0.0) or 0.0)):.4f}",
+                    scip=f"{float((graph_lookup.get('weights', {}) or {}).get('scip', 0.0) or 0.0):.4f}",
+                    xref=f"{float((graph_lookup.get('weights', {}) or {}).get('xref', 0.0) or 0.0):.4f}",
+                    query=f"{float((graph_lookup.get('weights', {}) or {}).get('query_xref', 0.0) or 0.0):.4f}",
+                    symbol=f"{float((graph_lookup.get('weights', {}) or {}).get('symbol', 0.0) or 0.0):.4f}",
+                    imports=f"{float((graph_lookup.get('weights', {}) or {}).get('import', 0.0) or 0.0):.4f}",
+                    coverage=f"{float((graph_lookup.get('weights', {}) or {}).get('coverage', 0.0) or 0.0):.4f}",
                 ),
                 "candidate_count={value}".format(
                     value=int(graph_lookup.get("candidate_count", 0) or 0)

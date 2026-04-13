@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.agent_loop.contracts import (
     build_agent_loop_action_v1,
+    build_agent_loop_branch_batch_v1,
     build_agent_loop_rerun_policy_v1,
     validate_agent_loop_action_v1,
 )
@@ -15,7 +16,6 @@ from ace_lite.validation.result import (
     score_validation_branch_result_v1,
     select_best_validation_branch_candidate_v1,
 )
-from ace_lite.agent_loop.contracts import build_agent_loop_branch_batch_v1
 
 AGENT_LOOP_SUMMARY_SCHEMA_VERSION = "agent_loop_summary_v1"
 AGENT_LOOP_STOP_REASONS = (
@@ -230,15 +230,18 @@ class BoundedLoopController:
             hint_parts.append(focus_prefix + ", ".join(focus_paths))
         if messages:
             hint_parts.append(messages[0][: self.query_hint_max_chars])
-        return build_agent_loop_action_v1(
-            action_type="request_more_context",
-            reason=reason,
-            query_hint=". ".join(
-                part for part in hint_parts if part
-            )[: self.query_hint_max_chars],
-            focus_paths=focus_paths,
-            metadata=metadata,
-        ).as_dict()
+        return cast(
+            dict[str, Any],
+            build_agent_loop_action_v1(
+                action_type="request_more_context",
+                reason=reason,
+                query_hint=". ".join(
+                    part for part in hint_parts if part
+                )[: self.query_hint_max_chars],
+                focus_paths=focus_paths,
+                metadata=metadata,
+            ).as_dict(),
+        )
 
     def select_action(
         self,
@@ -322,8 +325,8 @@ class BoundedLoopController:
             "focus_paths": normalized_focus_paths[: self.max_focus_paths],
             "source": "agent_loop",
             "metadata": (
-                dict(normalized.get("metadata"))
-                if isinstance(normalized.get("metadata"), dict)
+                dict(metadata_value)
+                if isinstance((metadata_value := normalized.get("metadata")), dict)
                 else {}
             ),
         }
@@ -342,12 +345,15 @@ class BoundedLoopController:
             "iteration_index": max(1, int(iteration_index)),
             "reason": str(normalized.get("reason") or "").strip(),
         }
-        return build_agent_loop_rerun_policy_v1(
-            action_type=str(normalized.get("action_type") or ""),
-            rerun_stages=rerun_stages,
-            replay_safe=True,
-            metadata=metadata,
-        ).as_dict()
+        return cast(
+            dict[str, Any],
+            build_agent_loop_rerun_policy_v1(
+                action_type=str(normalized.get("action_type") or ""),
+                rerun_stages=rerun_stages,
+                replay_safe=True,
+                metadata=metadata,
+            ).as_dict(),
+        )
 
     def record_iteration(
         self,

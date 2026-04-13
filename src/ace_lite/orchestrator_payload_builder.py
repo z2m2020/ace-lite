@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.exceptions import StageContractError
 from ace_lite.orchestrator_contracts import (
@@ -69,7 +69,7 @@ def build_orchestrator_plan_payload(
     replay_cache_info: dict[str, Any] | None,
     pipeline_order: tuple[str, ...],
     policy_version: str,
-    build_plugin_policy_summary_fn: Callable[[dict[str, Any], tuple[str, ...]], dict[str, Any]],
+    build_plugin_policy_summary_fn: Callable[..., dict[str, Any]],
     extract_source_plan_failure_signal_summary_fn: Callable[[Any], dict[str, Any]],
     extract_source_plan_validation_feedback_summary_fn: Callable[[Any], dict[str, Any]],
 ) -> dict[str, Any]:
@@ -184,7 +184,7 @@ def build_orchestrator_plan_payload(
         }
         payload["observability"]["contract_errors"] = list(projected["contract_errors"])
 
-    return validate_plan_response(payload)
+    return cast(dict[str, Any], validate_plan_response(dict(payload)))
 
 
 __all__ = ["build_default_validation_payload", "build_orchestrator_plan_payload"]

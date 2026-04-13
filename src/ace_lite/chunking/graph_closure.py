@@ -181,12 +181,13 @@ def apply_graph_closure_bonus(
     total_bonus = 0.0
     support_edge_count = 0
     for symbol_id in sorted(set(support_counts) | set(bonuses)):
-        row = by_symbol_id.get(symbol_id)
-        if not isinstance(row, dict):
+        row_value = by_symbol_id.get(symbol_id)
+        if not isinstance(row_value, dict):
             continue
-        breakdown = row.get("score_breakdown")
-        if not isinstance(breakdown, dict):
-            breakdown = {}
+        row = row_value
+        breakdown_value = row.get("score_breakdown")
+        breakdown = breakdown_value if isinstance(breakdown_value, dict) else {}
+        if not isinstance(breakdown_value, dict):
             row["score_breakdown"] = breakdown
         support_count = int(support_counts.get(symbol_id, 0) or 0)
         if support_count > 0:

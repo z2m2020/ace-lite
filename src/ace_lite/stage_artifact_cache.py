@@ -12,7 +12,7 @@ from datetime import timezone
 from pathlib import Path
 from pathlib import PurePosixPath
 from threading import Lock
-from typing import Any
+from typing import Any, cast
 from typing import Callable
 
 from ace_lite.stage_artifact_cache_store import (
@@ -64,7 +64,10 @@ class _StageArtifactHotTier:
             if entry is None:
                 return None
             self._entries.move_to_end(key)
-            return json.loads(json.dumps(entry.payload, ensure_ascii=False))
+            return cast(
+                dict[str, Any],
+                json.loads(json.dumps(entry.payload, ensure_ascii=False)),
+            )
 
     def put(
         self,
@@ -270,11 +273,11 @@ class StageArtifactCache:
 
     @property
     def payload_root(self) -> Path:
-        return self._payload_root
+        return Path(self._payload_root)
 
     @property
     def temp_root(self) -> Path:
-        return self._temp_root
+        return Path(self._temp_root)
 
     def hot_tier_snapshot(self) -> dict[str, Any]:
         return self._hot_tier.snapshot()

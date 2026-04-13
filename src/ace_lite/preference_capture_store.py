@@ -13,8 +13,6 @@ from uuid import uuid4
 
 from ace_lite.preference_capture_schema import (
     PREFERENCE_CAPTURE_EVENTS_TABLE,
-    PREFERENCE_CAPTURE_PREFERENCE_KINDS,
-    PREFERENCE_CAPTURE_SIGNAL_SOURCES,
     build_preference_capture_migration_bootstrap,
 )
 from ace_lite.runtime_db import connect_runtime_db
@@ -68,7 +66,7 @@ def _normalize_preference_kind(value: Any) -> str:
         "branch_outcome": "branch_outcome_preference",
     }
     normalized = aliases.get(normalized, normalized)
-    return normalized if normalized in PREFERENCE_CAPTURE_PREFERENCE_KINDS else normalized
+    return normalized
 
 
 def _normalize_signal_source(value: Any) -> str:
@@ -77,7 +75,7 @@ def _normalize_signal_source(value: Any) -> str:
         "feedback": "feedback_store",
     }
     normalized = aliases.get(normalized, normalized)
-    return normalized if normalized in PREFERENCE_CAPTURE_SIGNAL_SOURCES else normalized
+    return normalized
 
 
 def _encode_payload(payload: dict[str, Any]) -> str:
@@ -160,10 +158,8 @@ def _normalize_branch_outcome_capture_payload(value: Any) -> dict[str, Any]:
             value.get("target_file_manifest"),
             max_len=255,
         ),
-        "winner_validation_branch_score": (
-            dict(value.get("winner_validation_branch_score"))
-            if isinstance(value.get("winner_validation_branch_score"), dict)
-            else {}
+        "winner_validation_branch_score": _normalize_payload(
+            value.get("winner_validation_branch_score")
         ),
         "rejected": _normalize_mapping_list(value.get("rejected")),
     }
@@ -641,9 +637,9 @@ class DurablePreferenceCaptureStore:
 
 
 __all__ = [
-    "build_branch_outcome_preference_event",
     "DurablePreferenceCaptureStore",
     "PreferenceCaptureEvent",
-    "record_branch_outcome_preference_capture",
+    "build_branch_outcome_preference_event",
     "normalize_preference_capture_event",
+    "record_branch_outcome_preference_capture",
 ]

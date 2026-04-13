@@ -84,7 +84,7 @@ def apply_exact_search_boost(
             eligible_hits.items(),
             key=lambda item: (-int(item[1]), str(item[0])),
         )[: int(max_paths)]
-        scored_hits = score_exact_hits(hits_by_path=dict(limited_hits_items))
+        scored_hits = score_exact_hits(dict(limited_hits_items))
 
         candidates_by_path: dict[str, dict[str, Any]] = {
             str(item.get("path") or ""): item

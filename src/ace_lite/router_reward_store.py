@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from concurrent.futures import Future
-from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import math
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -198,7 +197,9 @@ def normalize_reward_event_for_replay(event: dict[str, Any]) -> dict[str, Any]:
             query_id=str(event.get("query_id") or event.get("query") or ""),
             chosen_arm_id=str(event.get("chosen_arm_id") or event.get("arm_id") or ""),
             reward_source=str(event.get("reward_source") or event.get("source") or ""),
-            reward_value=event.get("reward_value", event.get("reward", 0.0)),
+            reward_value=_normalize_reward_value(
+                event.get("reward_value", event.get("reward", 0.0))
+            ),
             observed_at=str(event.get("observed_at") or event.get("logged_at") or ""),
             reward_observed_at=str(
                 event.get("reward_observed_at")
@@ -370,9 +371,9 @@ class AsyncRewardLogWriter:
 
 
 __all__ = [
-    "AsyncRewardLogWriter",
     "DEFAULT_REWARD_LOG_PATH",
     "SCHEMA_VERSION",
+    "AsyncRewardLogWriter",
     "append_reward_event",
     "load_reward_events",
     "load_reward_events_for_replay",

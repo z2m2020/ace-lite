@@ -145,6 +145,17 @@ _INTENT_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
+def _coerce_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def infer_intent(query: str) -> str:
     """Infer the dominant skill-routing intent from a query string."""
 
@@ -267,20 +278,18 @@ def run_skills(
             module_hint=str(index_stage.get("module_hint", "") or ""),
         )
     )
-    selected = (
-        routed.get("selected")
-        if isinstance(routed.get("selected"), list)
-        else []
-    )
+    selected: list[dict[str, Any]] = [
+        item for item in _coerce_list(routed.get("selected")) if isinstance(item, dict)
+    ]
     available_count = max(
         0,
-        int(routed.get("available_count", len(skill_manifest)) or 0),
+        _coerce_int(routed.get("available_count", len(skill_manifest))),
     )
     routing_source = "precomputed" if isinstance(routed_payload, dict) else "same_stage"
     resolved_budget = _normalize_skill_token_budget(token_budget)
     route_latency_ms = float(routed.get("route_latency_ms", 0.0) or 0.0)
     routing_mode = str(routed.get("routing_mode") or "metadata_only").strip()
-    selected_manifest_token_estimate_total = int(
+    selected_manifest_token_estimate_total = _coerce_int(
         routed.get(
             "selected_manifest_token_estimate_total",
             sum(
@@ -354,7 +363,7 @@ def run_skills(
 def _estimate_selected_skill_tokens(
     *, item: dict[str, Any], sections: dict[str, str]
 ) -> int:
-    declared = int(item.get("token_estimate") or 0)
+    declared = _coerce_int(item.get("token_estimate"))
     if declared > 0:
         return declared
 
@@ -363,18 +372,18 @@ def _estimate_selected_skill_tokens(
             f"## {title}\n{content}".strip() for title, content in sections.items()
         )
         if text:
-            return estimate_tokens(text)
+            return int(estimate_tokens(text))
 
     fallback = str(item.get("description") or item.get("name") or "").strip()
-    return estimate_tokens(fallback) if fallback else 1
+    return int(estimate_tokens(fallback)) if fallback else 1
 
 
 def _manifest_skill_token_estimate(item: dict[str, Any]) -> int:
-    declared = int(item.get("token_estimate") or 0)
+    declared = _coerce_int(item.get("token_estimate"))
     if declared > 0:
         return declared
     fallback = str(item.get("description") or item.get("name") or "").strip()
-    return estimate_tokens(fallback) if fallback else 1
+    return int(estimate_tokens(fallback)) if fallback else 1
 
 
 def _normalize_skill_token_budget(value: int | None) -> int | None:

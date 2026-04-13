@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any, cast
 
 from ace_lite.pipeline.types import StageCallable, StageContext, StageDescriptor
 
@@ -107,18 +108,18 @@ class StageRegistry:
         descriptor = self.get_descriptor(stage)
         if descriptor is None or descriptor.handler is None:
             raise KeyError(f"unregistered stage: {stage}")
-        return descriptor.handler(ctx)
+        return cast(dict[str, Any], descriptor.handler(ctx))
 
     def _next_order(self) -> int:
         if not self._stages:
             return 0
-        return max(descriptor.order for descriptor in self._stages.values()) + 1
+        return cast(int, max(descriptor.order for descriptor in self._stages.values()) + 1)
 
 
 __all__ = [
     "CORE_PIPELINE_ORDER",
-    "CORE_STAGE_DESCRIPTOR_MAP",
     "CORE_STAGE_DESCRIPTORS",
+    "CORE_STAGE_DESCRIPTOR_MAP",
     "StageRegistry",
     "get_stage_descriptor",
     "iter_stage_descriptors",

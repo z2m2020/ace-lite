@@ -14,21 +14,12 @@ def build_validation_feedback_summary(
     if not isinstance(validation_result, dict) or not validation_result:
         return {}
 
-    summary = (
-        validation_result.get("summary")
-        if isinstance(validation_result.get("summary"), dict)
-        else {}
-    )
-    probes = (
-        validation_result.get("probes")
-        if isinstance(validation_result.get("probes"), dict)
-        else {}
-    )
-    tests = (
-        validation_result.get("tests")
-        if isinstance(validation_result.get("tests"), dict)
-        else {}
-    )
+    raw_summary = validation_result.get("summary")
+    summary = raw_summary if isinstance(raw_summary, dict) else {}
+    raw_probes = validation_result.get("probes")
+    probes = raw_probes if isinstance(raw_probes, dict) else {}
+    raw_tests = validation_result.get("tests")
+    tests = raw_tests if isinstance(raw_tests, dict) else {}
     selected_tests = tests.get("selected", [])
     executed_tests = tests.get("executed", [])
 
@@ -58,9 +49,12 @@ def build_chunk_cards(
     for item in prioritized_chunks:
         if not isinstance(item, dict):
             continue
-        evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
-        granularity = evidence.get("granularity", [])
-        sources = evidence.get("sources", [])
+        raw_evidence = item.get("evidence")
+        evidence = raw_evidence if isinstance(raw_evidence, dict) else {}
+        raw_granularity = evidence.get("granularity")
+        granularity = raw_granularity if isinstance(raw_granularity, list) else []
+        raw_sources = evidence.get("sources")
+        sources = raw_sources if isinstance(raw_sources, list) else []
         cards.append(
             {
                 "schema_version": CARD_SCHEMA_VERSION,
@@ -92,7 +86,7 @@ def build_chunk_cards(
 
 
 def build_file_cards(*, chunk_cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grouped: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+    grouped: OrderedDict[str, dict[str, Any]] = OrderedDict()
     for item in chunk_cards:
         if not isinstance(item, dict):
             continue
@@ -137,6 +131,16 @@ def build_evidence_cards(
     chunk_cards: list[dict[str, Any]],
     validation_feedback_summary: dict[str, Any],
 ) -> list[dict[str, Any]]:
+    file_paths = [
+        str(item.get("path") or "")
+        for item in file_cards
+        if isinstance(item, dict) and str(item.get("path") or "").strip()
+    ]
+    chunk_card_ids = [
+        str(item.get("card_id") or "")
+        for item in chunk_cards
+        if isinstance(item, dict) and str(item.get("card_id") or "").strip()
+    ][:12]
     retrieval_card = {
         "schema_version": CARD_SCHEMA_VERSION,
         "card_id": "evidence:retrieval_grounding",
@@ -162,10 +166,8 @@ def build_evidence_cards(
             "file_card_count": float(len(file_cards)),
             "chunk_card_count": float(len(chunk_cards)),
         },
-        "file_paths": [str(item.get("path") or "") for item in file_cards if str(item.get("path") or "").strip()],
-        "chunk_card_ids": [
-            str(item.get("card_id") or "") for item in chunk_cards if str(item.get("card_id") or "").strip()
-        ][:12],
+        "file_paths": file_paths,
+        "chunk_card_ids": chunk_card_ids,
     }
     cards = [retrieval_card]
 

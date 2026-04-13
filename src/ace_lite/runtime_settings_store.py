@@ -7,7 +7,6 @@ from collections.abc import Mapping
 from pathlib import Path, PurePath
 from typing import Any
 
-
 RUNTIME_SETTINGS_SCHEMA_VERSION = 1
 DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH = "~/.ace-lite/runtime-settings/current.json"
 DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH = "~/.ace-lite/runtime-settings/last-known-good.json"
@@ -18,7 +17,7 @@ def _normalize_for_fingerprint(value: Any) -> Any:
         return str(value)
     if isinstance(value, Mapping):
         normalized: dict[str, Any] = {}
-        for key in sorted(str(item) for item in value.keys()):
+        for key in sorted(str(item) for item in value):
             normalized[key] = _normalize_for_fingerprint(value[key])
         return normalized
     if isinstance(value, tuple):
@@ -112,6 +111,8 @@ def validate_runtime_settings_record(payload: Mapping[str, Any]) -> dict[str, An
     if not isinstance(metadata, Mapping):
         metadata = {}
     try:
+        if not isinstance(schema_version, (int, str)):
+            return None
         normalized_schema_version = int(schema_version)
     except Exception:
         return None
@@ -234,15 +235,15 @@ def persist_runtime_settings_record(
 
 
 __all__ = [
-    "RUNTIME_SETTINGS_SCHEMA_VERSION",
     "DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH",
     "DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH",
+    "RUNTIME_SETTINGS_SCHEMA_VERSION",
     "build_runtime_settings_fingerprint",
     "build_runtime_settings_record",
-    "load_runtime_settings_with_fallback",
-    "load_runtime_settings_record",
-    "load_valid_runtime_settings_record",
     "inspect_runtime_settings_record",
+    "load_runtime_settings_record",
+    "load_runtime_settings_with_fallback",
+    "load_valid_runtime_settings_record",
     "persist_runtime_settings_record",
     "resolve_user_runtime_settings_last_known_good_path",
     "resolve_user_runtime_settings_path",

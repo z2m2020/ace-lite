@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ace_lite.config_choices import CHUNK_GUARD_MODE_CHOICES
 from ace_lite.chunking.robust_signature import (
     chunk_identity_key,
     count_available_robust_signatures,
 )
+from ace_lite.config_choices import CHUNK_GUARD_MODE_CHOICES
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +131,7 @@ def apply_chunk_guard(
         "reason": reason,
         "candidate_pool": int(candidate_pool),
         "signed_chunk_count": int(signed_chunk_count),
-        "filtered_count": int(len(filtered_keys)),
+        "filtered_count": len(filtered_keys),
         "retained_count": int(candidate_pool - len(filtered_keys)),
         "pairwise_conflict_count": int(pairwise_conflict_count),
         "max_conflict_penalty": float(round(max_conflict_penalty, 6)),
@@ -183,7 +183,8 @@ def _build_report_only_subset(
             )
             if penalty <= 0.0:
                 continue
-            pair_key = tuple(sorted((left_key, right_key)))
+            ordered_pair = sorted((left_key, right_key))
+            pair_key = (ordered_pair[0], ordered_pair[1])
             conflict_penalties[pair_key] = penalty
             max_penalty = max(max_penalty, penalty)
 
@@ -216,7 +217,8 @@ def _build_report_only_subset(
             retained_key = chunk_identity_key(chunk=retained_chunk)
             if not retained_key:
                 continue
-            pair_key = tuple(sorted((key, retained_key)))
+            ordered_pair = sorted((key, retained_key))
+            pair_key = (ordered_pair[0], ordered_pair[1])
             conflict_total += float(conflict_penalties.get(pair_key, 0.0) or 0.0)
 
         marginal_utility = float(chunk.get("score", 0.0) or 0.0) - (

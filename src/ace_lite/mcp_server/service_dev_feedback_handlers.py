@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, TypedDict
+
+from typing_extensions import NotRequired
 
 from ace_lite.dev_feedback_runtime_linkage import (
     record_dev_issue_from_runtime_invocation,
@@ -335,11 +337,11 @@ def handle_dev_issue_record_request(
         "store_path": str(store.db_path),
         "issue": issue.to_payload(),
         "long_term_capture": long_term_capture,
+        "workflow_hints": _build_dev_issue_workflow_hints(
+            repo=issue.repo,
+            issue_id=issue.issue_id,
+        ),
     }
-    payload["workflow_hints"] = _build_dev_issue_workflow_hints(
-        repo=issue.repo,
-        issue_id=issue.issue_id,
-    )
     return payload
 
 
@@ -393,12 +395,12 @@ def handle_dev_fix_record_request(
         "store_path": str(store.db_path),
         "fix": fix.to_payload(),
         "long_term_capture": long_term_capture,
+        "workflow_hints": _build_dev_fix_workflow_hints(
+            repo=fix.repo,
+            issue_id=fix.issue_id,
+            fix_id=fix.fix_id,
+        ),
     }
-    payload["workflow_hints"] = _build_dev_fix_workflow_hints(
-        repo=fix.repo,
-        issue_id=fix.issue_id,
-        fix_id=fix.fix_id,
-    )
     return payload
 
 
@@ -417,11 +419,11 @@ def handle_dev_feedback_summary_request(
         "ok": True,
         "store_path": str(store.db_path),
         "summary": summary,
+        "workflow_hints": _build_dev_summary_workflow_hints(
+            repo=repo,
+            summary=summary,
+        ),
     }
-    payload["workflow_hints"] = _build_dev_summary_workflow_hints(
-        repo=repo,
-        summary=summary,
-    )
     return payload
 
 
@@ -475,12 +477,12 @@ def handle_dev_issue_from_runtime_request(
         "issue": issue.to_payload(),
         "invocation": invocation.to_payload(),
         "long_term_capture": long_term_capture,
+        "workflow_hints": _build_dev_issue_from_runtime_workflow_hints(
+            repo=issue.repo,
+            issue_id=issue.issue_id,
+            invocation_id=invocation.invocation_id,
+        ),
     }
-    payload["workflow_hints"] = _build_dev_issue_from_runtime_workflow_hints(
-        repo=issue.repo,
-        issue_id=issue.issue_id,
-        invocation_id=invocation.invocation_id,
-    )
     return payload
 
 
@@ -523,12 +525,12 @@ def handle_dev_issue_apply_fix_request(
         "issue": issue.to_payload(),
         "fix": fix.to_payload(),
         "long_term_capture": long_term_capture,
+        "workflow_hints": _build_dev_issue_resolution_workflow_hints(
+            repo=issue.repo,
+            issue_id=issue.issue_id,
+            fix_id=fix.fix_id,
+        ),
     }
-    payload["workflow_hints"] = _build_dev_issue_resolution_workflow_hints(
-        repo=issue.repo,
-        issue_id=issue.issue_id,
-        fix_id=fix.fix_id,
-    )
     return payload
 
 

@@ -45,6 +45,10 @@ _STOP_TOKENS = {
 }
 
 
+def _coerce_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def _normalize_identifier_tokens(value: Any) -> list[str]:
     normalized = str(value or "").strip()
     if not normalized:
@@ -118,15 +122,15 @@ def extract_entity_vocab(
     for row in (imports or [])[:_ROW_SCAN_LIMIT]:
         if not isinstance(row, dict):
             continue
-        for raw in (row.get("module"), row.get("name"), row.get("alias")):
-            for token in _normalize_identifier_tokens(raw):
+        for raw_value in (row.get("module"), row.get("name"), row.get("alias")):
+            for token in _normalize_identifier_tokens(raw_value):
                 counter[token] += 1
 
     for row in (references or [])[:_ROW_SCAN_LIMIT]:
         if not isinstance(row, dict):
             continue
-        for raw in (row.get("qualified_name"), row.get("name")):
-            for token in _normalize_identifier_tokens(raw):
+        for raw_value in (row.get("qualified_name"), row.get("name")):
+            for token in _normalize_identifier_tokens(raw_value):
                 counter[token] += 1
 
     if not counter:
@@ -326,12 +330,10 @@ def count_available_robust_signatures(
     for chunk in chunks:
         if not isinstance(chunk, dict):
             continue
-        inline_signature = (
+        inline_signature = _coerce_mapping(
             chunk.get("_robust_signature_lite")
             if isinstance(chunk.get("_robust_signature_lite"), dict)
             else chunk.get("robust_signature_summary")
-            if isinstance(chunk.get("robust_signature_summary"), dict)
-            else {}
         )
         if bool(inline_signature.get("available", False)):
             count += 1

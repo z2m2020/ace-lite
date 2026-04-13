@@ -385,3 +385,82 @@ def test_run_quality_gate_reports_hotspot_checks_without_failing_gate(
     assert hotspot_checks[0]["report_only"] is True
     assert hotspot_checks[0]["passed"] is False
     assert hotspot_checks[1]["passed"] is True
+
+
+def test_main_accepts_hotspot_path_arguments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_quality_gate.py")
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(json.dumps({"findings": []}), encoding="utf-8")
+    hotspot_baseline_path = tmp_path / "hotspot-baseline.json"
+    hotspot_baseline_path.write_text(
+        json.dumps(
+            {
+                "mode": "report_only",
+                "hotspots": [
+                    {"path": "src/ace_lite/orchestrator.py"},
+                    {"path": "src/ace_lite/plan_quick.py"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "out"
+
+    def fake_run_command(*, name: str, command: list[str], cwd: Path):
+        _ = cwd
+        if name == "pip_audit":
+            return module.CommandResult(
+                name=name,
+                command=command,
+                returncode=0,
+                stdout=json.dumps({"dependencies": []}),
+                stderr="",
+                elapsed_ms=7.0,
+            )
+        return module.CommandResult(
+            name=name,
+            command=command,
+            returncode=0,
+            stdout="ok",
+            stderr="",
+            elapsed_ms=5.0,
+        )
+
+    monkeypatch.setattr(module, "_run_command", fake_run_command)
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "run_quality_gate.py",
+            "--root",
+            str(tmp_path),
+            "--output-dir",
+            str(output_dir),
+            "--pip-audit-baseline",
+            str(baseline_path),
+            "--hotspot-baseline",
+            str(hotspot_baseline_path),
+            "--hotspot-path",
+            "src/ace_lite/orchestrator.py",
+            "--hotspot-path",
+            "src/ace_lite/plan_quick.py",
+        ],
+    )
+
+    exit_code = module.main()
+
+    assert exit_code == 0
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    hotspot_checks = summary["hotspot_checks"]
+    assert hotspot_checks[0]["command"][-2:] == [
+        "src/ace_lite/orchestrator.py",
+        "src/ace_lite/plan_quick.py",
+    ]
+    hotspot_paths = [item["path"] for item in summary["hotspot_summary"]["hotspots"]]
+    assert hotspot_paths[:2] == [
+        "src/ace_lite/orchestrator.py",
+        "src/ace_lite/plan_quick.py",
+    ]

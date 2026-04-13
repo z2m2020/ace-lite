@@ -189,22 +189,17 @@ def _build_scip_graph_context(
         provider_fallback=True,
         fallback_reason="file_scope_symbol_projection_pending",
     )
+    inbound_counts_value = loaded.get("inbound_counts")
+    pagerank_value = loaded.get("pagerank")
+    degree_centrality_value = loaded.get("degree_centrality")
     context.update(
         {
             "file_adjacency": _build_file_adjacency(loaded.get("edges")),
-            "file_inbound_degree": (
-                dict(loaded.get("inbound_counts"))
-                if isinstance(loaded.get("inbound_counts"), dict)
-                else {}
-            ),
-            "pagerank": (
-                dict(loaded.get("pagerank"))
-                if isinstance(loaded.get("pagerank"), dict)
-                else {}
-            ),
+            "file_inbound_degree": dict(inbound_counts_value) if isinstance(inbound_counts_value, dict) else {},
+            "pagerank": dict(pagerank_value) if isinstance(pagerank_value, dict) else {},
             "degree_centrality": (
-                dict(loaded.get("degree_centrality"))
-                if isinstance(loaded.get("degree_centrality"), dict)
+                dict(degree_centrality_value)
+                if isinstance(degree_centrality_value, dict)
                 else {}
             ),
             "source_provider_selected": str(

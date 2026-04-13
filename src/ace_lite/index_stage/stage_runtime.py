@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.scoring_config import SCIP_BASE_WEIGHT, resolve_chunk_scoring_config
 
@@ -72,7 +72,7 @@ def execute_index_stage_runtime(
         **deps.bootstrap_helpers,
     )
     if bootstrap.cache_hit_payload is not None:
-        return bootstrap.cache_hit_payload
+        return cast(dict[str, Any], bootstrap.cache_hit_payload)
 
     state = deps.build_index_stage_execution_state_fn(bootstrap=bootstrap)
     retrieval_refinement = ctx.state.get("_agent_loop_retrieval_refinement")

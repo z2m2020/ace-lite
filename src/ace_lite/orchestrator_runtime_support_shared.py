@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.exceptions import StageContractError
 from ace_lite.pipeline.hooks import HookBus
@@ -19,13 +19,16 @@ def run_stage_sequence(
     stage_names: tuple[str, ...],
 ) -> StageContractError | None:
     for stage_name in stage_names:
-        contract_error = orchestrator._execute_stage(
+        contract_error = cast(
+            StageContractError | None,
+            orchestrator._execute_stage(
             stage_name=stage_name,
             repo=repo,
             ctx=ctx,
             registry=registry,
             hook_bus=hook_bus,
             stage_metrics=stage_metrics,
+            ),
         )
         if contract_error is not None:
             return contract_error

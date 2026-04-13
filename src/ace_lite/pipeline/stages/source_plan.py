@@ -9,8 +9,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from ace_lite.explainability import attach_selection_why
 from ace_lite.chunking.skeleton import summarize_chunk_contract
+from ace_lite.explainability import attach_selection_why
 from ace_lite.pipeline.types import StageContext
 from ace_lite.prompt_rendering.renderer import build_prompt_rendering_boundary
 from ace_lite.scip.subgraph import build_subgraph_payload
@@ -32,8 +32,19 @@ from ace_lite.source_plan.evidence_confidence import (
 from ace_lite.validation.patch_artifact import validate_patch_artifact_contract_v1
 
 
+def _coerce_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def _coerce_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _extract_memory_hits(memory_stage: dict[str, Any]) -> list[dict[str, Any]]:
@@ -120,12 +131,12 @@ def _build_constraints(
     for text in _extract_profile_constraints(profile):
         raw.append({"text": text, "source": "profile"})
     for hit in memory_hits:
-        text = hit.get("text") or hit.get("preview")
-        if not isinstance(text, str):
+        text_raw = hit.get("text") or hit.get("preview")
+        if not isinstance(text_raw, str):
             continue
         handle = str(hit.get("handle") or "").strip()
         entry: dict[str, Any] = {
-            "text": text,
+            "text": text_raw,
             "source": "memory",
             "handle": handle,
         }
@@ -148,16 +159,10 @@ def _build_constraints(
         sanitized.append(candidate)
 
         if item.get("source") == "ltm":
-            selected_payload = (
-                item.get("ltm_selected") if isinstance(item.get("ltm_selected"), dict) else {}
-            )
-            attribution_payload = (
-                item.get("ltm_attribution") if isinstance(item.get("ltm_attribution"), dict) else {}
-            )
-            graph_neighborhood = (
+            selected_payload = _coerce_mapping(item.get("ltm_selected"))
+            attribution_payload = _coerce_mapping(item.get("ltm_attribution"))
+            graph_neighborhood = _coerce_mapping(
                 attribution_payload.get("graph_neighborhood")
-                if isinstance(attribution_payload.get("graph_neighborhood"), dict)
-                else {}
             )
             selected_ltm_constraints.append(
                 {
@@ -169,7 +174,9 @@ def _build_constraints(
                     "derived_from_observation_id": str(
                         selected_payload.get("derived_from_observation_id") or ""
                     ).strip(),
-                    "graph_neighbor_count": int(graph_neighborhood.get("triple_count", 0) or 0),
+                    "graph_neighbor_count": _coerce_int(
+                        graph_neighborhood.get("triple_count", 0)
+                    ),
                 }
             )
         if len(sanitized) >= 5:
@@ -181,7 +188,7 @@ def _build_constraints(
         "graph_neighbor_count": sum(
             1
             for item in selected_ltm_constraints
-            if int(item.get("graph_neighbor_count", 0) or 0) > 0
+            if _coerce_int(item.get("graph_neighbor_count", 0)) > 0
         ),
         "handles": [
             str(item.get("handle") or "").strip()
@@ -332,7 +339,7 @@ def run_source_plan(
         candidate_chunks=[item for item in candidate_chunks if isinstance(item, dict)],
         test_signal_weight=test_signal_weight,
     )
-    prioritized_chunks, packing = pack_source_plan_chunks(
+    packed_chunks = pack_source_plan_chunks(
         prioritized_chunks=ranked_chunks,
         focused_files=focused_files,
         chunk_top_k=max(1, int(chunk_top_k)),
@@ -341,6 +348,11 @@ def run_source_plan(
         ),
         return_metadata=True,
     )
+    if isinstance(packed_chunks, tuple):
+        prioritized_chunks, packing = packed_chunks
+    else:
+        prioritized_chunks = packed_chunks
+        packing = {}
     prioritized_chunks_with_why = attach_selection_why(
         prioritized_chunks,
         default_reason="ranked_chunk_candidate",

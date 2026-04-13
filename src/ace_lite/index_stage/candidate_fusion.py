@@ -9,8 +9,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
-from ace_lite.embeddings import CrossEncoderProvider
-from ace_lite.embeddings import EmbeddingProvider
+from ace_lite.embeddings import CrossEncoderProvider, EmbeddingProvider
 from ace_lite.index_stage.candidate_postprocess import CandidatePostprocessResult
 from ace_lite.index_stage.repo_paths import normalize_repo_path
 from ace_lite.rankers import fuse_rrf, normalize_rrf_scores
@@ -79,10 +78,10 @@ def _candidate_granularity_score(entry: dict[str, Any]) -> float:
     except Exception:
         pass
 
-    classes = entry.get("classes") if isinstance(entry.get("classes"), list) else []
-    functions = (
-        entry.get("functions") if isinstance(entry.get("functions"), list) else []
-    )
+    classes_raw = entry.get("classes")
+    classes = classes_raw if isinstance(classes_raw, list) else []
+    functions_raw = entry.get("functions")
+    functions = functions_raw if isinstance(functions_raw, list) else []
     return float(len(classes) + len(functions))
 
 
@@ -577,8 +576,8 @@ def refine_candidate_pool(
 
 
 __all__ = [
-    "apply_multi_channel_rrf_fusion",
     "CandidateFusionDeps",
     "CandidateFusionResult",
+    "apply_multi_channel_rrf_fusion",
     "refine_candidate_pool",
 ]

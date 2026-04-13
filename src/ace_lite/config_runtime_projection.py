@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.cli_app.params import parse_lsp_commands_from_config
 from ace_lite.config_models import RuntimeConfig
@@ -60,7 +60,7 @@ def build_orchestrator_runtime_projection(
 ) -> OrchestratorConfig:
     """Project boundary configuration into the runtime orchestrator model."""
     normalized = normalize_orchestrator_runtime_projection(payload)
-    return OrchestratorConfig.model_validate(normalized)
+    return cast(OrchestratorConfig, OrchestratorConfig.model_validate(normalized))
 
 
 def dump_orchestrator_runtime_projection(
@@ -70,9 +70,12 @@ def dump_orchestrator_runtime_projection(
     by_alias: bool,
 ) -> dict[str, Any]:
     """Project and dump orchestrator runtime configuration."""
-    return build_orchestrator_runtime_projection(payload).model_dump(
-        exclude_none=exclude_none,
-        by_alias=by_alias,
+    return cast(
+        dict[str, Any],
+        build_orchestrator_runtime_projection(payload).model_dump(
+            exclude_none=exclude_none,
+            by_alias=by_alias,
+        ),
     )
 
 
@@ -84,9 +87,12 @@ def dump_runtime_boundary_projection(
 ) -> dict[str, Any]:
     """Validate and dump runtime-only boundary configuration."""
     normalized = _copy_mapping(payload or {})
-    return RuntimeConfig.model_validate(normalized).model_dump(
-        exclude_none=exclude_none,
-        by_alias=by_alias,
+    return cast(
+        dict[str, Any],
+        RuntimeConfig.model_validate(normalized).model_dump(
+            exclude_none=exclude_none,
+            by_alias=by_alias,
+        ),
     )
 
 

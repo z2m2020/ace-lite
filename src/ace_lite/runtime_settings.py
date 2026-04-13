@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -474,7 +474,7 @@ def _resolve_runtime_profile_metadata(
         return {}, {}
 
     resolved_profile = get_runtime_profile(requested_profile)
-    metadata = {
+    metadata: dict[str, Any] = {
         "requested_profile": requested_profile,
         "selected_profile_source": selected_source,
         "available_profiles": list(RUNTIME_PROFILE_NAMES),
@@ -505,7 +505,7 @@ def _validate_root_payload(payload: dict[str, Any]) -> dict[str, Any]:
     meta = payload.get("_meta")
     candidate = dict(payload)
     candidate.pop("_meta", None)
-    validated = validate_cli_config(candidate)
+    validated = cast(dict[str, Any], validate_cli_config(candidate))
     if meta is not None:
         validated["_meta"] = meta
     return validated

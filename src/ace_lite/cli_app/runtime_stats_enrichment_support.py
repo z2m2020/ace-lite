@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.agent_loop.contracts import (
     AGENT_LOOP_ACTION_TYPES,
     AGENT_LOOP_RERUN_POLICY_SCHEMA_VERSION,
 )
 from ace_lite.agent_loop.controller import AGENT_LOOP_STOP_REASONS
-from ace_lite.dev_feedback_taxonomy import describe_dev_feedback_reason
-from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
-
+from ace_lite.dev_feedback_taxonomy import (
+    describe_dev_feedback_reason,
+    normalize_dev_feedback_reason_code,
+)
 
 RUNTIME_MEMORY_REASON_CODES = frozenset(
     {
@@ -24,7 +25,7 @@ def resolve_reason_details(reason_code: Any) -> dict[str, str]:
     canonical = normalize_dev_feedback_reason_code(reason_code, default="")
     if not canonical:
         return {"reason_code": "", "reason_family": "", "capture_class": ""}
-    return describe_dev_feedback_reason(canonical)
+    return cast(dict[str, str], describe_dev_feedback_reason(canonical))
 
 
 def build_runtime_top_pain_summary(
@@ -542,16 +543,18 @@ def build_runtime_next_cycle_input_summary(
             capture_class="memory",
         ),
     }
-    memory_focus_enabled = any(
-        float(memory_focus.get(key, 0) or 0) > 0.0
-        for key in (
-            "reason_count",
-            "runtime_event_count",
-            "issue_count",
-            "open_issue_count",
-            "fix_count",
-        )
-    )
+    memory_focus_enabled = False
+    for key in (
+        "reason_count",
+        "runtime_event_count",
+        "issue_count",
+        "open_issue_count",
+        "fix_count",
+    ):
+        value = memory_focus.get(key, 0)
+        if isinstance(value, (int, float, str)) and float(value or 0) > 0.0:
+            memory_focus_enabled = True
+            break
 
     if not priorities and not memory_focus_enabled and not degraded_service_names and not normalized_doctor_reasons:
         return {}
@@ -579,13 +582,13 @@ def build_runtime_next_cycle_input_summary(
 
 
 __all__ = [
-    "RUNTIME_MEMORY_REASON_CODES",
     "RUNTIME_MEMORY_LTM_FEEDBACK_SIGNALS",
+    "RUNTIME_MEMORY_REASON_CODES",
+    "attach_runtime_memory_ltm_signal_summary",
     "build_runtime_agent_loop_control_plane_summary",
     "build_runtime_memory_health_summary",
     "build_runtime_memory_ltm_signal_summary",
     "build_runtime_next_cycle_input_summary",
     "build_runtime_top_pain_summary",
-    "attach_runtime_memory_ltm_signal_summary",
     "resolve_reason_details",
 ]

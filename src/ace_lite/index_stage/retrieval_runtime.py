@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.scoring_config import (
     BM25_B,
@@ -216,11 +216,14 @@ def build_index_retrieval_runtime(
         candidate_terms: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         ranked_terms = terms if candidate_terms is None else candidate_terms
-        return runtime_profile.rank_candidates(
-            files_map=effective_files_map,
-            terms=ranked_terms,
-            candidate_ranker=candidate_ranker,
-            min_score=min_score,
+        return cast(
+            list[dict[str, Any]],
+            runtime_profile.rank_candidates(
+                files_map=effective_files_map,
+                terms=ranked_terms,
+                candidate_ranker=candidate_ranker,
+                min_score=min_score,
+            ),
         )
 
     return IndexRetrievalRuntime(

@@ -9,7 +9,10 @@ from typing import Any, Callable
 
 from ace_lite.exceptions import StageContractError
 from ace_lite.pipeline.types import StageMetric
-from ace_lite.runtime_stats import RuntimeInvocationStats
+from ace_lite.runtime_stats import (
+    RuntimeInvocationStats,
+    normalize_runtime_stage_latencies,
+)
 from ace_lite.tracing import export_stage_trace_jsonl, export_stage_trace_otlp
 
 logger = logging.getLogger(__name__)
@@ -268,12 +271,17 @@ class RuntimeObservabilityService:
                     if contract_error is not None
                     else "",
                     degraded_reason_codes=tuple(degraded_reason_codes),
-                    stage_latencies=tuple(
-                        {"stage_name": item.stage, "elapsed_ms": item.elapsed_ms}
-                        for item in stage_metrics
-                    )
-                    + (
-                        {"stage_name": "total", "elapsed_ms": round(float(total_ms), 6)},
+                    stage_latencies=normalize_runtime_stage_latencies(
+                        tuple(
+                            {"stage_name": item.stage, "elapsed_ms": item.elapsed_ms}
+                            for item in stage_metrics
+                        )
+                        + (
+                            {
+                                "stage_name": "total",
+                                "elapsed_ms": round(float(total_ms), 6),
+                            },
+                        )
                     ),
                     learning_router_rollout_decision=learning_router_payload,
                     plan_replay_hit=bool((replay_cache_info or {}).get("hit", False)),

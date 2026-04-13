@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.config_choices import EMBEDDING_PROVIDER_CHOICES
 from ace_lite.config_model_shared import (
@@ -17,8 +17,8 @@ from ace_lite.config_model_shared import (
     validate_scip_provider,
 )
 from ace_lite.config_sections import (
-    DEFAULT_EMBEDDINGS_INDEX_PATH,
     DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDINGS_INDEX_PATH,
     DEFAULT_LONG_TERM_MEMORY_PATH,
     DEFAULT_PLAN_REPLAY_CACHE_PATH,
     DEFAULT_SCIP_INDEX_PATH,
@@ -33,7 +33,7 @@ from ace_lite.utils import normalize_optional_str
 
 
 def normalize_container_tag(value: Any) -> str | None:
-    return normalize_optional_str(value)
+    return cast(str | None, normalize_optional_str(value))
 
 
 def resolve_memory_auto_tag_mode(
@@ -42,10 +42,13 @@ def resolve_memory_auto_tag_mode(
     field_name: str | None = None,
 ) -> str | None:
     if field_name is None:
-        return normalize_memory_auto_tag_mode(value)
-    return validate_memory_auto_tag_mode(
+        return cast(str | None, normalize_memory_auto_tag_mode(value))
+    return cast(
+        str | None,
+        validate_memory_auto_tag_mode(
         normalize_optional_str(value),
         field_name=field_name,
+        ),
     )
 
 
@@ -56,10 +59,13 @@ def resolve_memory_gate_mode(
     field_name: str | None = None,
 ) -> str | None:
     if field_name is None:
-        return normalize_memory_gate_mode(value, default=default)
-    return validate_memory_gate_mode(
+        return cast(str | None, normalize_memory_gate_mode(value, default=default))
+    return cast(
+        str | None,
+        validate_memory_gate_mode(
         normalize_optional_str(value),
         field_name=field_name,
+        ),
     )
 
 
@@ -70,10 +76,13 @@ def resolve_memory_notes_mode(
     field_name: str | None = None,
 ) -> str | None:
     if field_name is None:
-        return normalize_memory_notes_mode(value, default=default)
-    return validate_memory_notes_mode(
+        return cast(str | None, normalize_memory_notes_mode(value, default=default))
+    return cast(
+        str | None,
+        validate_memory_notes_mode(
         normalize_optional_str(value),
         field_name=field_name,
+        ),
     )
 
 
@@ -84,10 +93,13 @@ def resolve_ranking_profile(
     field_name: str | None = None,
 ) -> str | None:
     if field_name is None:
-        return normalize_ranking_profile(value, default=default)
-    return validate_ranking_profile(
+        return cast(str | None, normalize_ranking_profile(value, default=default))
+    return cast(
+        str | None,
+        validate_ranking_profile(
         normalize_optional_str(value),
         field_name=field_name,
+        ),
     )
 
 
@@ -105,7 +117,7 @@ def resolve_scip_provider(
     validated = validate_scip_provider(normalized, field_name=field_name)
     if validated is None and default is not None:
         return default
-    return validated
+    return cast(str | None, validated)
 
 
 def resolve_embedding_provider(
@@ -119,11 +131,14 @@ def resolve_embedding_provider(
         if not normalized:
             return default
         if normalized in EMBEDDING_PROVIDER_CHOICES:
-            return normalize_embedding_provider(normalized, default=default)
+            return cast(str | None, normalize_embedding_provider(normalized, default=default))
         return normalized
-    return validate_embedding_provider(
-        normalize_optional_str(value),
-        field_name=field_name,
+    return cast(
+        str | None,
+        validate_embedding_provider(
+            normalize_optional_str(value),
+            field_name=field_name,
+        ),
     )
 
 
@@ -132,8 +147,11 @@ def resolve_tokenizer_model(
     *,
     default: str = DEFAULT_TOKENIZER_MODEL,
 ) -> str:
-    return normalize_tokenizer_model(
-        normalize_string_default(value, default=default)
+    return cast(
+        str,
+        normalize_tokenizer_model(
+            normalize_string_default(value, default=default)
+        ),
     )
 
 
@@ -142,7 +160,7 @@ def resolve_embedding_model(
     *,
     default: str = DEFAULT_EMBEDDING_MODEL,
 ) -> str:
-    return normalize_string_default(value, default=default)
+    return cast(str, normalize_string_default(value, default=default))
 
 
 def resolve_embedding_index_path(
@@ -175,21 +193,24 @@ def resolve_trace_otlp_timeout_seconds(
     default: float = 1.5,
     minimum: float = 0.1,
 ) -> float:
-    return normalize_clamped_float(
-        value,
-        default=default,
-        minimum=minimum,
-        maximum=float("inf"),
+    return cast(
+        float,
+        normalize_clamped_float(
+            value,
+            default=default,
+            minimum=minimum,
+            maximum=float("inf"),
+        ),
     )
 
 
 def resolve_trace_otlp_endpoint(value: Any) -> str:
-    return str(value or "").strip()
+    return cast(str, str(value or "").strip())
 
 
 def resolve_optional_path(value: Any) -> str | None:
     normalized = normalize_optional_str(value)
-    return normalized or None
+    return cast(str | None, normalized or None)
 
 
 def resolve_plan_replay_cache_path(

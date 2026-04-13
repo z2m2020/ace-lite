@@ -257,7 +257,7 @@ def build_skill_catalog(manifest: list[dict[str, Any]]) -> str:
         "Discovered Markdown skills with routing metadata and default load surface.",
     ]
     if not manifest:
-        return "\n".join(lines + ["", "_No skills discovered._", ""])
+        return "\n".join([*lines, "", "_No skills discovered._", ""])
 
     for entry in manifest:
         name = str(entry.get("name") or "").strip() or "unnamed-skill"
@@ -269,6 +269,7 @@ def build_skill_catalog(manifest: list[dict[str, Any]]) -> str:
         default_sections = to_string_list(entry.get("default_sections") or [])
         priority = to_int(entry.get("priority"), default=0)
         token_estimate = to_int(entry.get("token_estimate"), default=0)
+        normalized_token_estimate = int(token_estimate or 0)
 
         lines.extend(["", f"## {name}"])
         if path:
@@ -284,8 +285,8 @@ def build_skill_catalog(manifest: list[dict[str, Any]]) -> str:
         if default_sections:
             lines.append(f"- **Default sections:** {', '.join(default_sections)}")
         lines.append(f"- **Priority:** {priority}")
-        if token_estimate > 0:
-            lines.append(f"- **Token estimate:** {token_estimate}")
+        if normalized_token_estimate > 0:
+            lines.append(f"- **Token estimate:** {normalized_token_estimate}")
 
     lines.append("")
     return "\n".join(lines)
@@ -372,10 +373,10 @@ def _estimate_skill_token_estimate(
                 f"## {title}\n{content}".strip()
                 for title, content in selected_sections.items()
             )
-            return estimate_tokens(text)
+            return int(estimate_tokens(text))
 
     plain = markdown_body.strip()
-    return estimate_tokens(plain) if plain else 1
+    return int(estimate_tokens(plain)) if plain else 1
 
 
 def _select_sections_by_heading(

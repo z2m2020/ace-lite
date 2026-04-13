@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Any, Callable
+from typing import Any
 
 from ace_lite.index_stage.cochange import apply_cochange_neighbors
 from ace_lite.index_stage.graph_lookup import apply_graph_lookup_rerank
@@ -58,22 +59,21 @@ def _merge_graph_lookup_payload(
     base_payload: dict[str, Any],
     applied_payload: dict[str, Any],
 ) -> dict[str, Any]:
+    base_weights_value = base_payload.get("weights")
+    base_weights = dict(base_weights_value) if isinstance(base_weights_value, dict) else {}
+    applied_weights_value = applied_payload.get("weights")
+    applied_weights = (
+        dict(applied_weights_value)
+        if isinstance(applied_weights_value, dict)
+        else {}
+    )
     merged = {
         **base_payload,
         **applied_payload,
     }
-    applied_weights = (
-        applied_payload.get("weights")
-        if isinstance(applied_payload.get("weights"), dict)
-        else {}
-    )
     merged["weights"] = {
         **_GRAPH_LOOKUP_DEFAULT_WEIGHTS,
-        **(
-            base_payload.get("weights")
-            if isinstance(base_payload.get("weights"), dict)
-            else {}
-        ),
+        **base_weights,
         **applied_weights,
     }
     return merged

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.index_cache import build_or_refresh_index
 from ace_lite.index_stage.terms import extract_terms
@@ -122,14 +122,20 @@ def extract_retrieval_terms(
     memory_stage: dict[str, Any] | None = None,
 ) -> list[str]:
     normalized_memory_stage = memory_stage if isinstance(memory_stage, dict) else {}
-    return extract_terms(query=query, memory_stage=normalized_memory_stage)
+    return cast(
+        list[str],
+        extract_terms(query=query, memory_stage=normalized_memory_stage),
+    )
 
 
 def normalize_candidate_ranker(candidate_ranker: str) -> str:
-    return normalize_choice(
-        str(candidate_ranker or ""),
-        CANDIDATE_RANKER_CHOICES,
-        default="heuristic",
+    return cast(
+        str,
+        normalize_choice(
+            str(candidate_ranker or ""),
+            CANDIDATE_RANKER_CHOICES,
+            default="heuristic",
+        ),
     )
 
 
@@ -277,54 +283,58 @@ def rank_candidate_files(
     candidate_limit = max(1, int(top_k_files))
     threshold = int(min_score)
     if strategy == "bm25_lite":
-        bm25_kwargs = {
-            "min_score": threshold,
-            "top_k_files": candidate_limit,
-            "heuristic_ranker": rank_candidates_heuristic,
-            "index_hash": index_hash,
-        }
-        if bm25_config:
-            bm25_kwargs["bm25_config"] = bm25_config
-        if heuristic_config:
-            bm25_kwargs["heuristic_config"] = heuristic_config
-        try:
-            return rank_candidates_bm25_two_stage(
-                files_map,
-                terms,
-                **bm25_kwargs,
-            )
-        except TypeError:
-            return rank_candidates_bm25_two_stage(
+        if bm25_config or heuristic_config:
+            try:
+                return cast(
+                    list[dict[str, Any]],
+                    rank_candidates_bm25_two_stage(
+                        files_map,
+                        terms,
+                        min_score=threshold,
+                        top_k_files=candidate_limit,
+                        heuristic_ranker=rank_candidates_heuristic,
+                        index_hash=index_hash,
+                        bm25_config=bm25_config,
+                        heuristic_config=heuristic_config,
+                    ),
+                )
+            except TypeError:
+                pass
+        return cast(
+            list[dict[str, Any]],
+            rank_candidates_bm25_two_stage(
                 files_map,
                 terms,
                 min_score=threshold,
                 top_k_files=candidate_limit,
                 heuristic_ranker=rank_candidates_heuristic,
                 index_hash=index_hash,
-            )
+            ),
+        )
     if strategy in {"hybrid_re2", "rrf_hybrid"}:
-        hybrid_kwargs = {
-            "min_score": threshold,
-            "top_n": candidate_limit,
-            "fusion_mode": "rrf" if strategy == "rrf_hybrid" else hybrid_fusion_mode,
-            "rrf_k": int(hybrid_rrf_k),
-            "weights": hybrid_weights,
-            "index_hash": index_hash,
-        }
-        if bm25_config:
-            hybrid_kwargs["bm25_config"] = bm25_config
-        if heuristic_config:
-            hybrid_kwargs["heuristic_config"] = heuristic_config
-        if hybrid_config:
-            hybrid_kwargs["hybrid_config"] = hybrid_config
-        try:
-            return rank_candidates_hybrid_re2(
-                files_map,
-                terms,
-                **hybrid_kwargs,
-            )
-        except TypeError:
-            return rank_candidates_hybrid_re2(
+        if bm25_config or heuristic_config or hybrid_config:
+            try:
+                return cast(
+                    list[dict[str, Any]],
+                    rank_candidates_hybrid_re2(
+                        files_map,
+                        terms,
+                        min_score=threshold,
+                        top_n=candidate_limit,
+                        fusion_mode="rrf" if strategy == "rrf_hybrid" else hybrid_fusion_mode,
+                        rrf_k=int(hybrid_rrf_k),
+                        weights=hybrid_weights,
+                        index_hash=index_hash,
+                        bm25_config=bm25_config,
+                        heuristic_config=heuristic_config,
+                        hybrid_config=hybrid_config,
+                    ),
+                )
+            except TypeError:
+                pass
+        return cast(
+            list[dict[str, Any]],
+            rank_candidates_hybrid_re2(
                 files_map,
                 terms,
                 min_score=threshold,
@@ -333,16 +343,23 @@ def rank_candidate_files(
                 rrf_k=int(hybrid_rrf_k),
                 weights=hybrid_weights,
                 index_hash=index_hash,
-            )
+            ),
+        )
     try:
-        return rank_candidates_heuristic(
-            files_map,
-            terms,
-            min_score=threshold,
-            scoring_config=heuristic_config,
+        return cast(
+            list[dict[str, Any]],
+            rank_candidates_heuristic(
+                files_map,
+                terms,
+                min_score=threshold,
+                scoring_config=heuristic_config,
+            ),
         )
     except TypeError:
-        return rank_candidates_heuristic(files_map, terms, min_score=threshold)
+        return cast(
+            list[dict[str, Any]],
+            rank_candidates_heuristic(files_map, terms, min_score=threshold),
+        )
 
 
 def _compute_index_hash(
@@ -526,13 +543,13 @@ def select_initial_candidates(
 
 
 __all__ = [
-    "build_guarded_rollout_payload",
-    "build_selection_observability",
-    "build_retrieval_runtime_profile",
     "CandidateSelectionResult",
-    "extract_retrieval_terms",
     "RetrievalIndexSnapshot",
     "RetrievalRuntimeProfile",
+    "build_guarded_rollout_payload",
+    "build_retrieval_runtime_profile",
+    "build_selection_observability",
+    "extract_retrieval_terms",
     "load_retrieval_index_snapshot",
     "normalize_candidate_ranker",
     "rank_candidate_files",

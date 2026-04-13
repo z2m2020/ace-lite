@@ -816,13 +816,15 @@ def resolve_quality_config(
         "base_weight": max(0.0, float(scip_base_weight)),
     }
 
+    snippet_value = normalized_chunk_payload.get("snippet")
+    snippet_payload = dict(snippet_value) if isinstance(snippet_value, dict) else {}
     return {
         "chunk_top_k": normalized_chunk_payload["top_k"],
         "chunk_per_file_limit": normalized_chunk_payload["per_file_limit"],
         "chunk_disclosure": chunk_disclosure,
         "chunk_signature": bool(chunk_signature),
-        "chunk_snippet_max_lines": normalized_chunk_payload["snippet"]["max_lines"],
-        "chunk_snippet_max_chars": normalized_chunk_payload["snippet"]["max_chars"],
+        "chunk_snippet_max_lines": snippet_payload.get("max_lines", 0),
+        "chunk_snippet_max_chars": snippet_payload.get("max_chars", 0),
         "chunk_token_budget": normalized_chunk_payload["token_budget"],
         "chunk_guard_enabled": bool(chunk_guard_enabled),
         "chunk_guard_mode": normalized_chunk_guard_mode,

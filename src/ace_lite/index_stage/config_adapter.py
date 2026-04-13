@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 StageConfigT = TypeVar("StageConfigT")
 
@@ -20,6 +20,13 @@ def build_index_stage_config_from_orchestrator(
     topological_shield_config_cls: type[Any],
     chunk_guard_config_cls: type[Any],
 ) -> StageConfigT:
+    stage_config_ctor = cast(Any, stage_config_cls)
+    retrieval_config_ctor = cast(Any, retrieval_config_cls)
+    adaptive_router_config_ctor = cast(Any, adaptive_router_config_cls)
+    chunking_config_ctor = cast(Any, chunking_config_cls)
+    topological_shield_config_ctor = cast(Any, topological_shield_config_cls)
+    chunk_guard_config_ctor = cast(Any, chunk_guard_config_cls)
+
     index_config = getattr(config, "index", None)
     retrieval_config = getattr(config, "retrieval", None)
     embeddings_config = getattr(config, "embeddings", None)
@@ -31,18 +38,20 @@ def build_index_stage_config_from_orchestrator(
     feedback_config = getattr(memory_config, "feedback", None)
     scip_config = getattr(config, "scip", None)
 
-    return stage_config_cls(
+    return cast(
+        StageConfigT,
+        stage_config_ctor(
         cache_path=Path(
             str(getattr(index_config, "cache_path", "context-map/index.json"))
         ),
         languages=list(getattr(index_config, "languages", None) or []),
         incremental=bool(getattr(index_config, "incremental", True)),
-        retrieval=retrieval_config_cls(
+        retrieval=retrieval_config_ctor(
             retrieval_policy=str(
                 getattr(retrieval_config, "retrieval_policy", "auto")
             ),
             policy_version=str(getattr(retrieval_config, "policy_version", "v1")),
-            adaptive_router=adaptive_router_config_cls(
+            adaptive_router=adaptive_router_config_ctor(
                 enabled=bool(
                     getattr(retrieval_config, "adaptive_router_enabled", False)
                 ),
@@ -226,7 +235,7 @@ def build_index_stage_config_from_orchestrator(
             getattr(embeddings_config, "min_similarity", 0.0)
         ),
         embedding_fail_open=bool(getattr(embeddings_config, "fail_open", True)),
-        chunking=chunking_config_cls(
+        chunking=chunking_config_ctor(
             top_k=int(getattr(chunking_config, "top_k", 24)),
             per_file_limit=int(getattr(chunking_config, "per_file_limit", 3)),
             token_budget=int(getattr(chunking_config, "token_budget", 1200)),
@@ -274,7 +283,7 @@ def build_index_stage_config_from_orchestrator(
             reference_cap=float(
                 getattr(chunking_config, "reference_cap", 2.5) or 2.5
             ),
-            topological_shield=topological_shield_config_cls(
+            topological_shield=topological_shield_config_ctor(
                 enabled=bool(
                     getattr(topological_shield_config, "enabled", False)
                 ),
@@ -295,7 +304,7 @@ def build_index_stage_config_from_orchestrator(
                     or 0.5
                 ),
             ),
-            guard=chunk_guard_config_cls(
+            guard=chunk_guard_config_ctor(
                 enabled=bool(getattr(chunk_guard_config, "enabled", False)),
                 mode=str(getattr(chunk_guard_config, "mode", "off")),
                 lambda_penalty=float(
@@ -346,6 +355,7 @@ def build_index_stage_config_from_orchestrator(
             getattr(scip_config, "generate_fallback", True)
         ),
         scip_base_weight=float(getattr(scip_config, "base_weight", 0.5) or 0.5),
+        ),
     )
 
 

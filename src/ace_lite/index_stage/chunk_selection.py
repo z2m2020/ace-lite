@@ -207,19 +207,18 @@ def apply_chunk_selection(
                 signature = str(item.get("signature") or "").strip()[:240]
                 snippet = str(item.get("snippet") or "").strip()[:600]
                 retrieval_context = resolve_retrieval_context_text(item)[:600]
-                sidecar = (
-                    item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
-                    if isinstance(item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY), dict)
-                    else {}
+                sidecar_value = item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
+                sidecar_dict = (
+                    dict(sidecar_value) if isinstance(sidecar_value, dict) else {}
                 )
-                parent_symbol = str(sidecar.get("parent_symbol") or "").strip()
+                parent_symbol = str(sidecar_dict.get("parent_symbol") or "").strip()
                 reference_values = (
                     [
                         str(value).strip()
-                        for value in sidecar.get("references", [])
+                        for value in sidecar_dict.get("references", [])
                         if str(value).strip()
                     ]
-                    if isinstance(sidecar.get("references"), list)
+                    if isinstance(sidecar_dict.get("references"), list)
                     else []
                 )
                 parts = [

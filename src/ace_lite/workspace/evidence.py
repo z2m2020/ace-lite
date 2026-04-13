@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 import re
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.validation.patch_artifact import validate_patch_artifact_contract_v1
 from ace_lite.workspace.common import ensure_non_empty_str as _ensure_non_empty_str
@@ -645,7 +645,7 @@ def validate_workspace_evidence_contract_v1(
             message="confidence must be numeric",
         )
     else:
-        confidence = float(confidence_raw)
+        confidence = float(cast(int | float, confidence_raw))
         if not math.isfinite(confidence):
             _add_violation(
                 code="confidence_not_finite",

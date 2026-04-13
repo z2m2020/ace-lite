@@ -23,6 +23,7 @@ def build_chunk_steps(
             continue
         lineno = int(item.get("lineno") or 0)
         end_lineno = int(item.get("end_lineno") or lineno)
+        raw_evidence = item.get("evidence")
         output.append(
             {
                 "id": index + 1,
@@ -33,8 +34,8 @@ def build_chunk_steps(
                     "kind": str(item.get("kind") or ""),
                     "lineno": lineno,
                     "end_lineno": end_lineno,
-                    "evidence": dict(item.get("evidence"))
-                    if isinstance(item.get("evidence"), dict)
+                    "evidence": dict(raw_evidence)
+                    if isinstance(raw_evidence, dict)
                     else {},
                     "disclosure": str(item.get("disclosure") or "refs"),
                     "skeleton_available": isinstance(item.get("skeleton"), dict),

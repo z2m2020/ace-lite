@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.benchmark.case_evaluation_context import build_candidate_context
 from ace_lite.benchmark.case_evaluation_details import classify_chunk_stage_miss
@@ -38,12 +38,6 @@ def evaluate_case_result(
         expected = [str(item).strip() for item in expected_keys if str(item).strip()]
 
     top_k = int(case.get("top_k", 8))
-    observability = (
-        plan_payload.get("observability", {})
-        if isinstance(plan_payload.get("observability"), dict)
-        else {}
-    )
-
     index_payload = plan_payload.get("index", {}) if isinstance(plan_payload.get("index"), dict) else {}
     index_metadata = (
         index_payload.get("metadata", {})
@@ -126,7 +120,6 @@ def evaluate_case_result(
     )
     expected_hits = list(candidate_match_details["expected_hits"])
     recall_hit = float(candidate_match_details["recall_hit"])
-    relevant_candidates = int(candidate_match_details["relevant_candidates"])
     first_hit_rank = candidate_match_details["first_hit_rank"]
     relevant_candidate_paths = list(candidate_match_details["relevant_candidate_paths"])
     noise_candidate_paths = list(candidate_match_details["noise_candidate_paths"])
@@ -442,8 +435,8 @@ def evaluate_case_result(
     graph_source_pagerank_signal_coverage_ratio = (
         metrics.graph_source_pagerank_signal_coverage_ratio
     )
-    skills_selected_count = metrics.skills_selected_count
-    skills_skipped_for_budget_count = metrics.skills_skipped_for_budget_count
+    skills_selected_count = int(metrics.skills_selected_count)
+    skills_skipped_for_budget_count = int(metrics.skills_skipped_for_budget_count)
     skills_token_budget = metrics.skills_token_budget
     skills_token_budget_used = metrics.skills_token_budget_used
     skills_budget_exhausted = metrics.skills_budget_exhausted
@@ -1128,7 +1121,7 @@ def evaluate_case_result(
                 source_plan_packing_reason=source_plan_packing_reason,
             )
         )
-    return payload
+    return cast(dict[str, Any], payload)
 
 
 __all__ = ["evaluate_case_result"]

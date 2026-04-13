@@ -21,9 +21,10 @@ from __future__ import annotations
 
 import logging
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Any, Callable, TypeVar
+from enum import Enum
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -49,25 +50,25 @@ class ExceptionRiskLevel(Enum):
     # Info: Logging only, recoverable
     INFO = 1
 
-    def __ge__(self, other: "ExceptionRiskLevel") -> bool:
+    def __ge__(self, other: ExceptionRiskLevel) -> bool:
         """Greater than or equal comparison."""
         if not isinstance(other, ExceptionRiskLevel):
             return NotImplemented
         return self.value >= other.value
 
-    def __gt__(self, other: "ExceptionRiskLevel") -> bool:
+    def __gt__(self, other: ExceptionRiskLevel) -> bool:
         """Greater than comparison."""
         if not isinstance(other, ExceptionRiskLevel):
             return NotImplemented
         return self.value > other.value
 
-    def __le__(self, other: "ExceptionRiskLevel") -> bool:
+    def __le__(self, other: ExceptionRiskLevel) -> bool:
         """Less than or equal comparison."""
         if not isinstance(other, ExceptionRiskLevel):
             return NotImplemented
         return self.value <= other.value
 
-    def __lt__(self, other: "ExceptionRiskLevel") -> bool:
+    def __lt__(self, other: ExceptionRiskLevel) -> bool:
         """Less than comparison."""
         if not isinstance(other, ExceptionRiskLevel):
             return NotImplemented
@@ -421,7 +422,7 @@ class ExceptionContext:
         self.error_payload: ErrorPayload | None = None
         self._exc_info: tuple[Any, Any, Any] | None = None
 
-    def __enter__(self) -> "ExceptionContext":
+    def __enter__(self) -> ExceptionContext:
         return self
 
     def __exit__(
@@ -433,8 +434,14 @@ class ExceptionContext:
         if exc_val is None:
             return True  # No exception
 
-        risk_level = assess_exception_risk(exc_val)
+        normalized_exc = exc_val if isinstance(exc_val, Exception) else Exception(str(exc_val))
+        risk_level = assess_exception_risk(normalized_exc)
         self._exc_info = (exc_type, exc_val, exc_tb)
+        traceback_summary = (
+            "".join(traceback.format_exception(exc_type, exc_val, exc_tb))[:500]
+            if exc_tb
+            else None
+        )
 
         self.error_payload = ErrorPayload(
             error_type=type(exc_val).__name__,
@@ -442,17 +449,12 @@ class ExceptionContext:
             risk_level=risk_level.name,
             recoverable=risk_level != ExceptionRiskLevel.CRITICAL,
             details={"operation": self.operation_name},
-            traceback_summary=traceback.format_exception(
-                exc_type, exc_val, exc_tb
-            )[:500] if exc_tb else None,
+            traceback_summary=traceback_summary,
         )
 
-        _log_exception(exc_val, risk_level, self.operation_name, self.error_payload)
+        _log_exception(normalized_exc, risk_level, self.operation_name, self.error_payload)
 
-        if risk_level == ExceptionRiskLevel.CRITICAL and self.reraise_on_critical:
-            return False  # Re-raise
-
-        return True  # Suppress
+        return not (risk_level == ExceptionRiskLevel.CRITICAL and self.reraise_on_critical)
 
 
 # =============================================================================
@@ -513,21 +515,21 @@ def safe_json_parse(
 # =============================================================================
 
 __all__ = [
-    "ExceptionRiskLevel",
     "ACELiteError",
     "CacheError",
-    "ParseError",
     "ConfigError",
+    "ErrorPayload",
+    "ExceptionContext",
+    "ExceptionHandlerConfig",
+    "ExceptionRiskLevel",
+    "ParseError",
     "PathError",
     "StageContractError",
-    "ErrorPayload",
-    "ExceptionHandlerConfig",
     "assess_exception_risk",
     "handle_exception",
     "safe_execute",
     "safe_execute_with_result",
-    "ExceptionContext",
-    "safe_int_parse",
     "safe_float_parse",
+    "safe_int_parse",
     "safe_json_parse",
 ]

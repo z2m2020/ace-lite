@@ -3,17 +3,13 @@ from __future__ import annotations
 import re
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
-from datetime import timezone
-from pathlib import Path
-from pathlib import PurePosixPath
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ace_lite.runtime_db import connect_runtime_db
-from ace_lite.runtime_db_migrate import RuntimeDbMigration
-from ace_lite.runtime_db_migrate import build_runtime_db_migration_bootstrap
+from ace_lite.runtime_db_migrate import RuntimeDbMigration, build_runtime_db_migration_bootstrap
 from ace_lite.runtime_paths import resolve_repo_runtime_cache_db_path
-
 
 STAGE_ARTIFACT_CACHE_SCHEMA_NAME = "stage_artifact_cache"
 STAGE_ARTIFACT_CACHE_SCHEMA_VERSION = 1
@@ -21,6 +17,37 @@ STAGE_ARTIFACT_CACHE_SCHEMA_LABEL = "ace-lite-stage-artifact-cache-v1"
 STAGE_ARTIFACT_CACHE_ENTRIES_TABLE = "stage_artifact_cache_entries"
 STAGE_ARTIFACT_CACHE_DEFAULT_PAYLOAD_ROOT = "context-map/runtime-cache/stage-artifacts"
 STAGE_ARTIFACT_CACHE_DEFAULT_TEMP_ROOT = "context-map/runtime-cache/stage-artifacts/tmp"
+STAGE_ARTIFACT_CACHE_SELECT_ENTRY_SQL = (
+    "SELECT * FROM stage_artifact_cache_entries WHERE stage_name = ? AND cache_key = ?"
+)
+STAGE_ARTIFACT_CACHE_UPSERT_ENTRY_SQL = (
+    "INSERT INTO stage_artifact_cache_entries("
+    "stage_name, cache_key, query_hash, fingerprint, settings_fingerprint, "
+    "payload_relpath, payload_tmp_relpath, payload_sha256, payload_bytes, token_weight, "
+    "ttl_seconds, soft_ttl_seconds, created_at, updated_at, last_accessed_at, expires_at, "
+    "content_version, policy_name, trust_class, orphaned, orphan_reason"
+    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+    "ON CONFLICT(stage_name, cache_key) DO UPDATE SET "
+    "query_hash = excluded.query_hash, "
+    "fingerprint = excluded.fingerprint, "
+    "settings_fingerprint = excluded.settings_fingerprint, "
+    "payload_relpath = excluded.payload_relpath, "
+    "payload_tmp_relpath = excluded.payload_tmp_relpath, "
+    "payload_sha256 = excluded.payload_sha256, "
+    "payload_bytes = excluded.payload_bytes, "
+    "token_weight = excluded.token_weight, "
+    "ttl_seconds = excluded.ttl_seconds, "
+    "soft_ttl_seconds = excluded.soft_ttl_seconds, "
+    "created_at = excluded.created_at, "
+    "updated_at = excluded.updated_at, "
+    "last_accessed_at = excluded.last_accessed_at, "
+    "expires_at = excluded.expires_at, "
+    "content_version = excluded.content_version, "
+    "policy_name = excluded.policy_name, "
+    "trust_class = excluded.trust_class, "
+    "orphaned = excluded.orphaned, "
+    "orphan_reason = excluded.orphan_reason"
+)
 STAGE_ARTIFACT_CACHE_TTL_FIELDS = (
     "ttl_seconds",
     "soft_ttl_seconds",
@@ -140,7 +167,7 @@ def _normalize_text(value: Any, *, max_len: int = 512) -> str:
 def _normalize_count(value: Any) -> int:
     try:
         parsed = int(value)
-    except Exception:
+    except (TypeError, ValueError):
         return 0
     return max(0, parsed)
 
@@ -323,6 +350,7 @@ def build_stage_artifact_cache_migration_bootstrap():
 
 def build_stage_artifact_cache_schema_document() -> dict[str, Any]:
     example_key = "abcdef0123456789"
+    example_writer = "writer_example"
     return {
         "schema_name": STAGE_ARTIFACT_CACHE_SCHEMA_NAME,
         "schema_version": STAGE_ARTIFACT_CACHE_SCHEMA_VERSION,
@@ -341,7 +369,7 @@ def build_stage_artifact_cache_schema_document() -> dict[str, Any]:
             "temp_relpath": build_stage_artifact_temp_relpath(
                 stage_name="source_plan",
                 cache_key=example_key,
-                write_token="writer-1",
+                write_token=example_writer,
             ),
         },
         "migration_plan": {
@@ -392,7 +420,7 @@ class StageArtifactCacheStore:
         conn = self._connect()
         try:
             row = conn.execute(
-                f"SELECT * FROM {STAGE_ARTIFACT_CACHE_ENTRIES_TABLE} WHERE stage_name = ? AND cache_key = ?",
+                STAGE_ARTIFACT_CACHE_SELECT_ENTRY_SQL,
                 (_normalize_stage_segment(stage_name), _normalize_cache_key(cache_key)),
             ).fetchone()
             if row is None:
@@ -419,32 +447,7 @@ class StageArtifactCacheStore:
         try:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute(
-                f"INSERT INTO {STAGE_ARTIFACT_CACHE_ENTRIES_TABLE}("
-                "stage_name, cache_key, query_hash, fingerprint, settings_fingerprint, "
-                "payload_relpath, payload_tmp_relpath, payload_sha256, payload_bytes, token_weight, "
-                "ttl_seconds, soft_ttl_seconds, created_at, updated_at, last_accessed_at, expires_at, "
-                "content_version, policy_name, trust_class, orphaned, orphan_reason"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(stage_name, cache_key) DO UPDATE SET "
-                "query_hash = excluded.query_hash, "
-                "fingerprint = excluded.fingerprint, "
-                "settings_fingerprint = excluded.settings_fingerprint, "
-                "payload_relpath = excluded.payload_relpath, "
-                "payload_tmp_relpath = excluded.payload_tmp_relpath, "
-                "payload_sha256 = excluded.payload_sha256, "
-                "payload_bytes = excluded.payload_bytes, "
-                "token_weight = excluded.token_weight, "
-                "ttl_seconds = excluded.ttl_seconds, "
-                "soft_ttl_seconds = excluded.soft_ttl_seconds, "
-                "created_at = excluded.created_at, "
-                "updated_at = excluded.updated_at, "
-                "last_accessed_at = excluded.last_accessed_at, "
-                "expires_at = excluded.expires_at, "
-                "content_version = excluded.content_version, "
-                "policy_name = excluded.policy_name, "
-                "trust_class = excluded.trust_class, "
-                "orphaned = excluded.orphaned, "
-                "orphan_reason = excluded.orphan_reason",
+                STAGE_ARTIFACT_CACHE_UPSERT_ENTRY_SQL,
                 (
                     payload["stage_name"],
                     payload["cache_key"],
@@ -487,8 +490,10 @@ __all__ = [
     "STAGE_ARTIFACT_CACHE_SCHEMA_LABEL",
     "STAGE_ARTIFACT_CACHE_SCHEMA_NAME",
     "STAGE_ARTIFACT_CACHE_SCHEMA_VERSION",
+    "STAGE_ARTIFACT_CACHE_SELECT_ENTRY_SQL",
     "STAGE_ARTIFACT_CACHE_TABLE_SPECS",
     "STAGE_ARTIFACT_CACHE_TTL_FIELDS",
+    "STAGE_ARTIFACT_CACHE_UPSERT_ENTRY_SQL",
     "STAGE_ARTIFACT_CACHE_WRITE_ORDER",
     "StageArtifactCacheEntry",
     "StageArtifactCacheStore",

@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 # =============================================================================
 # Configuration Sources (Priority Order)
 # =============================================================================
@@ -373,7 +372,8 @@ class UnifiedConfig:
     @property
     def language(self) -> str | None:
         """Get the language filter."""
-        return self.get(ConfigKeys.LANGUAGE, DefaultConfig.LANGUAGE)
+        value = self.get(ConfigKeys.LANGUAGE, DefaultConfig.LANGUAGE)
+        return value if isinstance(value, str) else None
 
     @property
     def embedding_enabled(self) -> bool:
@@ -486,18 +486,12 @@ class LegacyConfigAdapter:
 # =============================================================================
 
 __all__ = [
-    # Keys
     "ConfigKeys",
-    # Defaults
-    "DefaultConfig",
-    # Loader
     "ConfigLoader",
-    # Unified Config
-    "UnifiedConfig",
-    # Global Access
-    "get_global_config",
-    "set_global_config",
-    "reset_global_config",
-    # Legacy Support
+    "DefaultConfig",
     "LegacyConfigAdapter",
+    "UnifiedConfig",
+    "get_global_config",
+    "reset_global_config",
+    "set_global_config",
 ]

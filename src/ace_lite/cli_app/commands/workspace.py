@@ -5,7 +5,7 @@ from __future__ import annotations
 from importlib import import_module
 import math
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import click
 
@@ -45,7 +45,7 @@ def _workspace_callable(name: str) -> Callable[..., Any]:
     module = _workspace_module()
     value = getattr(module, name, None)
     if callable(value):
-        return value
+        return cast(Callable[..., Any], value)
     raise click.ClickException(f"workspace core function not available: {name}")
 
 

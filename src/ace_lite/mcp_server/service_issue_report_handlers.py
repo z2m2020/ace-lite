@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, TypedDict
+
+from typing_extensions import NotRequired
 
 from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.issue_report_store import IssueReportStore
@@ -208,11 +210,11 @@ def handle_issue_report_record_request(
         "repo": resolved_repo,
         "store_path": str(store.db_path),
         "report": report.to_payload(),
+        "workflow_hints": _build_issue_report_record_workflow_hints(
+            repo=resolved_repo,
+            issue_id=report.issue_id,
+        ),
     }
-    payload["workflow_hints"] = _build_issue_report_record_workflow_hints(
-        repo=resolved_repo,
-        issue_id=report.issue_id,
-    )
     return payload
 
 
@@ -321,12 +323,12 @@ def handle_issue_report_apply_fix_request(
         "dev_feedback_path": str(dev_store.db_path),
         "report": report.to_payload(),
         "fix": fix.to_payload(),
+        "workflow_hints": _build_issue_report_resolution_workflow_hints(
+            repo=report.repo,
+            issue_id=report.issue_id,
+            fix_id=fix.fix_id,
+        ),
     }
-    payload["workflow_hints"] = _build_issue_report_resolution_workflow_hints(
-        repo=report.repo,
-        issue_id=report.issue_id,
-        fix_id=fix.fix_id,
-    )
     return payload
 
 

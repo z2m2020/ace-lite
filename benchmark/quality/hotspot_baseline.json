@@ -1,19 +1,7 @@
 {
   "mode": "report_only",
-  "updated_at": "2026-03-18T00:00:00+00:00",
+  "updated_at": "2026-04-13T00:00:00+00:00",
   "hotspots": [
-    {
-      "path": "src/ace_lite/cli_app/runtime_command_support.py",
-      "coverage_percent": null,
-      "complexity_score": null,
-      "complexity_ceiling": null
-    },
-    {
-      "path": "src/ace_lite/pipeline/stages/index.py",
-      "coverage_percent": null,
-      "complexity_score": null,
-      "complexity_ceiling": null
-    },
     {
       "path": "src/ace_lite/orchestrator.py",
       "coverage_percent": null,
@@ -21,25 +9,37 @@
       "complexity_ceiling": null
     },
     {
-      "path": "src/ace_lite/cli_app/params_option_retrieval_groups.py",
+      "path": "src/ace_lite/orchestrator_contracts.py",
       "coverage_percent": null,
       "complexity_score": null,
       "complexity_ceiling": null
     },
     {
-      "path": "src/ace_lite/cli_app/orchestrator_factory_misc_payloads.py",
+      "path": "src/ace_lite/runtime_settings.py",
       "coverage_percent": null,
       "complexity_score": null,
       "complexity_ceiling": null
     },
     {
-      "path": "src/ace_lite/cli_app/orchestrator_factory_memory_payload.py",
+      "path": "src/ace_lite/plan_quick.py",
+      "coverage_percent": null,
+      "complexity_score": null,
+      "complexity_ceiling": null
+    },
+    {
+      "path": "src/ace_lite/plan_quick_strategies.py",
       "coverage_percent": null,
       "complexity_score": null,
       "complexity_ceiling": null
     },
     {
       "path": "src/ace_lite/benchmark/report.py",
+      "coverage_percent": null,
+      "complexity_score": null,
+      "complexity_ceiling": null
+    },
+    {
+      "path": "src/ace_lite/benchmark/report_observability.py",
       "coverage_percent": null,
       "complexity_score": null,
       "complexity_ceiling": null

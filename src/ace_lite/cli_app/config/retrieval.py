@@ -57,6 +57,10 @@ from ace_lite.scoring_config import (
 )
 
 
+def _coerce_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def resolve_retrieval_and_lsp_config(
     *,
     ctx: click.Context,
@@ -280,8 +284,8 @@ def resolve_retrieval_and_lsp_config(
         param_name="exact_search_enabled",
         current=exact_search_enabled,
         config=config,
-        paths=retrieval_paths("exact_search_enabled")
-        + [
+        paths=[
+            *retrieval_paths("exact_search_enabled"),
             (namespace, "exact_search"),
             ("exact_search",),
         ],
@@ -292,8 +296,8 @@ def resolve_retrieval_and_lsp_config(
         param_name="deterministic_refine_enabled",
         current=deterministic_refine_enabled,
         config=config,
-        paths=retrieval_paths("deterministic_refine_enabled")
-        + [
+        paths=[
+            *retrieval_paths("deterministic_refine_enabled"),
             (namespace, "deterministic_refine"),
             ("deterministic_refine",),
         ],
@@ -304,8 +308,8 @@ def resolve_retrieval_and_lsp_config(
         param_name="exact_search_time_budget_ms",
         current=exact_search_time_budget_ms,
         config=config,
-        paths=retrieval_paths("exact_search_time_budget_ms")
-        + [
+        paths=[
+            *retrieval_paths("exact_search_time_budget_ms"),
             (namespace, "exact_search_time_budget"),
             ("exact_search_time_budget",),
         ],
@@ -316,8 +320,8 @@ def resolve_retrieval_and_lsp_config(
         param_name="exact_search_max_paths",
         current=exact_search_max_paths,
         config=config,
-        paths=retrieval_paths("exact_search_max_paths")
-        + [
+        paths=[
+            *retrieval_paths("exact_search_max_paths"),
             (namespace, "exact_search_max_files"),
             ("exact_search_max_files",),
         ],
@@ -900,7 +904,7 @@ def resolve_retrieval_and_lsp_config(
     if default_xref_commands:
         lsp_xref_commands.update(default_xref_commands)
 
-    adaptive_router_payload = {
+    adaptive_router_payload: dict[str, Any] = {
         "enabled": bool(adaptive_router_enabled),
         "mode": _to_adaptive_router_mode(adaptive_router_mode),
         "model_path": str(adaptive_router_model_path).strip()
@@ -914,14 +918,15 @@ def resolve_retrieval_and_lsp_config(
         adaptive_router_online_bandit_enabled is not None
         or adaptive_router_online_bandit_experiment_enabled is not None
     ):
-        adaptive_router_payload["online_bandit"] = {
+        online_bandit_payload: dict[str, Any] = {
             "enabled": bool(adaptive_router_online_bandit_enabled)
         }
         if adaptive_router_online_bandit_experiment_enabled is not None:
-            adaptive_router_payload["online_bandit"]["experiment_enabled"] = bool(
+            online_bandit_payload["experiment_enabled"] = bool(
                 adaptive_router_online_bandit_experiment_enabled
             )
-    retrieval_payload = {
+        adaptive_router_payload["online_bandit"] = online_bandit_payload
+    retrieval_payload: dict[str, Any] = {
         "top_k_files": top_k_files,
         "min_candidate_score": min_candidate_score,
         "candidate_relative_threshold": candidate_relative_threshold,
@@ -961,12 +966,12 @@ def resolve_retrieval_and_lsp_config(
         "heur_depth_factor": max(0.0, float(heur_depth_factor)),
         "adaptive_router": dict(adaptive_router_payload),
     }
-    plugins_payload = {
+    plugins_payload: dict[str, Any] = {
         "enabled": bool(plugins_enabled),
         "remote_slot_policy_mode": _to_remote_slot_policy_mode(remote_slot_policy_mode),
         "remote_slot_allowlist": _to_slot_allowlist(remote_slot_allowlist),
     }
-    repomap_payload = {
+    repomap_payload: dict[str, Any] = {
         "enabled": bool(repomap_enabled),
         "top_k": max(1, int(repomap_top_k)),
         "neighbor_limit": max(0, int(repomap_neighbor_limit)),
@@ -974,7 +979,7 @@ def resolve_retrieval_and_lsp_config(
         "ranking_profile": str(repomap_ranking_profile).strip().lower(),
         "signal_weights": dict(repomap_signal_weights or {}),
     }
-    lsp_payload = {
+    lsp_payload: dict[str, Any] = {
         "enabled": bool(lsp_enabled),
         "top_n": max(0, int(lsp_top_n)),
         "commands": dict(lsp_commands),
@@ -983,7 +988,7 @@ def resolve_retrieval_and_lsp_config(
         "time_budget_ms": max(1, int(lsp_time_budget_ms)),
         "xref_commands": dict(lsp_xref_commands),
     }
-    embeddings_payload = {
+    embeddings_payload: dict[str, Any] = {
         "enabled": bool(embedding_enabled),
         "provider": str(embedding_provider).strip().lower() or "hash",
         "model": str(embedding_model).strip() or "hash-v1",
@@ -995,7 +1000,7 @@ def resolve_retrieval_and_lsp_config(
         "min_similarity": float(embedding_min_similarity),
         "fail_open": bool(embedding_fail_open),
     }
-    index_payload = {
+    index_payload: dict[str, Any] = {
         "languages": parse_language_csv(str(languages)),
         "cache_path": str(index_cache_path),
         "incremental": bool(index_incremental),
@@ -1053,14 +1058,14 @@ def resolve_retrieval_and_lsp_config(
         "repomap_neighbor_limit": repomap_payload["neighbor_limit"],
         "repomap_budget_tokens": repomap_payload["budget_tokens"],
         "repomap_ranking_profile": repomap_payload["ranking_profile"],
-        "repomap_signal_weights": dict(repomap_payload["signal_weights"]),
+        "repomap_signal_weights": _coerce_mapping(repomap_payload["signal_weights"]),
         "repomap": repomap_payload,
         "lsp_enabled": lsp_payload["enabled"],
         "lsp_top_n": lsp_payload["top_n"],
-        "lsp_commands": dict(lsp_payload["commands"]),
+        "lsp_commands": _coerce_mapping(lsp_payload["commands"]),
         "lsp_xref_enabled": lsp_payload["xref_enabled"],
         "lsp_xref_top_n": lsp_payload["xref_top_n"],
         "lsp_time_budget_ms": lsp_payload["time_budget_ms"],
-        "lsp_xref_commands": dict(lsp_payload["xref_commands"]),
+        "lsp_xref_commands": _coerce_mapping(lsp_payload["xref_commands"]),
         "lsp": lsp_payload,
     }

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any, cast
 
 from ace_lite.exceptions import StageContractError
 from ace_lite.orchestrator_runtime_support_types import (
@@ -154,11 +155,14 @@ def execute_finalize_source_plan_replay(
         return replay_cache_info
     if replay_result.replay_cache_path is None or replay_result.replay_cache_key is None:
         return replay_cache_info
-    return orchestrator._store_source_plan_replay(
-        query=query,
-        repo=repo,
-        replay_cache_path=replay_result.replay_cache_path,
-        replay_cache_key=replay_result.replay_cache_key,
-        source_plan_stage=source_plan_stage,
-        replay_cache_info=replay_cache_info,
+    return cast(
+        dict[str, Any],
+        orchestrator._store_source_plan_replay(
+            query=query,
+            repo=repo,
+            replay_cache_path=replay_result.replay_cache_path,
+            replay_cache_key=replay_result.replay_cache_key,
+            source_plan_stage=source_plan_stage,
+            replay_cache_info=replay_cache_info,
+        ),
     )

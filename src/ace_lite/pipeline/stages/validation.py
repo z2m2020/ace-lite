@@ -8,8 +8,8 @@ from typing import Any
 from ace_lite.agent_loop.contracts import build_agent_loop_branch_batch_v1
 from ace_lite.concurrency import LaneConfig, LanePool
 from ace_lite.lsp.broker import LspDiagnosticsBroker
-from ace_lite.preference_capture_store import DurablePreferenceCaptureStore
 from ace_lite.preference_capture_store import (
+    DurablePreferenceCaptureStore,
     record_branch_outcome_preference_capture,
 )
 from ace_lite.subprocess_utils import run_capture_output
@@ -26,6 +26,12 @@ from ace_lite.validation.sandbox import (
 )
 
 AVAILABLE_VALIDATION_PROBES = ("compile", "import", "tests")
+
+
+def _mapping_copy(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
 
 
 def _build_issue_entries(
@@ -184,18 +190,18 @@ def _decorate_validation_payload_with_branch_artifacts(
         branch_id = str(item.get("branch_id") or "").strip()
         if not branch_id:
             continue
-        patch_artifact = patch_artifacts_by_branch.get(branch_id, {})
+        patch_artifact = _mapping_copy(patch_artifacts_by_branch.get(branch_id))
         rejected_row = {
             "branch_id": branch_id,
             "rejected_reason": str(item.get("rejected_reason") or "").strip(),
-            "patch_artifact": dict(patch_artifact) if isinstance(patch_artifact, dict) else {},
+            "patch_artifact": patch_artifact,
         }
         rejected_artifact_refs[branch_id] = [
             f"validation.rejected_patch_artifacts[{len(rejected_patch_artifacts)}].patch_artifact"
         ]
         rejected_patch_artifacts.append(rejected_row)
-        if rejected_row["patch_artifact"]:
-            ordered_patch_artifacts.append(dict(rejected_row["patch_artifact"]))
+        if patch_artifact:
+            ordered_patch_artifacts.append(dict(patch_artifact))
 
     if ordered_patch_artifacts:
         payload["patch_artifacts"] = ordered_patch_artifacts
@@ -231,11 +237,7 @@ def _build_branch_outcome_preference_capture(
     *,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    branch_selection = (
-        dict(payload.get("branch_selection"))
-        if isinstance(payload.get("branch_selection"), dict)
-        else {}
-    )
+    branch_selection = _mapping_copy(payload.get("branch_selection"))
     if not branch_selection:
         return {}
     rejected = (
@@ -243,28 +245,16 @@ def _build_branch_outcome_preference_capture(
         if isinstance(branch_selection.get("rejected"), list)
         else []
     )
-    branch_batch = (
-        dict(payload.get("branch_batch"))
-        if isinstance(payload.get("branch_batch"), dict)
-        else {}
-    )
-    metadata = (
-        dict(branch_batch.get("metadata"))
-        if isinstance(branch_batch.get("metadata"), dict)
-        else {}
-    )
-    patch_artifact = (
-        dict(payload.get("patch_artifact"))
-        if isinstance(payload.get("patch_artifact"), dict)
-        else {}
-    )
+    branch_batch = _mapping_copy(payload.get("branch_batch"))
+    metadata = _mapping_copy(branch_batch.get("metadata"))
+    patch_artifact = _mapping_copy(payload.get("patch_artifact"))
     target_file_manifest = [
         str(path).strip().replace("\\", "/")
         for path in patch_artifact.get("target_file_manifest", [])
         if isinstance(path, str) and str(path).strip()
     ]
-    result = dict(payload.get("result")) if isinstance(payload.get("result"), dict) else {}
-    summary = dict(result.get("summary")) if isinstance(result.get("summary"), dict) else {}
+    result = _mapping_copy(payload.get("result"))
+    summary = _mapping_copy(result.get("summary"))
     rejected_patch_artifacts = (
         payload.get("rejected_patch_artifacts", [])
         if isinstance(payload.get("rejected_patch_artifacts"), list)
@@ -313,9 +303,7 @@ def _build_branch_outcome_preference_capture(
         "source": str(metadata.get("source") or "").strip(),
         "target_file_manifest": target_file_manifest,
         "winner_validation_branch_score": (
-            dict(branch_selection.get("winner_validation_branch_score"))
-            if isinstance(branch_selection.get("winner_validation_branch_score"), dict)
-            else {}
+            _mapping_copy(branch_selection.get("winner_validation_branch_score"))
         ),
         "rejected": rejected_rows,
     }
@@ -340,11 +328,7 @@ def _record_branch_outcome_preference_capture(
     user_id: str | None,
     profile_key: str | None,
 ) -> dict[str, Any]:
-    capture = (
-        dict(payload.get("branch_outcome_preference_capture"))
-        if isinstance(payload.get("branch_outcome_preference_capture"), dict)
-        else {}
-    )
+    capture = _mapping_copy(payload.get("branch_outcome_preference_capture"))
     if not capture:
         return payload
     if store is None:
@@ -772,7 +756,7 @@ def run_validation_stage(
             policy_version=policy_version,
         )
         single_branch_id = "candidate-1"
-        branch_candidates = [
+        serial_branch_candidates = [
             {
                 "branch_id": single_branch_id,
                 "validation_branch_score": score_validation_branch_result_v1(
@@ -784,11 +768,11 @@ def run_validation_stage(
             }
         ]
         branch_selection = select_best_validation_branch_candidate_v1(
-            candidates=branch_candidates
+            candidates=serial_branch_candidates
         )
         decorated = _decorate_validation_payload_with_branch_artifacts(
             payload=candidate_payload,
-            branch_candidates=branch_candidates,
+            branch_candidates=serial_branch_candidates,
             branch_selection=branch_selection,
             patch_artifacts_by_branch={single_branch_id: dict(selected_patch_artifacts[0])},
             metadata={
@@ -838,11 +822,11 @@ def run_validation_stage(
 
         baseline_result = dict(payload.get("result", {}))
         candidate_payloads: dict[str, dict[str, Any]] = {}
-        branch_candidates: list[dict[str, Any]] = []
+        parallel_branch_candidates: list[dict[str, Any]] = []
         for branch_id, (future, candidate_patch_artifact) in futures_by_branch.items():
             candidate_payload = future.result()
             candidate_payloads[branch_id] = candidate_payload
-            branch_candidates.append(
+            parallel_branch_candidates.append(
                 {
                     "branch_id": branch_id,
                     "validation_branch_score": score_validation_branch_result_v1(
@@ -857,13 +841,13 @@ def run_validation_stage(
         lane_pool.shutdown(wait=True, cancel_futures=False)
 
     branch_selection = select_best_validation_branch_candidate_v1(
-        candidates=branch_candidates
+        candidates=parallel_branch_candidates
     )
     winner_branch_id = str(branch_selection.get("winner_branch_id") or "").strip()
     winner_payload = candidate_payloads.get(winner_branch_id, payload)
     decorated = _decorate_validation_payload_with_branch_artifacts(
         payload=winner_payload,
-        branch_candidates=branch_candidates,
+        branch_candidates=parallel_branch_candidates,
         branch_selection=branch_selection,
         patch_artifacts_by_branch={
             branch_id: dict(candidate_patch_artifact)

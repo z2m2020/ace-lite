@@ -268,16 +268,22 @@ def validate_long_term_observation_contract_v1(
     try:
         normalized = build_long_term_observation_contract_v1(
             observation_id=payload.get("id"),
-            kind=payload.get("kind"),
-            repo=payload.get("repo"),
+            kind=_normalize_required_text(value=payload.get("kind"), context="kind"),
+            repo=_normalize_required_text(value=payload.get("repo"), context="repo"),
             root=str(payload.get("root") or ""),
             namespace=str(payload.get("namespace") or ""),
             user_id=str(payload.get("user_id") or ""),
             profile_key=str(payload.get("profile_key") or ""),
             query=str(payload.get("query") or ""),
-            payload=payload.get("payload"),
-            observed_at=payload.get("observed_at"),
-            as_of=payload.get("as_of"),
+            payload=_normalize_payload_mapping(
+                value=payload.get("payload"),
+                context="payload",
+            ),
+            observed_at=_normalize_timestamp(
+                value=payload.get("observed_at"),
+                context="observed_at",
+            ),
+            as_of=_normalize_timestamp(value=payload.get("as_of"), context="as_of"),
             source_run_id=str(payload.get("source_run_id") or ""),
             severity=str(payload.get("severity") or "info"),
             status=str(payload.get("status") or "observed"),
@@ -316,21 +322,33 @@ def validate_long_term_fact_contract_v1(
     try:
         normalized = build_long_term_fact_contract_v1(
             fact_id=payload.get("id"),
-            fact_type=payload.get("fact_type"),
-            subject=payload.get("subject"),
-            predicate=payload.get("predicate"),
-            object_value=payload.get("object"),
-            repo=payload.get("repo"),
+            fact_type=_normalize_required_text(
+                value=payload.get("fact_type"),
+                context="fact_type",
+            ),
+            subject=_normalize_required_text(value=payload.get("subject"), context="subject"),
+            predicate=_normalize_required_text(
+                value=payload.get("predicate"),
+                context="predicate",
+            ),
+            object_value=_normalize_required_text(
+                value=payload.get("object"),
+                context="object",
+            ),
+            repo=_normalize_required_text(value=payload.get("repo"), context="repo"),
             root=str(payload.get("root") or ""),
             namespace=str(payload.get("namespace") or ""),
             user_id=str(payload.get("user_id") or ""),
             profile_key=str(payload.get("profile_key") or ""),
-            as_of=payload.get("as_of"),
+            as_of=_normalize_timestamp(value=payload.get("as_of"), context="as_of"),
             confidence=payload.get("confidence", 1.0),
             valid_from=str(payload.get("valid_from") or ""),
             valid_to=str(payload.get("valid_to") or ""),
             superseded_by=str(payload.get("superseded_by") or ""),
-            derived_from_observation_id=payload.get("derived_from_observation_id"),
+            derived_from_observation_id=_normalize_required_text(
+                value=payload.get("derived_from_observation_id"),
+                context="derived_from_observation_id",
+            ),
             metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
         )
     except ValueError as exc:

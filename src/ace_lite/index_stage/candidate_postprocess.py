@@ -10,6 +10,10 @@ RankCandidatesFn = Callable[..., list[dict[str, Any]]]
 MergeCandidateListsFn = Callable[..., list[dict[str, Any]]]
 
 
+def _coerce_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 @dataclass(slots=True)
 class CandidatePostprocessResult:
     candidates: list[dict[str, Any]]
@@ -117,11 +121,7 @@ def _apply_retrieval_refinement(
         boosted_paths.append(path)
         item["agent_loop_focus"] = True
         item["agent_loop_focus_rank"] = int(focus_order.get(path, 0))
-        breakdown = (
-            dict(item.get("score_breakdown"))
-            if isinstance(item.get("score_breakdown"), dict)
-            else {}
-        )
+        breakdown = _coerce_mapping(item.get("score_breakdown"))
         breakdown["agent_loop_focus"] = float(
             round(max_score + 1.0 - (focus_order.get(path, 0) * 0.001), 6)
         )

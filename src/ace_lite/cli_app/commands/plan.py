@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from pathlib import Path
 
 import click
@@ -237,6 +238,7 @@ def plan_command(
 ) -> None:
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+    progress = bool(progress and sys.stderr.isatty())
 
     # Handle --quick mode
     if quick:
@@ -501,7 +503,7 @@ def plan_command(
     )
 
     if progress:
-        click.echo("Building source plan...")
+        click.echo("Building source plan...", err=True)
         echo_progress("Loading memory...")
 
     def _run_plan_payload():

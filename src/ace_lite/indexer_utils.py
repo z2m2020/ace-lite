@@ -17,12 +17,11 @@ from __future__ import annotations
 
 import fnmatch
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from fnmatch import translate
-from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from typing import Any
-
 
 # =============================================================================
 # Compiled Pattern Cache
@@ -150,12 +149,7 @@ def match_compiled_patterns(
                 )
 
         if matched:
-            if compiled.is_negated:
-                # Negated pattern: un-ignore this path
-                ignored = False
-            else:
-                # Normal pattern: ignore this path
-                ignored = True
+            ignored = not compiled.is_negated
 
     return ignored
 
@@ -170,7 +164,7 @@ class PathResolutionCache:
 
     def __init__(self):
         self._cache: dict[Path, Path] = {}
-        self._relative_cache: dict[tuple[Path, Path], PurePosixPath] = {}
+        self._relative_cache: dict[tuple[Path, Path], str] = {}
 
     def resolve(self, path: Path) -> Path:
         """Get resolved path with caching."""
@@ -182,7 +176,7 @@ class PathResolutionCache:
         self,
         path: Path,
         root: Path,
-    ) -> PurePosixPath | None:
+    ) -> str | None:
         """Get path relative to root with caching."""
         key = (path, root)
         if key not in self._relative_cache:
@@ -219,7 +213,7 @@ def sorted_paths(
     paths: list[Path],
     *,
     root: Path,
-    key_func: callable | None = None,
+    key_func: Callable[[Path], Any] | None = None,
 ) -> list[Path]:
     """Sort paths with optimized key extraction.
 
@@ -238,7 +232,8 @@ def sorted_paths(
         return []
 
     if key_func is None:
-        key_func = lambda p: extract_sort_key(p, root)
+        def key_func(path: Path) -> Any:
+            return extract_sort_key(path, root)
 
     return sorted(paths, key=key_func)
 
@@ -339,12 +334,12 @@ def normalize_aceignore_patterns(patterns: list[str]) -> list[str]:
 
 __all__ = [
     "CompiledPattern",
-    "compile_aceignore_patterns",
-    "match_compiled_patterns",
     "PathResolutionCache",
+    "compile_aceignore_patterns",
     "extract_sort_key",
-    "sorted_paths",
-    "should_process_file",
+    "match_compiled_patterns",
     "normalize_aceignore_pattern",
     "normalize_aceignore_patterns",
+    "should_process_file",
+    "sorted_paths",
 ]

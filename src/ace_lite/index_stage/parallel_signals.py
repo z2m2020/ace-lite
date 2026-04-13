@@ -167,8 +167,16 @@ def collect_parallel_signals(
                 if isinstance(docs_result_raw, dict)
                 else {"payload": docs_fallback, "elapsed_ms": 0.0, "error": "invalid"}
             )
-            docs_payload = docs_result.get("payload", docs_fallback)
-            docs_elapsed_ms = float(docs_result.get("elapsed_ms", 0.0) or 0.0)
+            docs_payload_value = docs_result.get("payload", docs_fallback)
+            docs_payload = (
+                docs_payload_value if isinstance(docs_payload_value, dict) else docs_fallback
+            )
+            docs_elapsed_value = docs_result.get("elapsed_ms", 0.0)
+            docs_elapsed_ms = (
+                float(docs_elapsed_value)
+                if isinstance(docs_elapsed_value, (int, float, str))
+                else 0.0
+            )
             parallel_payload["docs"]["timed_out"] = bool(docs_timed_out)
             parallel_payload["docs"]["error"] = str(
                 docs_error or docs_result.get("error", "") or ""
@@ -195,8 +203,18 @@ def collect_parallel_signals(
                 if isinstance(worktree_result_raw, dict)
                 else {"payload": worktree_fallback, "elapsed_ms": 0.0, "error": "invalid"}
             )
-            worktree_prior = worktree_result.get("payload", worktree_fallback)
-            worktree_elapsed_ms = float(worktree_result.get("elapsed_ms", 0.0) or 0.0)
+            worktree_payload_value = worktree_result.get("payload", worktree_fallback)
+            worktree_prior = (
+                worktree_payload_value
+                if isinstance(worktree_payload_value, dict)
+                else worktree_fallback
+            )
+            worktree_elapsed_value = worktree_result.get("elapsed_ms", 0.0)
+            worktree_elapsed_ms = (
+                float(worktree_elapsed_value)
+                if isinstance(worktree_elapsed_value, (int, float, str))
+                else 0.0
+            )
             parallel_payload["worktree"]["timed_out"] = bool(worktree_timed_out)
             parallel_payload["worktree"]["error"] = str(
                 worktree_error or worktree_result.get("error", "") or ""

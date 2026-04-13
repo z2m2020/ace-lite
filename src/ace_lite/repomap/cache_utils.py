@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from typing import Protocol
@@ -118,7 +118,7 @@ def selective_copy_payload(
         A new dict with selectively copied nested structures
     """
     if copy_nested:
-        return _deep_copy_impl(payload)
+        return cast(dict[str, Any], _deep_copy_impl(payload))
     return dict(payload)
 
 

@@ -259,7 +259,7 @@ class SelectionFeedbackStore:
 
     @property
     def path(self) -> Path:
-        return self._capture_store.db_path
+        return Path(self._capture_store.db_path)
 
     @property
     def configured_path(self) -> Path:
@@ -280,10 +280,15 @@ class SelectionFeedbackStore:
             signal_source=_FEEDBACK_SIGNAL_SOURCE,
             limit=max(1, self._max_entries) if self._max_entries > 0 else 10000,
         )
-        normalized = [self._capture_event_to_feedback_event(item.to_payload()) for item in durable_rows]
-        normalized = [item for item in normalized if item is not None]
+        normalized_candidates = [
+            self._capture_event_to_feedback_event(item.to_payload())
+            for item in durable_rows
+        ]
+        normalized: list[dict[str, Any]] = [
+            item for item in normalized_candidates if item is not None
+        ]
         if not normalized:
-            normalized = self._load_legacy_events()
+            normalized = list(self._load_legacy_events())
         normalized.sort(key=_event_sort_key)
         if self._max_entries > 0 and len(normalized) > self._max_entries:
             normalized = normalized[-self._max_entries :]
@@ -363,15 +368,36 @@ class SelectionFeedbackStore:
         long_term_capture: dict[str, Any] | None = None
         if self._long_term_capture_service is not None:
             try:
+                position_value = event.get("position")
+                event_position = (
+                    int(position_value)
+                    if isinstance(position_value, int)
+                    else None
+                )
+                event_captured_at = (
+                    str(event["captured_at"])
+                    if isinstance(event.get("captured_at"), str)
+                    else None
+                )
+                event_user_id = (
+                    str(event["user_id"])
+                    if isinstance(event.get("user_id"), str)
+                    else None
+                )
+                event_profile_key = (
+                    str(event["profile_key"])
+                    if isinstance(event.get("profile_key"), str)
+                    else None
+                )
                 long_term_capture = self._long_term_capture_service.capture_selection_feedback(
                     query=normalized_query,
                     repo=normalized_repo,
                     root=str(normalized_root_path or Path.cwd().resolve()),
                     selected_path=normalized_path,
-                    position=event["position"],
-                    captured_at=event["captured_at"],
-                    user_id=event["user_id"],
-                    profile_key=event["profile_key"],
+                    position=event_position,
+                    captured_at=event_captured_at,
+                    user_id=event_user_id,
+                    profile_key=event_profile_key,
                 )
             except Exception as exc:
                 long_term_capture = {
@@ -433,7 +459,7 @@ class SelectionFeedbackStore:
                 if str(event.get("profile_key") or "").strip()
                 == normalized_profile_key
             ]
-        payload = {
+        payload: dict[str, Any] = {
             "ok": True,
             "repo_filter": normalized_repo,
             "user_id_filter": normalized_user_id,
@@ -635,7 +661,8 @@ class SelectionFeedbackStore:
             now=now,
         )
 
-        payload = {
+        payload: dict[str, Any] = {}
+        payload.update({
             "ok": True,
             "repo_filter": normalized_repo,
             "user_id_filter": normalized_user_id,
@@ -656,7 +683,7 @@ class SelectionFeedbackStore:
             "suggested_capture_points": [],
             # ASF-8913: Decision-value metrics
             "decision_metrics": decision_metrics,
-        }
+        })
         bridge_events = [
             event
             for event in filtered

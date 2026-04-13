@@ -524,6 +524,7 @@ class ReqIdIntentStrategy(IntentStrategy):
 class IntentStrategyRegistry:
     """Registry for query intent detection strategies."""
 
+    _instance: ClassVar[IntentStrategyRegistry | None] = None
     _strategies: ClassVar[list[IntentStrategy]] = [
         OnboardingIntentStrategy(),
         DocSyncIntentStrategy(),
@@ -534,7 +535,7 @@ class IntentStrategyRegistry:
     @classmethod
     def get_instance(cls) -> IntentStrategyRegistry:
         """Get singleton instance."""
-        if not hasattr(cls, "_instance"):
+        if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 
@@ -759,6 +760,7 @@ class LatestDocBoostStrategy(BoostStrategy):
 class BoostStrategyRegistry:
     """Registry for boost/penalty calculation strategies."""
 
+    _instance: ClassVar[BoostStrategyRegistry | None] = None
     _strategies: ClassVar[list[BoostStrategy]] = [
         DocSyncBoostStrategy(),
         LatestDocBoostStrategy(),
@@ -767,7 +769,7 @@ class BoostStrategyRegistry:
     @classmethod
     def get_instance(cls) -> BoostStrategyRegistry:
         """Get singleton instance."""
-        if not hasattr(cls, "_instance"):
+        if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 

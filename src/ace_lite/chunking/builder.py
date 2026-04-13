@@ -128,13 +128,6 @@ def read_signature_line(*, root: str, path: str, lineno: int) -> str:
     except Exception:
         return ""
 
-
-def normalize_chunk_disclosure(value: str) -> str:
-    from ace_lite.chunking.disclosure_policy import normalize_chunk_disclosure as _normalize
-
-    return _normalize(value)
-
-
 def _read_file_lines(*, root: str, path: str) -> list[str]:
     try:
         source = (Path(root) / Path(path)).resolve()
@@ -920,10 +913,10 @@ def build_candidate_chunks(
         retrieval_context = str(item.get(RETRIEVAL_CONTEXT_SIDECAR_KEY) or "").strip()
         if retrieval_context:
             payload[RETRIEVAL_CONTEXT_SIDECAR_KEY] = retrieval_context
-        retrieval_context_sidecar = item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
-        if isinstance(retrieval_context_sidecar, dict) and retrieval_context_sidecar:
+        retrieval_context_sidecar_value = item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
+        if isinstance(retrieval_context_sidecar_value, dict) and retrieval_context_sidecar_value:
             payload[CONTEXTUAL_CHUNKING_SIDECAR_KEY] = dict(
-                retrieval_context_sidecar
+                retrieval_context_sidecar_value
             )
         if is_skeleton_disclosure(resolved_disclosure):
             payload["skeleton"] = build_chunk_skeleton(
@@ -1100,26 +1093,23 @@ def build_candidate_chunks(
         if isinstance(item, dict) and str(item.get("_retrieval_context") or "").strip()
     ]
     retrieval_context_chunk_count = len(retrieval_context_lengths)
-    contextual_sidecars = [
-        item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
-        for item in selected
-        if isinstance(item, dict)
-        and isinstance(item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY), dict)
-    ]
-    contextual_sidecar_parent_symbol_chunk_count = sum(
-        1
-        for sidecar in contextual_sidecars
-        if str(sidecar.get("parent_symbol") or "").strip()
-    )
-    contextual_sidecar_reference_hint_chunk_count = sum(
-        1
-        for sidecar in contextual_sidecars
-        if isinstance(sidecar.get("references"), list)
-        and any(
-            str(reference).strip()
-            for reference in sidecar.get("references", [])
-        )
-    )
+    contextual_sidecars: list[dict[str, Any]] = []
+    for item in selected:
+        if not isinstance(item, dict):
+            continue
+        sidecar_value = item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
+        if isinstance(sidecar_value, dict):
+            contextual_sidecars.append(dict(sidecar_value))
+    contextual_sidecar_parent_symbol_chunk_count = 0
+    contextual_sidecar_reference_hint_chunk_count = 0
+    for sidecar in contextual_sidecars:
+        if str(sidecar.get("parent_symbol") or "").strip():
+            contextual_sidecar_parent_symbol_chunk_count += 1
+        references_value = sidecar.get("references")
+        if isinstance(references_value, list) and any(
+            bool(str(reference).strip()) for reference in references_value
+        ):
+            contextual_sidecar_reference_hint_chunk_count += 1
     robust_signature_count = sum(
         1
         for item in selected
@@ -1149,11 +1139,8 @@ def build_candidate_chunks(
     for item in selected:
         if not isinstance(item, dict):
             continue
-        breakdown = (
-            item.get("score_breakdown")
-            if isinstance(item.get("score_breakdown"), dict)
-            else {}
-        )
+        breakdown_value = item.get("score_breakdown")
+        breakdown = dict(breakdown_value) if isinstance(breakdown_value, dict) else {}
         graph_prior = float(breakdown.get("graph_prior", 0.0) or 0.0)
         if graph_prior > 0.0:
             graph_prior_chunk_count += 1

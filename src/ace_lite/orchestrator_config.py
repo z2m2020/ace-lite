@@ -13,19 +13,38 @@ from typing import Any, cast
 from pydantic import Field, field_validator, model_validator
 
 from ace_lite.config_choices import MEMORY_NOTES_MODE_CHOICES
+from ace_lite.config_model_shared import (
+    AdaptiveRouterMode,
+    ChunkGuardMode,
+    MemoryAutoTagMode,
+    MemoryGateMode,
+    MemoryNotesMode,
+    MemoryTimezoneMode,
+    TopologicalShieldMode,
+    normalize_adaptive_router_mode,
+    normalize_candidate_ranker,
+    normalize_chunk_disclosure,
+    normalize_chunk_guard_mode,
+    normalize_memory_disclosure_mode,
+    normalize_memory_strategy,
+    normalize_memory_timezone_mode,
+    normalize_retrieval_policy,
+    normalize_topological_shield_mode,
+    validate_sbfl_metric,
+)
 from ace_lite.config_sections import (
-    ChunkCoreSectionSpec,
-    ChunkGuardSectionSpec,
-    ChunkTopologicalShieldSectionSpec,
-    DEFAULT_LONG_TERM_MEMORY_PATH,
-    DEFAULT_EMBEDDINGS_INDEX_PATH,
     DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDINGS_INDEX_PATH,
+    DEFAULT_LONG_TERM_MEMORY_PATH,
     DEFAULT_MEMORY_NOTES_PATH,
     DEFAULT_MEMORY_PROFILE_PATH,
     DEFAULT_PLAN_REPLAY_CACHE_PATH,
     DEFAULT_SCIP_INDEX_PATH,
     DEFAULT_TOKENIZER_MODEL,
     DEFAULT_TRACE_EXPORT_PATH,
+    ChunkCoreSectionSpec,
+    ChunkGuardSectionSpec,
+    ChunkTopologicalShieldSectionSpec,
     EmbeddingsSectionSpec,
     MemoryCaptureSectionSpec,
     MemoryCoreSectionSpec,
@@ -49,26 +68,6 @@ from ace_lite.config_sections import (
     normalize_non_negative_float,
     normalize_non_negative_int,
     normalize_positive_int,
-    normalize_string_default,
-)
-from ace_lite.config_model_shared import (
-    AdaptiveRouterMode,
-    ChunkGuardMode,
-    MemoryAutoTagMode,
-    MemoryGateMode,
-    MemoryNotesMode,
-    MemoryTimezoneMode,
-    TopologicalShieldMode,
-    normalize_adaptive_router_mode,
-    normalize_candidate_ranker,
-    normalize_chunk_guard_mode,
-    normalize_chunk_disclosure,
-    normalize_memory_disclosure_mode,
-    normalize_retrieval_policy,
-    normalize_memory_strategy,
-    normalize_memory_timezone_mode,
-    normalize_topological_shield_mode,
-    validate_sbfl_metric,
 )
 from ace_lite.pipeline.plugin_runtime import (
     normalize_remote_slot_allowlist,
@@ -76,25 +75,6 @@ from ace_lite.pipeline.plugin_runtime import (
 )
 from ace_lite.pydantic_utils import StrictModel as _StrictModel
 from ace_lite.rankers import normalize_fusion_mode
-from ace_lite.shared_plan_runtime_config import (
-    normalize_container_tag,
-    resolve_embedding_index_path,
-    resolve_embedding_model,
-    resolve_embedding_provider,
-    resolve_long_term_memory_path,
-    resolve_memory_auto_tag_mode,
-    resolve_memory_gate_mode,
-    resolve_memory_notes_mode,
-    resolve_optional_path,
-    resolve_plan_replay_cache_path,
-    resolve_ranking_profile,
-    resolve_scip_index_path,
-    resolve_scip_provider,
-    resolve_tokenizer_model,
-    resolve_trace_export_path,
-    resolve_trace_otlp_endpoint,
-    resolve_trace_otlp_timeout_seconds,
-)
 from ace_lite.scoring_config import (
     BM25_B,
     BM25_K1,
@@ -102,6 +82,11 @@ from ace_lite.scoring_config import (
     BM25_SCORE_SCALE,
     BM25_SHORTLIST_FACTOR,
     BM25_SHORTLIST_MIN,
+    CHUNK_DIVERSITY_KIND_PENALTY,
+    CHUNK_DIVERSITY_LOCALITY_PENALTY,
+    CHUNK_DIVERSITY_LOCALITY_WINDOW,
+    CHUNK_DIVERSITY_PATH_PENALTY,
+    CHUNK_DIVERSITY_SYMBOL_FAMILY_PENALTY,
     CHUNK_FILE_PRIOR_WEIGHT,
     CHUNK_MODULE_MATCH,
     CHUNK_PATH_MATCH,
@@ -110,11 +95,6 @@ from ace_lite.scoring_config import (
     CHUNK_SIGNATURE_MATCH,
     CHUNK_SYMBOL_EXACT,
     CHUNK_SYMBOL_PARTIAL,
-    CHUNK_DIVERSITY_KIND_PENALTY,
-    CHUNK_DIVERSITY_LOCALITY_PENALTY,
-    CHUNK_DIVERSITY_LOCALITY_WINDOW,
-    CHUNK_DIVERSITY_PATH_PENALTY,
-    CHUNK_DIVERSITY_SYMBOL_FAMILY_PENALTY,
     HEUR_CONTENT_CAP,
     HEUR_CONTENT_IMPORT_FACTOR,
     HEUR_CONTENT_SYMBOL_FACTOR,
@@ -139,11 +119,54 @@ from ace_lite.scoring_config import (
     HYBRID_SHORTLIST_MIN,
     SCIP_BASE_WEIGHT,
 )
+from ace_lite.shared_plan_runtime_config import (
+    normalize_container_tag,
+    resolve_embedding_index_path,
+    resolve_embedding_model,
+    resolve_embedding_provider,
+    resolve_long_term_memory_path,
+    resolve_memory_auto_tag_mode,
+    resolve_memory_gate_mode,
+    resolve_memory_notes_mode,
+    resolve_optional_path,
+    resolve_plan_replay_cache_path,
+    resolve_ranking_profile,
+    resolve_scip_index_path,
+    resolve_scip_provider,
+    resolve_tokenizer_model,
+    resolve_trace_export_path,
+    resolve_trace_otlp_endpoint,
+    resolve_trace_otlp_timeout_seconds,
+)
 from ace_lite.utils import to_float, to_lower_list
 
 
 def _normalize_positive_int(value: Any, default: int) -> int:
-    return normalize_positive_int(value, default=default, minimum=1)
+    return _as_int(normalize_positive_int(value, default=default, minimum=1))
+
+
+def _as_int(value: Any) -> int:
+    return cast(int, value)
+
+
+def _as_float(value: Any) -> float:
+    return cast(float, value)
+
+
+def _as_str(value: Any) -> str:
+    return cast(str, value)
+
+
+def _as_optional_str(value: Any) -> str | None:
+    return cast(str | None, value)
+
+
+def _as_path_value(value: Any) -> str | Path:
+    return cast(str | Path, value)
+
+
+def _as_optional_allowlist(value: Any) -> tuple[str, ...] | None:
+    return cast(tuple[str, ...] | None, value)
 
 
 class MemoryNamespaceConfig(MemoryNamespaceSectionSpec):
@@ -152,7 +175,7 @@ class MemoryNamespaceConfig(MemoryNamespaceSectionSpec):
     @field_validator("container_tag", mode="before")
     @classmethod
     def _normalize_container_tag(cls, value: Any) -> str | None:
-        return normalize_container_tag(value)
+        return _as_optional_str(normalize_container_tag(value))
 
     @field_validator("auto_tag_mode", mode="before")
     @classmethod
@@ -184,27 +207,27 @@ class MemoryPostprocessConfig(MemoryPostprocessSectionSpec):
     @field_validator("length_norm_anchor_chars", mode="before")
     @classmethod
     def _normalize_anchor(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=500, minimum=1)
+        return _as_int(normalize_positive_int(value, default=500, minimum=1))
 
     @field_validator("time_decay_half_life_days", mode="before")
     @classmethod
     def _normalize_half_life(cls, value: Any) -> float:
-        return normalize_non_negative_float(value, default=0.0)
+        return _as_float(normalize_non_negative_float(value, default=0.0))
 
     @field_validator("hard_min_score", mode="before")
     @classmethod
     def _normalize_hard_min(cls, value: Any) -> float:
-        return normalize_non_negative_float(value, default=0.0)
+        return _as_float(normalize_non_negative_float(value, default=0.0))
 
     @field_validator("diversity_similarity_threshold", mode="before")
     @classmethod
     def _normalize_div_thr(cls, value: Any) -> float:
-        return normalize_clamped_float(value, default=0.9)
+        return _as_float(normalize_clamped_float(value, default=0.9))
 
 
 class MemoryProfileConfig(MemoryProfileSectionSpec):
     enabled: bool = False
-    path: str | Path = DEFAULT_MEMORY_PROFILE_PATH
+    path: str = DEFAULT_MEMORY_PROFILE_PATH
     top_n: int = 4
     token_budget: int = 160
     expiry_enabled: bool = True
@@ -213,33 +236,33 @@ class MemoryProfileConfig(MemoryProfileSectionSpec):
 
     @field_validator("path", mode="before")
     @classmethod
-    def _normalize_path(cls, value: Any) -> str | Path:
-        return normalize_default_path(value, default=DEFAULT_MEMORY_PROFILE_PATH)
+    def _normalize_path(cls, value: Any) -> str:
+        return _as_str(normalize_default_path(value, default=DEFAULT_MEMORY_PROFILE_PATH))
 
     @field_validator("top_n", mode="before")
     @classmethod
     def _normalize_top_n(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=4, minimum=1)
+        return _as_int(normalize_positive_int(value, default=4, minimum=1))
 
     @field_validator("token_budget", mode="before")
     @classmethod
     def _normalize_token_budget(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=160, minimum=1)
+        return _as_int(normalize_positive_int(value, default=160, minimum=1))
 
     @field_validator("ttl_days", mode="before")
     @classmethod
     def _normalize_ttl_days(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=90, minimum=1)
+        return _as_int(normalize_positive_int(value, default=90, minimum=1))
 
     @field_validator("max_age_days", mode="before")
     @classmethod
     def _normalize_max_age_days(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=365, minimum=1)
+        return _as_int(normalize_positive_int(value, default=365, minimum=1))
 
 
 class MemoryFeedbackConfig(MemoryFeedbackSectionSpec):
     enabled: bool = False
-    path: str | Path = DEFAULT_MEMORY_PROFILE_PATH
+    path: str = DEFAULT_MEMORY_PROFILE_PATH
     max_entries: int = 512
     boost_per_select: float = 0.15
     max_boost: float = 0.6
@@ -247,33 +270,33 @@ class MemoryFeedbackConfig(MemoryFeedbackSectionSpec):
 
     @field_validator("path", mode="before")
     @classmethod
-    def _normalize_path(cls, value: Any) -> str | Path:
-        return normalize_default_path(value, default=DEFAULT_MEMORY_PROFILE_PATH)
+    def _normalize_path(cls, value: Any) -> str:
+        return _as_str(normalize_default_path(value, default=DEFAULT_MEMORY_PROFILE_PATH))
 
     @field_validator("max_entries", mode="before")
     @classmethod
     def _normalize_max_entries(cls, value: Any) -> int:
-        return normalize_non_negative_int(value, default=512)
+        return _as_int(normalize_non_negative_int(value, default=512))
 
     @field_validator("boost_per_select", mode="before")
     @classmethod
     def _normalize_boost_per_select(cls, value: Any) -> float:
-        return normalize_non_negative_float(value, default=0.15)
+        return _as_float(normalize_non_negative_float(value, default=0.15))
 
     @field_validator("max_boost", mode="before")
     @classmethod
     def _normalize_max_boost(cls, value: Any) -> float:
-        return normalize_non_negative_float(value, default=0.6)
+        return _as_float(normalize_non_negative_float(value, default=0.6))
 
     @field_validator("decay_days", mode="before")
     @classmethod
     def _normalize_decay_days(cls, value: Any) -> float:
-        return normalize_non_negative_float(value, default=60.0)
+        return _as_float(normalize_non_negative_float(value, default=60.0))
 
 
 class MemoryLongTermConfig(MemoryLongTermSectionSpec):
     enabled: bool = False
-    path: str | Path = DEFAULT_LONG_TERM_MEMORY_PATH
+    path: str = DEFAULT_LONG_TERM_MEMORY_PATH
     top_n: int = 4
     token_budget: int = 192
     write_enabled: bool = False
@@ -281,18 +304,18 @@ class MemoryLongTermConfig(MemoryLongTermSectionSpec):
 
     @field_validator("path", mode="before")
     @classmethod
-    def _normalize_path(cls, value: Any) -> str | Path:
-        return resolve_long_term_memory_path(value)
+    def _normalize_path(cls, value: Any) -> str:
+        return _as_str(resolve_long_term_memory_path(value))
 
     @field_validator("top_n", mode="before")
     @classmethod
     def _normalize_top_n(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=4, minimum=1)
+        return _as_int(normalize_positive_int(value, default=4, minimum=1))
 
     @field_validator("token_budget", mode="before")
     @classmethod
     def _normalize_token_budget(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=192, minimum=1)
+        return _as_int(normalize_positive_int(value, default=192, minimum=1))
 
 
 class MemoryTemporalConfig(MemoryTemporalSectionSpec):
@@ -304,29 +327,29 @@ class MemoryTemporalConfig(MemoryTemporalSectionSpec):
     @field_validator("recency_boost_max", mode="before")
     @classmethod
     def _normalize_recency_boost_max(cls, value: Any) -> float:
-        return normalize_clamped_float(value, default=0.15)
+        return _as_float(normalize_clamped_float(value, default=0.15))
 
     @field_validator("timezone_mode", mode="before")
     @classmethod
     def _normalize_timezone_mode(cls, value: Any) -> str:
-        return normalize_memory_timezone_mode(value, default="utc")
+        return _as_str(normalize_memory_timezone_mode(value, default="utc"))
 
 
 class MemoryCaptureConfig(MemoryCaptureSectionSpec):
     enabled: bool = False
-    notes_path: str | Path = DEFAULT_MEMORY_NOTES_PATH
+    notes_path: str = DEFAULT_MEMORY_NOTES_PATH
     min_query_length: int = 24
     keywords: list[str] | tuple[str, ...] | None = None
 
     @field_validator("notes_path", mode="before")
     @classmethod
-    def _normalize_notes_path(cls, value: Any) -> str | Path:
-        return normalize_default_path(value, default=DEFAULT_MEMORY_NOTES_PATH)
+    def _normalize_notes_path(cls, value: Any) -> str:
+        return _as_str(normalize_default_path(value, default=DEFAULT_MEMORY_NOTES_PATH))
 
     @field_validator("min_query_length", mode="before")
     @classmethod
     def _normalize_min_query_length(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=24, minimum=1)
+        return _as_int(normalize_positive_int(value, default=24, minimum=1))
 
     @field_validator("keywords", mode="before")
     @classmethod
@@ -343,7 +366,7 @@ class MemoryCaptureConfig(MemoryCaptureSectionSpec):
 
 class MemoryNotesConfig(MemoryNotesSectionSpec):
     enabled: bool = False
-    path: str | Path = DEFAULT_MEMORY_NOTES_PATH
+    path: str = DEFAULT_MEMORY_NOTES_PATH
     limit: int = 8
     mode: MemoryNotesMode = "supplement"
     expiry_enabled: bool = True
@@ -352,13 +375,13 @@ class MemoryNotesConfig(MemoryNotesSectionSpec):
 
     @field_validator("path", mode="before")
     @classmethod
-    def _normalize_path(cls, value: Any) -> str | Path:
-        return normalize_default_path(value, default=DEFAULT_MEMORY_NOTES_PATH)
+    def _normalize_path(cls, value: Any) -> str:
+        return _as_str(normalize_default_path(value, default=DEFAULT_MEMORY_NOTES_PATH))
 
     @field_validator("limit", mode="before")
     @classmethod
     def _normalize_limit(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=8, minimum=1)
+        return _as_int(normalize_positive_int(value, default=8, minimum=1))
 
     @field_validator("mode", mode="before")
     @classmethod
@@ -368,12 +391,12 @@ class MemoryNotesConfig(MemoryNotesSectionSpec):
     @field_validator("ttl_days", mode="before")
     @classmethod
     def _normalize_ttl_days(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=90, minimum=1)
+        return _as_int(normalize_positive_int(value, default=90, minimum=1))
 
     @field_validator("max_age_days", mode="before")
     @classmethod
     def _normalize_max_age_days(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=365, minimum=1)
+        return _as_int(normalize_positive_int(value, default=365, minimum=1))
 
 
 class MemoryConfig(MemoryCoreSectionSpec):
@@ -394,7 +417,7 @@ class MemoryConfig(MemoryCoreSectionSpec):
     @field_validator("disclosure_mode", mode="before")
     @classmethod
     def _normalize_disclosure_mode(cls, value: Any) -> str:
-        return normalize_memory_disclosure_mode(value, default="compact")
+        return _as_str(normalize_memory_disclosure_mode(value, default="compact"))
 
     @field_validator("preview_max_chars", mode="before")
     @classmethod
@@ -407,7 +430,7 @@ class MemoryConfig(MemoryCoreSectionSpec):
     @field_validator("strategy", mode="before")
     @classmethod
     def _normalize_strategy(cls, value: Any) -> str:
-        return normalize_memory_strategy(value, default="hybrid")
+        return _as_str(normalize_memory_strategy(value, default="hybrid"))
 
 
 class SkillsConfig(_StrictModel):
@@ -485,7 +508,7 @@ class RetrievalConfig(_StrictModel):
     @field_validator("top_k_files", mode="before")
     @classmethod
     def _normalize_top_k_files(cls, value: Any) -> int:
-        return _normalize_positive_int(value, 8)
+        return _as_int(_normalize_positive_int(value, 8))
 
     @field_validator("min_candidate_score", mode="before")
     @classmethod
@@ -507,12 +530,12 @@ class RetrievalConfig(_StrictModel):
     @field_validator("candidate_ranker", mode="before")
     @classmethod
     def _normalize_candidate_ranker(cls, value: Any) -> str:
-        return normalize_candidate_ranker(value, default="heuristic")
+        return _as_str(normalize_candidate_ranker(value, default="heuristic"))
 
     @field_validator("hybrid_re2_fusion_mode", mode="before")
     @classmethod
     def _normalize_hybrid_re2_fusion_mode(cls, value: Any) -> str:
-        return normalize_fusion_mode(str(value or "linear"))
+        return _as_str(normalize_fusion_mode(str(value or "linear")))
 
     @field_validator("hybrid_re2_rrf_k", mode="before")
     @classmethod
@@ -566,12 +589,12 @@ class RetrievalConfig(_StrictModel):
     @field_validator("exact_search_time_budget_ms", "exact_search_max_paths", mode="before")
     @classmethod
     def _normalize_exact_search_int(cls, value: Any) -> int:
-        return _normalize_positive_int(value, 0)
+        return _as_int(_normalize_positive_int(value, 0))
 
     @field_validator("multi_channel_rrf_k", mode="before")
     @classmethod
     def _normalize_multi_channel_rrf_k(cls, value: Any) -> int:
-        return _normalize_positive_int(value, HYBRID_RRF_K_DEFAULT)
+        return _as_int(_normalize_positive_int(value, HYBRID_RRF_K_DEFAULT))
 
     @field_validator(
         "multi_channel_rrf_pool_cap",
@@ -590,7 +613,7 @@ class RetrievalConfig(_StrictModel):
     @field_validator("retrieval_policy", mode="before")
     @classmethod
     def _normalize_retrieval_policy(cls, value: Any) -> str:
-        return normalize_retrieval_policy(value, default="auto")
+        return _as_str(normalize_retrieval_policy(value, default="auto"))
 
     @field_validator("policy_version", mode="before")
     @classmethod
@@ -737,15 +760,17 @@ class PluginsConfig(PluginsSectionSpec):
             return None
         if isinstance(value, str):
             parts = [item.strip() for item in value.split(",") if item.strip()]
-            return normalize_remote_slot_allowlist(parts)
+            return _as_optional_allowlist(normalize_remote_slot_allowlist(parts))
         if isinstance(value, (list, tuple, set)):
-            return normalize_remote_slot_allowlist([str(item) for item in value])
+            return _as_optional_allowlist(
+                normalize_remote_slot_allowlist([str(item) for item in value])
+            )
         return None
 
     @field_validator("remote_slot_policy_mode", mode="before")
     @classmethod
     def _normalize_remote_slot_policy_mode(cls, value: Any) -> str:
-        return normalize_remote_slot_policy_mode(str(value or "strict"))
+        return _as_str(normalize_remote_slot_policy_mode(str(value or "strict")))
 
 
 class ChunkingConfig(ChunkCoreSectionSpec):
@@ -917,7 +942,7 @@ class ChunkingConfig(ChunkCoreSectionSpec):
     @field_validator("disclosure", mode="before")
     @classmethod
     def _normalize_disclosure(cls, value: Any) -> str:
-        return normalize_chunk_disclosure(value, default="refs")
+        return _as_str(normalize_chunk_disclosure(value, default="refs"))
 
     @model_validator(mode="after")
     def _apply_signature_compatibility(self) -> ChunkingConfig:
@@ -932,7 +957,7 @@ class TokenizerConfig(TokenizerSectionSpec):
     @field_validator("model", mode="before")
     @classmethod
     def _normalize_model(cls, value: Any) -> str:
-        return resolve_tokenizer_model(value, default=DEFAULT_TOKENIZER_MODEL)
+        return _as_str(resolve_tokenizer_model(value, default=DEFAULT_TOKENIZER_MODEL))
 
 
 class CochangeConfig(_StrictModel):
@@ -974,7 +999,7 @@ class TestSignalsConfig(TestSignalsSectionSpec):
     @field_validator("junit_xml", "coverage_json", "sbfl_json", mode="before")
     @classmethod
     def _normalize_optional_path(cls, value: Any) -> str | None:
-        return resolve_optional_path(value)
+        return _as_optional_str(resolve_optional_path(value))
 
     @field_validator("sbfl_metric", mode="before")
     @classmethod
@@ -988,7 +1013,7 @@ class TestSignalsConfig(TestSignalsSectionSpec):
 
 class ScipConfig(ScipSectionSpec):
     enabled: bool = False
-    index_path: str | Path = DEFAULT_SCIP_INDEX_PATH
+    index_path: str = DEFAULT_SCIP_INDEX_PATH
     provider: str = "auto"
     generate_fallback: bool = True
     base_weight: float = SCIP_BASE_WEIGHT
@@ -996,7 +1021,7 @@ class ScipConfig(ScipSectionSpec):
     @field_validator("index_path", mode="before")
     @classmethod
     def _normalize_index_path(cls, value: Any) -> str:
-        return resolve_scip_index_path(value, default=DEFAULT_SCIP_INDEX_PATH)
+        return _as_str(resolve_scip_index_path(value, default=DEFAULT_SCIP_INDEX_PATH))
 
     @field_validator("provider", mode="before")
     @classmethod
@@ -1014,7 +1039,7 @@ class ScipConfig(ScipSectionSpec):
         try:
             return max(0.0, float(value))
         except Exception:
-            return SCIP_BASE_WEIGHT
+            return _as_float(SCIP_BASE_WEIGHT)
 
 
 class EmbeddingsConfig(EmbeddingsSectionSpec):
@@ -1022,7 +1047,7 @@ class EmbeddingsConfig(EmbeddingsSectionSpec):
     provider: str = "hash"
     model: str = DEFAULT_EMBEDDING_MODEL
     dimension: int = 256
-    index_path: str | Path = DEFAULT_EMBEDDINGS_INDEX_PATH
+    index_path: str = DEFAULT_EMBEDDINGS_INDEX_PATH
     rerank_pool: int = 24
     lexical_weight: float = 0.7
     semantic_weight: float = 0.3
@@ -1037,30 +1062,32 @@ class EmbeddingsConfig(EmbeddingsSectionSpec):
     @field_validator("model", mode="before")
     @classmethod
     def _normalize_model(cls, value: Any) -> str:
-        return resolve_embedding_model(value, default=DEFAULT_EMBEDDING_MODEL)
+        return _as_str(resolve_embedding_model(value, default=DEFAULT_EMBEDDING_MODEL))
 
     @field_validator("index_path", mode="before")
     @classmethod
     def _normalize_index_path(cls, value: Any) -> str:
-        return resolve_embedding_index_path(
-            value,
-            default=DEFAULT_EMBEDDINGS_INDEX_PATH,
+        return _as_str(
+            resolve_embedding_index_path(
+                value,
+                default=DEFAULT_EMBEDDINGS_INDEX_PATH,
+            )
         )
 
     @field_validator("dimension", mode="before")
     @classmethod
     def _normalize_dimension(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=256, minimum=8)
+        return _as_int(normalize_positive_int(value, default=256, minimum=8))
 
     @field_validator("rerank_pool", mode="before")
     @classmethod
     def _normalize_rerank_pool(cls, value: Any) -> int:
-        return normalize_positive_int(value, default=24, minimum=1)
+        return _as_int(normalize_positive_int(value, default=24, minimum=1))
 
     @field_validator("lexical_weight", "semantic_weight", mode="before")
     @classmethod
     def _normalize_weight(cls, value: Any) -> float:
-        return normalize_non_negative_float(value, default=0.0)
+        return _as_float(normalize_non_negative_float(value, default=0.0))
 
     @field_validator("min_similarity", mode="before")
     @classmethod
@@ -1073,7 +1100,7 @@ class EmbeddingsConfig(EmbeddingsSectionSpec):
 
 class TraceConfig(TraceSectionSpec):
     export_enabled: bool = False
-    export_path: str | Path = DEFAULT_TRACE_EXPORT_PATH
+    export_path: str = DEFAULT_TRACE_EXPORT_PATH
     otlp_enabled: bool = False
     otlp_endpoint: str = ""
     otlp_timeout_seconds: float = 1.5
@@ -1081,33 +1108,37 @@ class TraceConfig(TraceSectionSpec):
     @field_validator("otlp_endpoint", mode="before")
     @classmethod
     def _normalize_otlp_endpoint(cls, value: Any) -> str:
-        return resolve_trace_otlp_endpoint(value)
+        return _as_str(resolve_trace_otlp_endpoint(value))
 
     @field_validator("export_path", mode="before")
     @classmethod
     def _normalize_export_path(cls, value: Any) -> str:
-        return resolve_trace_export_path(value, default=DEFAULT_TRACE_EXPORT_PATH)
+        return _as_str(resolve_trace_export_path(value, default=DEFAULT_TRACE_EXPORT_PATH))
 
     @field_validator("otlp_timeout_seconds", mode="before")
     @classmethod
     def _normalize_otlp_timeout_seconds(cls, value: Any) -> float:
-        return resolve_trace_otlp_timeout_seconds(
-            value,
-            default=1.5,
-            minimum=0.1,
+        return _as_float(
+            resolve_trace_otlp_timeout_seconds(
+                value,
+                default=1.5,
+                minimum=0.1,
+            )
         )
 
 
 class PlanReplayCacheConfig(PlanReplayCacheSectionSpec):
     enabled: bool = False
-    cache_path: str | Path = DEFAULT_PLAN_REPLAY_CACHE_PATH
+    cache_path: str = DEFAULT_PLAN_REPLAY_CACHE_PATH
 
     @field_validator("cache_path", mode="before")
     @classmethod
-    def _normalize_cache_path(cls, value: Any) -> str | Path:
-        return resolve_plan_replay_cache_path(
-            value,
-            default=DEFAULT_PLAN_REPLAY_CACHE_PATH,
+    def _normalize_cache_path(cls, value: Any) -> str:
+        return _as_str(
+            resolve_plan_replay_cache_path(
+                value,
+                default=DEFAULT_PLAN_REPLAY_CACHE_PATH,
+            )
         )
 
 

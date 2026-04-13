@@ -15,7 +15,10 @@ Key improvements:
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypedDict
+from typing import Any, TypedDict, TypeVar, cast
+
+T = TypeVar("T")
+
 
 # =============================================================================
 # Core Payload TypedDicts
@@ -131,7 +134,7 @@ class OrchestratorStateProjection(TypedDict):
 # =============================================================================
 
 
-def get_optional(data: dict[str, Any], key: str, default: Any = None) -> Any:
+def get_optional(data: Mapping[str, Any], key: str, default: T | None = None) -> Any:
     """Get an optional value from a dict with a default.
 
     This is a safe accessor that won't raise KeyError.
@@ -158,7 +161,12 @@ def get_required(data: dict[str, Any], key: str, context: str = "") -> Any:
     return data[key]
 
 
-def get_typed(data: dict[str, Any], key: str, expected_type: type, default: Any) -> Any:
+def get_typed(
+    data: Mapping[str, Any],
+    key: str,
+    expected_type: type[Any] | tuple[type[Any], ...],
+    default: T,
+) -> T:
     """Get a value with type checking.
 
     Args:
@@ -172,7 +180,7 @@ def get_typed(data: dict[str, Any], key: str, expected_type: type, default: Any)
     """
     value = data.get(key, default)
     if isinstance(value, expected_type):
-        return value
+        return cast(T, value)
     return default
 
 
@@ -217,18 +225,52 @@ def get_bool(data: dict[str, Any], key: str, default: bool = False) -> bool:
     return default
 
 
-def get_list(data: dict[str, Any], key: str, default: list | None = None) -> list:
+def get_optional_str(
+    data: Mapping[str, Any],
+    key: str,
+    default: str | None = None,
+) -> str | None:
+    """Get an optional string value."""
+    value = data.get(key, default)
+    if isinstance(value, str):
+        return value
+    return default
+
+
+def get_optional_dict(
+    data: Mapping[str, Any],
+    key: str,
+) -> dict[str, Any] | None:
+    """Get an optional mapping value."""
+    value = data.get(key)
+    if isinstance(value, Mapping):
+        return {str(child_key): child_value for child_key, child_value in value.items()}
+    return None
+
+
+def get_list(
+    data: Mapping[str, Any],
+    key: str,
+    default: list[Any] | None = None,
+) -> list[Any]:
     """Get a list value with default."""
     if default is None:
         default = []
     return get_typed(data, key, list, default)
 
 
-def get_dict(data: dict[str, Any], key: str, default: dict | None = None) -> dict:
+def get_dict(
+    data: Mapping[str, Any],
+    key: str,
+    default: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Get a dict value with default."""
     if default is None:
         default = {}
-    return get_typed(data, key, dict, default)
+    value = data.get(key, default)
+    if isinstance(value, Mapping):
+        return {str(child_key): child_value for child_key, child_value in value.items()}
+    return default
 
 
 def coerce_mapping(data: Any) -> dict[str, Any]:
@@ -462,17 +504,17 @@ class PlanRequestAdapter:
     @property
     def time_range(self) -> str | None:
         """Get the requested time range."""
-        return get_optional(self._payload, "time_range")
+        return get_optional_str(self._payload, "time_range")
 
     @property
     def start_date(self) -> str | None:
         """Get the requested start date."""
-        return get_optional(self._payload, "start_date")
+        return get_optional_str(self._payload, "start_date")
 
     @property
     def end_date(self) -> str | None:
         """Get the requested end date."""
-        return get_optional(self._payload, "end_date")
+        return get_optional_str(self._payload, "end_date")
 
     @property
     def top_k(self) -> int:
@@ -487,17 +529,17 @@ class PlanRequestAdapter:
     @property
     def language(self) -> str | None:
         """Get the language filter."""
-        return get_optional(self._payload, "language")
+        return get_optional_str(self._payload, "language")
 
     @property
     def skip_stages(self) -> list[str]:
         """Get the stages to skip."""
-        return get_list(self._payload, "skip_stages")
+        return cast(list[str], get_list(self._payload, "skip_stages"))
 
     @property
     def force_stages(self) -> list[str]:
         """Get the stages to force."""
-        return get_list(self._payload, "force_stages")
+        return cast(list[str], get_list(self._payload, "force_stages"))
 
     @property
     def ranking_profile(self) -> str:
@@ -554,12 +596,12 @@ class PlanResponseAdapter:
     @property
     def stage_metrics(self) -> list[dict[str, Any]]:
         """Get the stage metrics."""
-        return get_list(self._payload, "stage_metrics")
+        return cast(list[dict[str, Any]], get_list(self._payload, "stage_metrics"))
 
     @property
     def candidates(self) -> list[dict[str, Any]]:
         """Get the candidates."""
-        return get_list(self._payload, "candidates")
+        return cast(list[dict[str, Any]], get_list(self._payload, "candidates"))
 
     @property
     def validation(self) -> dict[str, Any]:
@@ -626,19 +668,24 @@ class StageStateAdapter:
         """Get the elapsed time in seconds."""
         started = self._payload.get("started_at")
         completed = self._payload.get("completed_at")
-        if started and completed:
-            return completed - started
+        if (
+            isinstance(started, (int, float))
+            and not isinstance(started, bool)
+            and isinstance(completed, (int, float))
+            and not isinstance(completed, bool)
+        ):
+            return float(completed) - float(started)
         return None
 
     @property
     def result(self) -> dict[str, Any] | None:
         """Get the stage result."""
-        return get_optional(self._payload, "result")
+        return get_optional_dict(self._payload, "result")
 
     @property
     def error(self) -> str | None:
         """Get the error message."""
-        return get_optional(self._payload, "error")
+        return get_optional_str(self._payload, "error")
 
 
 # =============================================================================
@@ -668,6 +715,8 @@ __all__ = [
     "get_int",
     "get_list",
     "get_optional",
+    "get_optional_dict",
+    "get_optional_str",
     "get_required",
     "get_str",
     "get_typed",

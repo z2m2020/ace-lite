@@ -132,7 +132,7 @@ class OrjsonCodec(JSONCodec):
         """
         if self._orjson is None:
             raise RuntimeError("orjson is not available")
-        return self._orjson.dumps(obj)
+        return bytes(self._orjson.dumps(obj))
 
     def loads(self, s: str | bytes) -> Any:
         """Deserialize using orjson.loads."""

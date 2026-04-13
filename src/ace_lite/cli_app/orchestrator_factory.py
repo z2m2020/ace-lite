@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import click
 
@@ -234,9 +234,10 @@ def create_memory_provider(
         container_tag=None,
         channel_name="long_term",
     )
-    long_term_provider.token_budget = max(1, int(memory_long_term_token_budget))
-    long_term_provider.write_enabled = bool(memory_long_term_write_enabled)
-    long_term_provider.as_of_enabled = bool(memory_long_term_as_of_enabled)
+    configured_long_term_provider = cast(Any, long_term_provider)
+    configured_long_term_provider.token_budget = max(1, int(memory_long_term_token_budget))
+    configured_long_term_provider.write_enabled = bool(memory_long_term_write_enabled)
+    configured_long_term_provider.as_of_enabled = bool(memory_long_term_as_of_enabled)
 
     if _is_null_provider(provider_with_notes):
         return long_term_provider
@@ -1045,13 +1046,16 @@ def run_plan(
     )
 
     orchestrator = create_orchestrator(**orchestrator_kwargs)
-    return orchestrator.plan(
-        query=query,
-        repo=repo,
-        root=root,
-        time_range=time_range,
-        start_date=start_date,
-        end_date=end_date,
+    return cast(
+        dict[str, Any],
+        orchestrator.plan(
+            query=query,
+            repo=repo,
+            root=root,
+            time_range=time_range,
+            start_date=start_date,
+            end_date=end_date,
+        ),
     )
 
 

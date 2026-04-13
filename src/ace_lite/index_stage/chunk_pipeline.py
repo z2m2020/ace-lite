@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.embeddings import CrossEncoderProvider, EmbeddingProvider
 from ace_lite.index_stage.chunk_selection import ChunkSelectionResult
@@ -98,77 +98,80 @@ def select_index_chunks(
 ) -> ChunkSelectionResult:
     """Run chunk selection using a narrowed runtime config contract."""
 
-    return _call_with_supported_kwargs(
-        deps.apply_chunk_selection,
-        root=root,
-        query=query,
-        files_map=files_map,
-        candidates=candidates,
-        terms=terms,
-        top_k_files=int(runtime_config.top_k_files),
-        chunk_top_k=int(runtime_config.chunk_top_k),
-        chunk_per_file_limit=int(runtime_config.chunk_per_file_limit),
-        chunk_token_budget=int(runtime_config.chunk_token_budget),
-        chunk_disclosure=str(runtime_config.chunk_disclosure),
-        chunk_snippet_max_lines=int(runtime_config.chunk_snippet_max_lines),
-        chunk_snippet_max_chars=int(runtime_config.chunk_snippet_max_chars),
-        policy=policy,
-        tokenizer_model=str(runtime_config.tokenizer_model),
-        chunk_diversity_enabled=bool(runtime_config.chunk_diversity_enabled),
-        chunk_diversity_path_penalty=float(
-            runtime_config.chunk_diversity_path_penalty
-        ),
-        chunk_diversity_symbol_family_penalty=float(
-            runtime_config.chunk_diversity_symbol_family_penalty
-        ),
-        chunk_diversity_kind_penalty=float(runtime_config.chunk_diversity_kind_penalty),
-        chunk_diversity_locality_penalty=float(
-            runtime_config.chunk_diversity_locality_penalty
-        ),
-        chunk_diversity_locality_window=int(
-            runtime_config.chunk_diversity_locality_window
-        ),
-        chunk_topological_shield_enabled=bool(
-            runtime_config.chunk_topological_shield_enabled
-        ),
-        chunk_topological_shield_mode=str(
-            runtime_config.chunk_topological_shield_mode
-        ),
-        chunk_topological_shield_max_attenuation=float(
-            runtime_config.chunk_topological_shield_max_attenuation
-        ),
-        chunk_topological_shield_shared_parent_attenuation=float(
-            runtime_config.chunk_topological_shield_shared_parent_attenuation
-        ),
-        chunk_topological_shield_adjacency_attenuation=float(
-            runtime_config.chunk_topological_shield_adjacency_attenuation
-        ),
-        chunk_scoring_config=dict(runtime_config.chunk_scoring_config),
-        chunk_guard_enabled=bool(runtime_config.chunk_guard_enabled),
-        chunk_guard_mode=str(runtime_config.chunk_guard_mode),
-        chunk_guard_lambda_penalty=float(runtime_config.chunk_guard_lambda_penalty),
-        chunk_guard_min_pool=int(runtime_config.chunk_guard_min_pool),
-        chunk_guard_max_pool=int(runtime_config.chunk_guard_max_pool),
-        chunk_guard_min_marginal_utility=float(
-            runtime_config.chunk_guard_min_marginal_utility
-        ),
-        chunk_guard_compatibility_min_overlap=float(
-            runtime_config.chunk_guard_compatibility_min_overlap
-        ),
-        index_hash=index_hash,
-        embedding_enabled=bool(runtime_config.embedding_enabled),
-        embedding_lexical_weight=float(runtime_config.embedding_lexical_weight),
-        embedding_semantic_weight=float(runtime_config.embedding_semantic_weight),
-        embedding_min_similarity=float(runtime_config.embedding_min_similarity),
-        embeddings_payload=embeddings_payload,
-        semantic_embedding_provider_impl=semantic_embedding_provider_impl,
-        semantic_cross_encoder_provider=semantic_cross_encoder_provider,
-        mark_timing=deps.mark_timing,
-        rerank_rows_embeddings_with_time_budget=(
-            deps.rerank_rows_embeddings_with_time_budget
-        ),
-        rerank_rows_cross_encoder_with_time_budget=(
-            deps.rerank_rows_cross_encoder_with_time_budget
+    return cast(
+        ChunkSelectionResult,
+        _call_with_supported_kwargs(
+            deps.apply_chunk_selection,
+            root=root,
+            query=query,
+            files_map=files_map,
+            candidates=candidates,
+            terms=terms,
+            top_k_files=int(runtime_config.top_k_files),
+            chunk_top_k=int(runtime_config.chunk_top_k),
+            chunk_per_file_limit=int(runtime_config.chunk_per_file_limit),
+            chunk_token_budget=int(runtime_config.chunk_token_budget),
+            chunk_disclosure=str(runtime_config.chunk_disclosure),
+            chunk_snippet_max_lines=int(runtime_config.chunk_snippet_max_lines),
+            chunk_snippet_max_chars=int(runtime_config.chunk_snippet_max_chars),
+            policy=policy,
+            tokenizer_model=str(runtime_config.tokenizer_model),
+            chunk_diversity_enabled=bool(runtime_config.chunk_diversity_enabled),
+            chunk_diversity_path_penalty=float(
+                runtime_config.chunk_diversity_path_penalty
+            ),
+            chunk_diversity_symbol_family_penalty=float(
+                runtime_config.chunk_diversity_symbol_family_penalty
+            ),
+            chunk_diversity_kind_penalty=float(runtime_config.chunk_diversity_kind_penalty),
+            chunk_diversity_locality_penalty=float(
+                runtime_config.chunk_diversity_locality_penalty
+            ),
+            chunk_diversity_locality_window=int(
+                runtime_config.chunk_diversity_locality_window
+            ),
+            chunk_topological_shield_enabled=bool(
+                runtime_config.chunk_topological_shield_enabled
+            ),
+            chunk_topological_shield_mode=str(
+                runtime_config.chunk_topological_shield_mode
+            ),
+            chunk_topological_shield_max_attenuation=float(
+                runtime_config.chunk_topological_shield_max_attenuation
+            ),
+            chunk_topological_shield_shared_parent_attenuation=float(
+                runtime_config.chunk_topological_shield_shared_parent_attenuation
+            ),
+            chunk_topological_shield_adjacency_attenuation=float(
+                runtime_config.chunk_topological_shield_adjacency_attenuation
+            ),
+            chunk_scoring_config=dict(runtime_config.chunk_scoring_config),
+            chunk_guard_enabled=bool(runtime_config.chunk_guard_enabled),
+            chunk_guard_mode=str(runtime_config.chunk_guard_mode),
+            chunk_guard_lambda_penalty=float(runtime_config.chunk_guard_lambda_penalty),
+            chunk_guard_min_pool=int(runtime_config.chunk_guard_min_pool),
+            chunk_guard_max_pool=int(runtime_config.chunk_guard_max_pool),
+            chunk_guard_min_marginal_utility=float(
+                runtime_config.chunk_guard_min_marginal_utility
+            ),
+            chunk_guard_compatibility_min_overlap=float(
+                runtime_config.chunk_guard_compatibility_min_overlap
+            ),
+            index_hash=index_hash,
+            embedding_enabled=bool(runtime_config.embedding_enabled),
+            embedding_lexical_weight=float(runtime_config.embedding_lexical_weight),
+            embedding_semantic_weight=float(runtime_config.embedding_semantic_weight),
+            embedding_min_similarity=float(runtime_config.embedding_min_similarity),
+            embeddings_payload=embeddings_payload,
+            semantic_embedding_provider_impl=semantic_embedding_provider_impl,
+            semantic_cross_encoder_provider=semantic_cross_encoder_provider,
+            mark_timing=deps.mark_timing,
+            rerank_rows_embeddings_with_time_budget=(
+                deps.rerank_rows_embeddings_with_time_budget
+            ),
+            rerank_rows_cross_encoder_with_time_budget=(
+                deps.rerank_rows_cross_encoder_with_time_budget
+            ),
         ),
     )
 
