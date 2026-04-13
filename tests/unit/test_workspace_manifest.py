@@ -106,7 +106,7 @@ def _load_first_valid_variant(module: Any, tmp_path: Path) -> tuple[dict[str, An
         try:
             parsed = _load_manifest(module, manifest_path=manifest_path, workspace_root=tmp_path)
             return payload, parsed
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             errors.append(f"variant[{idx}] {type(exc).__name__}: {exc}")
     raise AssertionError("no manifest variant parsed successfully\n" + "\n".join(errors))
 

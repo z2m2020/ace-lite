@@ -97,9 +97,9 @@ def test_record_durable_stats_records_invocation_with_rollout_payload(tmp_path: 
     assert len(result["invocation_id"]) == 24
     assert len(recorded) == 1
     saved = recorded[0]
-    assert getattr(saved, "session_id") == "session-1"
-    assert getattr(saved, "plan_replay_hit") is True
-    assert getattr(saved, "trace_exported") is False
+    assert saved.session_id == "session-1"
+    assert saved.plan_replay_hit is True
+    assert saved.trace_exported is False
 
 
 def test_collect_durable_stats_reasons_marks_trace_export_failure() -> None:

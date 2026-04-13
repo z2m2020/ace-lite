@@ -45,9 +45,7 @@ def resolve_user_runtime_db_path(
 ) -> PurePath:
     cls = _path_cls(home_path, configured_path)
     raw_candidate = str(configured_path or DEFAULT_USER_RUNTIME_DB_PATH).strip()
-    if home_path is not None and raw_candidate.startswith("~/"):
-        raw_candidate = raw_candidate[2:]
-    elif home_path is not None and raw_candidate.startswith("~\\"):
+    if (home_path is not None and raw_candidate.startswith("~/")) or (home_path is not None and raw_candidate.startswith("~\\")):
         raw_candidate = raw_candidate[2:]
     candidate = _coerce_path(raw_candidate, cls=cls)
     if candidate.is_absolute():
@@ -65,9 +63,7 @@ def resolve_user_preference_capture_db_path(
 ) -> PurePath:
     cls = _path_cls(home_path, configured_path)
     raw_candidate = str(configured_path or DEFAULT_USER_PREFERENCE_CAPTURE_DB_PATH).strip()
-    if home_path is not None and raw_candidate.startswith("~/"):
-        raw_candidate = raw_candidate[2:]
-    elif home_path is not None and raw_candidate.startswith("~\\"):
+    if (home_path is not None and raw_candidate.startswith("~/")) or (home_path is not None and raw_candidate.startswith("~\\")):
         raw_candidate = raw_candidate[2:]
     candidate = _coerce_path(raw_candidate, cls=cls)
     if candidate.is_absolute():

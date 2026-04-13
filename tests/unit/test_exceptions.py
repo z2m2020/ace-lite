@@ -293,9 +293,8 @@ class TestExceptionContext:
 
     def test_critical_exception_reraised(self):
         """Test that critical exceptions are re-raised."""
-        with pytest.raises(PermissionError):
-            with ExceptionContext(operation_name="test"):
-                raise PermissionError("permission denied")
+        with pytest.raises(PermissionError), ExceptionContext(operation_name="test"):
+            raise PermissionError("permission denied")
 
     def test_custom_default(self):
         """Test custom default value."""

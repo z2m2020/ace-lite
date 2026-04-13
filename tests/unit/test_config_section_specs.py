@@ -28,7 +28,7 @@ from ace_lite.config_sections import (
 
 
 def _field_names(model_cls: type[object]) -> list[str]:
-    return list(getattr(model_cls, "model_fields").keys())
+    return list(model_cls.model_fields.keys())
 
 
 def test_config_section_spec_field_sets_are_single_sourced() -> None:

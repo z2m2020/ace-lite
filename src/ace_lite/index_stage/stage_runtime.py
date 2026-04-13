@@ -77,7 +77,7 @@ def execute_index_stage_runtime(
     state = deps.build_index_stage_execution_state_fn(bootstrap=bootstrap)
     retrieval_refinement = ctx.state.get("_agent_loop_retrieval_refinement")
     if isinstance(retrieval_refinement, dict) and retrieval_refinement:
-        setattr(state, "retrieval_refinement_payload", dict(retrieval_refinement))
+        state.retrieval_refinement_payload = dict(retrieval_refinement)
 
     retrieval_runtime = deps.build_index_retrieval_runtime_fn(
         retrieval_cfg=retrieval_cfg,

@@ -65,7 +65,7 @@ class ExactSearchResult:
             "timed_out": bool(self.timed_out),
             "returncode": int(self.returncode),
             "elapsed_ms": float(self.elapsed_ms),
-            "hit_paths": int(len(self.hits_by_path)),
+            "hit_paths": len(self.hits_by_path),
             "stderr": str(self.stderr or "")[:240],
         }
 
