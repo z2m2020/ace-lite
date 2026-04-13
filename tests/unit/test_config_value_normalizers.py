@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from ace_lite.config_choices import (
@@ -16,7 +18,9 @@ from ace_lite.config_value_normalizers import (
 def test_validate_choice_value_preserves_message_shape() -> None:
     with pytest.raises(
         ValueError,
-        match="Unsupported adaptive_router.mode: invalid. Expected one of: observe, shadow, enforce",
+        match=re.escape(
+            "Unsupported adaptive_router.mode: invalid. Expected one of: observe, shadow, enforce"
+        ),
     ):
         validate_choice_value(
             "invalid",

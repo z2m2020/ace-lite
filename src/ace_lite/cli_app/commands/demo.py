@@ -86,7 +86,7 @@ def demo_command(
             )
         output_path.mkdir(parents=True, exist_ok=True)
         cmd = ["git", "clone", "--depth", "1", str(clone_url), str(output_path)]
-        returncode, stdout, stderr, timed_out = run_capture_output(
+        returncode, _, stderr, timed_out = run_capture_output(
             cmd,
             cwd=output_path.parent,
             timeout_seconds=60.0,

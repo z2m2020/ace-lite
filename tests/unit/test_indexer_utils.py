@@ -324,7 +324,7 @@ class TestShouldProcessFile:
         root = tmp_path
         file_path = root / "test.txt"
 
-        should_process, rel_path = should_process_file(
+        should_process, _ = should_process_file(
             file_path,
             suffixes={".py"},
             excluded_dirs=set(),
@@ -340,7 +340,7 @@ class TestShouldProcessFile:
 
         file_path = root / "node_modules" / "test.js"
 
-        should_process, rel_path = should_process_file(
+        should_process, _ = should_process_file(
             file_path,
             suffixes={".js"},
             excluded_dirs={"node_modules"},

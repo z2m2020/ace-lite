@@ -21,7 +21,7 @@ def _run_script(*extra_args: str) -> tuple[int, str, str]:
 
 
 def test_create_dated_checkpoint_creates_manifest(tmp_path: Path) -> None:
-    rc, stdout, stderr = _run_script(
+    rc, _, _ = _run_script(
         "--date",
         "2026-04-11",
         "--phase",
@@ -42,7 +42,7 @@ def test_create_dated_checkpoint_creates_manifest(tmp_path: Path) -> None:
 
 
 def test_create_dated_checkpoint_missing_artifact_emits_warning(tmp_path: Path) -> None:
-    rc, stdout, stderr = _run_script(
+    rc, _, _ = _run_script(
         "--date",
         "2026-04-11",
         "--phase",
@@ -59,12 +59,12 @@ def test_create_dated_checkpoint_missing_artifact_emits_warning(tmp_path: Path) 
 
 
 def test_create_dated_checkpoint_cli_help_succeeds() -> None:
-    rc, stdout, stderr = _run_script("--help")
+    rc, _, _ = _run_script("--help")
     assert rc == 0
 
 
 def test_create_dated_checkpoint_cli_creates_file(tmp_path: Path) -> None:
-    rc, stdout, stderr = _run_script(
+    rc, stdout, _ = _run_script(
         "--date",
         "2026-04-11",
         "--phase",

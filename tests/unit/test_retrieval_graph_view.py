@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from ace_lite.retrieval_graph_view import (
@@ -538,5 +540,8 @@ def test_retrieval_graph_schema_guard_rejects_missing_summary_keys() -> None:
         "edges": [],
         "warnings": [],
     }
-    with pytest.raises(ValueError, match="summary.node_limit_applied is required"):
+    with pytest.raises(
+        ValueError,
+        match=re.escape("summary.node_limit_applied is required"),
+    ):
         validate_retrieval_graph_view_payload(payload)

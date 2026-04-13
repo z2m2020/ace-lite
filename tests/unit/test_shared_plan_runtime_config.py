@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from ace_lite.config_models import validate_cli_config
@@ -31,7 +33,10 @@ def test_shared_plan_runtime_config_helpers_support_validate_and_runtime_modes()
 
     assert resolve_memory_auto_tag_mode("USER") == "user"
     assert resolve_memory_auto_tag_mode("invalid") is None
-    with pytest.raises(ValueError, match="memory.namespace.auto_tag_mode"):
+    with pytest.raises(
+        ValueError,
+        match=re.escape("memory.namespace.auto_tag_mode"),
+    ):
         resolve_memory_auto_tag_mode(
             "invalid",
             field_name="memory.namespace.auto_tag_mode",
@@ -39,17 +44,17 @@ def test_shared_plan_runtime_config_helpers_support_validate_and_runtime_modes()
 
     assert resolve_memory_gate_mode("NEVER", default="auto") == "never"
     assert resolve_memory_gate_mode("invalid", default="auto") == "auto"
-    with pytest.raises(ValueError, match="memory.gate.mode"):
+    with pytest.raises(ValueError, match=re.escape("memory.gate.mode")):
         resolve_memory_gate_mode("invalid", field_name="memory.gate.mode")
 
     assert resolve_memory_notes_mode("PREFER_LOCAL", default="supplement") == "prefer_local"
     assert resolve_memory_notes_mode("invalid", default="supplement") == "supplement"
-    with pytest.raises(ValueError, match="memory.notes.mode"):
+    with pytest.raises(ValueError, match=re.escape("memory.notes.mode")):
         resolve_memory_notes_mode("invalid", field_name="memory.notes.mode")
 
     assert resolve_ranking_profile("GRAPH", default="graph") == "graph"
     assert resolve_ranking_profile("invalid", default="graph") == "graph"
-    with pytest.raises(ValueError, match="repomap.ranking_profile"):
+    with pytest.raises(ValueError, match=re.escape("repomap.ranking_profile")):
         resolve_ranking_profile("invalid", field_name="repomap.ranking_profile")
 
     assert resolve_embedding_provider(" OLLAMA ", default="hash") == "ollama"
@@ -98,7 +103,7 @@ def test_shared_plan_runtime_config_helpers_support_validate_and_runtime_modes()
     assert resolve_scip_provider("SCIP", field_name="scip.provider") == "scip"
     assert resolve_scip_provider("SCIP_LITE", field_name="scip.provider") == "scip_lite"
     assert resolve_scip_provider(None, default="auto", field_name="scip.provider") == "auto"
-    with pytest.raises(ValueError, match="scip.provider"):
+    with pytest.raises(ValueError, match=re.escape("scip.provider")):
         resolve_scip_provider("invalid", field_name="scip.provider")
 
 

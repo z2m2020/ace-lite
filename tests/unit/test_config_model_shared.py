@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from ace_lite.config_model_shared import (
@@ -57,25 +59,27 @@ def test_validate_shared_choice_helpers_preserve_error_shape() -> None:
 
     with pytest.raises(
         ValueError,
-        match="Unsupported chunk_disclosure: invalid. Expected one of:",
+        match=re.escape("Unsupported chunk_disclosure: invalid. Expected one of:"),
     ):
         validate_chunk_disclosure("invalid", field_name="chunk_disclosure")
 
     with pytest.raises(
         ValueError,
-        match="Unsupported repomap.ranking_profile: invalid. Expected one of:",
+        match=re.escape("Unsupported repomap.ranking_profile: invalid. Expected one of:"),
     ):
         validate_ranking_profile("invalid", field_name="repomap.ranking_profile")
 
     with pytest.raises(
         ValueError,
-        match="Unsupported scip_provider: invalid. Expected one of:",
+        match=re.escape("Unsupported scip_provider: invalid. Expected one of:"),
     ):
         validate_scip_provider("invalid", field_name="scip_provider")
 
     with pytest.raises(
         ValueError,
-        match="Unsupported plugins.remote_slot_policy_mode: invalid. Expected one of:",
+        match=re.escape(
+            "Unsupported plugins.remote_slot_policy_mode: invalid. Expected one of:"
+        ),
     ):
         validate_remote_slot_policy_mode(
             "invalid",
@@ -84,48 +88,54 @@ def test_validate_shared_choice_helpers_preserve_error_shape() -> None:
 
     with pytest.raises(
         ValueError,
-        match="Unsupported retrieval_policy: invalid. Expected one of:",
+        match=re.escape("Unsupported retrieval_policy: invalid. Expected one of:"),
     ):
         validate_retrieval_policy("invalid", field_name="retrieval_policy")
 
     with pytest.raises(
         ValueError,
-        match="Unsupported adaptive_router.mode: invalid. Expected one of:",
+        match=re.escape("Unsupported adaptive_router.mode: invalid. Expected one of:"),
     ):
         validate_adaptive_router_mode("invalid", field_name="adaptive_router.mode")
 
     with pytest.raises(
         ValueError,
-        match="Unsupported memory.namespace.auto_tag_mode: invalid. Expected one of:",
+        match=re.escape(
+            "Unsupported memory.namespace.auto_tag_mode: invalid. Expected one of:"
+        ),
     ):
         validate_memory_auto_tag_mode("invalid", field_name="memory.namespace.auto_tag_mode")
 
     with pytest.raises(
         ValueError,
-        match="Unsupported memory.gate.mode: invalid. Expected one of:",
+        match=re.escape("Unsupported memory.gate.mode: invalid. Expected one of:"),
     ):
         validate_memory_gate_mode("invalid", field_name="memory.gate.mode")
 
     with pytest.raises(
         ValueError,
-        match="Unsupported memory.notes.mode: invalid. Expected one of:",
+        match=re.escape("Unsupported memory.notes.mode: invalid. Expected one of:"),
     ):
         validate_memory_notes_mode("invalid", field_name="memory.notes.mode")
 
     with pytest.raises(
         ValueError,
-        match="Unsupported memory.temporal.timezone_mode: invalid. Expected one of:",
+        match=re.escape(
+            "Unsupported memory.temporal.timezone_mode: invalid. Expected one of:"
+        ),
     ):
         validate_memory_timezone_mode("invalid", field_name="memory.temporal.timezone_mode")
 
     with pytest.raises(
         ValueError,
-        match="Unsupported chunk.guard.mode: invalid. Expected one of:",
+        match=re.escape("Unsupported chunk.guard.mode: invalid. Expected one of:"),
     ):
         validate_chunk_guard_mode("invalid", field_name="chunk.guard.mode")
 
     with pytest.raises(
         ValueError,
-        match="Unsupported chunk.topological_shield.mode: invalid. Expected one of:",
+        match=re.escape(
+            "Unsupported chunk.topological_shield.mode: invalid. Expected one of:"
+        ),
     ):
         validate_topological_shield_mode("invalid", field_name="chunk.topological_shield.mode")

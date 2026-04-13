@@ -115,7 +115,7 @@ class TestBuildSummaryFromDir:
         return module.build_summary_from_dir(tmp_path)
 
     def test_empty_dir_returns_zero_counts(self) -> None:
-        summary, warnings = self._summary(Path("/nonexistent"))
+        summary, _ = self._summary(Path("/nonexistent"))
         assert summary["run_count"] == 0
         assert summary["outcome_counts"] == {}
         assert summary["aggregate"]["upgrade_recommended_count"] == 0
@@ -134,7 +134,7 @@ class TestBuildSummaryFromDir:
                 },
             },
         )
-        summary, warnings = self._summary(run_dir)
+        summary, _ = self._summary(run_dir)
         assert summary["run_count"] == 1
         assert summary["outcome_counts"] == {"plan_quick_success": 1}
         assert summary["aggregate"]["upgrade_recommended_count"] == 1
@@ -165,7 +165,7 @@ class TestBuildSummaryFromDir:
                 "upgrade_outcome_hint": {"upgrade_recommended": False},
             },
         )
-        summary, warnings = self._summary(run_dir)
+        summary, _ = self._summary(run_dir)
         assert summary["run_count"] == 3
         assert summary["outcome_counts"]["plan_quick_success"] == 2
         assert summary["outcome_counts"]["plan_quick_timeout_fallback"] == 1
@@ -182,7 +182,7 @@ class TestBuildSummaryFromDir:
             },
         )
         (run_dir / "readme.txt").write_text("not a json file")
-        summary, warnings = self._summary(run_dir)
+        summary, _ = self._summary(run_dir)
         assert summary["run_count"] == 1  # only the .json file
 
     def test_unknown_outcome_label_recorded_as_unknown(self, tmp_path: Path) -> None:

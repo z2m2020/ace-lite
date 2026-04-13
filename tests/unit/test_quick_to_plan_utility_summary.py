@@ -169,7 +169,7 @@ class TestBuildSummaryFromDir:
             {"elapsed_ms": 5000.0, "metrics": {"task_success_hit": 0.8}},
         )
 
-        summary, warnings = build_summary_from_dir(quick_dir)
+        summary, _ = build_summary_from_dir(quick_dir)
 
         assert summary["pair_count"] == 1
         assert summary["pairs"][0]["case_id"] == "run1"
