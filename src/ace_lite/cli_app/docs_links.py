@@ -27,6 +27,8 @@ COMMAND_GUIDES = {
     "profile": f"{DOCS_BASE}/PROFILE.md",
     "workspace": f"{DOCS_BASE}/WORKSPACE.md",
     "demo": f"{DOCS_BASE}/DEMO.md",
+    "runtime": f"{DOCS_BASE}/RUNTIME.md",
+    "skills": f"{DOCS_BASE}/SKILLS.md",
 }
 
 QUICK_REFERENCE = {
@@ -106,6 +108,16 @@ See also:
 See also:
   docs/guides/GETTING_STARTED.md    Quick start guide
   docs/guides/WORKSPACE.md          Workspace guide
+""",
+    "runtime": """
+See also:
+  docs/guides/GETTING_STARTED.md    Quick start guide
+  docs/guides/RUNTIME.md            Runtime guide
+""",
+    "skills": """
+See also:
+  docs/guides/GETTING_STARTED.md    Quick start guide
+  docs/guides/SKILLS.md             Skills guide
 """,
 }
 

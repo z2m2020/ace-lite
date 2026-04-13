@@ -23,10 +23,14 @@ from ace_lite.cli_app.commands.repomap import repomap_group
 from ace_lite.cli_app.commands.runtime import runtime_group
 from ace_lite.cli_app.commands.skills import skills_group
 from ace_lite.cli_app.commands.workspace import workspace_group
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.version import get_version
 
 
-@click.group(help="ACE-Lite command line interface.")
+@click.group(
+    help="ACE-Lite command line interface.",
+    epilog=get_help_template("getting_started"),
+)
 @click.version_option(version=get_version(), prog_name="ace-lite")
 def cli() -> None:
     logging.basicConfig(

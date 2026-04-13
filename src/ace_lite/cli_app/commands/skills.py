@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.skills import build_skill_catalog, build_skill_manifest
 
 
@@ -15,7 +16,11 @@ def _resolve_skills_path(*, root: str, skills_dir: str) -> Path:
     return (root_path / candidate).resolve()
 
 
-@click.group("skills", help="Inspect skill manifests and discovery surfaces.")
+@click.group(
+    "skills",
+    help="Inspect skill manifests and discovery surfaces.",
+    epilog=get_help_template("skills"),
+)
 def skills_group() -> None:
     return None
 

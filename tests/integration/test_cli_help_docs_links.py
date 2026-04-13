@@ -5,6 +5,17 @@ from click.testing import CliRunner
 from ace_lite.cli import cli
 
 
+def test_root_help_includes_docs_links() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["--help"])
+
+    assert result.exit_code == 0
+    assert "See also:" in result.output
+    assert "docs/guides/GETTING_STARTED.md" in result.output
+    assert "docs/guides/CHEATSHEET.md" in result.output
+
+
 def test_plan_help_includes_docs_links() -> None:
     runner = CliRunner()
 
@@ -125,3 +136,25 @@ def test_workspace_help_includes_docs_links() -> None:
     assert "See also:" in result.output
     assert "docs/guides/GETTING_STARTED.md" in result.output
     assert "docs/guides/WORKSPACE.md" in result.output
+
+
+def test_runtime_help_includes_docs_links() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["runtime", "--help"])
+
+    assert result.exit_code == 0
+    assert "See also:" in result.output
+    assert "docs/guides/GETTING_STARTED.md" in result.output
+    assert "docs/guides/RUNTIME.md" in result.output
+
+
+def test_skills_help_includes_docs_links() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["skills", "--help"])
+
+    assert result.exit_code == 0
+    assert "See also:" in result.output
+    assert "docs/guides/GETTING_STARTED.md" in result.output
+    assert "docs/guides/SKILLS.md" in result.output

@@ -12,6 +12,7 @@ from typing import Any
 
 import click
 
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.output import echo_json
 from ace_lite.cli_app.runtime_command_support import (
     DEFAULT_RUNTIME_STATS_DB_PATH,
@@ -103,7 +104,11 @@ def _runtime_scheduler_section(config: dict[str, Any]) -> dict[str, Any]:
     return scheduler if isinstance(scheduler, dict) else {}
 
 
-@click.group("runtime", help="Run service-mode utilities (hot-reload, scheduler).")
+@click.group(
+    "runtime",
+    help="Run service-mode utilities (hot-reload, scheduler).",
+    epilog=get_help_template("runtime"),
+)
 def runtime_group() -> None:
     return None
 
