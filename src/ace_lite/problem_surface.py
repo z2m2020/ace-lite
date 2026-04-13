@@ -369,8 +369,10 @@ def extract_problem_surface_payload(
             generated_at=generated_at,
         )
         payload["warnings"] = _dedup_warnings(
-            _list(payload.get("warnings"))
-            + [f"problem_surface_extractor_error:{type(exc).__name__}"]
+            [
+                *_list(payload.get("warnings")),
+                f"problem_surface_extractor_error:{type(exc).__name__}",
+            ]
         )
         return payload
 

@@ -83,10 +83,10 @@ def render_retrieval_context_from_sidecar(*, sidecar: dict[str, Any]) -> str:
         return ""
 
     context_parts: list[str] = []
-    for field in ("module", "language", "kind", "path", "symbol", "signature"):
-        value = str(sidecar.get(field) or "").strip()
+    for sidecar_field in ("module", "language", "kind", "path", "symbol", "signature"):
+        value = str(sidecar.get(sidecar_field) or "").strip()
         if value:
-            context_parts.append(f"{field}={value}")
+            context_parts.append(f"{sidecar_field}={value}")
 
     parent_symbol = str(sidecar.get("parent_symbol") or "").strip()
     if parent_symbol:

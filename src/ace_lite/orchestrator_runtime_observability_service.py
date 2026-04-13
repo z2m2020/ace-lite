@@ -273,11 +273,11 @@ class RuntimeObservabilityService:
                     else "",
                     degraded_reason_codes=tuple(degraded_reason_codes),
                     stage_latencies=normalize_runtime_stage_latencies(
-                        tuple(
-                            {"stage_name": item.stage, "elapsed_ms": item.elapsed_ms}
-                            for item in stage_metrics
-                        )
-                        + (
+                        (
+                            *(
+                                {"stage_name": item.stage, "elapsed_ms": item.elapsed_ms}
+                                for item in stage_metrics
+                            ),
                             {
                                 "stage_name": "total",
                                 "elapsed_ms": round(float(total_ms), 6),

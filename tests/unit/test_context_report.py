@@ -113,14 +113,6 @@ def minimal_plan_payload() -> dict:
         "validation_tests": [
             "pytest tests/unit/test_source_plan_properties.py::test_case",
         ],
-        "stages": [
-            "memory",
-            "index",
-            "repomap",
-            "augment",
-            "skills",
-            "source_plan",
-        ],
         "observability": {
             "stage_metrics": {
                 "degraded_reasons": ["memory_fallback"],

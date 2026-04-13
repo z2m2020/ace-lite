@@ -396,12 +396,13 @@ def _build_surprising_connections(
                 continue
             test_marker = "/test" in other.replace("\\", "/") or other.startswith("tests/")
             code_marker = "/test" not in other.replace("\\", "/") and not other.startswith("tests/")
-            if test_marker or code_marker:
+            if (
+                (test_marker or code_marker)
+                and ("src/" in p.replace("\\", "/") or "src\\" in p.replace("/", "\\"))
+                and ("test" in other.replace("\\", "/"))
+            ):
                 # Simple proxy: production src vs test
-                if ("src/" in p.replace("\\", "/") or "src\\" in p.replace("/", "\\")) and (
-                    "test" in other.replace("\\", "/")
-                ):
-                    test_code_pairs.append((p, other))
+                test_code_pairs.append((p, other))
 
     seen_pairs: set[tuple[str, str]] = set()
     for src, test in test_code_pairs:

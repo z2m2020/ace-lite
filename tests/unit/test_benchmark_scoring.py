@@ -2190,6 +2190,19 @@ def test_evaluate_case_result_extracts_memory_metrics() -> None:
     payload = {
         "index": {
             "candidate_files": [{"path": "src/auth.py", "module": "src.auth"}],
+            "candidate_ranking": {
+                "feedback_enabled": True,
+                "feedback_reason": "ok",
+                "feedback_event_count": 4,
+                "feedback_matched_event_count": 2,
+                "feedback_boosted_count": 1,
+                "feedback_boosted_paths": 1,
+                "multi_channel_rrf_enabled": True,
+                "multi_channel_rrf_applied": True,
+                "multi_channel_rrf_granularity_count": 2,
+                "multi_channel_rrf_pool_size": 5,
+                "multi_channel_rrf_granularity_pool_ratio": 0.4,
+            },
         },
         "memory": {
             "count": 4,
@@ -2223,22 +2236,6 @@ def test_evaluate_case_result_extracts_memory_metrics() -> None:
                 "constraint_count": 1,
                 "graph_neighbor_count": 1,
                 "handles": ["fact-1"],
-            },
-        },
-        "index": {
-            "candidate_files": [{"path": "src/auth.py", "module": "src.auth"}],
-            "candidate_ranking": {
-                "feedback_enabled": True,
-                "feedback_reason": "ok",
-                "feedback_event_count": 4,
-                "feedback_matched_event_count": 2,
-                "feedback_boosted_count": 1,
-                "feedback_boosted_paths": 1,
-                "multi_channel_rrf_enabled": True,
-                "multi_channel_rrf_applied": True,
-                "multi_channel_rrf_granularity_count": 2,
-                "multi_channel_rrf_pool_size": 5,
-                "multi_channel_rrf_granularity_pool_ratio": 0.4,
             },
         },
     }

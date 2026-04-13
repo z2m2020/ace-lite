@@ -39,7 +39,7 @@ def _flatten_knobs(
     paths: list[str] = []
     for key, value in payload.items():
         normalized_key = str(key)
-        current = prefix + (normalized_key,)
+        current = (*prefix, normalized_key)
         if isinstance(value, Mapping):
             paths.extend(_flatten_knobs(value, prefix=current))
             continue

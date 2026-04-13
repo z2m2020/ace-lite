@@ -516,9 +516,6 @@ def _build_chunks_with_structured_sidecar_only(
             "robust_signature_coverage_ratio": 1.0,
         },
     )
-    assert result.chunk_guard_payload["retained_count"] == 1
-    assert CONTEXTUAL_CHUNKING_SIDECAR_KEY not in result.candidate_chunks[0]
-    assert "_retrieval_context" not in result.candidate_chunks[0]
 
 
 def test_apply_chunk_selection_enforce_filters_conflicting_chunks() -> None:

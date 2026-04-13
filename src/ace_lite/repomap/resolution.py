@@ -62,7 +62,7 @@ def _path_locality_sort_key(*, seed_path: str, candidate_path: str) -> tuple[int
     candidate_text = str(candidate_path).strip().replace("\\", "/")
     candidate_parts = PurePosixPath(candidate_text).parent.parts
     shared_prefix = 0
-    for seed_part, candidate_part in zip(seed_parts, candidate_parts):
+    for seed_part, candidate_part in zip(seed_parts, candidate_parts, strict=False):
         if seed_part != candidate_part:
             break
         shared_prefix += 1

@@ -149,7 +149,7 @@ def plan_quick_command(
         raise click.ClickException(
             f"Failed to build quick plan: {e}\n\n"
             "Hint: Ensure the index exists by running 'ace-lite index --root=.' first"
-        )
+        ) from e
 
     # Add metadata
     payload["_plan_quick"] = True

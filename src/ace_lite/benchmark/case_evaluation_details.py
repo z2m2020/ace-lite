@@ -47,9 +47,11 @@ def _candidate_chunk_matches(
     normalized_oracle_path = _normalize_repo_path(
         oracle_chunk.get("path") or oracle_file_path
     )
-    if normalized_oracle_path:
-        if _normalize_repo_path(item.get("path")) != normalized_oracle_path:
-            return False
+    if (
+        normalized_oracle_path
+        and _normalize_repo_path(item.get("path")) != normalized_oracle_path
+    ):
+        return False
     for key in ("qualified_name", "signature"):
         expected = str(oracle_chunk.get(key) or "").strip()
         if expected and str(item.get(key) or "").strip() != expected:

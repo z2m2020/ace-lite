@@ -5,6 +5,7 @@ import json
 import os
 from collections import OrderedDict
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
@@ -444,10 +445,8 @@ class StageArtifactCache:
                 deleted += 1
                 continue
             if path.is_dir():
-                try:
+                with suppress(OSError):
                     path.rmdir()
-                except OSError:
-                    pass
         return deleted
 
     def _record_step(self, step: str) -> None:

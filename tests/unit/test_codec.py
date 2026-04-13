@@ -236,7 +236,7 @@ class TestBenchmarkCodecs:
         data = {"key": "value"}
         results = benchmark_codecs(data, iterations=5)
 
-        for codec_name, metrics in results.items():
+        for metrics in results.values():
             assert metrics["dumps_avg_ms"] >= 0
             assert metrics["loads_avg_ms"] >= 0
             assert metrics["total_avg_ms"] >= 0

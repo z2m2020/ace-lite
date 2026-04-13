@@ -103,7 +103,7 @@ class TestDoctorSchemaV3Compat:
 
                 # Stats may contain various sub-sections depending on runtime state
                 # but should never cause errors
-                assert "memory_health_summary" in stats or "event_class" in stats or True
+                assert isinstance(stats, dict)
 
             except json.JSONDecodeError:
                 pytest.skip("Output is not JSON format")

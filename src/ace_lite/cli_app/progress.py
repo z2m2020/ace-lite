@@ -20,7 +20,7 @@ class SpinnerProgress:
             do_long_operation()
     """
 
-    SPINNER_CHARS = ["-", "\\", "|", "/"]
+    SPINNER_CHARS = ("-", "\\", "|", "/")
     DEFAULT_DELAY = 0.1
 
     def __init__(self, message: str = "Working...", delay: float = DEFAULT_DELAY, stream=None):
