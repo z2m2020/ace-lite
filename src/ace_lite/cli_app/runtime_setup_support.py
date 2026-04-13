@@ -7,6 +7,21 @@ from typing import Any
 import click
 
 
+def _format_setup_error(operation: str, detail: str) -> str:
+    normalized_operation = str(operation or "").strip() or "runtime_setup"
+    normalized_detail = str(detail or "").strip() or "unknown error"
+    return f"Runtime setup failed during {normalized_operation}: {normalized_detail}"
+
+
+def _require_non_empty_setup_value(*, field_name: str, value: str, operation: str) -> str:
+    normalized = str(value or "").strip()
+    if normalized:
+        return normalized
+    raise click.ClickException(
+        _format_setup_error(operation, f"{field_name} must not be empty")
+    )
+
+
 def execute_codex_mcp_setup_plan(
     *,
     setup_plan: dict[str, Any],
@@ -39,8 +54,10 @@ def execute_codex_mcp_setup_plan(
     add_process = run_subprocess_fn(add_cmd, capture_output=True, text=True, check=False)
     if add_process.returncode != 0:
         raise click.ClickException(
-            "Failed to add Codex MCP server: "
-            + str(add_process.stderr or add_process.stdout or "").strip()
+            _format_setup_error(
+                "add_mcp_server",
+                str(add_process.stderr or add_process.stdout or "").strip(),
+            )
         )
 
     snapshot_path = write_snapshot_fn(
@@ -65,8 +82,10 @@ def execute_codex_mcp_setup_plan(
         }
         if get_process.returncode != 0:
             raise click.ClickException(
-                "Added MCP server but verification failed: "
-                + str(get_process.stderr or get_process.stdout or "").strip()
+                _format_setup_error(
+                    "verify_mcp_server",
+                    str(get_process.stderr or get_process.stdout or "").strip(),
+                )
             )
 
         result["verify_self_test"] = run_mcp_self_test_fn(
@@ -292,6 +311,16 @@ def build_codex_mcp_setup_plan(
     resolve_cli_path_fn: Any,
     env_get_fn: Any,
 ) -> dict[str, Any]:
+    normalized_codex_executable = _require_non_empty_setup_value(
+        field_name="codex_executable",
+        value=str(codex_executable),
+        operation="normalize_inputs",
+    )
+    normalized_python_executable = _require_non_empty_setup_value(
+        field_name="python_executable",
+        value=str(python_executable),
+        operation="normalize_inputs",
+    )
     identity = _resolve_codex_mcp_setup_identity(
         name=name,
         root=root,
@@ -302,8 +331,16 @@ def build_codex_mcp_setup_plan(
         env_get_fn=env_get_fn,
     )
     normalized_name = identity["normalized_name"]
-    normalized_root = identity["normalized_root"]
-    normalized_skills = identity["normalized_skills"]
+    normalized_root = _require_non_empty_setup_value(
+        field_name="root",
+        value=identity["normalized_root"],
+        operation="normalize_inputs",
+    )
+    normalized_skills = _require_non_empty_setup_value(
+        field_name="skills_dir",
+        value=identity["normalized_skills"],
+        operation="normalize_inputs",
+    )
     normalized_config_pack = identity["normalized_config_pack"]
     resolved_user_id = identity["resolved_user_id"]
     env_items = _build_codex_mcp_env_items(
@@ -330,14 +367,14 @@ def build_codex_mcp_setup_plan(
         ollama_base_url=ollama_base_url,
     )
 
-    remove_cmd = [str(codex_executable), "mcp", "remove", normalized_name]
-    add_cmd: list[str] = [str(codex_executable), "mcp", "add", normalized_name]
+    remove_cmd = [normalized_codex_executable, "mcp", "remove", normalized_name]
+    add_cmd: list[str] = [normalized_codex_executable, "mcp", "add", normalized_name]
     for item in env_items:
         add_cmd.extend(["--env", item])
     add_cmd.extend(
         [
             "--",
-            str(python_executable),
+            normalized_python_executable,
             "-m",
             "ace_lite.mcp_server",
             "--transport",

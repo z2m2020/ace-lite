@@ -4,6 +4,9 @@ import json
 import subprocess
 from pathlib import Path
 
+import click
+import pytest
+
 import ace_lite.cli_app.runtime_command_support as runtime_command_support_module
 from ace_lite.cli_app.runtime_command_support import (
     RUNTIME_COMMAND_DOMAIN_REGISTRY,
@@ -866,6 +869,135 @@ def test_execute_codex_mcp_setup_plan_apply_and_verify(tmp_path: Path) -> None:
     assert commands[0][:3] == ["codex", "mcp", "remove"]
     assert commands[1][:3] == ["codex", "mcp", "add"]
     assert commands[2][:3] == ["codex", "mcp", "get"]
+
+
+def test_build_codex_mcp_setup_plan_rejects_empty_codex_executable() -> None:
+    with pytest.raises(click.ClickException) as exc_info:
+        build_codex_mcp_setup_plan(
+            name="ace-lite",
+            root="repo",
+            skills_dir="skills",
+            codex_executable="",
+            python_executable="python",
+            enable_memory=False,
+            memory_primary="rest",
+            memory_secondary="none",
+            mcp_base_url="http://localhost:8765",
+            rest_base_url="http://localhost:8765",
+            user_id="",
+            app="ace-lite",
+            config_pack="",
+            enable_embeddings=False,
+            embedding_provider="ollama",
+            embedding_model="model",
+            embedding_dimension=2560,
+            embedding_index_path="context-map/embeddings/index.json",
+            embedding_rerank_pool=16,
+            embedding_lexical_weight=0.55,
+            embedding_semantic_weight=0.45,
+            embedding_min_similarity=0.05,
+            embedding_fail_open=True,
+            ollama_base_url="http://localhost:11434",
+            replace=True,
+            apply=False,
+            verify=True,
+            resolve_cli_path_fn=lambda value: str(value),
+            env_get_fn=lambda key, default="": default,
+        )
+    assert "normalize_inputs" in str(exc_info.value)
+    assert "codex_executable must not be empty" in str(exc_info.value)
+
+
+def test_build_codex_mcp_setup_plan_rejects_empty_python_executable() -> None:
+    with pytest.raises(click.ClickException) as exc_info:
+        build_codex_mcp_setup_plan(
+            name="ace-lite",
+            root="repo",
+            skills_dir="skills",
+            codex_executable="codex",
+            python_executable="",
+            enable_memory=False,
+            memory_primary="rest",
+            memory_secondary="none",
+            mcp_base_url="http://localhost:8765",
+            rest_base_url="http://localhost:8765",
+            user_id="",
+            app="ace-lite",
+            config_pack="",
+            enable_embeddings=False,
+            embedding_provider="ollama",
+            embedding_model="model",
+            embedding_dimension=2560,
+            embedding_index_path="context-map/embeddings/index.json",
+            embedding_rerank_pool=16,
+            embedding_lexical_weight=0.55,
+            embedding_semantic_weight=0.45,
+            embedding_min_similarity=0.05,
+            embedding_fail_open=True,
+            ollama_base_url="http://localhost:11434",
+            replace=True,
+            apply=False,
+            verify=True,
+            resolve_cli_path_fn=lambda value: str(value),
+            env_get_fn=lambda key, default="": default,
+        )
+    assert "normalize_inputs" in str(exc_info.value)
+    assert "python_executable must not be empty" in str(exc_info.value)
+
+
+def test_execute_codex_mcp_setup_plan_formats_add_failure_message(tmp_path: Path) -> None:
+    setup_plan = build_codex_mcp_setup_plan(
+        name="ace-lite",
+        root=str(tmp_path),
+        skills_dir=str(tmp_path / "skills"),
+        codex_executable="codex",
+        python_executable="python",
+        enable_memory=False,
+        memory_primary="rest",
+        memory_secondary="none",
+        mcp_base_url="http://localhost:8765",
+        rest_base_url="http://localhost:8765",
+        user_id="snapshot-user",
+        app="ace-lite",
+        config_pack="",
+        enable_embeddings=False,
+        embedding_provider="ollama",
+        embedding_model="model",
+        embedding_dimension=2560,
+        embedding_index_path="context-map/embeddings/index.json",
+        embedding_rerank_pool=16,
+        embedding_lexical_weight=0.55,
+        embedding_semantic_weight=0.45,
+        embedding_min_similarity=0.05,
+        embedding_fail_open=True,
+        ollama_base_url="http://localhost:11434",
+        replace=False,
+        apply=True,
+        verify=False,
+        resolve_cli_path_fn=lambda value: str(Path(value)),
+        env_get_fn=lambda key, default="": default,
+    )
+
+    def _fail_run(command, capture_output, text, check=False, env=None, timeout=None):
+        _ = (capture_output, text, check, env, timeout)
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=1,
+            stdout="",
+            stderr="codex add failed",
+        )
+
+    with pytest.raises(click.ClickException) as exc_info:
+        execute_codex_mcp_setup_plan(
+            setup_plan=setup_plan,
+            python_executable="python",
+            run_subprocess_fn=_fail_run,
+            write_snapshot_fn=lambda **kwargs: tmp_path / "snapshot.json",
+            run_mcp_self_test_fn=lambda **kwargs: {"ok": True},
+        )
+
+    assert "Runtime setup failed during add_mcp_server" in str(exc_info.value)
+    assert "codex add failed" in str(exc_info.value)
 
 
 def test_runtime_command_domain_registry_covers_phase1_domains() -> None:

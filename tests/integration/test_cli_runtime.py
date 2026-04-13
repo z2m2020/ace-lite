@@ -1135,6 +1135,46 @@ def test_cli_runtime_setup_codex_mcp_verify_disables_embeddings_when_not_enabled
     assert captured_env.get("ACE_LITE_EMBEDDING_ENABLED") == "0"
 
 
+def test_cli_runtime_setup_codex_mcp_apply_surfaces_formatted_add_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+
+    def _fail_run(command, capture_output, text, check=False, env=None, timeout=None):
+        _ = (capture_output, text, check, env, timeout)
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=1,
+            stdout="",
+            stderr="codex add failed",
+        )
+
+    monkeypatch.setattr(runtime_module.subprocess, "run", _fail_run)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "setup-codex-mcp",
+            "--name",
+            "ace-lite",
+            "--root",
+            str(tmp_path),
+            "--skills-dir",
+            str(skills_dir),
+            "--apply",
+            "--no-verify",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 1
+    assert "Runtime setup failed during add_mcp_server" in result.output
+    assert "codex add failed" in result.output
+
+
 def test_cli_runtime_settings_show_prints_effective_snapshot(tmp_path: Path) -> None:
     (tmp_path / ".ace-lite.yml").write_text(
         (
