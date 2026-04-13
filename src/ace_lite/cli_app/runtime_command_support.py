@@ -76,6 +76,42 @@ def _merge_unique_messages(*groups: list[str]) -> list[str]:
     return merged
 
 
+def _build_mcp_session_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    session_health = (
+        dict(payload.get("stdio_session_health"))
+        if isinstance(payload.get("stdio_session_health"), dict)
+        else {}
+    )
+    runtime_identity = (
+        dict(payload.get("runtime_identity"))
+        if isinstance(payload.get("runtime_identity"), dict)
+        else {}
+    )
+    request_stats = (
+        dict(payload.get("request_stats"))
+        if isinstance(payload.get("request_stats"), dict)
+        else {}
+    )
+    return {
+        "status": str(session_health.get("status") or "unknown"),
+        "scope": str(session_health.get("scope") or ""),
+        "transport": str(session_health.get("transport") or ""),
+        "message": str(session_health.get("message") or ""),
+        "restart_recommended": bool(session_health.get("restart_recommended")),
+        "reason_codes": list(session_health.get("reason_codes", []))
+        if isinstance(session_health.get("reason_codes"), list)
+        else [],
+        "pid": int(runtime_identity.get("pid") or 0),
+        "parent_pid": int(runtime_identity.get("parent_pid") or 0),
+        "python_executable": str(runtime_identity.get("python_executable") or ""),
+        "cwd": str(runtime_identity.get("current_working_directory") or ""),
+        "active_request_count": int(request_stats.get("active_request_count") or 0),
+        "current_request_runtime_ms": float(
+            request_stats.get("current_request_runtime_ms") or 0.0
+        ),
+    }
+
+
 def collect_runtime_mcp_doctor_payload(
     *,
     root: str,
@@ -128,6 +164,16 @@ def collect_runtime_mcp_doctor_payload(
         list(payload.get("recommendations", []))
         if isinstance(payload.get("recommendations"), list)
         else [],
+    )
+    session_summary = _build_mcp_session_summary(payload)
+    checks.append(
+        {
+            "name": "session_health",
+            "ok": str(session_summary.get("status") or "") == "ok",
+            "detail": str(session_summary.get("message") or ""),
+            "scope": session_summary.get("scope"),
+            "transport": session_summary.get("transport"),
+        }
     )
     endpoint_checks: list[dict[str, Any]] = []
     ok = True
@@ -191,6 +237,7 @@ def collect_runtime_mcp_doctor_payload(
         "ok": ok,
         "event": "mcp_doctor",
         "self_test": payload,
+        "session_summary": session_summary,
         "checks": checks,
         "warnings": warnings,
         "recommendations": recommendations,
@@ -241,10 +288,12 @@ def collect_runtime_mcp_self_test_payload(
         raise click.ClickException(
             "Memory providers are disabled; rerun with configured Mem0/OpenMemory env vars."
         )
+    session_summary = _build_mcp_session_summary(payload)
     return {
         "ok": True,
         "event": "mcp_self_test",
         "payload": payload,
+        "session_summary": session_summary,
         "warnings": _merge_unique_messages(
             list(memory_state["warnings"]),
             list(payload.get("warnings", [])) if isinstance(payload.get("warnings"), list) else [],

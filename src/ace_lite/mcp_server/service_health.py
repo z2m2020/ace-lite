@@ -56,6 +56,7 @@ class HealthPayload(TypedDict):
     user_id: str | None
     app: str
     runtime_identity: RuntimeIdentityPayload
+    stdio_session_health: dict[str, Any]
     staleness_warning: dict[str, Any] | None
     request_stats: dict[str, Any]
     warnings: list[str]
@@ -212,6 +213,48 @@ def build_health_response_payload(
         recommendations.append(
             "Inspect health.request_stats.recent_requests and restart the stdio MCP server/session if the request remains stuck."
         )
+    command_line = runtime_identity.get("command_line")
+    argv = [str(item) for item in command_line] if isinstance(command_line, list) else []
+    scope = "self_test_probe" if "--self-test" in argv else "live_process"
+    transport = "stdio(default)"
+    if "--transport" in argv:
+        try:
+            transport_value = str(argv[argv.index("--transport") + 1]).strip()
+            if transport_value:
+                transport = transport_value
+        except (IndexError, ValueError):
+            transport = "unknown"
+    reason_codes: list[str] = []
+    if bool(runtime_identity.get("stale_process_suspected")):
+        reason_codes.append("stale_process")
+    if active_request_count > 0 and current_request_runtime_ms >= 30000.0:
+        reason_codes.append("long_running_request")
+    stdio_session_health = {
+        "scope": scope,
+        "transport": transport,
+        "status": "warning" if reason_codes else "ok",
+        "reason_codes": reason_codes,
+        "restart_recommended": bool(reason_codes),
+        "active_request_count": active_request_count,
+        "current_request_runtime_ms": current_request_runtime_ms,
+        "message": (
+            "Self-test probe process started cleanly. This probe does not inspect an already-running long-lived stdio MCP session."
+            if scope == "self_test_probe" and not reason_codes
+            else (
+                "No stale-process or stuck-request signal detected for the current MCP process."
+                if not reason_codes
+                else (
+                    "Current MCP process appears stale and should be restarted."
+                    if reason_codes == ["stale_process"]
+                    else (
+                        "Current MCP process has a request that appears stuck for over 30s."
+                        if reason_codes == ["long_running_request"]
+                        else "Current MCP process appears stale and also has a long-running in-flight request."
+                    )
+                )
+            )
+        ),
+    }
     staleness_warning = (
         {
             "triggered": True,
@@ -262,6 +305,7 @@ def build_health_response_payload(
         "user_id": config.user_id,
         "app": config.app,
         "runtime_identity": runtime_identity,
+        "stdio_session_health": stdio_session_health,
         "staleness_warning": staleness_warning,
         "request_stats": request_stats,
         "warnings": warnings,

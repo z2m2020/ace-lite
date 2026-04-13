@@ -141,6 +141,16 @@ def test_collect_runtime_mcp_self_test_payload_merges_health_warnings() -> None:
             "warnings": ["Runtime code appears stale"],
             "recommendations": ["Restart the stdio MCP server/session after git pull or pip install -e updates."],
             "runtime_identity": {"stale_process_suspected": True},
+            "stdio_session_health": {
+                "scope": "self_test_probe",
+                "transport": "stdio(default)",
+                "status": "warning",
+                "reason_codes": ["stale_process"],
+                "restart_recommended": True,
+                "active_request_count": 0,
+                "current_request_runtime_ms": 0.0,
+                "message": "Current MCP process appears stale and should be restarted.",
+            },
         },
         snapshot_path_fn=lambda **kwargs: Path("snapshot.json"),
         load_snapshot_fn=lambda **kwargs: ({}, Path("snapshot.json")),
@@ -149,6 +159,9 @@ def test_collect_runtime_mcp_self_test_payload_merges_health_warnings() -> None:
     assert payload["ok"] is True
     assert "Runtime code appears stale" in payload["warnings"]
     assert any("Restart the stdio MCP server/session" in item for item in payload["recommendations"])
+    assert payload["session_summary"]["status"] == "warning"
+    assert payload["session_summary"]["scope"] == "self_test_probe"
+    assert payload["session_summary"]["message"]
 
 
 def test_collect_runtime_mcp_doctor_payload_merges_self_test_warnings(monkeypatch) -> None:
@@ -162,6 +175,16 @@ def test_collect_runtime_mcp_doctor_payload_merges_self_test_warnings(monkeypatc
             "warnings": ["Runtime code appears stale"],
             "recommendations": ["Restart the stdio MCP server/session after git pull or pip install -e updates."],
             "runtime_identity": {"stale_process_suspected": True},
+            "stdio_session_health": {
+                "scope": "self_test_probe",
+                "transport": "stdio(default)",
+                "status": "warning",
+                "reason_codes": ["stale_process"],
+                "restart_recommended": True,
+                "active_request_count": 0,
+                "current_request_runtime_ms": 0.0,
+                "message": "Current MCP process appears stale and should be restarted.",
+            },
         },
     )
 
@@ -178,6 +201,9 @@ def test_collect_runtime_mcp_doctor_payload_merges_self_test_warnings(monkeypatc
 
     assert payload["ok"] is True
     assert payload["self_test"]["runtime_identity"]["stale_process_suspected"] is True
+    assert payload["checks"][1]["name"] == "session_health"
+    assert payload["checks"][1]["ok"] is False
+    assert payload["session_summary"]["status"] == "warning"
     assert "Runtime code appears stale" in payload["warnings"]
     assert any("Restart the stdio MCP server/session" in item for item in payload["recommendations"])
 

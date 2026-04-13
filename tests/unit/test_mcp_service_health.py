@@ -80,6 +80,16 @@ def test_build_health_payload_reports_memory_disabled_recommendations(
         "--transport",
         "stdio",
     ]
+    assert payload["stdio_session_health"] == {
+        "scope": "live_process",
+        "transport": "stdio",
+        "status": "ok",
+        "reason_codes": [],
+        "restart_recommended": False,
+        "active_request_count": 0,
+        "current_request_runtime_ms": 0.0,
+        "message": "No stale-process or stuck-request signal detected for the current MCP process.",
+    }
     assert payload["staleness_warning"] is None
     assert payload["timestamp"] == "2026-03-14T00:00:00+00:00"
 
@@ -166,6 +176,8 @@ def test_build_health_payload_adds_structured_stale_process_warning(
     assert any(
         "Restart the stdio MCP server/session" in item for item in payload["recommendations"]
     )
+    assert payload["stdio_session_health"]["status"] == "warning"
+    assert payload["stdio_session_health"]["reason_codes"] == ["stale_process"]
 
 
 def test_build_health_payload_adds_long_running_request_warning(
@@ -191,3 +203,5 @@ def test_build_health_payload_adds_long_running_request_warning(
         "Inspect health.request_stats.recent_requests" in item
         for item in payload["recommendations"]
     )
+    assert payload["stdio_session_health"]["reason_codes"] == ["long_running_request"]
+    assert payload["stdio_session_health"]["restart_recommended"] is True
