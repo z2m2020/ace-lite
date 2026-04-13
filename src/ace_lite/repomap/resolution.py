@@ -24,10 +24,10 @@ def _build_resolution_maps(
         if module:
             module_to_path[module] = normalized_path
 
-        def add_key(key: str) -> None:
+        def add_key(key: str, *, path_value: str = normalized_path) -> None:
             normalized = str(key or "").strip().lstrip("./")
             if normalized:
-                path_style_to_paths[normalized].add(normalized_path)
+                path_style_to_paths[normalized].add(path_value)
 
         def add_path_keys(candidate_path: str) -> None:
             without = _remove_source_suffix(candidate_path)

@@ -345,12 +345,12 @@ def benchmark_codecs(
         if not codec:
             continue
 
-        def serialize():
-            return codec.dumps(data)
+        def serialize(_codec=codec):
+            return _codec.dumps(data)
 
-        def deserialize():
-            serialized = codec.dumps(data)
-            return codec.loads(serialized)
+        def deserialize(_codec=codec):
+            serialized = _codec.dumps(data)
+            return _codec.loads(serialized)
 
         serialize_result = runner.run(f"{codec_name}_dumps", serialize)
         deserialize_result = runner.run(f"{codec_name}_loads", deserialize)

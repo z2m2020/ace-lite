@@ -32,7 +32,7 @@ def _path_looks_like_docs(path: str) -> bool:
         return True
     if normalized.startswith("docs/") or "/docs/" in normalized:
         return True
-    if normalized in {
+    return normalized in {
         "readme",
         "readme.md",
         "changelog",
@@ -41,9 +41,7 @@ def _path_looks_like_docs(path: str) -> bool:
         "contributing.md",
         "security",
         "security.md",
-    }:
-        return True
-    return False
+    }
 
 
 def _candidate_path_matches_filters(
@@ -64,11 +62,10 @@ def _candidate_path_matches_filters(
         )
         if not included:
             return False
-    if normalized in exclude_paths:
-        return False
-    if any(fnmatchcase(normalized, pattern) for pattern in exclude_globs):
-        return False
-    return True
+    return (
+        normalized not in exclude_paths
+        and not any(fnmatchcase(normalized, pattern) for pattern in exclude_globs)
+    )
 
 
 def resolve_benchmark_candidate_filters(ctx: StageContext) -> dict[str, Any]:

@@ -68,11 +68,10 @@ def candidate_path_matches_filters(
         )
         if not included:
             return False
-    if normalized_path in exclude_paths:
-        return False
-    if any(fnmatchcase(normalized_path, pattern) for pattern in exclude_globs):
-        return False
-    return True
+    return (
+        normalized_path not in exclude_paths
+        and not any(fnmatchcase(normalized_path, pattern) for pattern in exclude_globs)
+    )
 
 
 def filter_candidate_path_items(

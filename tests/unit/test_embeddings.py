@@ -693,10 +693,11 @@ def test_ollama_embedding_provider_falls_back_to_legacy_endpoint(
         assert request.full_url.endswith("/api/embeddings")
         body = json.loads((request.data or b"{}").decode("utf-8"))
         prompt = str(body.get("prompt") or "")
-        if prompt == "hello":
-            payload = {"embedding": [1.0, 0.0]}
-        else:
-            payload = {"embedding": [0.0, 2.0]}
+        payload = (
+            {"embedding": [1.0, 0.0]}
+            if prompt == "hello"
+            else {"embedding": [0.0, 2.0]}
+        )
         return _FakeResponse(json.dumps(payload).encode("utf-8"))
 
     monkeypatch.setattr(

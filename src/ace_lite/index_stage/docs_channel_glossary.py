@@ -102,6 +102,4 @@ def is_glossary_token(
         return False
     if normalized.isdigit():
         return False
-    if normalized in glossary_stopwords or normalized in module_stopwords:
-        return False
-    return True
+    return normalized not in glossary_stopwords and normalized not in module_stopwords

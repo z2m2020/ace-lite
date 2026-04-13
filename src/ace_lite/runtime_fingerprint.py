@@ -315,10 +315,7 @@ def build_git_fast_fingerprint(
     if budget_exhausted and not downgrade_reason:
         downgrade_reason = "latency_budget_exceeded"
         fallback_reason = downgrade_reason
-        if head_commit:
-            trust_class = "git_partial"
-        else:
-            trust_class = "fallback"
+        trust_class = "git_partial" if head_commit else "fallback"
 
     fingerprint = _hash_payload(
         {

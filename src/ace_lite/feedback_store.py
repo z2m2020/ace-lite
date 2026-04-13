@@ -763,10 +763,9 @@ class SelectionFeedbackStore:
             if path:
                 path_counts[path] = path_counts.get(path, 0) + 1
         repeat_selections = sum(1 for c in path_counts.values() if c > 1)
-        if path_counts:
-            reuse_lift = float(repeat_selections) / float(len(path_counts))
-        else:
-            reuse_lift = None
+        reuse_lift = (
+            float(repeat_selections) / float(len(path_counts)) if path_counts else None
+        )
 
         # selection_replay_precision_delta: compare recent vs older precision
         recent_events = [
