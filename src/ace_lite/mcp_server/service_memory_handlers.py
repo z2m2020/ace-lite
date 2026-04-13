@@ -242,8 +242,9 @@ def handle_memory_store(
     namespace: str | None,
     tags: dict[str, str] | None,
     path: Path,
-    rows: list[dict[str, Any]],
-    save_notes_fn: Any,
+    rows: list[dict[str, Any]] | None,
+    save_notes_fn: Any | None,
+    append_note_fn: Any | None = None,
     # Task-level slots (ASF-8911)
     req: str | None = None,
     contract: str | None = None,
@@ -287,8 +288,14 @@ def handle_memory_store(
     if task_id:
         payload["task_id"] = task_id
 
-    rows.append(payload)
-    save_notes_fn(path, rows)
+    if append_note_fn is not None:
+        append_note_fn(path, payload)
+    else:
+        persisted_rows = list(rows or [])
+        persisted_rows.append(payload)
+        if save_notes_fn is None:
+            raise ValueError("save_notes_fn is required when append_note_fn is not provided")
+        save_notes_fn(path, persisted_rows)
     return {
         "ok": True,
         "stored": payload,

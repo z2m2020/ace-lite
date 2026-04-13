@@ -197,6 +197,32 @@ def test_handle_memory_store_accepts_task_level_slots(tmp_path: Path) -> None:
     assert stored["contract"] == "explainability-v1"
 
 
+def test_handle_memory_store_supports_append_only_persistence(tmp_path: Path) -> None:
+    from ace_lite.mcp_server.service_memory_handlers import handle_memory_store
+
+    notes_path = tmp_path / "context-map" / "memory_notes.jsonl"
+    appended: list[dict[str, object]] = []
+
+    def mock_append(path: Path, row: dict[str, object]) -> None:
+        assert path == notes_path
+        appended.append(dict(row))
+
+    payload = handle_memory_store(
+        text="append-only memory write",
+        namespace="runtime",
+        tags={"type": "note"},
+        path=notes_path,
+        rows=None,
+        save_notes_fn=None,
+        append_note_fn=mock_append,
+    )
+
+    assert payload["ok"] is True
+    assert len(appended) == 1
+    assert appended[0]["text"] == "append-only memory write"
+    assert appended[0]["namespace"] == "runtime"
+
+
 def test_handle_memory_search_boosts_task_level_matches(tmp_path: Path) -> None:
     """ASF-8911: Memory search boosts notes matching query req/contract IDs."""
     from ace_lite.mcp_server.service_memory_handlers import handle_memory_search

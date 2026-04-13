@@ -539,6 +539,27 @@ def test_mcp_service_memory_store_persists_task_level_slots(tmp_path: Path) -> N
     assert stored["stored"]["contract"] == "trace-render-v1"
 
 
+def test_mcp_service_memory_store_avoids_full_notes_reload(tmp_path: Path) -> None:
+    service = _make_service(tmp_path)
+    notes_path = tmp_path / "context-map" / "memory_notes.append.jsonl"
+
+    def _unexpected_load(_path: Path) -> list[dict[str, object]]:
+        raise AssertionError("memory_store should not reload all notes for append-only writes")
+
+    service._load_notes = _unexpected_load  # type: ignore[method-assign]
+
+    stored = service.memory_store(
+        text="append-only write path",
+        namespace="runtime",
+        tags={"type": "note"},
+        notes_path=str(notes_path),
+    )
+
+    assert stored["ok"] is True
+    persisted = notes_path.read_text(encoding="utf-8").splitlines()
+    assert len([line for line in persisted if line.strip()]) == 1
+
+
 def test_mcp_service_feedback_record_and_stats(tmp_path: Path) -> None:
     _write_sample_repo(tmp_path)
     service = _make_service(tmp_path)

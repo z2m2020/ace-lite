@@ -21,6 +21,7 @@ from ace_lite.indexer import build_index
 from ace_lite.indexing_resilience import build_index_with_resilience
 from ace_lite.mcp_server.config import AceLiteMcpConfig
 from ace_lite.mcp_server.file_support import (
+    append_note,
     load_notes,
     resolve_config_pack_path,
     resolve_notes_path,
@@ -537,14 +538,14 @@ class AceLiteMcpService:
     ) -> dict[str, Any]:
         def _operation() -> dict[str, Any]:
             path = self._resolve_notes_path(notes_path=notes_path)
-            rows = self._load_notes(path)
             return handle_memory_store(
                 text=text,
                 namespace=namespace,
                 tags=tags,
                 path=path,
-                rows=rows,
-                save_notes_fn=self._save_notes,
+                rows=None,
+                save_notes_fn=None,
+                append_note_fn=self._append_note,
                 req=req,
                 contract=contract,
                 area=area,
@@ -961,6 +962,10 @@ class AceLiteMcpService:
     @staticmethod
     def _save_notes(path: Path, rows: list[dict[str, Any]]) -> None:
         save_notes(path, rows)
+
+    @staticmethod
+    def _append_note(path: Path, row: dict[str, Any]) -> None:
+        append_note(path, row)
 
 
 __all__ = ["AceLiteMcpService"]

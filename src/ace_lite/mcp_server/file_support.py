@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from threading import Lock
 from typing import Any
+
+_NOTES_WRITE_LOCK = Lock()
 
 
 def resolve_root(*, root: str | None, default_root: Path) -> Path:
@@ -80,12 +83,22 @@ def load_notes(path: Path) -> list[dict[str, Any]]:
 
 
 def save_notes(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    content = "\n".join(json.dumps(row, ensure_ascii=False) for row in rows)
-    path.write_text((content + "\n") if content else "", encoding="utf-8")
+    with _NOTES_WRITE_LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        content = "\n".join(json.dumps(row, ensure_ascii=False) for row in rows)
+        path.write_text((content + "\n") if content else "", encoding="utf-8")
+
+
+def append_note(path: Path, row: dict[str, Any]) -> None:
+    with _NOTES_WRITE_LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False))
+            fh.write("\n")
 
 
 __all__ = [
+    "append_note",
     "load_notes",
     "resolve_config_pack_path",
     "resolve_notes_path",
