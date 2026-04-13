@@ -9,6 +9,7 @@ runbooks.
 - `docs/guides/GETTING_STARTED.md`
 - `docs/guides/MCP_SETUP.md`
 - `docs/design/ARCHITECTURE_OVERVIEW.md`
+- `docs/design/ORCHESTRATOR_SEAM_DESIGN.md`
 - `docs/maintainers/README.md`
 - `docs/maintainers/SYSTEM_MAP.md`
 - `docs/reference/ACEIGNORE_COOKBOOK.md`
