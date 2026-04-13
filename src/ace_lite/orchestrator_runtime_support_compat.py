@@ -11,7 +11,6 @@ from ace_lite.orchestrator_runtime_support_shared import (
     resolve_agent_loop_rerun_stages,
     run_stage_sequence,
 )
-from ace_lite.pipeline.types import StageContext, StageMetric
 
 RunStageSequence = Callable[..., StageContractError | None]
 GetStageState = Callable[..., dict[str, Any]]

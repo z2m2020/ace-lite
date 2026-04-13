@@ -51,7 +51,6 @@ from ace_lite.cli_app.params_option_groups import (
     SCIP_PROVIDER_CHOICES,
     build_option_group_decorators,
 )
-from ace_lite.repomap.ranking import RANKING_PROFILES
 from ace_lite.runtime_profiles import RUNTIME_PROFILE_NAMES
 
 
@@ -204,6 +203,7 @@ __all__ = [
     "_to_hybrid_fusion_mode",
     "_to_int",
     "_to_memory_auto_tag_mode",
+    "_to_memory_gate_mode",
     "_to_optional_str",
     "_to_remote_slot_policy_mode",
     "_to_retrieval_policy",
