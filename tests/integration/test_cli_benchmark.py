@@ -132,7 +132,7 @@ def test_cli_benchmark_run_can_export_runtime_stats_snapshot(tmp_path: Path) -> 
         position=1,
     )
     (tmp_path / ".ace-lite.yml").write_text(
-        f"""
+        """
 benchmark:
   memory:
     feedback:
@@ -271,7 +271,7 @@ def test_cli_benchmark_runtime_profile_scopes_benchmark_durable_preference_event
         position=1,
     )
     (tmp_path / ".ace-lite.yml").write_text(
-        f"""
+        """
 memory:
   feedback:
     enabled: true
@@ -348,7 +348,7 @@ def test_cli_benchmark_runtime_profile_preserves_benchmark_feedback_config(
         position=1,
     )
     (tmp_path / ".ace-lite.yml").write_text(
-        f"""
+        """
 benchmark:
   memory:
     feedback:
@@ -427,7 +427,7 @@ def test_cli_benchmark_user_id_scopes_benchmark_durable_preference_events(
         position=1,
     )
     (tmp_path / ".ace-lite.yml").write_text(
-        f"""
+        """
 memory:
   feedback:
     enabled: true

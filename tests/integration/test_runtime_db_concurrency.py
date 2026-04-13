@@ -14,7 +14,7 @@ from ace_lite.sqlite_mirror import MIRROR_SCHEMA_VERSION, write_embeddings_mirro
 def _writer_payload(worker_id: int, iteration: int) -> tuple[dict[str, str], dict[str, list[float]]]:
     file_hashes = {
         f"src/worker_{worker_id}.py": f"hash-{worker_id}-{iteration}",
-        f"src/shared.py": f"shared-{iteration}",
+        "src/shared.py": f"shared-{iteration}",
     }
     vectors = {
         f"src/worker_{worker_id}.py": [

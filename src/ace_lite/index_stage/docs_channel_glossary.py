@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from re import Pattern
-from typing import Any, Callable
+from typing import Any
 
 Section = dict[str, Any]
 

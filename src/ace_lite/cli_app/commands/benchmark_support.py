@@ -625,10 +625,7 @@ def _record_benchmark_validation_preference_event(
             "signal_key": f"benchmark.validation:{session_key}",
             "target_path": "_benchmark/validation_summary",
             "value_text": (
-                "missing_validation_rate={missing:.4f} evidence_insufficient_rate={insufficient:.4f}".format(
-                    missing=missing_validation_rate,
-                    insufficient=evidence_insufficient_rate,
-                )
+                f"missing_validation_rate={missing_validation_rate:.4f} evidence_insufficient_rate={evidence_insufficient_rate:.4f}"
             ),
             "weight": missing_validation_rate,
             "payload": {

@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Iterable
+from typing import Any
 
 from ace_lite.memory.timestamps import extract_memory_record_timestamp
 

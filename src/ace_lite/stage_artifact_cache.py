@@ -4,11 +4,12 @@ import hashlib
 import json
 import os
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from threading import Lock
-from typing import Any, Callable, cast
+from typing import Any, cast
 
 from ace_lite.stage_artifact_cache_store import (
     STAGE_ARTIFACT_CACHE_WRITE_ORDER,
@@ -25,7 +26,7 @@ from ace_lite.token_estimator import estimate_payload_tokens, normalize_tokenize
 WriteStepRecorder = Callable[[str], None]
 _HOT_TIER_DEFAULT_MAX_ENTRIES = 32
 _HOT_TIER_DEFAULT_MAX_TOKENS = 16_384
-_HOT_TIER_REGISTRY: dict[tuple[str, str, int, int, str], "_StageArtifactHotTier"] = {}
+_HOT_TIER_REGISTRY: dict[tuple[str, str, int, int, str], _StageArtifactHotTier] = {}
 _HOT_TIER_REGISTRY_LOCK = Lock()
 
 

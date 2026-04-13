@@ -86,16 +86,16 @@ def _compute_selection_fingerprint(
 
     parts.append(
         "chunk_contract:"
-        f"{str(chunk_contract.get('schema_version') or '')}"
-        f"|{str(chunk_contract.get('requested_disclosure') or '')}"
+        f"{chunk_contract.get('schema_version') or ''!s}"
+        f"|{chunk_contract.get('requested_disclosure') or ''!s}"
         f"|{','.join(str(item) for item in chunk_contract.get('observed_disclosures', []))}"
         f"|fallbacks={int(chunk_contract.get('fallback_count', 0) or 0)}"
         f"|skeletons={int(chunk_contract.get('skeleton_chunk_count', 0) or 0)}"
     )
     parts.append(
         "subgraph_payload:"
-        f"{str(subgraph_payload.get('payload_version') or '')}"
-        f"|{str(subgraph_payload.get('taxonomy_version') or '')}"
+        f"{subgraph_payload.get('payload_version') or ''!s}"
+        f"|{subgraph_payload.get('taxonomy_version') or ''!s}"
         f"|enabled={int(bool(subgraph_payload.get('enabled', False)))}"
         f"|seeds={','.join(str(item) for item in subgraph_payload.get('seed_paths', []))}"
         f"|edges={','.join(f'{key}:{value}' for key, value in sorted((subgraph_payload.get('edge_counts') or {}).items()))}"

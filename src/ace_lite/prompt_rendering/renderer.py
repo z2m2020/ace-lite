@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from ace_lite.prompt_rendering.segments import (
     SEGMENT_HASH_ALGORITHM,

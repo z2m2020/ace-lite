@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from ace_lite.orchestrator_runtime_support_types import OrchestratorPreparationResult
 from ace_lite.pipeline.types import StageContext

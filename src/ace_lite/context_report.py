@@ -559,7 +559,7 @@ def _build_suggested_questions(
                 {
                     "type": "entrypoint",
                     "question": "Which top candidate file should be inspected first?",
-                    "why": f"Top source_plan candidate controls the likely edit boundary.",
+                    "why": "Top source_plan candidate controls the likely edit boundary.",
                     "path": path,
                 }
             )

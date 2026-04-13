@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 Section = dict[str, Any]
 SectionCache = dict[tuple[str, int, int], tuple[str, list[Section]]]

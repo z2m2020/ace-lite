@@ -296,7 +296,7 @@ def apply_patch_artifact_in_sandbox(
             fallback_result = _apply_patch_artifact_python_fallback(session=session)
         except Exception as exc:
             fallback_result = None
-            stderr = f"{str(stderr or '')}\npython_fallback: {exc}".strip()
+            stderr = f"{stderr or ''!s}\npython_fallback: {exc}".strip()
         if isinstance(fallback_result, dict) and fallback_result.get("ok", False):
             return fallback_result
     return {

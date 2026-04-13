@@ -34,7 +34,7 @@ def _normalize_expected_repos(*, value: Any, context: str) -> tuple[str, ...]:
     return tuple(sorted(normalized))
 
 
-def _normalize_case(*, payload: Any, index: int) -> "WorkspaceBenchmarkCase":
+def _normalize_case(*, payload: Any, index: int) -> WorkspaceBenchmarkCase:
     context = f"cases[{index}]"
     if not isinstance(payload, dict):
         raise ValueError(f"{context} must be a mapping")

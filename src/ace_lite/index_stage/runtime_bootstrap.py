@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Callable
+from typing import Any
 
 from ace_lite.index_stage.embedding_runtime import EmbeddingRuntimeConfig
 from ace_lite.pipeline.types import StageContext

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic, sleep
-from typing import Any, Callable
+from typing import Any
 
 try:  # pragma: no cover - sqlite3 may be unavailable in minimal runtimes
     import sqlite3

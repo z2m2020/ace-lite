@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 import time
-from typing import Generator
+from collections.abc import Generator
 
 
 class SpinnerProgress:

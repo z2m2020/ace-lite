@@ -102,7 +102,7 @@ class LongTermMemoryCaptureService:
                 "signal_count": 0,
             }
         observation_id = hashlib.sha256(
-            f"{stage_name}|{repo}|{query}|{observed_at}".encode("utf-8")
+            f"{stage_name}|{repo}|{query}|{observed_at}".encode()
         ).hexdigest()[:24]
         contract = build_long_term_observation_contract_v1(
             observation_id=observation_id,
@@ -187,9 +187,7 @@ class LongTermMemoryCaptureService:
             "position": int(position) if isinstance(position, int) and position > 0 else None,
         }
         observation_id = hashlib.sha256(
-            f"selection_feedback|{repo}|{query}|{normalized_selected_path}|{observed_at}".encode(
-                "utf-8"
-            )
+            f"selection_feedback|{repo}|{query}|{normalized_selected_path}|{observed_at}".encode()
         ).hexdigest()[:24]
         contract = build_long_term_observation_contract_v1(
             observation_id=observation_id,
@@ -262,7 +260,7 @@ class LongTermMemoryCaptureService:
             "notes": _normalize_text(normalized_issue.get("notes")),
         }
         observation_id = hashlib.sha256(
-            f"dev_issue|{repo}|{issue_id}|{observed_at}|{status}".encode("utf-8")
+            f"dev_issue|{repo}|{issue_id}|{observed_at}|{status}".encode()
         ).hexdigest()[:24]
         contract = build_long_term_observation_contract_v1(
             observation_id=observation_id,
@@ -326,7 +324,7 @@ class LongTermMemoryCaptureService:
             "resolution_note": _normalize_text(normalized_fix.get("resolution_note")),
         }
         observation_id = hashlib.sha256(
-            f"dev_fix|{repo}|{fix_id}|{observed_at}".encode("utf-8")
+            f"dev_fix|{repo}|{fix_id}|{observed_at}".encode()
         ).hexdigest()[:24]
         contract = build_long_term_observation_contract_v1(
             observation_id=observation_id,
@@ -406,7 +404,7 @@ class LongTermMemoryCaptureService:
             "resolution_note": resolution_note,
         }
         observation_id = hashlib.sha256(
-            f"dev_issue_resolution|{repo}|{issue_id}|{fix_id}|{observed_at}".encode("utf-8")
+            f"dev_issue_resolution|{repo}|{issue_id}|{fix_id}|{observed_at}".encode()
         ).hexdigest()[:24]
         observation_contract = build_long_term_observation_contract_v1(
             observation_id=observation_id,
@@ -443,9 +441,7 @@ class LongTermMemoryCaptureService:
         observation_entry = self._store.upsert_observation(observation_contract)
         fact_contract = build_long_term_fact_contract_v1(
             fact_id=hashlib.sha256(
-                f"dev_issue_resolution_fact|{repo}|{issue_id}|{fix_id}|{observed_at}".encode(
-                    "utf-8"
-                )
+                f"dev_issue_resolution_fact|{repo}|{issue_id}|{fix_id}|{observed_at}".encode()
             ).hexdigest()[:24],
             fact_type="dev_issue_resolution",
             subject=f"dev_issue:{issue_id}",

@@ -101,12 +101,12 @@ def build_runtime_service_health(
             "name": "preference_capture",
             "status": (
                 "ok"
-                if int(((runtime_stats.get("preference_capture_summary", {}) or {}).get("event_count", 0) or 0)) > 0
+                if int((runtime_stats.get("preference_capture_summary", {}) or {}).get("event_count", 0) or 0) > 0
                 else "idle"
             ),
             "store_path": (runtime_stats.get("preference_capture_summary", {}) or {}).get("store_path"),
             "event_count": int(
-                ((runtime_stats.get("preference_capture_summary", {}) or {}).get("event_count", 0) or 0)
+                (runtime_stats.get("preference_capture_summary", {}) or {}).get("event_count", 0) or 0
             ),
         },
     ]

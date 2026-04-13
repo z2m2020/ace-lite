@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from ace_lite.exceptions import StageContractError
 from ace_lite.pipeline.types import StageMetric

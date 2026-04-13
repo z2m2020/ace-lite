@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from hashlib import sha256
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 SEGMENT_ORDERING = "canonical_v1"
 SEGMENT_HASH_ALGORITHM = "sha256"

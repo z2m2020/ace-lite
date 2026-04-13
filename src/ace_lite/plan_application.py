@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from ace_lite.plan_contract_summary import build_plan_contract_summary
 from ace_lite.plan_timeout import PlanTimeoutOutcome, execute_with_timeout

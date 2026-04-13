@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from ace_lite.lsp.broker import LspDiagnosticsBroker
 from ace_lite.memory import MemoryProvider

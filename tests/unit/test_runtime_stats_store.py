@@ -212,8 +212,8 @@ def test_durable_stats_store_load_invocation_tolerates_legacy_rows_missing_new_c
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute(
-        """
-        CREATE TABLE {table_name} (
+        f"""
+        CREATE TABLE {RUNTIME_STATS_INVOCATIONS_TABLE} (
             invocation_id TEXT PRIMARY KEY,
             session_id TEXT NOT NULL,
             repo_key TEXT NOT NULL,
@@ -229,16 +229,16 @@ def test_durable_stats_store_load_invocation_tolerates_legacy_rows_missing_new_c
             finished_at TEXT NOT NULL
         )
         """
-        .format(table_name=RUNTIME_STATS_INVOCATIONS_TABLE)
+        
     )
     conn.execute(
-        """
-        INSERT INTO {table_name}(
+        f"""
+        INSERT INTO {RUNTIME_STATS_INVOCATIONS_TABLE}(
             invocation_id, session_id, repo_key, profile_key, event_class,
             settings_fingerprint, status, contract_error_code, degraded_reason_codes,
             stage_latency_json, total_latency_ms, started_at, finished_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """.format(table_name=RUNTIME_STATS_INVOCATIONS_TABLE),
+        """,
         (
             "legacy-inv",
             "legacy-session",

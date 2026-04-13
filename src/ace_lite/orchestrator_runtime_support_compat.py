@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from ace_lite.exceptions import StageContractError
 from ace_lite.orchestrator_runtime_support_shared import (
