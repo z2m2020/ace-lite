@@ -32,11 +32,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, ClassVar
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
+from typing import Any, ClassVar
 
 # =============================================================================
 # Normalization Utilities
@@ -104,7 +100,7 @@ class QueryFlags:
     req_ids: tuple[str, ...] = field(default_factory=tuple)
 
     @classmethod
-    def from_query(cls, query: str) -> "QueryFlags":
+    def from_query(cls, query: str) -> QueryFlags:
         """Detect flags from a query string."""
         lowered = str(query or "").strip().lower()
         return cls(
@@ -528,7 +524,7 @@ class ReqIdIntentStrategy(IntentStrategy):
 class IntentStrategyRegistry:
     """Registry for query intent detection strategies."""
 
-    _strategies: list[IntentStrategy] = [
+    _strategies: ClassVar[list[IntentStrategy]] = [
         OnboardingIntentStrategy(),
         DocSyncIntentStrategy(),
         LatestIntentStrategy(),
@@ -536,7 +532,7 @@ class IntentStrategyRegistry:
     ]
 
     @classmethod
-    def get_instance(cls) -> "IntentStrategyRegistry":
+    def get_instance(cls) -> IntentStrategyRegistry:
         """Get singleton instance."""
         if not hasattr(cls, "_instance"):
             cls._instance = cls()
@@ -610,7 +606,6 @@ class DocSyncBoostStrategy(BoostStrategy):
             return BoostResult(boost=0.0, reason="no_doc_sync_intent")
 
         normalized_path = NormalizationUtils.normalize_path(path)
-        normalized_language = NormalizationUtils.normalize_language(language)
         domain = DomainStrategyRegistry.classify(path)
 
         boost = 0.0
@@ -750,6 +745,11 @@ class LatestDocBoostStrategy(BoostStrategy):
             boost -= 0.75
             reasons.append("domain_penalty(reports)")
 
+        for marker, penalty in self.SECONDARY_NAME_PENALTIES:
+            if marker in normalized_path:
+                boost += penalty * 0.5
+                reasons.append(f"name_penalty({marker})")
+
         return BoostResult(
             boost=boost,
             reason="latest_doc:" + ",".join(reasons) if reasons else "latest_doc:no_hits",
@@ -759,13 +759,13 @@ class LatestDocBoostStrategy(BoostStrategy):
 class BoostStrategyRegistry:
     """Registry for boost/penalty calculation strategies."""
 
-    _strategies: list[BoostStrategy] = [
+    _strategies: ClassVar[list[BoostStrategy]] = [
         DocSyncBoostStrategy(),
         LatestDocBoostStrategy(),
     ]
 
     @classmethod
-    def get_instance(cls) -> "BoostStrategyRegistry":
+    def get_instance(cls) -> BoostStrategyRegistry:
         """Get singleton instance."""
         if not hasattr(cls, "_instance"):
             cls._instance = cls()
@@ -779,10 +779,79 @@ class BoostStrategyRegistry:
         context: dict[str, Any],
     ) -> float:
         """Calculate total boost from all strategies."""
+        return sum(
+            result.boost
+            for result in self._calculate_results(
+                path=path,
+                language=language,
+                flags=flags,
+                context=context,
+            )
+        )
+
+    def _calculate_results(
+        self,
+        *,
+        path: str | None,
+        language: str | None,
+        flags: QueryFlags,
+        context: dict[str, Any],
+    ) -> list[BoostResult]:
+        """Evaluate all registered strategies and return their results."""
+        return [
+            strategy.calculate(path, language, flags, context)
+            for strategy in self._strategies
+        ]
+
+    def calculate_doc_sync_boost(
+        self,
+        *,
+        path: str | None,
+        language: str | None,
+        flags: QueryFlags,
+        context: dict[str, Any],
+    ) -> float:
+        """Calculate only the documentation-sync boost component."""
+        return self._calculate_strategy_type(
+            strategy_type=DocSyncBoostStrategy,
+            path=path,
+            language=language,
+            flags=flags,
+            context=context,
+        )
+
+    def calculate_latest_doc_boost(
+        self,
+        *,
+        path: str | None,
+        language: str | None,
+        flags: QueryFlags,
+        context: dict[str, Any],
+    ) -> float:
+        """Calculate only the latest-document recency boost component."""
+        return self._calculate_strategy_type(
+            strategy_type=LatestDocBoostStrategy,
+            path=path,
+            language=language,
+            flags=flags,
+            context=context,
+        )
+
+    def _calculate_strategy_type(
+        self,
+        *,
+        strategy_type: type[BoostStrategy],
+        path: str | None,
+        language: str | None,
+        flags: QueryFlags,
+        context: dict[str, Any],
+    ) -> float:
+        """Calculate the boost from a specific strategy class."""
         total = 0.0
         for strategy in self._strategies:
-            result = strategy.calculate(path, language, flags, context)
-            total += result.boost
+            if isinstance(strategy, strategy_type):
+                result = strategy.calculate(path, language, flags, context)
+                total += result.boost
         return total
 
     def register_strategy(self, strategy: BoostStrategy) -> None:
@@ -795,22 +864,21 @@ class BoostStrategyRegistry:
 # =============================================================================
 
 __all__ = [
-    "NormalizationUtils",
-    "QueryFlags",
-    "DomainStrategy",
-    "DomainStrategyRegistry",
-    "DomainMatch",
-    "IntentStrategy",
-    "IntentStrategyRegistry",
-    "BoostStrategy",
-    "BoostStrategyRegistry",
-    "BoostResult",
-    # Marker exports for backward compatibility
+    "DOC_ENTRYPOINT_BASENAMES",
+    "DOC_PREFERRED_PREFIXES",
+    "DOC_PRIMARY_NAME_MARKERS",
+    "DOC_SECONDARY_NAME_MARKERS",
     "QUERY_DOC_SYNC_MARKERS",
     "QUERY_LATEST_MARKERS",
     "QUERY_ONBOARDING_MARKERS",
-    "DOC_PRIMARY_NAME_MARKERS",
-    "DOC_SECONDARY_NAME_MARKERS",
-    "DOC_PREFERRED_PREFIXES",
-    "DOC_ENTRYPOINT_BASENAMES",
+    "BoostResult",
+    "BoostStrategy",
+    "BoostStrategyRegistry",
+    "DomainMatch",
+    "DomainStrategy",
+    "DomainStrategyRegistry",
+    "IntentStrategy",
+    "IntentStrategyRegistry",
+    "NormalizationUtils",
+    "QueryFlags",
 ]

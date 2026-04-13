@@ -10,6 +10,7 @@ runbooks.
 - `docs/guides/MCP_SETUP.md`
 - `docs/design/ARCHITECTURE_OVERVIEW.md`
 - `docs/maintainers/README.md`
+- `docs/maintainers/SYSTEM_MAP.md`
 - `docs/reference/ACEIGNORE_COOKBOOK.md`
 
 ## Layout

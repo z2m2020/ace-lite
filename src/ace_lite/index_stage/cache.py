@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import sqlite3
 from pathlib import Path
 from time import time
 from typing import Any
@@ -283,7 +284,7 @@ def store_cached_index_candidates(
             payload=payload,
         )
         return True
-    except Exception:
+    except (OSError, sqlite3.Error, TypeError, ValueError):
         return False
 
 
@@ -337,10 +338,7 @@ def _entry_meta_matches(
     entry_meta = entry.get("meta")
     if not isinstance(entry_meta, dict):
         return False
-    for key, expected in required_meta.items():
-        if entry_meta.get(key) != expected:
-            return False
-    return True
+    return all(entry_meta.get(key) == expected for key, expected in required_meta.items())
 
 
 def _is_entry_expired(
@@ -353,7 +351,7 @@ def _is_entry_expired(
         return False
     try:
         updated_at_epoch = float(entry.get("updated_at_epoch", 0.0) or 0.0)
-    except Exception:
+    except (TypeError, ValueError):
         return True
     if updated_at_epoch <= 0.0:
         return True

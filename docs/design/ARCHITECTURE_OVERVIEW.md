@@ -87,8 +87,10 @@ needed.
 
 - `src/ace_lite/cli_app/runtime_command_support.py`: shared runtime doctor/status/settings/setup payload builders, keeping CLI command callbacks thin.
 - `src/ace_lite/mcp_server/server_tool_registration.py`: MCP tool registration surface and metadata, keeping `server.py` as the server entry shell.
+- `src/ace_lite/orchestrator_payload_builder.py`: source-plan payload and observability assembly seam, keeping `AceOrchestrator` focused on lifecycle coordination.
 - `src/ace_lite/index_stage/`: index-stage helper seams for benchmark filters, fusion, parallel runtime, rerank timeouts, and repo-path normalization.
 - `src/ace_lite/benchmark/case_evaluation_*.py`: benchmark evaluation seams for matching, context, metrics, diagnostics, row assembly, and detail output.
+- `src/ace_lite/benchmark/report_observability.py`: extracted benchmark-report observability sections, keeping `benchmark/report.py` focused on report assembly and stable output ordering.
 
 ## Determinism and observability
 

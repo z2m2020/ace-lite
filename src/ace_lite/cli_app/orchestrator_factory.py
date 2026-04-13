@@ -10,30 +10,37 @@ import click
 
 from ace_lite.cli_app.orchestrator_factory_support import (
     GroupedFlatSectionSpec as _GroupedFlatSectionSpec,
+)
+from ace_lite.cli_app.orchestrator_factory_support import (
     build_adaptive_router_run_plan_section_spec,
     build_chunking_payload,
     build_chunking_run_plan_section_spec,
-    build_memory_run_plan_section_spec,
-    build_passthrough_run_plan_section_specs,
-    build_retrieval_payload,
-    build_retrieval_run_plan_section_spec,
     build_cochange_payload,
     build_embeddings_payload,
     build_index_payload,
     build_lsp_payload,
     build_memory_payload,
-    merge_group_or_flat_sections as _merge_group_or_flat_sections,
+    build_memory_run_plan_section_spec,
+    build_passthrough_run_plan_section_specs,
     build_plan_replay_cache_payload,
     build_plugins_payload,
     build_repomap_payload,
+    build_retrieval_payload,
+    build_retrieval_run_plan_section_spec,
     build_scip_payload,
     build_skills_payload,
     build_tests_payload,
     build_tokenizer_payload,
     build_trace_payload,
+)
+from ace_lite.cli_app.orchestrator_factory_support import (
+    merge_group_or_flat_sections as _merge_group_or_flat_sections,
+)
+from ace_lite.cli_app.orchestrator_factory_support import (
     normalize_group_mapping as _normalize_group_mapping,
 )
 from ace_lite.cli_app.params import MEMORY_STRATEGY_CHOICES
+from ace_lite.config_runtime_projection import build_orchestrator_runtime_projection
 from ace_lite.memory import (
     DualChannelMemoryProvider,
     HybridMemoryProvider,
@@ -45,11 +52,10 @@ from ace_lite.memory import (
     OpenMemoryClient,
     OpenMemoryMemoryProvider,
 )
-from ace_lite.memory_long_term import LongTermMemoryProvider, LongTermMemoryStore
 from ace_lite.memory_clients.mcp_client import OpenMemoryMcpClient
 from ace_lite.memory_clients.rest_client import OpenMemoryRestClient
+from ace_lite.memory_long_term import LongTermMemoryProvider, LongTermMemoryStore
 from ace_lite.orchestrator import AceOrchestrator
-from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.plugins.loader import PluginLoader
 from ace_lite.runtime_manager import RuntimeManager
 
@@ -228,9 +234,9 @@ def create_memory_provider(
         container_tag=None,
         channel_name="long_term",
     )
-    setattr(long_term_provider, "token_budget", max(1, int(memory_long_term_token_budget)))
-    setattr(long_term_provider, "write_enabled", bool(memory_long_term_write_enabled))
-    setattr(long_term_provider, "as_of_enabled", bool(memory_long_term_as_of_enabled))
+    long_term_provider.token_budget = max(1, int(memory_long_term_token_budget))
+    long_term_provider.write_enabled = bool(memory_long_term_write_enabled)
+    long_term_provider.as_of_enabled = bool(memory_long_term_as_of_enabled)
 
     if _is_null_provider(provider_with_notes):
         return long_term_provider
@@ -644,7 +650,7 @@ def create_orchestrator(
         plan_replay_cache_path=str(plan_replay_cache_path),
     )
 
-    config = OrchestratorConfig.model_validate(
+    config = build_orchestrator_runtime_projection(
         {
             "memory": memory_payload,
             "skills": skills_payload,

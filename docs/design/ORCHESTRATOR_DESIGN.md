@@ -106,8 +106,10 @@ Each plan payload is schema-validated (`schema_version = 2.0`) and includes:
 
 - `src/ace_lite/cli_app/orchestrator_factory.py` and `src/ace_lite/cli_app/runtime_command_support.py` own CLI-to-config translation and runtime command payload assembly.
 - `src/ace_lite/mcp_server/server_tool_registration.py` owns MCP tool registration metadata and registration grouping.
+- `src/ace_lite/orchestrator_payload_builder.py` owns final context-plan payload assembly and default validation fallback shaping.
 - `src/ace_lite/index_stage/` owns extracted index-stage helper seams; `src/ace_lite/pipeline/stages/index.py` remains the stage orchestration entry.
 - `src/ace_lite/benchmark/case_evaluation_*.py` owns extracted benchmark-evaluation seams; `src/ace_lite/benchmark/case_evaluation.py` remains the orchestration shell.
+- `src/ace_lite/benchmark/report_observability.py` owns extracted benchmark-report observability sections; `src/ace_lite/benchmark/report.py` remains the report assembly shell.
 
 ## Active structural hotspots (current)
 

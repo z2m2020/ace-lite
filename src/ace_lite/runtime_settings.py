@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 
 import yaml
 
@@ -16,12 +16,18 @@ from ace_lite.cli_app.config_resolve_defaults import (
     PLAN_MEMORY_POSTPROCESS_DEFAULTS,
     PLAN_MEMORY_PROFILE_DEFAULTS,
 )
-from ace_lite.cli_app.params import parse_lsp_commands_from_config
 from ace_lite.config import DEFAULT_CONFIG_FILE
-from ace_lite.config_models import RuntimeConfig, validate_cli_config
+from ace_lite.config_models import validate_cli_config
 from ace_lite.config_pack import load_config_pack
-from ace_lite.orchestrator_config import OrchestratorConfig
+from ace_lite.config_runtime_projection import (
+    dump_orchestrator_runtime_projection,
+    dump_runtime_boundary_projection,
+)
 from ace_lite.runtime_profiles import RUNTIME_PROFILE_NAMES, get_runtime_profile
+from ace_lite.runtime_settings_store import (
+    RUNTIME_SETTINGS_SCHEMA_VERSION,
+    build_runtime_settings_fingerprint,
+)
 from ace_lite.scoring_config import (
     BM25_B,
     BM25_K1,
@@ -55,10 +61,6 @@ from ace_lite.scoring_config import (
     HYBRID_SHORTLIST_FACTOR,
     HYBRID_SHORTLIST_MIN,
     SCIP_BASE_WEIGHT,
-)
-from ace_lite.runtime_settings_store import (
-    RUNTIME_SETTINGS_SCHEMA_VERSION,
-    build_runtime_settings_fingerprint,
 )
 
 _MISSING = object()
@@ -145,18 +147,6 @@ def _set_nested(target: dict[str, Any], path: tuple[str, ...], value: Any) -> No
             current[key] = child
         current = child
     current[path[-1]] = value
-
-
-def _split_csv(value: Any) -> list[str] | None:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        values = [item.strip() for item in value.split(",") if item.strip()]
-        return values or None
-    if isinstance(value, (list, tuple)):
-        values = [str(item).strip() for item in value if str(item).strip()]
-        return values or None
-    return None
 
 
 def _build_payload_and_provenance(
@@ -511,24 +501,6 @@ def _resolve_runtime_profile_metadata(
     return resolved_profile.plan_overrides(), metadata
 
 
-def _normalize_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    index_payload = payload.get("index")
-    if isinstance(index_payload, dict):
-        languages = _split_csv(index_payload.get("languages"))
-        if languages is not None:
-            index_payload["languages"] = languages
-        conventions = _split_csv(index_payload.get("conventions_files"))
-        if conventions is not None:
-            index_payload["conventions_files"] = conventions
-    lsp_payload = payload.get("lsp")
-    if isinstance(lsp_payload, dict):
-        for key in ("commands", "xref_commands"):
-            value = lsp_payload.get(key)
-            if value is not None:
-                lsp_payload[key] = parse_lsp_commands_from_config(value)
-    return payload
-
-
 def _validate_root_payload(payload: dict[str, Any]) -> dict[str, Any]:
     meta = payload.get("_meta")
     candidate = dict(payload)
@@ -583,9 +555,11 @@ def _build_plan_snapshot(
         ("user_config", user_plan),
     ]
     payload, provenance = _build_payload_and_provenance(specs=_PLAN_SPECS, layers=layers)
-    normalized = OrchestratorConfig.model_validate(
-        _normalize_plan_payload(payload)
-    ).model_dump(exclude_none=False, by_alias=True)
+    normalized = dump_orchestrator_runtime_projection(
+        payload,
+        exclude_none=False,
+        by_alias=True,
+    )
     return normalized, provenance, validated_root, profile_metadata
 
 
@@ -603,7 +577,8 @@ def _build_runtime_snapshot(
         ("user_config", _normalize_mapping(user_root.get("runtime"))),
     ]
     payload, provenance = _build_payload_and_provenance(specs=_RUNTIME_SPECS, layers=layers)
-    normalized = RuntimeConfig.model_validate(payload).model_dump(
+    normalized = dump_runtime_boundary_projection(
+        payload,
         exclude_none=False,
         by_alias=True,
     )

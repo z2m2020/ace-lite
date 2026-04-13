@@ -6,8 +6,7 @@ backward compatibility while reducing code duplication.
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from pathlib import Path
+from datetime import date
 
 import pytest
 
@@ -252,6 +251,35 @@ class TestBoostStrategyRegistry:
             context=context,
         )
         # Should get positive boost for being the newest dated doc
+        assert boost > 0.0
+
+    def test_calculate_doc_sync_boost_component(self):
+        """Test direct access to the doc-sync boost component."""
+        registry = BoostStrategyRegistry.get_instance()
+        flags = QueryFlags(doc_sync=True)
+
+        boost = registry.calculate_doc_sync_boost(
+            path="docs/readme.md",
+            language="markdown",
+            flags=flags,
+            context={},
+        )
+
+        assert boost > 0.0
+
+    def test_calculate_latest_doc_boost_component(self):
+        """Test direct access to the latest-doc boost component."""
+        registry = BoostStrategyRegistry.get_instance()
+        flags = QueryFlags(latest_sensitive=True)
+        context = {"newest_dated_doc": date(2026, 4, 1)}
+
+        boost = registry.calculate_latest_doc_boost(
+            path="docs/status-2026-04-01.md",
+            language="markdown",
+            flags=flags,
+            context=context,
+        )
+
         assert boost > 0.0
 
 

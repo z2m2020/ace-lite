@@ -288,16 +288,16 @@ def _iter_source_files(
 
     collected = []
     for current_root, dir_names, file_names in os.walk(root_path, topdown=True):
-        dir_names[:] = sorted(name for name in dir_names if name not in excluded_dirs)
+        dir_names[:] = [name for name in dir_names if name not in excluded_dirs]
         base_path = Path(current_root)
         try:
-            rel_parts = base_path.resolve().relative_to(root_path).parts
+            rel_parts = base_path.relative_to(root_path).parts
         except ValueError:
             rel_parts = ()
         in_node_modules = "node_modules" in rel_parts
         effective_suffixes = {".sol"} if in_node_modules and ".sol" in suffixes else suffixes
 
-        for file_name in sorted(file_names):
+        for file_name in file_names:
             candidate = base_path / file_name
             if candidate.suffix.lower() not in effective_suffixes:
                 continue
@@ -391,7 +391,7 @@ def _normalize_changed_path(changed_file: str | Path, root_path: Path) -> Path |
 
     try:
         return candidate.resolve().relative_to(root_path)
-    except ValueError:
+    except (OSError, ValueError):
         return None
 
 

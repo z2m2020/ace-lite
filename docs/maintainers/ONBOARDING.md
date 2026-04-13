@@ -35,6 +35,8 @@ ace-lite doctor
 
 ## What to run before/after changes
 
+- Install commit-time validation hook: `pre-commit install`
+- Staged-change validation planner: `python scripts/run_precommit_validation.py --staged`
 - Unit tests: `pytest`
 - Docs snippet drift check: `python scripts/validate_docs_cli_snippets.py`
 - Build/update index artifacts for local retrieval: `ace-lite index --root . --output context-map/index.json`
@@ -56,6 +58,7 @@ Useful quick-plan fields:
 - MCP client setup: `docs/guides/MCP_SETUP.md`
 - Architecture overview: `docs/design/ARCHITECTURE_OVERVIEW.md`
 - Orchestrator contract + plugins: `docs/design/ORCHESTRATOR_DESIGN.md`
+- Maintainer system map: `docs/maintainers/SYSTEM_MAP.md`
 - Indexer and rankers: `docs/design/INDEXER_DESIGN.md`
 - Skill routing + lazy-load: `docs/design/SKILL_LAZYLOAD_DESIGN.md`
 - Quality and tuning workflow: `docs/maintainers/QUALITY_GOVERNANCE.md`

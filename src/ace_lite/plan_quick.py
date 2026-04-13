@@ -9,6 +9,13 @@ from typing import Any
 
 from ace_lite.index_stage.policy import resolve_retrieval_policy
 from ace_lite.parsers.languages import parse_language_csv
+from ace_lite.plan_quick_strategies import (
+    BoostStrategyRegistry,
+    DomainStrategyRegistry,
+    IntentStrategyRegistry,
+    NormalizationUtils,
+    QueryFlags,
+)
 from ace_lite.repomap.builder import build_repo_map, build_stage_repo_map
 from ace_lite.retrieval_shared import (
     CandidateSelectionResult,
@@ -192,51 +199,24 @@ def _extract_req_ids(query: str) -> list[str]:
 
 
 def _query_flags(query: str) -> dict[str, bool]:
-    lowered = str(query or "").lower().strip()
-    has_doc_sync_markers = any(marker in lowered for marker in _DOC_SYNC_MARKERS)
-    latest_sensitive = any(marker in lowered for marker in _LATEST_MARKERS)
-    onboarding = any(marker in lowered for marker in _ONBOARDING_MARKERS)
-    req_ids = _extract_req_ids(query)
+    flags = IntentStrategyRegistry.get_instance().detect_intent(query)
     return {
-        "doc_sync": has_doc_sync_markers,
-        "latest_sensitive": latest_sensitive,
-        "onboarding": onboarding,
-        "has_req_id": bool(req_ids),
-        "req_ids": req_ids,
+        "doc_sync": flags.doc_sync,
+        "latest_sensitive": flags.latest_sensitive,
+        "onboarding": flags.onboarding,
+        "has_req_id": flags.has_req_id,
+        "req_ids": list(flags.req_ids),
     }
 
 
 def _classify_path_domain(path: str) -> str:
-    normalized = str(path or "").strip().replace("\\", "/").lower()
-    if normalized.startswith(("planning/", "plans/", ".planning/", ".plans/")) or "/planning/" in normalized or "/.planning/" in normalized:
-        return "planning"
-    if normalized.startswith(("milestones/", ".milestones/")) or "/milestones/" in normalized or "/.milestones/" in normalized:
-        return "planning"
-    if normalized.startswith(("phases/", ".phases/")) or "/phases/" in normalized or "/.phases/" in normalized:
-        return "planning"
-    if normalized.startswith(("state/", ".state/")) or "/state/" in normalized or "/.state/" in normalized:
-        return "planning"
-    if normalized.startswith("repos/"):
-        return "repos"
-    if normalized.startswith("reports/"):
-        return "reports"
-    if normalized.startswith("research/") or "/research/" in normalized:
-        return "research"
-    if normalized.startswith(("reference/", "docs/reference/")) or "/reference/" in normalized:
-        return "reference"
-    if normalized.startswith(("docs/", "doc/")):
-        return "docs"
-    if normalized.startswith(("tests/", "test/")):
-        return "tests"
-    if normalized.endswith((".md", ".mdx")):
-        return "markdown"
-    return "code"
+    return DomainStrategyRegistry.classify(path)
 
 
 def _is_markdown_doc(*, path: str, language: str) -> bool:
-    normalized_path = str(path or "").strip().replace("\\", "/").lower()
-    normalized_language = str(language or "").strip().lower()
-    return normalized_language in _MARKDOWN_LANGUAGES or normalized_path.endswith((".md", ".mdx"))
+    return NormalizationUtils.is_markdown_language(
+        language
+    ) or NormalizationUtils.is_markdown_path(path)
 
 
 def _extract_path_date(path: str) -> date | None:
@@ -251,10 +231,7 @@ def _extract_path_date(path: str) -> date | None:
 
 
 def _path_stem(path: str) -> str:
-    normalized_path = str(path or "").strip().replace("\\", "/").lower()
-    basename = normalized_path.rsplit("/", 1)[-1]
-    stem = basename.rsplit(".", 1)[0]
-    return stem
+    return NormalizationUtils.extract_path_stem(path)
 
 
 def _is_doc_entrypoint_path(*, path: str, semantic_domain: str) -> bool:
@@ -284,39 +261,29 @@ def _find_newest_dated_doc(rows: list[dict[str, Any]]) -> date | None:
     return newest
 
 
-def _doc_sync_intent_boost(*, path: str, language: str, query_flags: dict[str, bool]) -> float:
-    if not bool(query_flags.get("doc_sync", False)):
-        return 0.0
-    normalized_path = str(path or "").strip().replace("\\", "/").lower()
-    normalized_language = str(language or "").strip().lower()
-    semantic_domain = _classify_path_domain(path)
-    primary_hits = sum(1 for marker in _DOC_PRIMARY_NAME_MARKERS if marker in normalized_path)
-    secondary_hits = sum(1 for marker in _DOC_SECONDARY_NAME_MARKERS if marker in normalized_path)
-    is_entrypoint = _is_doc_entrypoint_path(
-        path=path,
-        semantic_domain=semantic_domain,
+def _query_flags_as_registry_flags(query_flags: dict[str, Any]) -> QueryFlags:
+    req_ids_raw = query_flags.get("req_ids", [])
+    if isinstance(req_ids_raw, tuple | list):
+        req_ids = tuple(str(item) for item in req_ids_raw if str(item).strip())
+    else:
+        req_ids = ()
+    return QueryFlags(
+        doc_sync=bool(query_flags.get("doc_sync", False)),
+        latest_sensitive=bool(query_flags.get("latest_sensitive", False)),
+        onboarding=bool(query_flags.get("onboarding", False)),
+        has_req_id=bool(query_flags.get("has_req_id", False)),
+        req_ids=req_ids,
     )
-    boost = 0.0
-    if normalized_language in _MARKDOWN_LANGUAGES or normalized_path.endswith((".md", ".mdx")):
-        boost += 4.0
-    if normalized_path.startswith(_DOC_PREFERRED_PREFIXES):
-        boost += 3.0
-    boost += min(4.0, float(primary_hits) * 1.5)
-    boost += min(1.5, float(secondary_hits) * 0.75)
-    if is_entrypoint:
-        boost += 3.0
-    for prefix, penalty in _DOC_PENALIZED_PREFIXES:
-        if normalized_path.startswith(prefix):
-            boost += penalty
-            break
-    if semantic_domain == "research":
-        boost -= 4.0
-    elif semantic_domain == "reports" and primary_hits == 0:
-        boost -= 1.5
-    for marker, penalty in _DOC_SECONDARY_NAME_PENALTIES:
-        if marker in normalized_path:
-            boost += penalty
-    return boost
+
+
+def _doc_sync_intent_boost(*, path: str, language: str, query_flags: dict[str, bool]) -> float:
+    flags = _query_flags_as_registry_flags(query_flags)
+    return BoostStrategyRegistry.get_instance().calculate_doc_sync_boost(
+        path=path,
+        language=language,
+        flags=flags,
+        context={},
+    )
 
 
 def _latest_doc_intent_boost(
@@ -326,44 +293,13 @@ def _latest_doc_intent_boost(
     query_flags: dict[str, bool],
     newest_dated_doc: date | None,
 ) -> float:
-    if not bool(query_flags.get("latest_sensitive", False)):
-        return 0.0
-    domain = _classify_path_domain(path)
-    if domain not in _LATEST_DOC_DOMAINS:
-        return 0.0
-    if not _is_markdown_doc(path=path, language=language):
-        return 0.0
-    normalized_path = str(path or "").strip().replace("\\", "/").lower()
-    primary_hits = sum(1 for marker in _DOC_PRIMARY_NAME_MARKERS if marker in normalized_path)
-    secondary_hits = sum(1 for marker in _DOC_SECONDARY_NAME_MARKERS if marker in normalized_path)
-    is_entrypoint = _is_doc_entrypoint_path(
+    flags = _query_flags_as_registry_flags(query_flags)
+    return BoostStrategyRegistry.get_instance().calculate_latest_doc_boost(
         path=path,
-        semantic_domain=domain,
+        language=language,
+        flags=flags,
+        context={"newest_dated_doc": newest_dated_doc},
     )
-    boost = 0.0
-    if normalized_path.startswith(_DOC_PREFERRED_PREFIXES):
-        boost += 1.0
-    boost += min(2.5, float(primary_hits))
-    boost += min(0.75, float(secondary_hits) * 0.5)
-    if is_entrypoint:
-        boost += 1.5
-    if "current" in normalized_path or "latest" in normalized_path:
-        boost += 0.75
-    path_date = _extract_path_date(path)
-    if newest_dated_doc is not None and path_date is not None:
-        lag_days = max(0, (newest_dated_doc - path_date).days)
-        if lag_days == 0:
-            boost += 3.0
-        elif lag_days <= 30:
-            boost += 2.0
-        elif lag_days <= 90:
-            boost += 1.0
-    if domain == "reports" and primary_hits == 0:
-        boost -= 0.75
-    for marker, penalty in _DOC_SECONDARY_NAME_PENALTIES:
-        if marker in normalized_path:
-            boost += penalty * 0.5
-    return boost
 
 
 def _build_plan_quick_risk_hints(
@@ -910,10 +846,12 @@ def _build_picked_because(
         reasons.append("test lock")
 
     # Domain match for doc queries
-    if bool(query_flags.get("doc_sync", False)):
-        if row.semantic_domain in {"planning", "docs", "reference"}:
-            if "planning domain" not in reasons:
-                reasons.append("domain match")
+    if (
+        bool(query_flags.get("doc_sync", False))
+        and row.semantic_domain in {"planning", "docs", "reference"}
+        and "planning domain" not in reasons
+    ):
+        reasons.append("domain match")
 
     if not reasons:
         reasons.append("fused score")

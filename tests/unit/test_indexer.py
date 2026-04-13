@@ -3,7 +3,7 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from ace_lite.indexer import build_index, classify_tier, update_index
+from ace_lite.indexer import build_index, classify_tier, discover_source_files, update_index
 
 
 def _create_sample_repo(root: Path) -> None:
@@ -176,3 +176,68 @@ def test_update_index_respects_aceignore(tmp_path: Path) -> None:
 
     assert "pkg/mod.py" not in updated["files"]
     assert updated["file_count"] == 1
+
+
+def test_discover_source_files_returns_repo_relative_sorted_paths(tmp_path: Path) -> None:
+    (tmp_path / "z_dir").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "a_dir").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "z_dir" / "b_file.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "a_dir" / "a_file.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "a_dir" / "z_file.py").write_text("x = 1\n", encoding="utf-8")
+
+    root_path, enabled_languages, files = discover_source_files(
+        tmp_path,
+        languages=["python"],
+    )
+
+    assert root_path == tmp_path.resolve()
+    assert enabled_languages == ("python",)
+    assert [path.relative_to(root_path).as_posix() for path in files] == [
+        "a_dir/a_file.py",
+        "a_dir/z_file.py",
+        "z_dir/b_file.py",
+    ]
+
+
+def test_build_index_ignores_aceignore_permission_error(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _create_sample_repo(tmp_path)
+    (tmp_path / ".aceignore").write_text("pkg/\n", encoding="utf-8")
+    original_read_text = Path.read_text
+
+    def fake_read_text(self: Path, *args, **kwargs) -> str:
+        if self.name == ".aceignore":
+            raise PermissionError("access denied")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+
+    index = build_index(tmp_path, languages=["python"])
+
+    assert "pkg/mod.py" in index["files"]
+    assert "pkg/__init__.py" in index["files"]
+
+
+def test_update_index_skips_changed_path_when_resolve_raises_oserror(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _create_sample_repo(tmp_path)
+    index = build_index(tmp_path, languages=["python"])
+    blocked = tmp_path / "pkg" / "blocked.py"
+    blocked.write_text("def blocked() -> int:\n    return 1\n", encoding="utf-8")
+    original_resolve = Path.resolve
+
+    def fake_resolve(self: Path, *args, **kwargs) -> Path:
+        if self.name == "blocked.py":
+            raise PermissionError("path locked")
+        return original_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", fake_resolve)
+
+    updated = update_index(index, tmp_path, ["pkg/blocked.py"], languages=["python"])
+
+    assert "pkg/blocked.py" not in updated["files"]
+    assert updated["file_count"] == index["file_count"]

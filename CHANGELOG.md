@@ -8,6 +8,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.65] - 2026-04-13
+
+### Added
+
+- Added a dated quality-optimization baseline generator plus focused regression coverage for hotspot metrics and artifact emission.
+- Added explicit orchestrator typed contract and runtime projection test coverage, including shared config projection helpers and commit-time pre-commit hook validation.
+
+### Changed
+
+- Wired the `plan_quick` strategy registry, reduced `repomap/cache` payload copying, narrowed high-risk cache exception handling, and trimmed `indexer` scan overhead while preserving output ordering.
+- Moved orchestrator request/response typing and state projection into shared contract and payload-builder seams, and split config boundary validation from runtime projection so `runtime_settings` and CLI orchestrator factory reuse the same normalization path.
+- Updated maintainer architecture, onboarding, quality governance, and system map documentation to reflect the stabilized Phase 1 and Phase 2 quality optimization surfaces.
+
 ## [0.3.64] - 2026-04-12
 
 ### Added

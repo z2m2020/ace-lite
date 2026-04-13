@@ -31,6 +31,11 @@ such as `benchmark/case_evaluation.py`, `cli_app/orchestrator_factory.py`,
 `config_models.py`, `runtime.py`, and `mcp_server/service.py` remain retired or
 demoted.
 
+For the benchmark report stack, keep `src/ace_lite/benchmark/report.py` as the
+assembly shell and move report-only summary sections into support modules such
+as `src/ace_lite/benchmark/report_observability.py` rather than growing the
+shell again.
+
 The current hotspot set is intentionally report-only. Update the target list in
 `benchmark/quality/hotspot_baseline.json` together with `scripts/run_quality_gate.py`
 when a new maintainability wave changes the main concentration risks.
@@ -38,6 +43,8 @@ when a new maintainability wave changes the main concentration risks.
 Quality execution is unified via:
 
 - `scripts/run_quality_gate.py`
+- `.pre-commit-config.yaml`
+- `scripts/run_precommit_validation.py`
 - audit baseline: `benchmark/quality/pip_audit_baseline.json`
 - friction event log: `artifacts/friction/events.jsonl`
 - friction report builder: `scripts/build_friction_report.py`
@@ -82,10 +89,14 @@ These suites freeze three contracts that are easy to drift during refactors:
 ```powershell
 pip install -e .[dev]
 python scripts/validate_docs_cli_snippets.py
+python scripts/run_precommit_validation.py --staged
+pre-commit install
 python scripts/run_quality_gate.py --root . --output-dir artifacts/quality/latest --pip-audit-baseline benchmark/quality/pip_audit_baseline.json --fail-on-new-vulns --friction-log artifacts/friction/events.jsonl
 python scripts/build_friction_report.py --events-path artifacts/friction/events.jsonl --output-dir artifacts/friction/latest
 python scripts/log_friction_event.py --stage planning --expected "ace_plan_quick returns focused candidates" --actual "results include noisy files" --root-cause retrieval-noise --manual-fix "tighten query terms + rerun ace_plan" --severity medium --time-cost-min 4 --tag mcp --tag retrieval
 ```
+
+`run_quality_gate.py` now also emits report-only hotspot `ruff` and `mypy` results for the tracked hotspot file set. These hotspot checks are observability-only and do not flip the overall gate result, but they give maintainers a stable way to track whether the highest-risk files are converging.
 
 ## Tuning Workflow (Config Packs)
 

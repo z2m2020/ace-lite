@@ -8,32 +8,30 @@ from __future__ import annotations
 import pytest
 
 from ace_lite.orchestrator_contracts import (
-    # TypedDicts
+    OrchestratorStateProjection,
+    PlanRequestAdapter,
     PlanRequestPayload,
+    PlanResponseAdapter,
     PlanResponsePayload,
+    StageStateAdapter,
     StageStatePayload,
-    # Accessors
+    ValidationError,
+    build_plan_request_payload,
+    build_retrieval_candidate,
+    build_stage_state,
+    get_bool,
+    get_dict,
+    get_float,
+    get_int,
+    get_list,
     get_optional,
     get_required,
-    get_typed,
     get_str,
-    get_int,
-    get_float,
-    get_bool,
-    get_list,
-    get_dict,
-    # Validation
-    ValidationError,
+    get_typed,
+    project_orchestrator_state,
     validate_payload,
     validate_plan_request,
     validate_plan_response,
-    # Builders
-    build_stage_state,
-    build_retrieval_candidate,
-    # Adapters
-    PlanRequestAdapter,
-    PlanResponseAdapter,
-    StageStateAdapter,
 )
 
 
@@ -44,10 +42,12 @@ class TestTypedDicts:
         """Test PlanRequestPayload structure."""
         payload: PlanRequestPayload = {
             "query": "test query",
+            "repo": "demo-repo",
             "root": "/path/to/root",
             "top_k": 10,
         }
         assert payload["query"] == "test query"
+        assert payload["repo"] == "demo-repo"
         assert payload["top_k"] == 10
 
     def test_plan_response_payload(self):
@@ -55,6 +55,8 @@ class TestTypedDicts:
         payload: PlanResponsePayload = {
             "schema_version": "v1",
             "query": "test",
+            "repo": "demo-repo",
+            "root": "/tmp/demo",
             "plan": "implementation",
             "confidence": 0.95,
         }
@@ -69,6 +71,25 @@ class TestTypedDicts:
             "metrics": {"files": 100},
         }
         assert payload["status"] == "completed"
+
+    def test_orchestrator_state_projection_payload(self):
+        """Test orchestrator state projection structure."""
+        payload: OrchestratorStateProjection = {
+            "memory": {},
+            "index": {},
+            "repomap": {},
+            "augment": {},
+            "skills": {},
+            "source_plan": {},
+            "validation": {},
+            "plugin_action_log": [],
+            "plugin_conflicts": [],
+            "plugin_policy_stage": {},
+            "contract_errors": [],
+            "agent_loop": {},
+            "long_term_capture": [],
+        }
+        assert payload["validation"] == {}
 
 
 class TestAccessors:
@@ -157,7 +178,7 @@ class TestValidation:
 
     def test_validate_plan_request(self):
         """Test plan request validation."""
-        payload = {"query": "test"}
+        payload = {"query": "test", "repo": "demo", "root": "/tmp/demo"}
         result = validate_plan_request(payload)
         assert result == payload
 
@@ -202,6 +223,39 @@ class TestBuilders:
         assert candidate["score"] == 0.95
         assert candidate["rank"] == 1
 
+    def test_build_plan_request_payload(self):
+        """Test canonical plan request building."""
+        payload = build_plan_request_payload(
+            query="test query",
+            repo="demo-repo",
+            root="/repo",
+            time_range="30d",
+            start_date="2026-04-01",
+            end_date="2026-04-13",
+            filters={"lang": "python"},
+        )
+
+        assert payload["query"] == "test query"
+        assert payload["repo"] == "demo-repo"
+        assert payload["filters"] == {"lang": "python"}
+
+    def test_project_orchestrator_state_uses_default_validation(self):
+        """Test orchestrator state projection fail-opens invalid state."""
+        projection = project_orchestrator_state(
+            {
+                "memory": {"hits": 1},
+                "validation": "invalid",
+                "_plugin_action_log": [{"stage": "index"}],
+                "_plugin_conflicts": "invalid",
+            },
+            default_validation_payload={"enabled": False, "reason": "disabled"},
+        )
+
+        assert projection["memory"] == {"hits": 1}
+        assert projection["validation"] == {"enabled": False, "reason": "disabled"}
+        assert projection["plugin_action_log"] == [{"stage": "index"}]
+        assert projection["plugin_conflicts"] == []
+
 
 class TestPlanRequestAdapter:
     """Tests for PlanRequestAdapter."""
@@ -210,6 +264,7 @@ class TestPlanRequestAdapter:
         """Test basic property access."""
         payload = {
             "query": "test query",
+            "repo": "demo-repo",
             "root": "/project",
             "top_k": 10,
             "budget_tokens": 1000,
@@ -217,6 +272,7 @@ class TestPlanRequestAdapter:
         adapter = PlanRequestAdapter(payload)
 
         assert adapter.query == "test query"
+        assert adapter.repo == "demo-repo"
         assert adapter.root == "/project"
         assert adapter.top_k == 10
         assert adapter.budget_tokens == 1000
@@ -226,6 +282,7 @@ class TestPlanRequestAdapter:
         adapter = PlanRequestAdapter({})
 
         assert adapter.query == ""
+        assert adapter.repo == ""
         assert adapter.root == "."
         assert adapter.top_k == 8
         assert adapter.budget_tokens == 800
@@ -236,11 +293,13 @@ class TestPlanRequestAdapter:
             "query": "test",
             "language": "python",
             "skip_stages": ["index"],
+            "filters": {"lang": "python"},
         }
         adapter = PlanRequestAdapter(payload)
 
         assert adapter.language == "python"
         assert adapter.skip_stages == ["index"]
+        assert adapter.filters == {"lang": "python"}
 
 
 class TestPlanResponseAdapter:
@@ -251,6 +310,8 @@ class TestPlanResponseAdapter:
         payload = {
             "schema_version": "v1",
             "query": "test",
+            "repo": "demo-repo",
+            "root": "/repo",
             "plan": "implementation",
             "confidence": 0.95,
         }
@@ -258,6 +319,8 @@ class TestPlanResponseAdapter:
 
         assert adapter.schema_version == "v1"
         assert adapter.query == "test"
+        assert adapter.repo == "demo-repo"
+        assert adapter.root == "/repo"
         assert adapter.plan == "implementation"
         assert adapter.confidence == 0.95
 
@@ -285,6 +348,19 @@ class TestPlanResponseAdapter:
         adapter = PlanResponseAdapter(payload)
 
         assert len(adapter.stage_metrics) == 1
+
+    def test_observability_accessors(self):
+        """Test observability projection accessors."""
+        payload = {
+            "validation": {"enabled": True},
+            "observability": {
+                "learning_router_rollout_decision": {"reason": "shadow_only"}
+            },
+        }
+        adapter = PlanResponseAdapter(payload)
+
+        assert adapter.validation == {"enabled": True}
+        assert adapter.learning_router_rollout_decision == {"reason": "shadow_only"}
 
 
 class TestStageStateAdapter:

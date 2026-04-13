@@ -6,6 +6,7 @@ for the public repository.
 ## Public maintainer docs
 
 - `ONBOARDING.md`
+- `SYSTEM_MAP.md`
 - `BENCHMARKING.md`
 - `RELEASING.md`
 - `QUALITY_GOVERNANCE.md`
@@ -16,6 +17,7 @@ for the public repository.
 
 ## Suggested entrypoints
 
+- cross-cutting architecture changes: start with `SYSTEM_MAP.md`, then pair `docs/design/ARCHITECTURE_OVERVIEW.md` and `docs/design/ORCHESTRATOR_DESIGN.md`
 - release or RC work: start with `RELEASING.md`, then cross-check `BENCHMARKING.md` and `QUALITY_GOVERNANCE.md`
 - maintainability refactors: pair `QUALITY_GOVERNANCE.md` with `docs/design/ARCHITECTURE_OVERVIEW.md` and `docs/design/ORCHESTRATOR_DESIGN.md` so the refactor guard suites and documented seams stay in sync
 

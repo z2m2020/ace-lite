@@ -28,6 +28,8 @@ HOTSPOT_TARGETS = [
     "src/ace_lite/benchmark/summaries.py",
 ]
 
+HOTSPOT_CHECK_NAMES = ("ruff_hotspots", "mypy_hotspots")
+
 
 @dataclass(slots=True)
 class CommandResult:
@@ -466,6 +468,8 @@ def _diff_findings(
 def _build_markdown(summary: dict[str, Any]) -> str:
     commands = summary.get("commands")
     command_rows = commands if isinstance(commands, list) else []
+    hotspot_checks = summary.get("hotspot_checks")
+    hotspot_check_rows = hotspot_checks if isinstance(hotspot_checks, list) else []
     pip_audit = summary.get("pip_audit")
     pip_audit_section = pip_audit if isinstance(pip_audit, dict) else {}
     hotspot_summary = summary.get("hotspot_summary")
@@ -589,6 +593,33 @@ def _build_markdown(summary: dict[str, Any]) -> str:
         lines.append("")
     lines.extend(
         [
+            "## Hotspot Checks",
+            "",
+            "- Report only: True",
+            "",
+        ]
+    )
+    if hotspot_check_rows:
+        lines.extend(
+            [
+                "| Name | Passed | Exit Code | Elapsed (ms) |",
+                "| --- | :---: | ---: | ---: |",
+            ]
+        )
+        for row in hotspot_check_rows:
+            if not isinstance(row, dict):
+                continue
+            lines.append(
+                "| {name} | {passed} | {code} | {elapsed:.2f} |".format(
+                    name=str(row.get("name") or ""),
+                    passed="PASS" if bool(row.get("passed", False)) else "FAIL",
+                    code=int(row.get("returncode", 0) or 0),
+                    elapsed=float(row.get("elapsed_ms", 0.0) or 0.0),
+                )
+            )
+        lines.append("")
+    lines.extend(
+        [
             "## Friction",
             "",
             f"- Enabled: {bool(friction_section.get('enabled', False))}",
@@ -636,6 +667,24 @@ def _quality_commands(
     ]
 
 
+def _quality_hotspot_commands(
+    *,
+    python_exe: str,
+    hotspot_paths: list[str] | None = None,
+) -> list[tuple[str, list[str]]]:
+    targets = tuple(
+        _normalize_hotspot_path(path)
+        for path in (hotspot_paths if isinstance(hotspot_paths, list) else HOTSPOT_TARGETS)
+        if _normalize_hotspot_path(path)
+    )
+    if not targets:
+        return []
+    return [
+        ("ruff_hotspots", [python_exe, "-m", "ruff", "check", *targets]),
+        ("mypy_hotspots", [python_exe, "-m", "mypy", *targets]),
+    ]
+
+
 def run_quality_gate(
     *,
     root: Path,
@@ -646,6 +695,8 @@ def run_quality_gate(
     python_exe: str,
     friction_log_path: Path | None = None,
     capture_friction: bool = False,
+    include_hotspot_checks: bool = True,
+    hotspot_paths: list[str] | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     coverage_json_path = output_dir / "coverage.json"
@@ -656,6 +707,7 @@ def run_quality_gate(
     )
 
     command_summaries: list[dict[str, Any]] = []
+    hotspot_check_summaries: list[dict[str, Any]] = []
     all_required_passed = True
     friction_events_logged = 0
 
@@ -802,11 +854,30 @@ def run_quality_gate(
         }
     )
 
+    if include_hotspot_checks:
+        for name, command in _quality_hotspot_commands(
+            python_exe=python_exe,
+            hotspot_paths=hotspot_paths,
+        ):
+            result = _run_command(name=name, command=command, cwd=root)
+            _write_command_logs(result=result, output_dir=output_dir)
+            hotspot_check_summaries.append(
+                {
+                    "name": result.name,
+                    "command": result.command,
+                    "returncode": result.returncode,
+                    "elapsed_ms": result.elapsed_ms,
+                    "passed": result.passed,
+                    "report_only": True,
+                }
+            )
+
     summary = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "root": str(root),
         "fail_on_new_vulns": bool(fail_on_new_vulns),
         "commands": command_summaries,
+        "hotspot_checks": hotspot_check_summaries,
         "pip_audit": {
             "parsed": pip_parsed,
             "baseline_path": str(baseline_path),
@@ -829,6 +900,7 @@ def run_quality_gate(
             root=root,
             coverage_json_path=coverage_json_path,
             hotspot_baseline_path=resolved_hotspot_baseline,
+            hotspot_paths=hotspot_paths,
         ),
         "passed": all_required_passed,
     }
@@ -871,12 +943,18 @@ def main() -> int:
         help="Friction JSONL output path for auto-captured quality failures.",
     )
     parser.add_argument(
+        "--no-hotspot-checks",
+        action="store_false",
+        dest="include_hotspot_checks",
+        help="Disable report-only ruff/mypy hotspot checks.",
+    )
+    parser.add_argument(
         "--no-capture-friction",
         action="store_false",
         dest="capture_friction",
         help="Disable automatic friction event capture.",
     )
-    parser.set_defaults(capture_friction=True)
+    parser.set_defaults(capture_friction=True, include_hotspot_checks=True)
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parents[1]
@@ -895,6 +973,7 @@ def main() -> int:
         python_exe=sys.executable,
         friction_log_path=friction_log_path,
         capture_friction=bool(args.capture_friction),
+        include_hotspot_checks=bool(args.include_hotspot_checks),
     )
 
     summary_path = output_dir / "summary.json"

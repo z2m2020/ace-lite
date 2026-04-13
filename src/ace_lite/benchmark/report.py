@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ace_lite.benchmark.pq_overlay import resolve_benchmark_pq_003_overlay
 from ace_lite.benchmark.report_cases import append_case_sections
 from ace_lite.benchmark.report_metrics import (
     ALL_METRIC_ORDER,
@@ -11,11 +12,27 @@ from ace_lite.benchmark.report_metrics import (
     SLO_BUDGET_LIMIT_ORDER,
     SLO_SIGNAL_ORDER,
     STAGE_LATENCY_ORDER,
+)
+from ace_lite.benchmark.report_metrics import (
     format_metric as _format_metric,
+)
+from ace_lite.benchmark.report_metrics import (
     format_optional_metric as _format_optional_metric,
+)
+from ace_lite.benchmark.report_metrics import (
     normalize_metrics as _normalize_metrics,
 )
-from ace_lite.benchmark.pq_overlay import resolve_benchmark_pq_003_overlay
+from ace_lite.benchmark.report_observability import (
+    append_adaptive_router_observability_summary,
+    append_decision_observability_summary,
+    append_feedback_loop_summary,
+    append_feedback_observability_summary,
+    append_ltm_explainability_summary,
+    append_preference_observability_summary,
+    append_retrieval_control_plane_gate_summary,
+    append_reward_log_summary,
+    format_decision_event,
+)
 from ace_lite.benchmark.report_summary import copy_optional_summary_sections
 from ace_lite.cli_app.runtime_stats_enrichment_support import (
     attach_runtime_memory_ltm_signal_summary,
@@ -2087,9 +2104,7 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
             latest_created_at = str(durable_summary.get("latest_created_at") or "").strip()
             if latest_created_at:
                 lines.append(
-                    "- Durable preference latest_created_at: {value}".format(
-                        value=latest_created_at
-                )
+                    f"- Durable preference latest_created_at: {latest_created_at}"
             )
             lines.append("")
         durable_scoped_summary_raw = preference_snapshot.get(
@@ -2131,9 +2146,7 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
             ).strip()
             if latest_created_at:
                 lines.append(
-                    "- Durable preference scoped latest_created_at: {value}".format(
-                        value=latest_created_at
-                    )
+                    f"- Durable preference scoped latest_created_at: {latest_created_at}"
                 )
             lines.append("")
         durable_retrieval_summary_raw = preference_snapshot.get(
@@ -2170,9 +2183,7 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
             ).strip()
             if latest_created_at:
                 lines.append(
-                    "- Durable retrieval-preference latest_created_at: {value}".format(
-                        value=latest_created_at
-                    )
+                    f"- Durable retrieval-preference latest_created_at: {latest_created_at}"
                 )
             lines.append("")
         durable_packing_summary_raw = preference_snapshot.get(
@@ -2209,9 +2220,7 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
             ).strip()
             if latest_created_at:
                 lines.append(
-                    "- Durable packing-preference latest_created_at: {value}".format(
-                        value=latest_created_at
-                    )
+                    f"- Durable packing-preference latest_created_at: {latest_created_at}"
                 )
             lines.append("")
         durable_validation_summary_raw = preference_snapshot.get(
@@ -2250,9 +2259,7 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
             ).strip()
             if latest_created_at:
                 lines.append(
-                    "- Durable validation-preference latest_created_at: {value}".format(
-                        value=latest_created_at
-                    )
+                    f"- Durable validation-preference latest_created_at: {latest_created_at}"
                 )
             lines.append("")
         lines.append("")
@@ -2276,9 +2283,7 @@ def _append_evidence_insufficiency_summary(
     lines.append("")
 
     lines.append(
-        "- Applicable failing positive cases: {applicable}".format(
-            applicable=applicable_case_count
-        )
+        f"- Applicable failing positive cases: {applicable_case_count}"
     )
     lines.append(
         "- Excluded negative-control cases: {count}".format(
@@ -2349,7 +2354,7 @@ def _append_missing_context_risk_summary(
     lines.append("## Missing-Context Risk Summary")
     lines.append("")
     lines.append(
-        "- Applicable positive cases: {count}".format(count=applicable_case_count)
+        f"- Applicable positive cases: {applicable_case_count}"
     )
     lines.append(
         "- Excluded negative-control cases: {count}".format(
@@ -2583,7 +2588,7 @@ def _append_retrieval_default_strategy_summary(
     )
     if provider_case_counts:
         distribution = ", ".join(
-            f"{str(provider)}={int(count or 0)}"
+            f"{provider!s}={int(count or 0)}"
             for provider, count in sorted(provider_case_counts.items())
         )
         lines.append(f"- Semantic rerank providers: {distribution}")
@@ -2724,610 +2729,6 @@ def _append_agent_loop_control_plane_summary(
     lines.append("")
 
 
-def _append_preference_observability_summary(
-    lines: list[str], results: dict[str, Any]
-) -> None:
-    summary_raw = results.get("preference_observability_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
-    if not summary:
-        return
-
-    lines.append("## Preference Observability Summary")
-    lines.append("")
-    lines.append(
-        "- Observed cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("observed_case_count", 0) or 0),
-            total=int(summary.get("case_count", 0) or 0),
-            rate=float(summary.get("observed_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Notes-hit cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("notes_hit_case_count", 0) or 0),
-            total=int(summary.get("case_count", 0) or 0),
-            rate=float(summary.get("notes_hit_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Profile-selected cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("profile_selected_case_count", 0) or 0),
-            total=int(summary.get("case_count", 0) or 0),
-            rate=float(summary.get("profile_selected_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Capture-triggered cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("capture_triggered_case_count", 0) or 0),
-            total=int(summary.get("case_count", 0) or 0),
-            rate=float(summary.get("capture_triggered_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append("")
-    lines.append("| Metric | Value |")
-    lines.append("| --- | ---: |")
-    lines.append(
-        "| notes_hit_ratio_mean | {value:.4f} |".format(
-            value=float(summary.get("notes_hit_ratio_mean", 0.0) or 0.0)
-        )
-    )
-    lines.append(
-        "| profile_selected_count_mean | {value:.4f} |".format(
-            value=float(summary.get("profile_selected_count_mean", 0.0) or 0.0)
-        )
-    )
-    lines.append("")
-
-
-def _append_feedback_observability_summary(
-    lines: list[str], results: dict[str, Any]
-) -> None:
-    summary_raw = results.get("feedback_observability_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
-    if not summary:
-        return
-
-    reasons_raw = summary.get("reasons")
-    reasons: dict[str, Any] = reasons_raw if isinstance(reasons_raw, dict) else {}
-
-    lines.append("## Feedback Observability Summary")
-    lines.append("")
-    lines.append(
-        "- Enabled cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("enabled_case_count", 0) or 0),
-            total=int(summary.get("case_count", 0) or 0),
-            rate=float(summary.get("enabled_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Matched cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("matched_case_count", 0) or 0),
-            total=int(summary.get("case_count", 0) or 0),
-            rate=float(summary.get("matched_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Boosted cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("boosted_case_count", 0) or 0),
-            total=int(summary.get("case_count", 0) or 0),
-            rate=float(summary.get("boosted_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append("")
-    lines.append("| Metric | Value |")
-    lines.append("| --- | ---: |")
-    lines.append(
-        "| event_count_mean | {value:.4f} |".format(
-            value=float(summary.get("event_count_mean", 0.0) or 0.0)
-        )
-    )
-    lines.append(
-        "| matched_event_count_mean | {value:.4f} |".format(
-            value=float(summary.get("matched_event_count_mean", 0.0) or 0.0)
-        )
-    )
-    lines.append(
-        "| boosted_candidate_count_mean | {value:.4f} |".format(
-            value=float(summary.get("boosted_candidate_count_mean", 0.0) or 0.0)
-        )
-    )
-    lines.append(
-        "| boosted_unique_paths_mean | {value:.4f} |".format(
-            value=float(summary.get("boosted_unique_paths_mean", 0.0) or 0.0)
-        )
-    )
-    lines.append("")
-    lines.append("### Reasons")
-    lines.append("")
-    if not reasons:
-        lines.append("- None")
-        lines.append("")
-        return
-    lines.append("| Reason | Count |")
-    lines.append("| --- | ---: |")
-    for name, count in sorted(
-        reasons.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))
-    ):
-        lines.append(f"| {name} | {int(count or 0)} |")
-    lines.append("")
-
-
-def _append_ltm_explainability_summary(
-    lines: list[str], results: dict[str, Any]
-) -> None:
-    summary_raw = results.get("ltm_explainability_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
-    if not summary:
-        return
-
-    case_count = int(summary.get("case_count", 0) or 0)
-    lines.append("## Long-Term Explainability Summary")
-    lines.append("")
-    lines.append(
-        "- Selected cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("selected_case_count", 0) or 0),
-            total=case_count,
-            rate=float(summary.get("selected_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Attribution cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("attribution_case_count", 0) or 0),
-            total=case_count,
-            rate=float(summary.get("attribution_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Graph-neighbor cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("graph_neighbor_case_count", 0) or 0),
-            total=case_count,
-            rate=float(summary.get("graph_neighbor_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Plan-constraint cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("plan_constraint_case_count", 0) or 0),
-            total=case_count,
-            rate=float(summary.get("plan_constraint_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Feedback-signal observed cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("feedback_signal_observed_case_count", 0) or 0),
-            total=case_count,
-            rate=float(
-                summary.get("feedback_signal_observed_case_rate", 0.0) or 0.0
-            ),
-        )
-    )
-    lines.append(
-        "- Attribution-scope observed cases: {count}/{total} ({rate:.4f})".format(
-            count=int(summary.get("attribution_scope_observed_case_count", 0) or 0),
-            total=case_count,
-            rate=float(
-                summary.get("attribution_scope_observed_case_rate", 0.0) or 0.0
-            ),
-        )
-    )
-    lines.append("")
-    lines.append("| Metric | Value |")
-    lines.append("| --- | ---: |")
-    lines.append(
-        "| selected_count_mean | {value:.4f} |".format(
-            value=float(summary.get("selected_count_mean", 0.0) or 0.0)
-        )
-    )
-    lines.append(
-        "| attribution_count_mean | {value:.4f} |".format(
-            value=float(summary.get("attribution_count_mean", 0.0) or 0.0)
-        )
-    )
-    lines.append(
-        "| graph_neighbor_count_mean | {value:.4f} |".format(
-            value=float(summary.get("graph_neighbor_count_mean", 0.0) or 0.0)
-        )
-    )
-    lines.append(
-        "| plan_constraint_count_mean | {value:.4f} |".format(
-            value=float(summary.get("plan_constraint_count_mean", 0.0) or 0.0)
-        )
-    )
-    lines.append("")
-    feedback_rows_raw = summary.get("feedback_signals")
-    feedback_rows = feedback_rows_raw if isinstance(feedback_rows_raw, list) else []
-    if feedback_rows:
-        lines.append("| Feedback Signal | Cases | Case Rate | Total Count | Count Mean |")
-        lines.append("| --- | ---: | ---: | ---: | ---: |")
-        for item in feedback_rows:
-            if not isinstance(item, dict):
-                continue
-            lines.append(
-                "| "
-                f"{str(item.get('feedback_signal') or '').strip() or '(unknown)'}"
-                f" | {int(item.get('case_count', 0) or 0)}"
-                f" | {float(item.get('case_rate', 0.0) or 0.0):.4f}"
-                f" | {int(item.get('total_count', 0) or 0)}"
-                f" | {float(item.get('count_mean', 0.0) or 0.0):.4f} |"
-            )
-        lines.append("")
-    attribution_rows_raw = summary.get("attribution_scopes")
-    attribution_rows = (
-        attribution_rows_raw if isinstance(attribution_rows_raw, list) else []
-    )
-    if attribution_rows:
-        lines.append(
-            "| Attribution Scope | Cases | Case Rate | Total Count | Count Mean |"
-        )
-        lines.append("| --- | ---: | ---: | ---: | ---: |")
-        for item in attribution_rows:
-            if not isinstance(item, dict):
-                continue
-            lines.append(
-                "| "
-                f"{str(item.get('attribution_scope') or '').strip() or '(unknown)'}"
-                f" | {int(item.get('case_count', 0) or 0)}"
-                f" | {float(item.get('case_rate', 0.0) or 0.0):.4f}"
-                f" | {int(item.get('total_count', 0) or 0)}"
-                f" | {float(item.get('count_mean', 0.0) or 0.0):.4f} |"
-            )
-        lines.append("")
-
-
-def _append_feedback_loop_summary(lines: list[str], results: dict[str, Any]) -> None:
-    summary_raw = results.get("feedback_loop_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
-    if not summary:
-        return
-
-    feedback_surfaces_raw = summary.get("feedback_surfaces")
-    feedback_surfaces: dict[str, Any] = (
-        feedback_surfaces_raw if isinstance(feedback_surfaces_raw, dict) else {}
-    )
-
-    lines.append("## Feedback Loop Summary")
-    lines.append("")
-    lines.append(
-        "- Issue-report cases: {count}".format(
-            count=int(summary.get("issue_report_case_count", 0) or 0)
-        )
-    )
-    lines.append(
-        "- Converted issue-report benchmark cases: {count} rate={rate:.4f}".format(
-            count=int(summary.get("issue_report_linked_case_count", 0) or 0),
-            rate=float(
-                summary.get("issue_to_benchmark_case_conversion_rate", 0.0) or 0.0
-            ),
-        )
-    )
-    lines.append(
-        "- Linked-plan issue reports: {count} rate={rate:.4f}".format(
-            count=int(summary.get("issue_report_linked_plan_case_count", 0) or 0),
-            rate=float(summary.get("issue_report_linked_plan_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Resolved issue reports: {count} rate={rate:.4f} time_to_fix_mean={hours:.2f}h".format(
-            count=int(summary.get("issue_report_resolved_case_count", 0) or 0),
-            rate=float(summary.get("issue_report_resolution_rate", 0.0) or 0.0),
-            hours=float(summary.get("issue_report_time_to_fix_hours_mean", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Dev-issue capture cases: {count} captured={captured} rate={rate:.4f}".format(
-            count=int(summary.get("dev_issue_capture_case_count", 0) or 0),
-            captured=int(summary.get("dev_issue_captured_case_count", 0) or 0),
-            rate=float(summary.get("dev_issue_capture_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Dev-feedback resolution cases: {count} resolved={resolved} rate={rate:.4f}".format(
-            count=int(summary.get("dev_feedback_resolution_case_count", 0) or 0),
-            resolved=int(summary.get("dev_feedback_resolved_case_count", 0) or 0),
-            rate=float(summary.get("dev_feedback_resolution_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Dev-feedback issue linkage: issues={issue_count} linked_fixes={linked} resolved_issues={resolved} issue_to_fix_rate={rate:.4f} time_to_fix_mean={hours:.2f}h".format(
-            issue_count=int(summary.get("dev_feedback_issue_count", 0) or 0),
-            linked=int(summary.get("dev_feedback_linked_fix_issue_count", 0) or 0),
-            resolved=int(summary.get("dev_feedback_resolved_issue_count", 0) or 0),
-            rate=float(summary.get("dev_issue_to_fix_rate", 0.0) or 0.0),
-            hours=float(
-                summary.get("dev_feedback_issue_time_to_fix_hours_mean", 0.0) or 0.0
-            ),
-        )
-    )
-    lines.append("")
-    lines.append("| Metric | Value |")
-    lines.append("| --- | ---: |")
-    lines.append(
-        "| issue_to_benchmark_case_conversion_rate | {value:.4f} |".format(
-            value=float(
-                summary.get("issue_to_benchmark_case_conversion_rate", 0.0) or 0.0
-            )
-        )
-    )
-    lines.append(
-        "| issue_report_linked_plan_rate | {value:.4f} |".format(
-            value=float(summary.get("issue_report_linked_plan_rate", 0.0) or 0.0)
-        )
-    )
-    lines.append(
-        "| issue_report_time_to_fix_hours_mean | {value:.2f} |".format(
-            value=float(summary.get("issue_report_time_to_fix_hours_mean", 0.0) or 0.0)
-        )
-    )
-    lines.append(
-        "| dev_issue_capture_rate | {value:.4f} |".format(
-            value=float(summary.get("dev_issue_capture_rate", 0.0) or 0.0)
-        )
-    )
-    lines.append(
-        "| dev_feedback_resolution_rate | {value:.4f} |".format(
-            value=float(summary.get("dev_feedback_resolution_rate", 0.0) or 0.0)
-        )
-    )
-    lines.append(
-        "| dev_issue_to_fix_rate | {value:.4f} |".format(
-            value=float(summary.get("dev_issue_to_fix_rate", 0.0) or 0.0)
-        )
-    )
-    lines.append("")
-    lines.append("### Feedback Surfaces")
-    lines.append("")
-    if not feedback_surfaces:
-        lines.append("- None")
-        lines.append("")
-        return
-
-    lines.append("| Surface | Count |")
-    lines.append("| --- | ---: |")
-    for name, count in sorted(
-        feedback_surfaces.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))
-    ):
-        lines.append(f"| {name} | {int(count or 0)} |")
-    lines.append("")
-
-
-def _append_adaptive_router_observability_summary(
-    lines: list[str],
-    results: dict[str, Any],
-) -> None:
-    summary_raw = results.get("adaptive_router_observability_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
-    if not summary:
-        return
-
-    enabled_case_count = int(summary.get("enabled_case_count", 0) or 0)
-    shadow_coverage_case_count = int(summary.get("shadow_coverage_case_count", 0) or 0)
-    comparable_case_count = int(summary.get("comparable_case_count", 0) or 0)
-    agreement_case_count = int(summary.get("agreement_case_count", 0) or 0)
-    disagreement_case_count = int(summary.get("disagreement_case_count", 0) or 0)
-
-    lines.append("## Adaptive Router Observability")
-    lines.append("")
-    lines.append(
-        "- Enabled cases: {count}/{total} ({rate:.4f})".format(
-            count=enabled_case_count,
-            total=int(summary.get("case_count", 0) or 0),
-            rate=float(summary.get("enabled_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Shadow coverage: {count}/{enabled} ({rate:.4f})".format(
-            count=shadow_coverage_case_count,
-            enabled=enabled_case_count,
-            rate=float(summary.get("shadow_coverage_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Comparable cases: {count}/{enabled} ({rate:.4f})".format(
-            count=comparable_case_count,
-            enabled=enabled_case_count,
-            rate=float(summary.get("comparable_case_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Agreement: {count}/{comparable} ({rate:.4f})".format(
-            count=agreement_case_count,
-            comparable=comparable_case_count,
-            rate=float(summary.get("agreement_rate", 0.0) or 0.0),
-        )
-    )
-    lines.append(
-        "- Disagreement: {count}/{comparable} ({rate:.4f})".format(
-            count=disagreement_case_count,
-            comparable=comparable_case_count,
-            rate=float(summary.get("disagreement_rate", 0.0) or 0.0),
-        )
-    )
-    shadow_source_counts_raw = summary.get("shadow_source_counts")
-    shadow_source_counts: dict[str, Any] = (
-        shadow_source_counts_raw if isinstance(shadow_source_counts_raw, dict) else {}
-    )
-    if shadow_source_counts:
-        formatted = ", ".join(
-            f"{name}={int(count or 0)}"
-            for name, count in sorted(
-                shadow_source_counts.items(),
-                key=lambda item: (-int(item[1] or 0), str(item[0])),
-            )
-        )
-        lines.append(f"- Shadow sources: {formatted}")
-    lines.append("")
-
-    executed_arms = summary.get("executed_arms", [])
-    if isinstance(executed_arms, list) and executed_arms:
-        lines.append("### Executed Arms")
-        lines.append("")
-        for item in executed_arms:
-            if not isinstance(item, dict):
-                continue
-            lines.append(
-                "- {arm_id}: cases={case_count} rate={case_rate:.4f} task_success={task_success:.4f} mrr={mrr:.4f} fallback_cases={fallback_cases} downgrade_cases={downgrade_cases} latency_p95_ms={latency_p95:.4f} index_latency_p95_ms={index_latency_p95:.4f}".format(
-                    arm_id=str(item.get("arm_id", "") or "(unknown)"),
-                    case_count=int(item.get("case_count", 0) or 0),
-                    case_rate=float(item.get("case_rate", 0.0) or 0.0),
-                    task_success=float(item.get("task_success_rate", 0.0) or 0.0),
-                    mrr=float(item.get("mrr", 0.0) or 0.0),
-                    fallback_cases=int(item.get("fallback_case_count", 0) or 0),
-                    downgrade_cases=int(item.get("downgrade_case_count", 0) or 0),
-                    latency_p95=float(item.get("latency_p95_ms", 0.0) or 0.0),
-                    index_latency_p95=float(
-                        item.get("index_latency_p95_ms", 0.0) or 0.0
-                    ),
-                )
-            )
-        lines.append("")
-
-    shadow_arms = summary.get("shadow_arms", [])
-    if isinstance(shadow_arms, list) and shadow_arms:
-        lines.append("### Shadow Arms")
-        lines.append("")
-        for item in shadow_arms:
-            if not isinstance(item, dict):
-                continue
-            lines.append(
-                "- {arm_id}: cases={case_count} rate={case_rate:.4f} task_success={task_success:.4f} mrr={mrr:.4f} fallback_cases={fallback_cases} downgrade_cases={downgrade_cases} latency_p95_ms={latency_p95:.4f} index_latency_p95_ms={index_latency_p95:.4f}".format(
-                    arm_id=str(item.get("arm_id", "") or "(unknown)"),
-                    case_count=int(item.get("case_count", 0) or 0),
-                    case_rate=float(item.get("case_rate", 0.0) or 0.0),
-                    task_success=float(item.get("task_success_rate", 0.0) or 0.0),
-                    mrr=float(item.get("mrr", 0.0) or 0.0),
-                    fallback_cases=int(item.get("fallback_case_count", 0) or 0),
-                    downgrade_cases=int(item.get("downgrade_case_count", 0) or 0),
-                    latency_p95=float(item.get("latency_p95_ms", 0.0) or 0.0),
-                    index_latency_p95=float(
-                        item.get("index_latency_p95_ms", 0.0) or 0.0
-                    ),
-                )
-            )
-        lines.append("")
-
-
-def _append_reward_log_summary(lines: list[str], results: dict[str, Any]) -> None:
-    summary_raw = results.get("reward_log_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
-    if not summary:
-        return
-
-    lines.append("## Reward Log Summary")
-    lines.append("")
-    lines.append(f"- Status: {str(summary.get('status') or 'disabled')}")
-    lines.append(f"- Enabled: {bool(summary.get('enabled', False))}")
-    lines.append(f"- Active: {bool(summary.get('active', False))}")
-    lines.append(f"- Path: {str(summary.get('path') or '(none)')}")
-    lines.append(
-        "- Eligible cases: {count}".format(
-            count=max(0, int(summary.get("eligible_case_count", 0) or 0))
-        )
-    )
-    lines.append(
-        "- Submitted events: {count}".format(
-            count=max(0, int(summary.get("submitted_count", 0) or 0))
-        )
-    )
-    lines.append(
-        "- Written events: {count}".format(
-            count=max(0, int(summary.get("written_count", 0) or 0))
-        )
-    )
-    lines.append(
-        "- Pending events: {count}".format(
-            count=max(0, int(summary.get("pending_count", 0) or 0))
-        )
-    )
-    lines.append(
-        "- Error count: {count}".format(
-            count=max(0, int(summary.get("error_count", 0) or 0))
-        )
-    )
-    last_error = str(summary.get("last_error") or "").strip()
-    if last_error:
-        lines.append(f"- Last error: {last_error}")
-    lines.append("")
-
-
-def _append_retrieval_control_plane_gate_summary(
-    lines: list[str], results: dict[str, Any]
-) -> None:
-    summary_raw = results.get("retrieval_control_plane_gate_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
-    if not summary:
-        return
-
-    failed_checks_raw = summary.get("failed_checks", [])
-    failed_checks = (
-        [str(item) for item in failed_checks_raw if str(item).strip()]
-        if isinstance(failed_checks_raw, list)
-        else []
-    )
-
-    lines.append("## Retrieval Control Plane Gate Summary")
-    lines.append("")
-    lines.append(
-        f"- Gate passed: {'yes' if bool(summary.get('gate_passed', False)) else 'no'}"
-    )
-    lines.append(
-        "- Regression evaluated: {value}".format(
-            value="yes" if bool(summary.get("regression_evaluated", False)) else "no"
-        )
-    )
-    lines.append(
-        "- Benchmark regression detected: {value}".format(
-            value="yes"
-            if bool(summary.get("benchmark_regression_detected", False))
-            else "no"
-        )
-    )
-    benchmark_regression_passed = (
-        bool(summary.get("benchmark_regression_passed", False))
-        if "benchmark_regression_passed" in summary
-        else not bool(summary.get("benchmark_regression_detected", False))
-    )
-    lines.append(
-        "- Benchmark regression gate: {value}".format(
-            value="pass" if benchmark_regression_passed else "fail"
-        )
-    )
-    lines.append(
-        "- Adaptive router shadow coverage: {value:.4f} (threshold >= {threshold:.4f}, {status})".format(
-            value=float(summary.get("adaptive_router_shadow_coverage", 0.0) or 0.0),
-            threshold=float(
-                summary.get("adaptive_router_shadow_coverage_threshold", 0.0) or 0.0
-            ),
-            status="pass"
-            if bool(summary.get("adaptive_router_shadow_coverage_passed", False))
-            else "fail",
-        )
-    )
-    lines.append(
-        "- Risk-upgrade precision gain: {value:.4f} (threshold >= {threshold:.4f}, {status})".format(
-            value=float(summary.get("risk_upgrade_precision_gain", 0.0) or 0.0),
-            threshold=float(
-                summary.get("risk_upgrade_precision_gain_threshold", 0.0) or 0.0
-            ),
-            status="pass"
-            if bool(summary.get("risk_upgrade_precision_gain_passed", False))
-            else "fail",
-        )
-    )
-    lines.append(
-        "- Latency p95 ms: {value:.2f} (threshold <= {threshold:.2f}, {status})".format(
-            value=float(summary.get("latency_p95_ms", 0.0) or 0.0),
-            threshold=float(summary.get("latency_p95_ms_threshold", 0.0) or 0.0),
-            status="pass"
-            if bool(summary.get("latency_p95_ms_passed", False))
-            else "fail",
-        )
-    )
-    lines.append(
-        "- Failed checks: {value}".format(
-            value=", ".join(failed_checks) if failed_checks else "(none)"
-        )
-    )
-    lines.append("")
-
-
 def _append_retrieval_frontier_gate_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
@@ -3396,54 +2797,6 @@ def _append_retrieval_frontier_gate_summary(
     lines.append("")
 
 
-def _append_decision_observability_summary(
-    lines: list[str], results: dict[str, Any]
-) -> None:
-    summary_raw = results.get("decision_observability_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
-    if not summary:
-        return
-
-    lines.append("## Decision Observability Summary")
-    lines.append("")
-    lines.append(
-        "- Cases with decision events: {count}/{case_count} ({rate})".format(
-            count=int(summary.get("case_with_decisions_count", 0) or 0),
-            case_count=int(summary.get("case_count", 0) or 0),
-            rate=f"{float(summary.get('case_with_decisions_rate', 0.0) or 0.0):.4f}",
-        )
-    )
-    lines.append(
-        "- Decision events: {count}".format(
-            count=int(summary.get("decision_event_count", 0) or 0)
-        )
-    )
-    lines.append("")
-
-    for title, key in (
-        ("Actions", "actions"),
-        ("Targets", "targets"),
-        ("Reasons", "reasons"),
-        ("Outcomes", "outcomes"),
-    ):
-        counts_raw = summary.get(key)
-        counts: dict[str, Any] = counts_raw if isinstance(counts_raw, dict) else {}
-        lines.append(f"### {title}")
-        lines.append("")
-        if not counts:
-            lines.append("- None")
-            lines.append("")
-            continue
-        label = title[:-1] if title.endswith("s") else title
-        lines.append(f"| {label} | Count |")
-        lines.append("| --- | ---: |")
-        for name, count in sorted(
-            counts.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))
-        ):
-            lines.append(f"| {name} | {int(count or 0)} |")
-        lines.append("")
-
-
 def _append_chunk_stage_miss_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
@@ -3483,22 +2836,6 @@ def _append_chunk_stage_miss_summary(
         )
         lines.append(f"| {name} | {int(count or 0)} | {rate:.4f} |")
     lines.append("")
-
-
-def _format_decision_event(event: dict[str, Any]) -> str:
-    stage = str(event.get("stage") or "").strip()
-    action = str(event.get("action") or "").strip()
-    target = str(event.get("target") or "").strip()
-    reason = str(event.get("reason") or "").strip()
-    outcome = str(event.get("outcome") or "").strip()
-    parts = [part for part in (stage, action, target) if part]
-    if reason:
-        parts.append(f"reason={reason}")
-    if outcome:
-        parts.append(f"outcome={outcome}")
-    return " | ".join(parts)
-
-
 def _append_stage_latency_summary(lines: list[str], results: dict[str, Any]) -> None:
     summary_raw = results.get("stage_latency_summary")
     summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
@@ -3707,7 +3044,7 @@ def _append_retrieval_task_gap_cases(lines: list[str], cases: list[Any]) -> None
         if isinstance(decision_trace, list):
             for event in decision_trace:
                 if isinstance(event, dict):
-                    lines.append(f"- decision_event: {_format_decision_event(event)}")
+                    lines.append(f"- decision_event: {format_decision_event(event)}")
         lines.append("")
 
 
@@ -3814,7 +3151,7 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     _append_native_scip_summary(lines, results)
     _append_graph_context_source_summary(lines, results)
     _append_chunk_cache_contract_summary(lines, results)
-    _append_retrieval_control_plane_gate_summary(lines, results)
+    append_retrieval_control_plane_gate_summary(lines, results)
     _append_retrieval_frontier_gate_summary(lines, results)
     _append_agent_loop_control_plane_summary(lines, results)
 
@@ -3828,8 +3165,8 @@ def build_report_markdown(results: dict[str, Any]) -> str:
             lines.append(f"- {label}: {int(count or 0)}")
         lines.append("")
 
-    _append_adaptive_router_observability_summary(lines, results)
-    _append_reward_log_summary(lines, results)
+    append_adaptive_router_observability_summary(lines, results)
+    append_reward_log_summary(lines, results)
     _append_runtime_stats_summary(lines, results)
 
     baseline_metrics_raw = results.get("baseline_metrics")
@@ -3853,14 +3190,14 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     _append_comparison_lane_summary(lines, results)
     _append_evidence_insufficiency_summary(lines, results)
     _append_missing_context_risk_summary(lines, results)
-    _append_feedback_loop_summary(lines, results)
-    _append_feedback_observability_summary(lines, results)
-    _append_ltm_explainability_summary(lines, results)
-    _append_preference_observability_summary(lines, results)
+    append_feedback_loop_summary(lines, results)
+    append_feedback_observability_summary(lines, results)
+    append_ltm_explainability_summary(lines, results)
+    append_preference_observability_summary(lines, results)
     _append_retrieval_default_strategy_summary(lines, results)
     _append_retrieval_context_observability_summary(lines, results)
     _append_chunk_stage_miss_summary(lines, results)
-    _append_decision_observability_summary(lines, results)
+    append_decision_observability_summary(lines, results)
     _append_stage_latency_summary(lines, results)
     _append_slo_budget_summary(lines, results)
 
@@ -3908,7 +3245,7 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     append_case_sections(
         lines,
         cases=cases if isinstance(cases, list) else [],
-        format_decision_event=_format_decision_event,
+        format_decision_event=format_decision_event,
     )
 
     return "\n".join(lines).strip() + "\n"

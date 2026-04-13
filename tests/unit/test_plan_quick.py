@@ -53,6 +53,67 @@ def test_score_plan_quick_rows_tiebreaks_by_path() -> None:
     assert [row.path for row in scored] == ["a.py", "b.py"]
 
 
+def test_score_plan_quick_rows_uses_strategy_registries(monkeypatch) -> None:
+    calls: dict[str, int] = {"intent": 0, "domain": 0, "doc_boost": 0, "latest_boost": 0}
+
+    class FakeIntentRegistry:
+        def detect_intent(self, query: str):
+            calls["intent"] += 1
+            assert query == "latest docs status"
+
+            class Flags:
+                doc_sync = True
+                latest_sensitive = True
+                onboarding = False
+                has_req_id = False
+                req_ids = ()
+
+            return Flags()
+
+    class FakeBoostRegistry:
+        def calculate_doc_sync_boost(self, **kwargs):
+            calls["doc_boost"] += 1
+            assert kwargs["path"] == "docs/status.md"
+            return 2.5
+
+        def calculate_latest_doc_boost(self, **kwargs):
+            calls["latest_boost"] += 1
+            assert kwargs["context"]["newest_dated_doc"] is None
+            return 1.25
+
+    monkeypatch.setattr(
+        "ace_lite.plan_quick.IntentStrategyRegistry.get_instance",
+        lambda: FakeIntentRegistry(),
+    )
+    monkeypatch.setattr(
+        "ace_lite.plan_quick.DomainStrategyRegistry.classify",
+        lambda path: calls.__setitem__("domain", calls["domain"] + 1) or "docs",
+    )
+    monkeypatch.setattr(
+        "ace_lite.plan_quick.BoostStrategyRegistry.get_instance",
+        lambda: FakeBoostRegistry(),
+    )
+
+    scored = score_plan_quick_rows(
+        query="latest docs status",
+        rows=[
+            {
+                "path": "docs/status.md",
+                "module": "docs.status",
+                "language": "markdown",
+                "score": 3.0,
+            }
+        ],
+        lexical_boost_per_hit=0.0,
+    )
+
+    assert len(scored) == 1
+    assert scored[0].semantic_domain == "docs"
+    assert scored[0].intent_boost == 2.5
+    assert scored[0].recency_boost == 1.25
+    assert calls == {"intent": 1, "domain": 2, "doc_boost": 1, "latest_boost": 1}
+
+
 def test_score_plan_quick_rows_biases_doc_sync_queries_toward_markdown_status_files() -> None:
     rows = [
         {

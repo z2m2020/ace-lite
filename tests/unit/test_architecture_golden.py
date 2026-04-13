@@ -30,7 +30,6 @@ from ace_lite.orchestrator import (
 )
 from ace_lite.orchestrator_config import OrchestratorConfig
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -535,6 +534,8 @@ class TestRefactorBoundaryContracts:
         for text in (overview, orchestrator_design):
             assert "runtime_command_support.py" in text
             assert "server_tool_registration.py" in text
+            assert "orchestrator_payload_builder.py" in text
+            assert "report_observability.py" in text
             assert "src/ace_lite/index_stage/" in text
             assert "case_evaluation_*.py" in text
 

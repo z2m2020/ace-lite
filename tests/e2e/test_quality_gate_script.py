@@ -327,3 +327,61 @@ def test_hotspot_baseline_matches_current_targets() -> None:
     hotspots = payload.get("hotspots")
     assert isinstance(hotspots, list)
     assert [item.get("path") for item in hotspots if isinstance(item, dict)] == module.HOTSPOT_TARGETS
+
+
+def test_run_quality_gate_reports_hotspot_checks_without_failing_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_quality_gate.py")
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(json.dumps({"findings": []}), encoding="utf-8")
+    output_dir = tmp_path / "out"
+
+    def fake_run_command(*, name: str, command: list[str], cwd: Path):
+        _ = (command, cwd)
+        if name == "pip_audit":
+            return module.CommandResult(
+                name=name,
+                command=["pip-audit"],
+                returncode=0,
+                stdout=json.dumps({"dependencies": []}),
+                stderr="",
+                elapsed_ms=7.0,
+            )
+        if name == "ruff_hotspots":
+            return module.CommandResult(
+                name=name,
+                command=["ruff"],
+                returncode=1,
+                stdout="",
+                stderr="hotspot lint failed",
+                elapsed_ms=9.0,
+            )
+        return module.CommandResult(
+            name=name,
+            command=[name],
+            returncode=0,
+            stdout="ok",
+            stderr="",
+            elapsed_ms=5.0,
+        )
+
+    monkeypatch.setattr(module, "_run_command", fake_run_command)
+
+    summary = module.run_quality_gate(
+        root=tmp_path,
+        output_dir=output_dir,
+        baseline_path=baseline_path,
+        fail_on_new_vulns=True,
+        python_exe=sys.executable,
+        hotspot_paths=["src/ace_lite/orchestrator.py"],
+    )
+
+    assert summary["passed"] is True
+    hotspot_checks = summary["hotspot_checks"]
+    assert isinstance(hotspot_checks, list)
+    assert [item["name"] for item in hotspot_checks] == list(module.HOTSPOT_CHECK_NAMES)
+    assert hotspot_checks[0]["report_only"] is True
+    assert hotspot_checks[0]["passed"] is False
+    assert hotspot_checks[1]["passed"] is True

@@ -14,7 +14,7 @@ From the GitNexus + Rowboat borrowing reports:
 - Rowboat provides "build_skill_catalog()" for human-readable skill enumeration
 - ACE-Lite already has `build_skill_catalog()` in `src/ace_lite/skills.py`
 
-The gap: **there is no CLI or MCP entry point to expose the catalog**.
+The original gap was that ACE-Lite had `build_skill_catalog()` but no public CLI surface to expose it. That gap is now closed through `ace-lite skills catalog`.
 
 ---
 
@@ -27,27 +27,12 @@ The gap: **there is no CLI or MCP entry point to expose the catalog**.
 
 ---
 
-## Option A: CLI `--catalog` Flag (Recommended)
-
-### Implementation
-
-Add a `--catalog` flag to the `ace-lite plan` command:
-
-```python
-# In cli_app/commands/plan.py or cli_enhancements.py
-
-@click.option(
-    "--catalog",
-    is_flag=True,
-    help="Output skill catalog and exit (read-only, does not run pipeline)",
-)
-```
+## Current Implementation: CLI `ace-lite skills catalog`
 
 ### Behavior
 
 ```bash
-# Show skill catalog
-ace-lite plan --catalog --repo ace-lite --root .
+ace-lite skills catalog --root . --skills-dir skills
 
 # Current output format (from build_skill_catalog):
 # # ACE-Lite Skill Catalog
@@ -59,48 +44,26 @@ ace-lite plan --catalog --repo ace-lite --root .
 # - Default sections: ...
 ```
 
-### Pros
-- Minimal implementation (just flag + output)
-- Single responsibility
-- Fits existing CLI patterns
-
-### Cons
-- Requires knowing to use `--catalog` flag
-
----
-
-## Option B: CLI `ace-lite skills` Subcommand
-
 ### Implementation
 
-Create a new command group:
+The implemented command lives in `src/ace_lite/cli_app/commands/skills.py`:
 
 ```python
-# In src/ace_lite/cli_app/commands/skills.py (new file)
-
 @click.group("skills", help="Skill management and discovery.")
 def skills_group() -> None:
     pass
 
 
 @skills_group.command("catalog", help="Show available skills as markdown catalog.")
-@click.option("--repo", default=".", help="Repository identifier.")
 @click.option("--root", default=".", help="Repository root path.")
-@click.option("--skills-dir", default=None, help="Skills directory override.")
-def catalog_command(repo: str, root: str, skills_dir: str | None) -> None:
+@click.option("--skills-dir", default="skills", help="Skills directory override.")
+def catalog_command(root: str, skills_dir: str) -> None:
     from ace_lite.skills import build_skill_manifest, build_skill_catalog
-    from ace_lite.cli_app.params import resolve_cli_path
     
-    skills_path = resolve_cli_path(skills_dir or "skills")
+    skills_path = _resolve_skills_path(root=root, skills_dir=skills_dir)
     manifest = build_skill_manifest(skills_path)
     catalog = build_skill_catalog(manifest)
     click.echo(catalog)
-```
-
-### Usage
-
-```bash
-ace-lite skills catalog --repo ace-lite --root .
 ```
 
 ### Pros
@@ -114,7 +77,7 @@ ace-lite skills catalog --repo ace-lite --root .
 
 ---
 
-## Option C: MCP Tool `skills_catalog`
+## Future Option: MCP Tool `skills_catalog`
 
 ### Implementation
 
@@ -157,47 +120,6 @@ mcp__skills__catalog()
 
 ---
 
-## Recommended Approach
-
-**Option A (CLI `--catalog` flag)** as the immediate implementation, with **Option C (MCP tool)** as a future enhancement.
-
-### Rationale
-
-1. `build_skill_catalog()` already exists - minimal delta
-2. CLI is the primary interface for local development
-3. MCP can be added later without breaking CLI
-4. Keeps catalog as a Layer 2 read-only artifact (not a routing mechanism)
-
----
-
-## Implementation Sketch (Option A)
-
-### File: `src/ace_lite/cli_app/cli_enhancements.py`
-
-```python
-# Add to existing plan command or create minimal wrapper
-
-def add_catalog_flag(parser: Any) -> None:
-    parser.add_argument(
-        "--catalog",
-        action="store_true",
-        help="Show skill catalog and exit (read-only)",
-    )
-
-# In plan command handler:
-if catalog:
-    from ace_lite.skills import build_skill_manifest, build_skill_catalog
-    from ace_lite.cli_app.params import resolve_cli_path
-    
-    skills_dir = resolve_cli_path(skills_dir_override or "skills")
-    manifest = build_skill_manifest(skills_dir)
-    catalog_md = build_skill_catalog(manifest)
-    click.echo(catalog_md)
-    return
-```
-
----
-
 ## Testing
 
 ```bash
@@ -205,7 +127,7 @@ if catalog:
 pytest -q tests/unit/test_skills.py -k catalog
 
 # Integration test
-ace-lite plan --catalog --repo ace-lite --root . | head -20
+ace-lite skills catalog --root . --skills-dir skills
 ```
 
 ---
@@ -223,7 +145,7 @@ Per `docs/maintainers/REPORT_LAYER_GOVERNANCE.md`:
 ## Rollback
 
 ```bash
-git restore -- src/ace_lite/cli_app/cli_enhancements.py
+git restore -- src/ace_lite/cli_app/commands/skills.py
 ```
 
 ---
@@ -240,5 +162,6 @@ git restore -- src/ace_lite/cli_app/cli_enhancements.py
 ## References
 
 - `src/ace_lite/skills.py` - `build_skill_catalog()` implementation
+- `src/ace_lite/cli_app/commands/skills.py` - CLI catalog surface
 - `docs/maintainers/REPORT_LAYER_GOVERNANCE.md` - Layer 2 artifact rules
 - `.context/TEMPLATE_RESEARCH_REPORT.md` - Template used for borrowing reports

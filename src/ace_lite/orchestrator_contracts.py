@@ -14,8 +14,8 @@ Key improvements:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, TypedDict
-
 
 # =============================================================================
 # Core Payload TypedDicts
@@ -26,7 +26,11 @@ class PlanRequestPayload(TypedDict, total=False):
     """Payload structure for plan requests."""
 
     query: str
+    repo: str
     root: str
+    time_range: str | None
+    start_date: str | None
+    end_date: str | None
     top_k: int
     ranking_profile: str
     budget_tokens: int
@@ -34,6 +38,7 @@ class PlanRequestPayload(TypedDict, total=False):
     skip_stages: list[str]
     force_stages: list[str]
     context: dict[str, Any]
+    filters: dict[str, Any]
 
 
 class PlanResponsePayload(TypedDict, total=False):
@@ -41,8 +46,20 @@ class PlanResponsePayload(TypedDict, total=False):
 
     schema_version: str
     query: str
+    repo: str
+    root: str
     plan: str
     confidence: float
+    pipeline_order: list[str]
+    conventions: dict[str, Any]
+    memory: dict[str, Any]
+    index: dict[str, Any]
+    repomap: dict[str, Any]
+    augment: dict[str, Any]
+    skills: dict[str, Any]
+    source_plan: dict[str, Any]
+    validation: dict[str, Any]
+    observability: dict[str, Any]
     stage_metrics: list[dict[str, Any]]
     candidates: list[dict[str, Any]]
 
@@ -89,6 +106,24 @@ class RetrievalConfigPayload(TypedDict, total=False):
     language: str | None
     ranking_profile: str
     signal_weights: dict[str, float]
+
+
+class OrchestratorStateProjection(TypedDict):
+    """Canonical orchestrator stage/state projection."""
+
+    memory: dict[str, Any]
+    index: dict[str, Any]
+    repomap: dict[str, Any]
+    augment: dict[str, Any]
+    skills: dict[str, Any]
+    source_plan: dict[str, Any]
+    validation: dict[str, Any]
+    plugin_action_log: list[dict[str, Any]]
+    plugin_conflicts: list[dict[str, Any]]
+    plugin_policy_stage: dict[str, Any]
+    contract_errors: list[dict[str, Any]]
+    agent_loop: dict[str, Any]
+    long_term_capture: list[dict[str, Any]]
 
 
 # =============================================================================
@@ -194,6 +229,20 @@ def get_dict(data: dict[str, Any], key: str, default: dict | None = None) -> dic
     if default is None:
         default = {}
     return get_typed(data, key, dict, default)
+
+
+def coerce_mapping(data: Any) -> dict[str, Any]:
+    """Project arbitrary input into a plain dict mapping."""
+    if isinstance(data, Mapping):
+        return {str(key): value for key, value in data.items()}
+    return {}
+
+
+def coerce_mapping_list(data: Any) -> list[dict[str, Any]]:
+    """Project arbitrary input into a list of plain dict mappings."""
+    if not isinstance(data, list):
+        return []
+    return [coerce_mapping(item) for item in data if isinstance(item, Mapping)]
 
 
 # =============================================================================
@@ -303,6 +352,59 @@ def build_stage_state(
     return payload
 
 
+def build_plan_request_payload(
+    *,
+    query: str,
+    repo: str,
+    root: str,
+    time_range: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    filters: Mapping[str, Any] | None = None,
+) -> PlanRequestPayload:
+    """Build a canonical plan request payload."""
+    payload: PlanRequestPayload = {
+        "query": str(query),
+        "repo": str(repo),
+        "root": str(root),
+    }
+    if time_range is not None:
+        payload["time_range"] = str(time_range)
+    if start_date is not None:
+        payload["start_date"] = str(start_date)
+    if end_date is not None:
+        payload["end_date"] = str(end_date)
+    if isinstance(filters, Mapping):
+        payload["filters"] = coerce_mapping(filters)
+    return payload
+
+
+def project_orchestrator_state(
+    state: Mapping[str, Any],
+    *,
+    default_validation_payload: Mapping[str, Any],
+) -> OrchestratorStateProjection:
+    """Project raw ``ctx.state`` into a stable typed view."""
+    validation = coerce_mapping(state.get("validation"))
+    if not validation:
+        validation = coerce_mapping(default_validation_payload)
+    return {
+        "memory": coerce_mapping(state.get("memory")),
+        "index": coerce_mapping(state.get("index")),
+        "repomap": coerce_mapping(state.get("repomap")),
+        "augment": coerce_mapping(state.get("augment")),
+        "skills": coerce_mapping(state.get("skills")),
+        "source_plan": coerce_mapping(state.get("source_plan")),
+        "validation": validation,
+        "plugin_action_log": coerce_mapping_list(state.get("_plugin_action_log")),
+        "plugin_conflicts": coerce_mapping_list(state.get("_plugin_conflicts")),
+        "plugin_policy_stage": coerce_mapping(state.get("_plugin_policy_stage")),
+        "contract_errors": coerce_mapping_list(state.get("_contract_errors")),
+        "agent_loop": coerce_mapping(state.get("_agent_loop")),
+        "long_term_capture": coerce_mapping_list(state.get("_long_term_capture")),
+    }
+
+
 def build_retrieval_candidate(
     path: str,
     score: float,
@@ -353,6 +455,26 @@ class PlanRequestAdapter:
         return get_str(self._payload, "root", ".")
 
     @property
+    def repo(self) -> str:
+        """Get the repository identifier."""
+        return get_str(self._payload, "repo", "")
+
+    @property
+    def time_range(self) -> str | None:
+        """Get the requested time range."""
+        return get_optional(self._payload, "time_range")
+
+    @property
+    def start_date(self) -> str | None:
+        """Get the requested start date."""
+        return get_optional(self._payload, "start_date")
+
+    @property
+    def end_date(self) -> str | None:
+        """Get the requested end date."""
+        return get_optional(self._payload, "end_date")
+
+    @property
     def top_k(self) -> int:
         """Get the top K value."""
         return get_int(self._payload, "top_k", 8)
@@ -387,6 +509,11 @@ class PlanRequestAdapter:
         """Get the context dict."""
         return get_dict(self._payload, "context", {})
 
+    @property
+    def filters(self) -> dict[str, Any]:
+        """Get the filter mapping."""
+        return get_dict(self._payload, "filters", {})
+
 
 class PlanResponseAdapter:
     """Adapter for PlanResponsePayload with type-safe accessors."""
@@ -415,6 +542,16 @@ class PlanResponseAdapter:
         return get_float(self._payload, "confidence", 0.0)
 
     @property
+    def repo(self) -> str:
+        """Get the repository identifier."""
+        return get_str(self._payload, "repo", "")
+
+    @property
+    def root(self) -> str:
+        """Get the resolved root path."""
+        return get_str(self._payload, "root", "")
+
+    @property
     def stage_metrics(self) -> list[dict[str, Any]]:
         """Get the stage metrics."""
         return get_list(self._payload, "stage_metrics")
@@ -423,6 +560,21 @@ class PlanResponseAdapter:
     def candidates(self) -> list[dict[str, Any]]:
         """Get the candidates."""
         return get_list(self._payload, "candidates")
+
+    @property
+    def validation(self) -> dict[str, Any]:
+        """Get the validation payload."""
+        return get_dict(self._payload, "validation", {})
+
+    @property
+    def observability(self) -> dict[str, Any]:
+        """Get the observability payload."""
+        return get_dict(self._payload, "observability", {})
+
+    @property
+    def learning_router_rollout_decision(self) -> dict[str, Any]:
+        """Get the learning-router rollout decision payload."""
+        return get_dict(self.observability, "learning_router_rollout_decision", {})
 
     def get_candidate_paths(self) -> list[str]:
         """Get just the candidate paths."""
@@ -494,33 +646,33 @@ class StageStateAdapter:
 # =============================================================================
 
 __all__ = [
-    # TypedDicts
-    "PlanRequestPayload",
-    "PlanResponsePayload",
-    "StageStatePayload",
-    "RetrievalContextPayload",
     "MemoryConfigPayload",
+    "OrchestratorStateProjection",
+    "PlanRequestAdapter",
+    "PlanRequestPayload",
+    "PlanResponseAdapter",
+    "PlanResponsePayload",
     "RetrievalConfigPayload",
-    # Accessors
+    "RetrievalContextPayload",
+    "StageStateAdapter",
+    "StageStatePayload",
+    "ValidationError",
+    "build_plan_request_payload",
+    "build_retrieval_candidate",
+    "build_stage_state",
+    "coerce_mapping",
+    "coerce_mapping_list",
+    "get_bool",
+    "get_dict",
+    "get_float",
+    "get_int",
+    "get_list",
     "get_optional",
     "get_required",
-    "get_typed",
     "get_str",
-    "get_int",
-    "get_float",
-    "get_bool",
-    "get_list",
-    "get_dict",
-    # Validation
-    "ValidationError",
+    "get_typed",
+    "project_orchestrator_state",
     "validate_payload",
     "validate_plan_request",
     "validate_plan_response",
-    # Builders
-    "build_stage_state",
-    "build_retrieval_candidate",
-    # Adapters
-    "PlanRequestAdapter",
-    "PlanResponseAdapter",
-    "StageStateAdapter",
 ]

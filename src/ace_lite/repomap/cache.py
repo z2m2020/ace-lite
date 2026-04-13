@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import copy
 import hashlib
 import json
+import sqlite3
 from pathlib import Path
 from time import time
 from typing import Any
 
+from ace_lite.repomap.cache_utils import (
+    selective_copy_payload,
+)
 from ace_lite.stage_artifact_cache import StageArtifactCache
 from ace_lite.token_estimator import normalize_tokenizer_model
 
@@ -163,7 +166,7 @@ def _load_cached_payload_entry(
             continue
         legacy_payload = entry.get("payload")
         if isinstance(legacy_payload, dict):
-            return copy.deepcopy(legacy_payload)
+            return selective_copy_payload(legacy_payload)
         if backend != "stage_artifact_cache":
             continue
 
@@ -182,7 +185,7 @@ def _load_cached_payload_entry(
         )
         if cached is None:
             continue
-        materialized = copy.deepcopy(cached.payload)
+        materialized = cached.payload
         _store_artifact_memory(
             schema_version=schema_version,
             cache_path=cache_path,
@@ -261,7 +264,7 @@ def _store_cached_payload_entry(
                 "meta": _normalize_cache_meta(item.get("meta")),
                 "stage_name": str(item.get("stage_name") or stage_name),
                 **(
-                    {"payload": copy.deepcopy(item["payload"])}
+                    {"payload": selective_copy_payload(item["payload"])}
                     if isinstance(item.get("payload"), dict)
                     else {}
                 ),
@@ -276,7 +279,7 @@ def _store_cached_payload_entry(
             query_hash=_build_query_hash(key),
             fingerprint=str(key),
             settings_fingerprint=_build_meta_fingerprint(normalized_meta),
-            payload=copy.deepcopy(payload),
+            payload=payload,
             token_weight=_estimate_payload_token_weight(payload),
             ttl_seconds=max(0, int(normalized_meta.get("ttl_seconds") or 0)),
             content_version=str(normalized_meta.get("content_version") or schema_version),
@@ -310,7 +313,7 @@ def _store_cached_payload_entry(
             payload=payload,
         )
         return True
-    except Exception:
+    except (OSError, sqlite3.Error, TypeError, ValueError):
         pass
 
     trimmed_entries.insert(
@@ -320,7 +323,7 @@ def _store_cached_payload_entry(
             "updated_at_epoch": round(float(time()), 3),
             "meta": normalized_meta,
             "stage_name": stage_name,
-            "payload": copy.deepcopy(payload),
+            "payload": selective_copy_payload(payload),
         },
     )
     if len(trimmed_entries) > max_entries:
@@ -396,7 +399,7 @@ def _load_artifact_memory(
             None,
         )
         return None
-    return copy.deepcopy(cached[2])
+    return selective_copy_payload(cached[2])
 
 
 def _store_artifact_memory(
@@ -416,7 +419,7 @@ def _store_artifact_memory(
         return
     _REPOMAP_ARTIFACT_MEMORY[
         _artifact_memory_key(schema_version, cache_path, key)
-    ] = (stat.st_mtime_ns, stat.st_size, copy.deepcopy(payload))
+    ] = (stat.st_mtime_ns, stat.st_size, selective_copy_payload(payload))
 
 
 def _load_cache_payload(*, cache_path: Path, schema_version: str) -> dict[str, Any] | None:
@@ -492,7 +495,7 @@ def _is_entry_expired(
         return False
     try:
         updated_at = float(entry.get("updated_at_epoch", 0.0) or 0.0)
-    except Exception:
+    except (TypeError, ValueError):
         return True
     if updated_at <= 0.0:
         return True

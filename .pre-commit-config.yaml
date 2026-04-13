@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ace-lite-precommit-validation
+        name: ace-lite precommit validation
+        entry: python scripts/run_precommit_validation.py --staged
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
