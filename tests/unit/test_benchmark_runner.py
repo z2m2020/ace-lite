@@ -5,9 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from ace_lite.benchmark.runner import BenchmarkRunner
-from ace_lite.benchmark.runner import load_baseline_metrics
-from ace_lite.benchmark.runner import load_cases
+from ace_lite.benchmark.runner import BenchmarkRunner, load_baseline_metrics, load_cases
 
 
 class _StubOrchestrator:

@@ -12,14 +12,14 @@ import pytest
 
 from ace_lite.indexer_utils import (
     CompiledPattern,
-    compile_aceignore_patterns,
-    match_compiled_patterns,
     PathResolutionCache,
+    compile_aceignore_patterns,
     extract_sort_key,
-    sorted_paths,
-    should_process_file,
+    match_compiled_patterns,
     normalize_aceignore_pattern,
     normalize_aceignore_patterns,
+    should_process_file,
+    sorted_paths,
 )
 
 

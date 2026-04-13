@@ -4,16 +4,11 @@ import hashlib
 import json
 import os
 from collections import OrderedDict
-from dataclasses import dataclass
-from dataclasses import replace
-from datetime import datetime
-from datetime import timedelta
-from datetime import timezone
-from pathlib import Path
-from pathlib import PurePosixPath
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta, timezone
+from pathlib import Path, PurePosixPath
 from threading import Lock
-from typing import Any, cast
-from typing import Callable
+from typing import Any, Callable, cast
 
 from ace_lite.stage_artifact_cache_store import (
     STAGE_ARTIFACT_CACHE_WRITE_ORDER,
@@ -26,7 +21,6 @@ from ace_lite.stage_artifact_cache_store import (
     resolve_stage_artifact_temp_root,
 )
 from ace_lite.token_estimator import estimate_payload_tokens, normalize_tokenizer_model
-
 
 WriteStepRecorder = Callable[[str], None]
 _HOT_TIER_DEFAULT_MAX_ENTRIES = 32

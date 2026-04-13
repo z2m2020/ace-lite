@@ -10,30 +10,66 @@ from ace_lite.benchmark.report_metrics import (
     build_zero_metrics,
     normalize_metrics,
 )
-from ace_lite.benchmark.summary_common import PIPELINE_STAGE_ORDER, p95 as _p95
+from ace_lite.benchmark.summary_common import PIPELINE_STAGE_ORDER
+from ace_lite.benchmark.summary_common import p95 as _p95
 from ace_lite.benchmark.summary_quality import (
     build_agent_loop_control_plane_summary as _build_agent_loop_control_plane_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_chunk_stage_miss_summary as _build_chunk_stage_miss_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_comparison_lane_summary as _build_comparison_lane_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_decision_observability_summary as _build_decision_observability_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_evidence_insufficiency_summary as _build_evidence_insufficiency_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_feedback_loop_summary as _build_feedback_loop_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_feedback_observability_summary as _build_feedback_observability_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_missing_context_risk_summary as _build_missing_context_risk_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_preference_observability_summary as _build_preference_observability_summary_impl,
-    build_retrieval_default_strategy_summary as _build_retrieval_default_strategy_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_retrieval_context_observability_summary as _build_retrieval_context_observability_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
+    build_retrieval_default_strategy_summary as _build_retrieval_default_strategy_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_slo_budget_summary as _build_slo_budget_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_stage_latency_summary as _build_stage_latency_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     is_risk_upgrade_case as _is_risk_upgrade_case_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     summarize_missing_context_risk_case as _summarize_missing_context_risk_case_impl,
 )
 from ace_lite.benchmark.summary_router import (
     build_adaptive_router_arm_summary as _build_adaptive_router_arm_summary_impl,
-    build_learning_router_rollout_summary as _build_learning_router_rollout_summary_impl,
+)
+from ace_lite.benchmark.summary_router import (
     build_adaptive_router_observability_summary as _build_adaptive_router_observability_summary_impl,
+)
+from ace_lite.benchmark.summary_router import (
     build_adaptive_router_pair_summary as _build_adaptive_router_pair_summary_impl,
 )
+from ace_lite.benchmark.summary_router import (
+    build_learning_router_rollout_summary as _build_learning_router_rollout_summary_impl,
+)
+
 
 def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     if not case_results:
@@ -2491,34 +2527,34 @@ def build_chunk_cache_contract_summary(
 __all__ = [
     "PIPELINE_STAGE_ORDER",
     "aggregate_metrics",
-    "build_chunk_cache_contract_summary",
     "build_adaptive_router_arm_summary",
-    "build_learning_router_rollout_summary",
     "build_adaptive_router_observability_summary",
     "build_adaptive_router_pair_summary",
+    "build_agent_loop_control_plane_summary",
+    "build_chunk_cache_contract_summary",
     "build_chunk_stage_miss_summary",
-    "build_deep_symbol_summary",
     "build_decision_observability_summary",
+    "build_deep_symbol_summary",
     "build_evidence_insufficiency_summary",
     "build_feedback_loop_summary",
     "build_feedback_observability_summary",
-    "build_agent_loop_control_plane_summary",
-    "build_missing_context_risk_summary",
+    "build_learning_router_rollout_summary",
     "build_ltm_explainability_summary",
+    "build_missing_context_risk_summary",
     "build_native_scip_summary",
     "build_preference_observability_summary",
     "build_repomap_seed_summary",
-    "build_retrieval_control_plane_gate_summary",
-    "build_retrieval_frontier_gate_summary",
-    "build_retrieval_default_strategy_summary",
     "build_retrieval_context_observability_summary",
+    "build_retrieval_control_plane_gate_summary",
+    "build_retrieval_default_strategy_summary",
+    "build_retrieval_frontier_gate_summary",
+    "build_slo_budget_summary",
     "build_source_plan_card_summary",
     "build_source_plan_failure_signal_summary",
     "build_source_plan_validation_feedback_summary",
+    "build_stage_latency_summary",
     "build_validation_branch_gate_summary",
     "build_validation_branch_summary",
-    "build_slo_budget_summary",
-    "build_stage_latency_summary",
     "build_validation_probe_summary",
     "compare_metrics",
 ]

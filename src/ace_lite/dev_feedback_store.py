@@ -8,8 +8,10 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from ace_lite.dev_feedback_taxonomy import describe_dev_feedback_reason
-from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
+from ace_lite.dev_feedback_taxonomy import (
+    describe_dev_feedback_reason,
+    normalize_dev_feedback_reason_code,
+)
 from ace_lite.runtime_db import connect_runtime_db
 
 DEV_ISSUES_TABLE = "dev_issues"

@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ace_lite.vcs_worktree import build_git_worktree_state_token
-from ace_lite.vcs_worktree import collect_git_worktree_summary
+from ace_lite.vcs_worktree import build_git_worktree_state_token, collect_git_worktree_summary
 
 
 def test_collect_git_worktree_summary_skips_when_not_git_repo(tmp_path: Path) -> None:

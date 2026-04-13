@@ -20,10 +20,9 @@ from __future__ import annotations
 
 import json
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Callable
-from contextlib import contextmanager
-
 
 # =============================================================================
 # Benchmark Results
@@ -439,13 +438,13 @@ def determine_optimization(
 # =============================================================================
 
 __all__ = [
-    "BenchmarkResult",
     "BenchmarkComparison",
     "BenchmarkConfig",
+    "BenchmarkResult",
     "BenchmarkRunner",
     "TuningRecommendation",
-    "track_memory",
     "benchmark_json_serialization",
     "benchmark_parallel_processing",
     "determine_optimization",
+    "track_memory",
 ]

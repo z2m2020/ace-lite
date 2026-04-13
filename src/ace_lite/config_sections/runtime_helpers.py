@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_MEMORY_PROFILE_PATH = "~/.ace-lite/profile.json"
 DEFAULT_MEMORY_NOTES_PATH = "context-map/memory_notes.jsonl"
 DEFAULT_LONG_TERM_MEMORY_PATH = "context-map/long_term_memory.db"

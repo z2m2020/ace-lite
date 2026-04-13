@@ -12,40 +12,54 @@ from typing import Any
 
 import click
 
-from ace_lite.cli_app.runtime_mcp_ops import (
-    extract_memory_channels as _extract_memory_channels,
-    load_mcp_env_snapshot as _load_mcp_env_snapshot,
-    mcp_env_snapshot_path as _mcp_env_snapshot_path,
-    memory_channels_disabled as _memory_channels_disabled,
-    memory_config_recommendations as _memory_config_recommendations,
-    resolve_cli_path as _resolve_cli_path,
-    run_mcp_self_test as _run_mcp_self_test,
-    write_mcp_env_snapshot as _write_mcp_env_snapshot,
-)
+from ace_lite.cli_app.output import echo_json
 from ace_lite.cli_app.runtime_command_support import (
     DEFAULT_RUNTIME_STATS_DB_PATH,
     build_codex_mcp_setup_plan,
-    execute_codex_mcp_setup_plan,
     build_runtime_cache_doctor_payload,
     build_runtime_cache_vacuum_payload,
     build_runtime_doctor_payload,
+    collect_runtime_mcp_doctor_payload,
     collect_runtime_mcp_self_test_payload,
     collect_runtime_settings_persist_payload,
     collect_runtime_settings_show_payload,
     collect_runtime_status_payload,
-    collect_runtime_mcp_doctor_payload,
+    execute_codex_mcp_setup_plan,
     load_runtime_stats_summary,
 )
 from ace_lite.cli_app.runtime_doctor_support import persist_runtime_doctor_invocation
-from ace_lite.cli_app.output import echo_json
+from ace_lite.cli_app.runtime_mcp_ops import (
+    extract_memory_channels as _extract_memory_channels,
+)
+from ace_lite.cli_app.runtime_mcp_ops import (
+    load_mcp_env_snapshot as _load_mcp_env_snapshot,
+)
+from ace_lite.cli_app.runtime_mcp_ops import (
+    mcp_env_snapshot_path as _mcp_env_snapshot_path,
+)
+from ace_lite.cli_app.runtime_mcp_ops import (
+    memory_channels_disabled as _memory_channels_disabled,
+)
+from ace_lite.cli_app.runtime_mcp_ops import (
+    memory_config_recommendations as _memory_config_recommendations,
+)
+from ace_lite.cli_app.runtime_mcp_ops import (
+    resolve_cli_path as _resolve_cli_path,
+)
+from ace_lite.cli_app.runtime_mcp_ops import (
+    run_mcp_self_test as _run_mcp_self_test,
+)
+from ace_lite.cli_app.runtime_mcp_ops import (
+    write_mcp_env_snapshot as _write_mcp_env_snapshot,
+)
 from ace_lite.config import find_git_root, load_layered_config
 from ace_lite.config_models import validate_cli_config
 from ace_lite.runtime import ConfigWatcher, TaskScheduler
+from ace_lite.runtime_profiles import RUNTIME_PROFILE_NAMES
 from ace_lite.runtime_settings_store import (
     DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH,
     DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH,
 )
-from ace_lite.runtime_profiles import RUNTIME_PROFILE_NAMES
 
 
 def _layered_config_paths(*, root: str, config_file: str) -> list[Path]:

@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from ace_lite.chunking.skeleton import CHUNK_SKELETON_SCHEMA_VERSION
 from ace_lite.index_stage import build_index_stage_output as exported_build_index_stage_output
 from ace_lite.index_stage import build_index_stage_result as exported_build_index_stage_result
-from ace_lite.index_stage.result_payload import build_index_stage_output
-from ace_lite.index_stage.result_payload import build_index_stage_result
-from ace_lite.chunking.skeleton import CHUNK_SKELETON_SCHEMA_VERSION
+from ace_lite.index_stage.result_payload import build_index_stage_output, build_index_stage_result
 
 
 def _base_inputs() -> dict:

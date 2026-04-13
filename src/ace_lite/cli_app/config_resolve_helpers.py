@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -12,8 +11,8 @@ from click.core import ParameterSource
 
 from ace_lite.cli_app.params import _resolve_retrieval_preset
 from ace_lite.config import config_get, load_layered_config
-from ace_lite.config_pack import load_config_pack
 from ace_lite.config_models import validate_cli_config
+from ace_lite.config_pack import load_config_pack
 from ace_lite.runtime_profiles import get_runtime_profile
 
 

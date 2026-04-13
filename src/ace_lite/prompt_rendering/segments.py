@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from hashlib import sha256
-import json
 from typing import Any, Iterable, Mapping
 
 SEGMENT_ORDERING = "canonical_v1"
@@ -134,9 +134,9 @@ def canonicalize_segments(
 
 
 __all__ = [
-    "PromptSegment",
     "SEGMENT_HASH_ALGORITHM",
     "SEGMENT_ORDERING",
+    "PromptSegment",
     "canonicalize_segments",
     "coerce_prompt_segment",
     "compute_segment_hash",

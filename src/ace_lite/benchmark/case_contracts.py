@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ace_lite.feedback_case_contracts import derive_dev_feedback_case_payload
-from ace_lite.feedback_case_contracts import derive_issue_report_feedback_context
+from ace_lite.feedback_case_contracts import (
+    derive_dev_feedback_case_payload,
+    derive_issue_report_feedback_context,
+)
 
 _DEV_ISSUE_CAPTURE_SURFACES = {
     "runtime_issue_capture_cli",

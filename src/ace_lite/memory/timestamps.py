@@ -59,5 +59,5 @@ def extract_memory_record_timestamp(metadata: dict[str, Any]) -> float | None:
     return None
 
 
-__all__ = ["parse_memory_timestamp", "extract_memory_record_timestamp"]
+__all__ = ["extract_memory_record_timestamp", "parse_memory_timestamp"]
 

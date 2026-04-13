@@ -7,11 +7,6 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
-from ace_lite.cli_app.orchestrator_factory_payload_core import (
-    CanonicalFieldSpec,
-    build_canonical_payload,
-    resolve_grouped_value,
-)
 from ace_lite.cli_app.orchestrator_factory_memory_payload import (
     build_memory_payload,
 )
@@ -29,6 +24,11 @@ from ace_lite.cli_app.orchestrator_factory_misc_payloads import (
     build_tokenizer_payload,
     build_trace_payload,
 )
+from ace_lite.cli_app.orchestrator_factory_payload_core import (
+    CanonicalFieldSpec,
+    build_canonical_payload,
+    resolve_grouped_value,
+)
 from ace_lite.cli_app.orchestrator_factory_retrieval_payloads import (
     build_chunking_payload,
     build_retrieval_payload,
@@ -43,6 +43,8 @@ from ace_lite.cli_app.orchestrator_factory_run_plan_sections import (
     merge_group_or_flat_sections,
     normalize_group_mapping,
 )
+
+
 @dataclass(frozen=True)
 class PayloadFamilyDescriptor:
     family: str

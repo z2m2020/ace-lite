@@ -9,8 +9,10 @@ from ace_lite.plan_replay_cache import (
     build_plan_component_fingerprint,
     build_plan_replay_cache_key,
     build_repo_root_fingerprint,
-    content_version as plan_replay_content_version,
     normalize_plan_query,
+)
+from ace_lite.plan_replay_cache import (
+    content_version as plan_replay_content_version,
 )
 from ace_lite.prompt_rendering.renderer import build_prompt_rendering_boundary
 
@@ -310,8 +312,8 @@ __all__ = [
     "build_index_replay_fingerprint",
     "build_memory_replay_fingerprint",
     "build_orchestrator_plan_replay_key",
-    "build_repomap_replay_fingerprint",
     "build_repo_inputs_replay_fingerprint",
+    "build_repomap_replay_fingerprint",
     "build_skills_replay_fingerprint",
     "build_source_plan_contract_replay_fingerprint",
 ]

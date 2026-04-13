@@ -13,8 +13,7 @@ from ace_lite.index_stage.semantic_candidate_rerank import (
 )
 from ace_lite.index_stage.structural_rerank import StructuralRerankResult
 from ace_lite.orchestrator_config import OrchestratorConfig
-from ace_lite.pipeline.stages.index import IndexStageConfig
-from ace_lite.pipeline.stages.index import run_index
+from ace_lite.pipeline.stages.index import IndexStageConfig, run_index
 from ace_lite.pipeline.types import StageContext
 from ace_lite.retrieval_shared import RetrievalIndexSnapshot
 
@@ -825,6 +824,7 @@ def test_run_index_emits_shadow_router_choice_in_shadow_mode(
     tmp_path: Path,
 ) -> None:
     import json
+
     import ace_lite.pipeline.stages.index as index_stage
 
     files_map = {
@@ -912,6 +912,7 @@ def test_run_index_shadow_mode_preserves_executed_outputs_until_explicitly_enabl
     tmp_path: Path,
 ) -> None:
     import json
+
     import ace_lite.pipeline.stages.index as index_stage
 
     files_map = {

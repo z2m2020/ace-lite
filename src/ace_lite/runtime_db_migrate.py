@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable
 
-
 SCHEMA_TABLE_NAME = "runtime_db_schema"
 
 MigrationApply = Callable[[Any], None]

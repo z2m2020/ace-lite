@@ -11,15 +11,15 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from ace_lite.chunking.diversity import calculate_diversity_penalty, chunk_symbol_family
 from ace_lite.chunking.disclosure_policy import (
     CHUNK_DISCLOSURE_CHOICES,
     is_skeleton_disclosure,
     normalize_chunk_disclosure,
     resolve_chunk_disclosure,
 )
-from ace_lite.chunking.graph_context import get_graph_context
+from ace_lite.chunking.diversity import calculate_diversity_penalty, chunk_symbol_family
 from ace_lite.chunking.graph_closure import apply_graph_closure_bonus
+from ace_lite.chunking.graph_context import get_graph_context
 from ace_lite.chunking.graph_prior import apply_query_aware_graph_prior
 from ace_lite.chunking.robust_signature import (
     build_robust_signature_lite,

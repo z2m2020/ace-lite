@@ -501,9 +501,9 @@ def _hash_cross_score(*, query: str, text: str) -> float:
 __all__ = [
     "BGE_M3_DEFAULT_MODEL",
     "BGE_RERANKER_DEFAULT_MODEL",
-    "OLLAMA_DEFAULT_MODEL",
-    "OLLAMA_DEFAULT_DIMENSION",
     "OLLAMA_DEFAULT_BASE_URL",
+    "OLLAMA_DEFAULT_DIMENSION",
+    "OLLAMA_DEFAULT_MODEL",
     "BGEM3EmbeddingProvider",
     "BGERerankerCrossEncoderProvider",
     "CrossEncoderProvider",

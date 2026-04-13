@@ -19,9 +19,11 @@ from ace_lite.config_sections import (
     PluginsSectionSpec,
     RepomapSectionSpec,
     ScipSectionSpec,
-    TestSignalsSectionSpec as _TestSignalsSectionSpec,
     TokenizerSectionSpec,
     TraceSectionSpec,
+)
+from ace_lite.config_sections import (
+    TestSignalsSectionSpec as _TestSignalsSectionSpec,
 )
 
 

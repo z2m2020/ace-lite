@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.memory.local_notes import append_capture_note
 from ace_lite.memory_long_term import LongTermMemoryCaptureService
-from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.pipeline.types import StageContext
 from ace_lite.preference_capture_store import DurablePreferenceCaptureStore
 from ace_lite.profile_store import ProfileStore

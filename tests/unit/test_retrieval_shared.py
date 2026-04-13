@@ -5,8 +5,8 @@ from typing import Any
 from ace_lite.retrieval_shared import (
     build_retrieval_runtime_profile,
     build_selection_observability,
-    load_retrieval_index_snapshot,
     extract_retrieval_terms,
+    load_retrieval_index_snapshot,
     normalize_candidate_ranker,
     rank_candidate_files,
 )

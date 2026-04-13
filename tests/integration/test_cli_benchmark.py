@@ -10,9 +10,11 @@ from click.testing import CliRunner
 from ace_lite.benchmark.regression_checks import resolve_regression_thresholds
 from ace_lite.cli import cli
 from ace_lite.feedback_store import SelectionFeedbackStore
-from ace_lite.router_reward_store import append_reward_event
-from ace_lite.router_reward_store import DEFAULT_REWARD_LOG_PATH
-from ace_lite.router_reward_store import make_reward_event
+from ace_lite.router_reward_store import (
+    DEFAULT_REWARD_LOG_PATH,
+    append_reward_event,
+    make_reward_event,
+)
 
 
 def _seed_repo(root: Path) -> None:

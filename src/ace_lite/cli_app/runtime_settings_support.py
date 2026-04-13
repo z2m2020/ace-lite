@@ -12,8 +12,8 @@ from ace_lite.runtime_settings import RuntimeSettingsManager
 from ace_lite.runtime_settings_store import (
     build_runtime_settings_record,
     inspect_runtime_settings_record,
-    load_valid_runtime_settings_record,
     load_runtime_settings_with_fallback,
+    load_valid_runtime_settings_record,
     persist_runtime_settings_record,
     resolve_user_runtime_settings_last_known_good_path,
     resolve_user_runtime_settings_path,

@@ -5,10 +5,10 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ace_lite.cli_app.runtime_status_support import load_runtime_stats_summary
 from ace_lite.cli_app.runtime_stats_enrichment_support import (
     build_runtime_next_cycle_input_summary,
 )
+from ace_lite.cli_app.runtime_status_support import load_runtime_stats_summary
 from ace_lite.config import find_git_root
 from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
 from ace_lite.runtime_stats import RuntimeInvocationStats, utc_now_iso
@@ -348,12 +348,12 @@ def build_runtime_doctor_payload(
     payload_root: str,
     temp_root: str,
 ) -> dict[str, Any]:
+    from ace_lite.cli_app.runtime_command_support import collect_runtime_mcp_doctor_payload
     from ace_lite.cli_app.runtime_settings_support import (
         build_runtime_settings_payload,
         resolve_effective_runtime_skills_dir,
         resolve_runtime_settings_bundle,
     )
-    from ace_lite.cli_app.runtime_command_support import collect_runtime_mcp_doctor_payload
 
     requested_root = Path(root).resolve()
     bundle = resolve_runtime_settings_bundle(
@@ -456,11 +456,11 @@ def build_runtime_doctor_payload(
 
 
 __all__ = [
+    "_collect_runtime_doctor_degraded_reason_codes",
     "build_runtime_cache_doctor_payload",
     "build_runtime_cache_vacuum_payload",
-    "_collect_runtime_doctor_degraded_reason_codes",
-    "persist_runtime_doctor_invocation",
     "build_runtime_doctor_payload",
     "build_runtime_git_doctor_payload",
     "build_runtime_version_sync_payload",
+    "persist_runtime_doctor_invocation",
 ]

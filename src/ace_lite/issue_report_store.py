@@ -8,12 +8,12 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from ace_lite.runtime_db import connect_runtime_db
 from ace_lite.dev_feedback_store import DevFix
 from ace_lite.feedback_issue_linkage import (
     build_issue_report_resolution_from_fix,
     export_issue_report_benchmark_case,
 )
+from ace_lite.runtime_db import connect_runtime_db
 
 ISSUE_REPORTS_TABLE = "issue_reports"
 

@@ -5,7 +5,6 @@ from dataclasses import dataclass, field, replace
 from time import perf_counter
 from typing import Any
 
-
 StageCallable = Callable[["StageContext"], dict[str, Any]]
 
 

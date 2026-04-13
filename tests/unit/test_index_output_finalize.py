@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 from types import SimpleNamespace
+from typing import Any
 
-from ace_lite.index_stage.output_finalize import finalize_index_stage_output
-from ace_lite.index_stage.output_finalize import finalize_index_stage_output_from_state
+from ace_lite.index_stage.output_finalize import (
+    finalize_index_stage_output,
+    finalize_index_stage_output_from_state,
+)
 
 
 def test_finalize_index_stage_output_attaches_filters_and_cache_metadata() -> None:

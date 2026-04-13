@@ -18,12 +18,18 @@ from ace_lite.repomap.cache import (
     store_cached_repomap_precompute,
 )
 from ace_lite.repomap.cache_runtime import (
-    build_subgraph_contract_salt as _build_subgraph_contract_salt,
     build_repomap_stage_payload_from_cache_runtime,
-    inject_worktree_seed_candidates as _inject_worktree_seed_candidates,
-    normalize_repomap_path as _normalize_path,
     prepare_repomap_seed_runtime,
     prepare_repomap_stage_cache_runtime,
+)
+from ace_lite.repomap.cache_runtime import (
+    build_subgraph_contract_salt as _build_subgraph_contract_salt,
+)
+from ace_lite.repomap.cache_runtime import (
+    inject_worktree_seed_candidates as _inject_worktree_seed_candidates,
+)
+from ace_lite.repomap.cache_runtime import (
+    normalize_repomap_path as _normalize_path,
 )
 from ace_lite.repomap.stage_runtime import (
     build_disabled_repomap_payload,

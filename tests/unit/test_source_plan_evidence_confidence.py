@@ -9,7 +9,6 @@ from ace_lite.source_plan.evidence_confidence import (
     build_confidence_summary,
 )
 
-
 # ----------------------------------------------------------------------
 # Fixtures
 # ----------------------------------------------------------------------

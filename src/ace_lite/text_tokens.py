@@ -58,5 +58,5 @@ def code_token_set(
     return set(code_tokens(text, min_len=min_len, max_tokens=max_tokens))
 
 
-__all__ = ["code_tokens", "code_token_set"]
+__all__ = ["code_token_set", "code_tokens"]
 

@@ -4,15 +4,13 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable
-from typing import Any
+from typing import Any, Callable
 
 from ace_lite.vcs_history import collect_git_head_snapshot
 from ace_lite.vcs_worktree import (
     build_git_worktree_state_token,
     collect_git_worktree_summary,
 )
-
 
 GIT_FAST_FINGERPRINT_TRUST_CLASSES = ("exact", "git_partial", "fallback")
 

@@ -56,7 +56,6 @@ from ace_lite.pipeline.stage_tags import build_stage_tags
 from ace_lite.pipeline.types import StageContext, StageMetric
 from ace_lite.schema import validate_context_plan
 
-
 _RUNTIME_SUPPORT_COMPAT = build_orchestrator_runtime_support_compat(
     pre_stage_names=PRE_SOURCE_PLAN_LIFECYCLE.stage_names,
     source_plan_stage_names=SOURCE_PLAN_LIFECYCLE.stage_names,
@@ -309,22 +308,22 @@ def _resolve_agent_loop_rerun_stages(*, action_type: str) -> list[str]:
 
 __all__ = [
     "ORCHESTRATOR_LIFECYCLE",
-    "OrchestratorLifecycleDescriptor",
-    "OrchestratorFinalizationResult",
-    "OrchestratorLifecycleResult",
-    "OrchestratorPreparationResult",
-    "OrchestratorAgentLoopResult",
-    "OrchestratorSourcePlanReplayResult",
     "POST_SOURCE_PLAN_LIFECYCLE",
     "PRE_SOURCE_PLAN_LIFECYCLE",
     "SOURCE_PLAN_LIFECYCLE",
+    "OrchestratorAgentLoopResult",
+    "OrchestratorFinalizationResult",
+    "OrchestratorLifecycleDescriptor",
+    "OrchestratorLifecycleResult",
+    "OrchestratorPreparationResult",
+    "OrchestratorSourcePlanReplayResult",
+    "finalize_source_plan_replay",
     "get_lifecycle_descriptor",
     "iter_lifecycle_descriptors",
+    "prepare_source_plan_replay",
     "run_orchestrator_finalization",
     "run_orchestrator_lifecycle",
     "run_orchestrator_preparation",
-    "prepare_source_plan_replay",
-    "finalize_source_plan_replay",
     "run_post_source_plan_agent_loop",
     "run_post_source_plan_runtime",
     "run_pre_source_plan_stages",

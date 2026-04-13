@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from ace_lite.agent_loop.controller import BoundedLoopController
 from ace_lite.agent_loop.contracts import build_agent_loop_action_v1
+from ace_lite.agent_loop.controller import BoundedLoopController
 from ace_lite.validation.result import build_validation_result_v1
 
 

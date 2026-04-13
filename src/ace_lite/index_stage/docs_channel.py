@@ -10,38 +10,80 @@ from typing import Any
 
 from ace_lite.index_stage.docs_channel_cache import (
     load_repo_glossary as _cache_load_repo_glossary,
+)
+from ace_lite.index_stage.docs_channel_cache import (
     load_repo_glossary_from_disk_cache as _cache_load_repo_glossary_from_disk_cache,
+)
+from ace_lite.index_stage.docs_channel_cache import (
     load_sections as _cache_load_sections,
+)
+from ace_lite.index_stage.docs_channel_cache import (
     load_sections_from_disk_cache as _cache_load_sections_from_disk_cache,
+)
+from ace_lite.index_stage.docs_channel_cache import (
     resolve_repo_glossary_cache_path as _cache_resolve_repo_glossary_cache_path,
+)
+from ace_lite.index_stage.docs_channel_cache import (
     resolve_sections_cache_path as _cache_resolve_sections_cache_path,
+)
+from ace_lite.index_stage.docs_channel_cache import (
     store_repo_glossary_to_disk_cache as _cache_store_repo_glossary_to_disk_cache,
+)
+from ace_lite.index_stage.docs_channel_cache import (
     store_sections_to_disk_cache as _cache_store_sections_to_disk_cache,
 )
 from ace_lite.index_stage.docs_channel_glossary import (
     build_repo_glossary as _glossary_build_repo_glossary,
+)
+from ace_lite.index_stage.docs_channel_glossary import (
     derive_glossary_terms as _glossary_derive_glossary_terms,
+)
+from ace_lite.index_stage.docs_channel_glossary import (
     is_glossary_token as _glossary_is_glossary_token,
 )
 from ace_lite.index_stage.docs_channel_hints import (
     extract_code_fence_values as _hint_extract_code_fence_values,
+)
+from ace_lite.index_stage.docs_channel_hints import (
     extract_code_hints as _hint_extract_code_hints,
 )
 from ace_lite.index_stage.docs_channel_loading import (
     collect_docs_paths as _loading_collect_docs_paths,
+)
+from ace_lite.index_stage.docs_channel_loading import (
     docs_fingerprint as _loading_docs_fingerprint,
+)
+from ace_lite.index_stage.docs_channel_loading import (
     normalize_cached_section as _loading_normalize_cached_section,
+)
+from ace_lite.index_stage.docs_channel_loading import (
     parse_markdown_sections as _loading_parse_markdown_sections,
+)
+from ace_lite.index_stage.docs_channel_loading import (
     serialize_section_for_cache as _loading_serialize_section_for_cache,
 )
 from ace_lite.index_stage.docs_channel_ranking import (
     build_fts5_query as _ranking_build_fts5_query,
+)
+from ace_lite.index_stage.docs_channel_ranking import (
     build_query_tokens as _ranking_build_query_tokens,
+)
+from ace_lite.index_stage.docs_channel_ranking import (
     normalize_fts5_score as _ranking_normalize_fts5_score,
+)
+from ace_lite.index_stage.docs_channel_ranking import (
     rank_sections as _ranking_rank_sections,
+)
+from ace_lite.index_stage.docs_channel_ranking import (
     rank_sections_fts5 as _ranking_rank_sections_fts5,
+)
+from ace_lite.index_stage.docs_channel_ranking import (
     rank_sections_mirror_fts5 as _ranking_rank_sections_mirror_fts5,
+)
+from ace_lite.index_stage.docs_channel_ranking import (
     sqlite_supports_fts5 as _ranking_sqlite_supports_fts5,
+)
+from ace_lite.index_stage.docs_channel_ranking import (
     term_frequency as _ranking_term_frequency,
 )
 from ace_lite.sqlite_mirror import ensure_docs_fts_mirror, query_docs_fts, resolve_mirror_db_path

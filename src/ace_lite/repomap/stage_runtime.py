@@ -147,8 +147,8 @@ def build_repomap_error_payload(
 
 __all__ = [
     "RepomapStagePolicyRuntime",
-    "build_repomap_error_payload",
     "build_disabled_repomap_payload",
+    "build_repomap_error_payload",
     "finalize_repomap_stage_payload",
     "resolve_repomap_stage_policy_runtime",
 ]

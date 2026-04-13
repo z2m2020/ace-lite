@@ -33,4 +33,4 @@ def skills_catalog_command(root: str, skills_dir: str) -> None:
     click.echo(build_skill_catalog(manifest))
 
 
-__all__ = ["skills_group", "skills_catalog_command"]
+__all__ = ["skills_catalog_command", "skills_group"]

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from itertools import permutations
 
+from ace_lite.chunking.skeleton import CHUNK_SKELETON_SCHEMA_VERSION
+from ace_lite.pipeline.stages.source_plan import run_source_plan
+from ace_lite.pipeline.types import StageContext
 from ace_lite.prompt_rendering.renderer import (
     PROMPT_RENDERER_BOUNDARY_VERSION,
     build_prompt_rendering_boundary,
     render_prompt,
 )
-from ace_lite.chunking.skeleton import CHUNK_SKELETON_SCHEMA_VERSION
-from ace_lite.pipeline.stages.source_plan import run_source_plan
-from ace_lite.pipeline.types import StageContext
 from ace_lite.prompt_rendering.segments import (
     SEGMENT_HASH_ALGORITHM,
     SEGMENT_ORDERING,

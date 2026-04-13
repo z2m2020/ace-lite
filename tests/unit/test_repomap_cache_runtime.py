@@ -4,8 +4,8 @@ from pathlib import Path
 
 from ace_lite.repomap.cache_runtime import (
     RepomapSeedRuntime,
-    build_subgraph_contract_salt,
     build_repomap_stage_payload_from_cache_runtime,
+    build_subgraph_contract_salt,
     inject_worktree_seed_candidates,
     normalize_repomap_path,
     prepare_repomap_seed_runtime,

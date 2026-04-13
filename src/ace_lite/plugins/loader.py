@@ -9,8 +9,8 @@ from urllib.parse import urlparse
 
 import yaml
 
-from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.pipeline.hooks import HookBus
+from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.plugins.runtime_mcp import make_mcp_hooks
 
 

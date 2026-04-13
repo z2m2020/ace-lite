@@ -4,8 +4,8 @@ import json
 import time
 from urllib.error import URLError
 
-from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.pipeline.types import StageContext, StageEvent
+from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.plugins import runtime_mcp
 
 

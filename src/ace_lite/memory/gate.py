@@ -11,7 +11,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-
 _SKIP_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Greetings & pleasantries
     re.compile(

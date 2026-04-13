@@ -21,8 +21,8 @@ from ace_lite.repomap.adjacency import (
     _expand_neighbors,
 )
 from ace_lite.repomap.ranking import RANKING_PROFILES, rank_index_files
-from ace_lite.repomap.resolution import _build_resolution_maps
 from ace_lite.repomap.rendering import _file_descriptor, _render_skeleton_markdown
+from ace_lite.repomap.resolution import _build_resolution_maps
 from ace_lite.repomap.stage_support import (
     build_stage_repomap_explainability,
     extract_seed_candidate_paths,

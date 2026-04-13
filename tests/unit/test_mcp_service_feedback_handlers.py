@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from ace_lite.memory_long_term import LongTermMemoryStore
 from ace_lite.mcp_server.service_feedback_handlers import (
     handle_feedback_record_request,
     handle_feedback_stats_request,
     resolve_feedback_profile_path,
 )
+from ace_lite.memory_long_term import LongTermMemoryStore
 
 
 def test_resolve_feedback_profile_path_resolves_relative_under_root(

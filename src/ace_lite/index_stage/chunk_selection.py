@@ -1,13 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
-from collections.abc import Mapping
 from typing import Any, Callable
 
 from ace_lite.chunking.builder import build_candidate_chunks
-from ace_lite.scoring_config import resolve_chunk_scoring_config
 from ace_lite.chunking.robust_signature import (
     build_chunk_robust_signature_sidecar,
     count_available_robust_signatures,
@@ -20,6 +19,7 @@ from ace_lite.chunking.types import (
 )
 from ace_lite.embeddings import CrossEncoderProvider, EmbeddingProvider
 from ace_lite.index_stage.chunk_guard import apply_chunk_guard
+from ace_lite.scoring_config import resolve_chunk_scoring_config
 
 
 @dataclass(frozen=True, slots=True)

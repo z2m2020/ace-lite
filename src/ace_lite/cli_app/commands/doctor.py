@@ -11,7 +11,6 @@ from ace_lite.cli_app.runtime_doctor_support import (
     persist_runtime_doctor_invocation,
 )
 
-
 # Doctor command help examples
 DOCTOR_HELP_EXAMPLES = """
 Examples:

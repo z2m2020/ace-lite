@@ -1,11 +1,11 @@
 from ace_lite.cli_app import params_option_catalog
 from ace_lite.cli_app.params_option_groups import (
     CANDIDATE_RANKER_CHOICES,
-    HYBRID_FUSION_CHOICES,
     CHUNK_GUARD_MODE_CHOICES,
+    HYBRID_FUSION_CHOICES,
     MEMORY_STRATEGY_CHOICES,
-    RETRIEVAL_PRESETS,
     RETRIEVAL_PRESET_CHOICES,
+    RETRIEVAL_PRESETS,
     SBFL_METRIC_CHOICES,
     SCIP_PROVIDER_CHOICES,
 )

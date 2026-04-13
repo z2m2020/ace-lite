@@ -10,7 +10,6 @@ from ace_lite.retrieval_graph_view import (
     validate_retrieval_graph_view_payload,
 )
 
-
 # ----------------------------------------------------------------------
 # Fixtures
 # ----------------------------------------------------------------------

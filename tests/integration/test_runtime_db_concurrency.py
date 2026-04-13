@@ -8,8 +8,7 @@ from queue import Empty
 from typing import Any
 
 from ace_lite.runtime_db import connect_runtime_db
-from ace_lite.sqlite_mirror import MIRROR_SCHEMA_VERSION
-from ace_lite.sqlite_mirror import write_embeddings_mirror
+from ace_lite.sqlite_mirror import MIRROR_SCHEMA_VERSION, write_embeddings_mirror
 
 
 def _writer_payload(worker_id: int, iteration: int) -> tuple[dict[str, str], dict[str, list[float]]]:

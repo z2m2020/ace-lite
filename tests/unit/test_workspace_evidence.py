@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
+from ace_lite.validation.patch_artifact import build_patch_artifact_contract_v1
 from ace_lite.workspace.evidence import (
     build_workspace_evidence_contract_v1,
     validate_workspace_evidence_contract_v1,
 )
-from ace_lite.validation.patch_artifact import build_patch_artifact_contract_v1
 
 
 def test_workspace_evidence_contract_includes_extended_collections() -> None:

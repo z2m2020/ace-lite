@@ -12,7 +12,6 @@ from ace_lite.orchestrator_runtime_support_shared import (
 )
 from ace_lite.pipeline.types import StageContext, StageMetric
 
-
 RunStageSequence = Callable[..., StageContractError | None]
 GetStageState = Callable[..., dict[str, Any]]
 ApplyContractErrorToPayload = Callable[..., None]

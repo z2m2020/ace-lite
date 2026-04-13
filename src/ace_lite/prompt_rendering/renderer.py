@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from hashlib import sha256
-import json
 from typing import Any, Iterable, Mapping
 
 from ace_lite.prompt_rendering.segments import (
-    PromptSegment,
     SEGMENT_HASH_ALGORITHM,
     SEGMENT_ORDERING,
+    PromptSegment,
     canonicalize_segments,
 )
 

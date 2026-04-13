@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
+
 from ace_lite.workspace.common import ensure_non_empty_str as _ensure_non_empty_str
 
 PLAN_QUICK_OPTION_KEYS: tuple[str, ...] = (

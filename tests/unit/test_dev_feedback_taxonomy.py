@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from ace_lite.dev_feedback_store import normalize_dev_fix
-from ace_lite.dev_feedback_store import normalize_dev_issue
-from ace_lite.dev_feedback_taxonomy import describe_dev_feedback_reason
-from ace_lite.dev_feedback_taxonomy import normalize_dev_feedback_reason_code
+from ace_lite.dev_feedback_store import normalize_dev_fix, normalize_dev_issue
+from ace_lite.dev_feedback_taxonomy import (
+    describe_dev_feedback_reason,
+    normalize_dev_feedback_reason_code,
+)
 
 
 def test_normalize_dev_feedback_reason_code_maps_known_aliases() -> None:

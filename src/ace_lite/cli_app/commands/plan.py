@@ -16,6 +16,7 @@ from ace_lite.cli_app.config_resolve_defaults import (
     PLAN_MEMORY_POSTPROCESS_DEFAULTS,
     PLAN_MEMORY_PROFILE_DEFAULTS,
 )
+from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.cli_app.output import echo_json
 from ace_lite.cli_app.params import (
     _to_candidate_ranker,
@@ -24,6 +25,8 @@ from ace_lite.cli_app.params import (
     _to_retrieval_policy,
     _with_shared_plan_options,
 )
+from ace_lite.cli_app.progress import clear_progress, echo_done, echo_progress
+from ace_lite.context_report import write_context_report_markdown
 from ace_lite.entrypoint_runtime import (
     MemoryProviderKwargs,
     RunPlanRuntimeKwargs,
@@ -41,9 +44,6 @@ from ace_lite.plan_timeout import (
     is_plan_timeout_debug_enabled,
     resolve_plan_timeout_seconds,
 )
-from ace_lite.context_report import write_context_report_markdown
-from ace_lite.cli_app.progress import echo_progress, echo_done, clear_progress
-from ace_lite.cli_app.docs_links import get_help_template
 from ace_lite.scoring_config import (
     HYBRID_BM25_WEIGHT,
     HYBRID_COMBINED_SCALE,

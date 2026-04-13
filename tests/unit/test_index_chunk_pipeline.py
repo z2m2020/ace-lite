@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from ace_lite.index_stage.chunk_pipeline import ChunkSelectionDeps
-from ace_lite.index_stage.chunk_pipeline import ChunkSelectionRuntimeConfig
-from ace_lite.index_stage.chunk_pipeline import select_index_chunks
+from ace_lite.index_stage.chunk_pipeline import (
+    ChunkSelectionDeps,
+    ChunkSelectionRuntimeConfig,
+    select_index_chunks,
+)
 from ace_lite.index_stage.chunk_selection import ChunkSelectionResult
 
 

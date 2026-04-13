@@ -18,8 +18,8 @@ from ace_lite.cli_app.params_option_catalog import (
     MEMORY_STRATEGY_CHOICES,
     REMOTE_SLOT_POLICY_CHOICES,
     RETRIEVAL_POLICY_CHOICES,
-    RETRIEVAL_PRESETS,
     RETRIEVAL_PRESET_CHOICES,
+    RETRIEVAL_PRESETS,
     SBFL_METRIC_CHOICES,
     SCIP_PROVIDER_CHOICES,
 )
@@ -41,6 +41,8 @@ from ace_lite.cli_app.params_option_observability_groups import (
 from ace_lite.cli_app.params_option_registry import (
     OptionDescriptor,
     OptionGroupDescriptor,
+)
+from ace_lite.cli_app.params_option_registry import (
     build_option_decorators as _build_option_decorators,
 )
 from ace_lite.cli_app.params_option_retrieval_groups import (
@@ -107,8 +109,6 @@ __all__ = [
     "MEMORY_AUTO_TAG_MODE_CHOICES",
     "MEMORY_GATE_MODE_CHOICES",
     "MEMORY_STRATEGY_CHOICES",
-    "OptionDescriptor",
-    "OptionGroupDescriptor",
     "OPTION_GROUP_REGISTRY",
     "REMOTE_SLOT_POLICY_CHOICES",
     "RETRIEVAL_POLICY_CHOICES",
@@ -131,6 +131,8 @@ __all__ = [
     "SHARED_TARGET_OPTION_DESCRIPTORS",
     "SHARED_TEST_SIGNAL_OPTION_DESCRIPTORS",
     "SHARED_TRACE_OPTION_DESCRIPTORS",
+    "OptionDescriptor",
+    "OptionGroupDescriptor",
     "_build_option_decorators",
     "build_option_group_decorators",
     "get_option_group_descriptor",

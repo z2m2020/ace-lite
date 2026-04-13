@@ -461,8 +461,8 @@ class RuntimeObservabilityService:
 
 __all__ = [
     "COMMON_TAG_RULES",
-    "DurableStatsTagRule",
     "REPLAY_REASON_RULES",
-    "RuntimeObservabilityService",
     "STAGE_TAG_RULES",
+    "DurableStatsTagRule",
+    "RuntimeObservabilityService",
 ]

@@ -4,19 +4,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ace_lite.cli_app.runtime_status_config_support import (
-    RuntimeStatusSections,
-    build_runtime_status_cache_paths,
-    resolve_runtime_feedback_path_from_settings,
-    resolve_runtime_status_repo_relative_path,
-    resolve_runtime_status_sections,
-)
-from ace_lite.cli_app.runtime_status_health_support import (
-    build_runtime_degraded_services,
-    build_runtime_service_health,
-)
-from ace_lite.cli_app.runtime_stats_query_support import load_latest_runtime_stats_match
-from ace_lite.dev_feedback_taxonomy import get_dev_feedback_reason_family
 from ace_lite.cli_app.runtime_stats_data_support import (
     load_runtime_dev_feedback_summary,
     load_runtime_preference_capture_summary,
@@ -28,13 +15,25 @@ from ace_lite.cli_app.runtime_stats_enrichment_support import (
     build_runtime_next_cycle_input_summary,
     build_runtime_top_pain_summary,
 )
-from ace_lite.runtime_paths import DEFAULT_USER_RUNTIME_DB_PATH, resolve_user_runtime_db_path
+from ace_lite.cli_app.runtime_stats_query_support import load_latest_runtime_stats_match
 from ace_lite.cli_app.runtime_stats_summary_support import build_runtime_scope_map
+from ace_lite.cli_app.runtime_status_config_support import (
+    RuntimeStatusSections,
+    build_runtime_status_cache_paths,
+    resolve_runtime_feedback_path_from_settings,
+    resolve_runtime_status_repo_relative_path,
+    resolve_runtime_status_sections,
+)
+from ace_lite.cli_app.runtime_status_health_support import (
+    build_runtime_degraded_services,
+    build_runtime_service_health,
+)
+from ace_lite.dev_feedback_taxonomy import get_dev_feedback_reason_family
+from ace_lite.runtime_paths import DEFAULT_USER_RUNTIME_DB_PATH, resolve_user_runtime_db_path
 from ace_lite.runtime_stats_schema import (
     RUNTIME_STATS_DOCTOR_EVENT_CLASS,
 )
 from ace_lite.runtime_stats_store import DurableStatsStore
-
 
 DEFAULT_RUNTIME_STATS_DB_PATH = DEFAULT_USER_RUNTIME_DB_PATH
 

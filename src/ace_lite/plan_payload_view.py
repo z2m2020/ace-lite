@@ -12,6 +12,8 @@ from typing import Any
 
 __all__ = [
     "coerce_payload",
+    "resolve_candidate_chunks",
+    "resolve_candidate_files",
     "resolve_confidence_summary",
     "resolve_evidence_summary",
     "resolve_pipeline_stage_names",
@@ -20,8 +22,6 @@ __all__ = [
     "resolve_subgraph_payload",
     "resolve_validation_result",
     "resolve_validation_tests",
-    "resolve_candidate_chunks",
-    "resolve_candidate_files",
 ]
 
 

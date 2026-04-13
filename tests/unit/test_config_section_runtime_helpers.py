@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from ace_lite.config_sections import (
-    DEFAULT_EMBEDDINGS_INDEX_PATH,
     DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDINGS_INDEX_PATH,
     DEFAULT_MEMORY_NOTES_PATH,
     DEFAULT_MEMORY_PROFILE_PATH,
     DEFAULT_PLAN_REPLAY_CACHE_PATH,

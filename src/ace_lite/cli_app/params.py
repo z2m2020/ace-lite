@@ -45,8 +45,8 @@ from ace_lite.cli_app.params_option_groups import (
     MEMORY_STRATEGY_CHOICES,
     REMOTE_SLOT_POLICY_CHOICES,
     RETRIEVAL_POLICY_CHOICES,
-    RETRIEVAL_PRESETS,
     RETRIEVAL_PRESET_CHOICES,
+    RETRIEVAL_PRESETS,
     SBFL_METRIC_CHOICES,
     SCIP_PROVIDER_CHOICES,
     build_option_group_decorators,
@@ -176,12 +176,12 @@ def _with_shared_plan_options(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 __all__ = [
+    "ADAPTIVE_ROUTER_MODE_CHOICES",
     "CANDIDATE_RANKER_CHOICES",
     "CHUNK_DISCLOSURE_CHOICES",
     "CHUNK_GUARD_MODE_CHOICES",
     "EMBEDDING_PROVIDER_CHOICES",
     "HYBRID_FUSION_CHOICES",
-    "ADAPTIVE_ROUTER_MODE_CHOICES",
     "MEMORY_AUTO_TAG_MODE_CHOICES",
     "MEMORY_GATE_MODE_CHOICES",
     "MEMORY_STRATEGY_CHOICES",
@@ -192,8 +192,8 @@ __all__ = [
     "SBFL_METRIC_CHOICES",
     "SCIP_PROVIDER_CHOICES",
     "_resolve_retrieval_preset",
-    "_to_bool",
     "_to_adaptive_router_mode",
+    "_to_bool",
     "_to_candidate_ranker",
     "_to_chunk_disclosure",
     "_to_chunk_guard_mode",

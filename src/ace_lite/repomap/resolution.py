@@ -4,7 +4,6 @@ from collections import defaultdict
 from pathlib import PurePosixPath
 from typing import Any
 
-
 SOURCE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".sol")
 
 

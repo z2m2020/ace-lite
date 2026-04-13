@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 
-
 PIPELINE_STAGE_ORDER = (
     "memory",
     "index",

@@ -305,13 +305,13 @@ class ChunkMetrics:
 
 
 __all__ = [
-    "ChunkCandidate",
-    "ChunkMetrics",
     "CONTEXTUAL_CHUNKING_SIDECAR_KEY",
     "INTERNAL_CHUNK_SIDECAR_KEYS",
     "RETRIEVAL_CONTEXT_SIDECAR_KEY",
     "ROBUST_SIGNATURE_SIDECAR_KEY",
     "TOPOLOGICAL_SHIELD_SIDECAR_KEY",
+    "ChunkCandidate",
+    "ChunkMetrics",
     "render_retrieval_context_from_sidecar",
     "resolve_retrieval_context_text",
     "strip_internal_chunk_sidecars",

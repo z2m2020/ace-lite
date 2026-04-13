@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import ace_lite.plan_application as plan_application_module
-from ace_lite.plan_timeout import PlanTimeoutOutcome
 from ace_lite.plan_application import (
     attach_plan_contract_summary,
     build_plan_contract_summary_from_payload,
     execute_timed_plan_with_fallback,
     resolve_plan_quick_fallback,
 )
+from ace_lite.plan_timeout import PlanTimeoutOutcome
 
 
 def test_resolve_plan_quick_fallback_collects_paths_and_steps() -> None:

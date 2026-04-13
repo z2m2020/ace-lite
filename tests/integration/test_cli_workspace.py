@@ -4,9 +4,8 @@ import json
 from pathlib import Path
 from typing import cast
 
-import pytest
-
 import click
+import pytest
 from click.testing import CliRunner
 
 from ace_lite.cli import cli

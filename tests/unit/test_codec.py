@@ -8,15 +8,15 @@ from __future__ import annotations
 import pytest
 
 from ace_lite.codec import (
-    JSONCodec,
-    StandardJSONCodec,
-    OrjsonCodec,
     CodecRegistry,
-    get_codec_registry,
-    dumps,
-    loads,
-    dumps_to_str,
+    JSONCodec,
+    OrjsonCodec,
+    StandardJSONCodec,
     benchmark_codecs,
+    dumps,
+    dumps_to_str,
+    get_codec_registry,
+    loads,
 )
 
 

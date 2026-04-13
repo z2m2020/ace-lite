@@ -690,7 +690,7 @@ __all__ = [
     "LONG_TERM_MEMORY_FTS_TABLE",
     "LONG_TERM_MEMORY_TRIPLES_TABLE",
     "LongTermMemoryEntry",
-    "LongTermMemoryTriple",
     "LongTermMemoryStore",
+    "LongTermMemoryTriple",
     "build_long_term_memory_schema_bootstrap",
 ]

@@ -6,17 +6,18 @@ Tests verify the unified configuration system (QO-2103/QO-2104).
 from __future__ import annotations
 
 import os
+
 import pytest
 
 from ace_lite.config_unified import (
     ConfigKeys,
-    DefaultConfig,
     ConfigLoader,
+    DefaultConfig,
+    LegacyConfigAdapter,
     UnifiedConfig,
     get_global_config,
-    set_global_config,
     reset_global_config,
-    LegacyConfigAdapter,
+    set_global_config,
 )
 
 

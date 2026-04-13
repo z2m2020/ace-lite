@@ -8,20 +8,20 @@ from uuid import uuid4
 from ace_lite.lsp.broker import LspDiagnosticsBroker
 from ace_lite.memory import MemoryProvider, NullMemoryProvider
 from ace_lite.orchestrator_config import OrchestratorConfig
-from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.pipeline.plugin_runtime import (
     PluginRuntime,
     PluginRuntimeConfig,
     normalize_remote_slot_allowlist,
     normalize_remote_slot_policy_mode,
 )
+from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.plugins.loader import PluginLoader
 from ace_lite.runtime_state import RuntimeServiceBundle, RuntimeState
-from ace_lite.stage_artifact_cache_gc import run_bounded_stage_artifact_cache_gc
 from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.signal_extractor import SignalExtractor
 from ace_lite.skills import build_skill_manifest
 from ace_lite.stage_artifact_cache import StageArtifactCache
+from ace_lite.stage_artifact_cache_gc import run_bounded_stage_artifact_cache_gc
 
 logger = logging.getLogger(__name__)
 

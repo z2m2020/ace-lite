@@ -13,8 +13,8 @@ from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from ace_lite.text_tokens import code_tokens
 from ace_lite.scoring_config import resolve_bm25_scoring_config
+from ace_lite.text_tokens import code_tokens
 
 
 def _tokenize_words(text: str) -> list[str]:

@@ -7,7 +7,6 @@ PRD-91: Help文档跳转统一入口
 
 from __future__ import annotations
 
-
 # Base paths
 DOCS_BASE = "docs/guides"
 DOCS_ROOT = "docs"
@@ -111,13 +110,13 @@ def get_help_template(command: str) -> str:
 
 
 __all__ = [
+    "COMMAND_GUIDES",
     "DOCS_BASE",
     "DOCS_ROOT",
     "GUIDES",
-    "COMMAND_GUIDES",
+    "HELP_TEMPLATES",
     "QUICK_REFERENCE",
     "get_command_guide",
     "get_guide",
     "get_help_template",
-    "HELP_TEMPLATES",
 ]

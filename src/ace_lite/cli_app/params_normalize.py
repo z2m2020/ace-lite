@@ -311,8 +311,8 @@ def _to_float_dict(value: Any) -> dict[str, float]:
 
 __all__ = [
     "_resolve_retrieval_preset",
-    "_to_bool",
     "_to_adaptive_router_mode",
+    "_to_bool",
     "_to_candidate_ranker",
     "_to_chunk_disclosure",
     "_to_chunk_guard_mode",

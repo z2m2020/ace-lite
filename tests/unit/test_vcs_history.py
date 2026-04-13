@@ -3,8 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import ace_lite.vcs_history as vcs_history_module
-from ace_lite.vcs_history import collect_git_head_snapshot
-from ace_lite.vcs_history import collect_git_commit_history
+from ace_lite.vcs_history import collect_git_commit_history, collect_git_head_snapshot
 
 
 def test_collect_git_commit_history_skips_when_not_git_repo(tmp_path: Path) -> None:

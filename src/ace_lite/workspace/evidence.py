@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 import re
+from dataclasses import dataclass
 from typing import Any, cast
 
 from ace_lite.validation.patch_artifact import validate_patch_artifact_contract_v1

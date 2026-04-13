@@ -15,7 +15,6 @@ from typing import Any, Iterable
 
 from ace_lite.memory.timestamps import extract_memory_record_timestamp
 
-
 _NOISE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bas an ai language model\b", re.IGNORECASE),
     re.compile(r"\bi (can'?t|cannot) (help|comply|do that)\b", re.IGNORECASE),

@@ -4,12 +4,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from ace_lite.scoring_config import SCIP_BASE_WEIGHT, resolve_chunk_scoring_config
 from ace_lite.index_stage.benchmark_candidate_runtime import (
     BenchmarkCandidateFilterResult,
 )
 from ace_lite.index_stage.candidate_fusion import CandidateFusionResult
 from ace_lite.index_stage.chunk_selection import ChunkSelectionResult
+from ace_lite.scoring_config import SCIP_BASE_WEIGHT, resolve_chunk_scoring_config
 
 
 @dataclass(slots=True)

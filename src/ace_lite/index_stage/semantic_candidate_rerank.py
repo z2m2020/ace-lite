@@ -8,6 +8,7 @@ from typing import Any, Callable
 from ace_lite.embeddings import (
     BGE_M3_DEFAULT_MODEL,
     BGE_RERANKER_DEFAULT_MODEL,
+    OLLAMA_DEFAULT_MODEL,
     BGEM3EmbeddingProvider,
     BGERerankerCrossEncoderProvider,
     CrossEncoderProvider,
@@ -15,7 +16,6 @@ from ace_lite.embeddings import (
     HashColbertLateInteractionProvider,
     HashCrossEncoderProvider,
     HashEmbeddingProvider,
-    OLLAMA_DEFAULT_MODEL,
     OllamaEmbeddingProvider,
     SentenceTransformersEmbeddingProvider,
     rerank_candidates_with_cross_encoder,

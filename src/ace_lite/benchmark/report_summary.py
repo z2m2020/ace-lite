@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 OPTIONAL_SUMMARY_MAPPING_KEYS = (
     "task_success_summary",
     "evidence_insufficiency_summary",

@@ -7,12 +7,12 @@ import pytest
 
 import ace_lite.workspace.planner as workspace_planner
 from ace_lite.workspace.manifest import WorkspaceManifest, WorkspaceRepo
+from ace_lite.workspace.planner import build_workspace_plan, route_workspace_repos
 from ace_lite.workspace.summary_index import (
     RepoSummaryV1,
     build_workspace_summary_index_v1,
     save_summary_index_v1,
 )
-from ace_lite.workspace.planner import build_workspace_plan, route_workspace_repos
 
 
 def _seed_repo(root: Path, marker: str) -> None:

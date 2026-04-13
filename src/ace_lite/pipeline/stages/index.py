@@ -14,16 +14,16 @@ from ace_lite.exact_search import run_exact_search_ripgrep, score_exact_search_h
 from ace_lite.index_stage import (
     apply_candidate_priors,
     apply_chunk_selection,
-    apply_multi_channel_rrf_fusion,
     apply_exact_search_boost,
+    apply_multi_channel_rrf_fusion,
     apply_semantic_candidate_rerank,
     apply_structural_rerank,
     build_adaptive_router_payload,
     build_disabled_docs_payload,
     build_disabled_worktree_prior,
     build_embedding_stats,
-    build_index_stage_output,
     build_exact_search_payload,
+    build_index_stage_output,
     collect_docs_signals,
     collect_parallel_signals,
     collect_worktree_prior,
@@ -31,8 +31,8 @@ from ace_lite.index_stage import (
     filter_candidate_rows,
     filter_files_map_for_benchmark,
     gather_initial_candidates,
-    merge_candidate_lists,
     get_index_parallel_executor,
+    merge_candidate_lists,
     normalize_repo_path,
     postprocess_candidates,
     refine_candidate_pool,
@@ -51,6 +51,9 @@ from ace_lite.index_stage import (
     select_index_chunks,
     select_initial_candidates,
 )
+from ace_lite.index_stage.benchmark_candidate_runtime import (
+    apply_benchmark_candidate_filters,
+)
 from ace_lite.index_stage.cache import (
     attach_index_candidate_cache_info,
     build_index_candidate_cache_key,
@@ -61,9 +64,6 @@ from ace_lite.index_stage.cache import (
     store_cached_index_candidates,
 )
 from ace_lite.index_stage.candidate_fusion_runtime import run_index_candidate_fusion
-from ace_lite.index_stage.benchmark_candidate_runtime import (
-    apply_benchmark_candidate_filters,
-)
 from ace_lite.index_stage.candidate_generation_runtime import (
     run_index_candidate_generation,
 )
@@ -71,12 +71,12 @@ from ace_lite.index_stage.chunk_runtime import run_index_chunk_selection
 from ace_lite.index_stage.config_adapter import (
     build_index_stage_config_from_orchestrator,
 )
-from ace_lite.index_stage.feedback import apply_feedback_boost
 from ace_lite.index_stage.execution_state import (
     apply_candidate_generation_runtime_to_state,
     apply_post_generation_runtime_to_state,
     build_index_stage_execution_state,
 )
+from ace_lite.index_stage.feedback import apply_feedback_boost
 from ace_lite.index_stage.output_finalize import finalize_index_stage_output_from_state
 from ace_lite.index_stage.post_generation_runtime import (
     run_index_post_generation_runtime,

@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ace_lite.benchmark.reward_replay import build_reward_replay_payload
-from ace_lite.benchmark.reward_replay import write_reward_replay_artifacts
-from ace_lite.router_reward_store import append_reward_event
-from ace_lite.router_reward_store import make_reward_event
+from ace_lite.benchmark.reward_replay import (
+    build_reward_replay_payload,
+    write_reward_replay_artifacts,
+)
+from ace_lite.router_reward_store import append_reward_event, make_reward_event
 
 
 def test_build_reward_replay_payload_summarizes_reward_events() -> None:

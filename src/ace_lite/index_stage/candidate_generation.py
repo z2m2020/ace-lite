@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
 
-from ace_lite.retrieval_shared import CandidateSelectionResult
-from ace_lite.retrieval_shared import RetrievalRuntimeProfile
+from ace_lite.retrieval_shared import CandidateSelectionResult, RetrievalRuntimeProfile
 
 
 @dataclass(frozen=True, slots=True)

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 _REASON_ALIASES = {
     "docs_timeout": "parallel_docs_timeout",
     "document_timeout": "parallel_docs_timeout",

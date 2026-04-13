@@ -897,8 +897,8 @@ def summarize_workspace(
 
 
 __all__ = [
-    "DEFAULT_WORKSPACE_LANGUAGES",
     "DEFAULT_SUMMARY_TTL_SECONDS",
+    "DEFAULT_WORKSPACE_LANGUAGES",
     "WorkspaceRepoCandidate",
     "build_workspace_plan",
     "route_workspace_repos",

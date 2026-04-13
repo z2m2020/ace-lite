@@ -4,8 +4,8 @@ import textwrap
 from pathlib import Path
 from urllib.error import URLError
 
-from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.pipeline.types import StageContext, StageEvent
+from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.plugins import runtime_mcp
 from ace_lite.plugins.loader import PluginLoader
 

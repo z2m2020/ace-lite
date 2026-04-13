@@ -10,9 +10,9 @@ import time
 import pytest
 
 from ace_lite.performance_benchmark import (
-    BenchmarkResult,
     BenchmarkComparison,
     BenchmarkConfig,
+    BenchmarkResult,
     BenchmarkRunner,
     TuningRecommendation,
     benchmark_json_serialization,

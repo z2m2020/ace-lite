@@ -5,11 +5,11 @@ import pytest
 from ace_lite.agent_loop.contracts import (
     AGENT_LOOP_BRANCH_BATCH_SCHEMA_VERSION,
     AGENT_LOOP_RERUN_POLICY_SCHEMA_VERSION,
-    build_agent_loop_branch_batch_v1,
     build_agent_loop_action_v1,
+    build_agent_loop_branch_batch_v1,
     build_agent_loop_rerun_policy_v1,
-    validate_agent_loop_branch_batch_v1,
     validate_agent_loop_action_v1,
+    validate_agent_loop_branch_batch_v1,
 )
 
 

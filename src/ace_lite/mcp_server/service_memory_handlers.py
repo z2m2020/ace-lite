@@ -8,7 +8,6 @@ from ace_lite.memory_long_term.graph_view import build_long_term_graph_view
 from ace_lite.memory_long_term.store import LongTermMemoryStore
 from ace_lite.memory_search_guardrails import build_memory_search_guardrails
 
-
 _ABSTRACT_QUERY_EXPANSIONS: dict[str, tuple[str, ...]] = {
     "onboarding": ("onboarding", "familiarize", "overview", "entrypoint", "codebase"),
     "familiarization": ("onboarding", "familiarize", "overview", "entrypoint", "codebase"),

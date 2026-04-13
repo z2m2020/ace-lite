@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from pathlib import PurePosixPath
-from pathlib import PureWindowsPath
+from pathlib import PurePosixPath, PureWindowsPath
 
-from ace_lite.runtime_paths import DEFAULT_REPO_RUNTIME_CACHE_DB_PATH
-from ace_lite.runtime_paths import DEFAULT_USER_PREFERENCE_CAPTURE_DB_PATH
-from ace_lite.runtime_paths import DEFAULT_USER_RUNTIME_DB_PATH
-from ace_lite.runtime_paths import resolve_repo_runtime_cache_db_path
-from ace_lite.runtime_paths import resolve_user_preference_capture_db_path
-from ace_lite.runtime_paths import resolve_user_runtime_db_path
+from ace_lite.runtime_paths import (
+    DEFAULT_REPO_RUNTIME_CACHE_DB_PATH,
+    DEFAULT_USER_PREFERENCE_CAPTURE_DB_PATH,
+    DEFAULT_USER_RUNTIME_DB_PATH,
+    resolve_repo_runtime_cache_db_path,
+    resolve_user_preference_capture_db_path,
+    resolve_user_runtime_db_path,
+)
 
 
 def test_resolve_user_runtime_db_path_posix_home() -> None:

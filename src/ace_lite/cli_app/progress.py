@@ -194,11 +194,11 @@ def progress_iter(items: list, message: str = "Processing", stream=None) -> Gene
 
 
 __all__ = [
-    "SpinnerProgress",
     "ProgressContext",
-    "echo_progress",
+    "SpinnerProgress",
     "clear_progress",
     "echo_done",
     "echo_error",
+    "echo_progress",
     "progress_iter",
 ]

@@ -94,15 +94,15 @@ def get_lifecycle_descriptor(name: str) -> OrchestratorLifecycleDescriptor | Non
 
 __all__ = [
     "ORCHESTRATOR_LIFECYCLE",
+    "POST_SOURCE_PLAN_LIFECYCLE",
+    "PRE_SOURCE_PLAN_LIFECYCLE",
+    "SOURCE_PLAN_LIFECYCLE",
     "OrchestratorAgentLoopResult",
     "OrchestratorFinalizationResult",
     "OrchestratorLifecycleDescriptor",
     "OrchestratorLifecycleResult",
     "OrchestratorPreparationResult",
     "OrchestratorSourcePlanReplayResult",
-    "POST_SOURCE_PLAN_LIFECYCLE",
-    "PRE_SOURCE_PLAN_LIFECYCLE",
-    "SOURCE_PLAN_LIFECYCLE",
     "get_lifecycle_descriptor",
     "iter_lifecycle_descriptors",
 ]

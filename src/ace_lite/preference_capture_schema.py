@@ -3,9 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ace_lite.runtime_db_migrate import RuntimeDbMigration
-from ace_lite.runtime_db_migrate import build_runtime_db_migration_bootstrap
-
+from ace_lite.runtime_db_migrate import RuntimeDbMigration, build_runtime_db_migration_bootstrap
 
 PREFERENCE_CAPTURE_SCHEMA_NAME = "preference_capture"
 PREFERENCE_CAPTURE_SCHEMA_VERSION = 1

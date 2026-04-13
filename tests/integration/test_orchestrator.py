@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
+from ace_lite.agent_loop.contracts import build_agent_loop_action_v1
 from ace_lite.cli import cli
 from ace_lite.index_stage import extract_terms
 from ace_lite.memory import OpenMemoryMemoryProvider
@@ -16,14 +17,13 @@ from ace_lite.memory_long_term import (
     LongTermMemoryStore,
     build_long_term_fact_contract_v1,
 )
-from ace_lite.agent_loop.contracts import build_agent_loop_action_v1
 from ace_lite.orchestrator import AceOrchestrator
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.rankers.bm25 import rank_candidates_bm25_two_stage
 from ace_lite.runtime_manager import RuntimeManager
-from ace_lite.stage_artifact_cache import StageArtifactCache
 from ace_lite.runtime_stats_store import DurableStatsStore
 from ace_lite.schema import SCHEMA_VERSION
+from ace_lite.stage_artifact_cache import StageArtifactCache
 from ace_lite.validation.result import build_validation_result_v1
 
 

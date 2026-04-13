@@ -122,8 +122,8 @@ def normalize_source_plan_evidence_summary(value: Any) -> dict[str, float]:
 
 __all__ = [
     "coerce_chunk_refs",
-    "count_unique_paths",
     "compute_chunks_per_file_mean",
+    "count_unique_paths",
     "extract_stage_latency_ms",
     "extract_stage_observability",
     "normalize_source_plan_evidence_summary",

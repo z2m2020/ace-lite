@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping
 
 
 def _deep_merge(target: dict[str, Any], source: Mapping[str, Any]) -> None:
@@ -463,9 +463,9 @@ def list_runtime_profiles() -> tuple[RuntimeProfile, ...]:
 
 
 __all__ = [
+    "RUNTIME_PROFILES",
     "RUNTIME_PROFILE_CATALOG",
     "RUNTIME_PROFILE_NAMES",
-    "RUNTIME_PROFILES",
     "RuntimeProfile",
     "get_runtime_profile",
     "list_runtime_profiles",

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import yaml
-
 from pathlib import Path
+
+import yaml
 
 
 def test_full_validation_script_includes_required_gates() -> None:

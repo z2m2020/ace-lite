@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import re
-from pathlib import PurePath
-from pathlib import PurePosixPath
-from pathlib import PureWindowsPath
-
+from pathlib import PurePath, PurePosixPath, PureWindowsPath
 
 DEFAULT_USER_RUNTIME_DB_PATH = "~/.ace-lite/runtime_state.db"
 DEFAULT_USER_PREFERENCE_CAPTURE_DB_PATH = "~/.ace-lite/preference_capture.db"

@@ -4,8 +4,8 @@ import copy
 import random
 from itertools import pairwise
 
-from ace_lite.chunking.types import CONTEXTUAL_CHUNKING_SIDECAR_KEY
 from ace_lite.chunking.skeleton import CHUNK_SKELETON_SCHEMA_VERSION
+from ace_lite.chunking.types import CONTEXTUAL_CHUNKING_SIDECAR_KEY
 from ace_lite.pipeline.stages.source_plan import run_source_plan
 from ace_lite.pipeline.types import StageContext
 from ace_lite.source_plan import (

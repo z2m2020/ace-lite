@@ -1465,17 +1465,17 @@ def build_slo_budget_summary(case_results: list[dict[str, Any]]) -> dict[str, An
 
 
 __all__ = [
-    "build_missing_context_risk_summary",
+    "build_agent_loop_control_plane_summary",
     "build_chunk_stage_miss_summary",
     "build_comparison_lane_summary",
     "build_decision_observability_summary",
     "build_evidence_insufficiency_summary",
     "build_feedback_loop_summary",
     "build_feedback_observability_summary",
-    "build_agent_loop_control_plane_summary",
+    "build_missing_context_risk_summary",
     "build_preference_observability_summary",
-    "build_retrieval_default_strategy_summary",
     "build_retrieval_context_observability_summary",
+    "build_retrieval_default_strategy_summary",
     "build_slo_budget_summary",
     "build_stage_latency_summary",
     "is_risk_upgrade_case",

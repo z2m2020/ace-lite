@@ -6,8 +6,8 @@ from typing import Any, Callable
 from ace_lite.lsp.broker import LspDiagnosticsBroker
 from ace_lite.memory import MemoryProvider
 from ace_lite.orchestrator_config import OrchestratorConfig
-from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.pipeline.plugin_runtime import PluginRuntime
+from ace_lite.plugin_integration_manager import PluginIntegrationManager
 from ace_lite.plugins.loader import PluginLoader
 from ace_lite.signal_extractor import SignalExtractor
 

@@ -7,13 +7,13 @@ This package contains pure helpers used by the `source_plan` pipeline stage:
 - step list construction
 """
 
-from ace_lite.source_plan.chunk_ranking import (
-    pack_source_plan_chunks,
-    rank_source_plan_chunks,
-)
 from ace_lite.source_plan.cards import (
     build_source_plan_cards,
     build_validation_feedback_summary,
+)
+from ace_lite.source_plan.chunk_ranking import (
+    pack_source_plan_chunks,
+    rank_source_plan_chunks,
 )
 from ace_lite.source_plan.grounding import (
     annotate_source_plan_grounding,

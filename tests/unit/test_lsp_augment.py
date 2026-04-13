@@ -5,8 +5,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from ace_lite.lsp.broker import LspDiagnosticsBroker
 import ace_lite.pipeline.stages.augment as augment_stage
+from ace_lite.lsp.broker import LspDiagnosticsBroker
 from ace_lite.pipeline.stages.augment import run_diagnostics_augment
 
 

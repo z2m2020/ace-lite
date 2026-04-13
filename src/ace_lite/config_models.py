@@ -21,6 +21,20 @@ from ace_lite.config_choices import (
     REMOTE_SLOT_POLICY_CHOICES,
     RETRIEVAL_POLICY_CHOICES,
 )
+from ace_lite.config_model_shared import (
+    validate_adaptive_router_mode,
+    validate_candidate_ranker,
+    validate_chunk_disclosure,
+    validate_chunk_guard_mode,
+    validate_hybrid_fusion_mode,
+    validate_memory_disclosure_mode,
+    validate_memory_strategy,
+    validate_memory_timezone_mode,
+    validate_remote_slot_policy_mode,
+    validate_retrieval_policy,
+    validate_sbfl_metric,
+    validate_topological_shield_mode,
+)
 from ace_lite.config_sections import (
     ChunkCoreSectionSpec,
     ChunkGuardSectionSpec,
@@ -44,20 +58,6 @@ from ace_lite.config_sections import (
     TokenizerSectionSpec,
     TraceSectionSpec,
 )
-from ace_lite.config_model_shared import (
-    validate_adaptive_router_mode,
-    validate_candidate_ranker,
-    validate_chunk_guard_mode,
-    validate_chunk_disclosure,
-    validate_hybrid_fusion_mode,
-    validate_memory_disclosure_mode,
-    validate_memory_strategy,
-    validate_memory_timezone_mode,
-    validate_remote_slot_policy_mode,
-    validate_retrieval_policy,
-    validate_sbfl_metric,
-    validate_topological_shield_mode,
-)
 from ace_lite.config_value_normalizers import validate_choice_value
 from ace_lite.pydantic_utils import StrictModel as _StrictModel
 from ace_lite.runtime.scheduler import CronSchedule
@@ -80,6 +80,7 @@ from ace_lite.shared_plan_runtime_config import (
     resolve_trace_otlp_endpoint,
     resolve_trace_otlp_timeout_seconds,
 )
+
 
 class TokenizerConfig(TokenizerSectionSpec):
 
@@ -970,16 +971,16 @@ def validate_cli_config(config: dict[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "ADAPTIVE_ROUTER_MODE_CHOICES",
-    "AceLiteConfig",
-    "BenchmarkConfig",
     "CHUNK_GUARD_MODE_CHOICES",
     "EMBEDDING_PROVIDER_CHOICES",
     "MEMORY_AUTO_TAG_MODE_CHOICES",
     "MEMORY_GATE_MODE_CHOICES",
     "MEMORY_TIMEZONE_MODE_CHOICES",
     "REMOTE_SLOT_POLICY_CHOICES",
-    "RepoMapConfig",
     "RETRIEVAL_POLICY_CHOICES",
+    "AceLiteConfig",
+    "BenchmarkConfig",
+    "RepoMapConfig",
     "RuntimeConfig",
     "SharedPlanConfig",
     "TeamConfig",

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ace_lite.runtime_db import DEFAULT_RUNTIME_DB_BUSY_TIMEOUT_MS
-from ace_lite.runtime_db import connect_runtime_db
-from ace_lite.runtime_db_migrate import RuntimeDbMigration
-from ace_lite.runtime_db_migrate import build_runtime_db_migration_bootstrap
-from ace_lite.runtime_db_migrate import get_runtime_db_schema_version
+from ace_lite.runtime_db import DEFAULT_RUNTIME_DB_BUSY_TIMEOUT_MS, connect_runtime_db
+from ace_lite.runtime_db_migrate import (
+    RuntimeDbMigration,
+    build_runtime_db_migration_bootstrap,
+    get_runtime_db_schema_version,
+)
 
 
 def _journal_mode(conn: object) -> str:
