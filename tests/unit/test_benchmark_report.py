@@ -1443,6 +1443,59 @@ def test_build_results_summary_preserves_source_plan_validation_feedback_summary
     }
 
 
+def test_build_results_summary_preserves_wave1_context_governance_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "wave1_context_governance_summary": {
+                "case_count": 2,
+                "plan_available_case_count": 2,
+                "plan_available_case_rate": 1.0,
+                "history_hits_case_count": 1,
+                "history_hits_case_rate": 0.5,
+                "candidate_review_case_count": 2,
+                "candidate_review_case_rate": 1.0,
+                "candidate_review_watch_case_count": 1,
+                "candidate_review_watch_case_rate": 0.5,
+                "validation_findings_case_count": 2,
+                "validation_findings_case_rate": 1.0,
+                "validation_blocker_case_count": 1,
+                "validation_blocker_case_rate": 0.5,
+                "session_end_report_case_count": 2,
+                "session_end_report_case_rate": 1.0,
+                "history_hit_count_mean": 1.5,
+                "validation_warn_count_mean": 1.0,
+                "validation_blocker_count_mean": 0.5,
+                "session_next_action_count_mean": 2.0,
+                "session_risk_count_mean": 1.0,
+            },
+        }
+    )
+
+    assert summary["wave1_context_governance_summary"] == {
+        "case_count": 2,
+        "plan_available_case_count": 2,
+        "plan_available_case_rate": 1.0,
+        "history_hits_case_count": 1,
+        "history_hits_case_rate": 0.5,
+        "candidate_review_case_count": 2,
+        "candidate_review_case_rate": 1.0,
+        "candidate_review_watch_case_count": 1,
+        "candidate_review_watch_case_rate": 0.5,
+        "validation_findings_case_count": 2,
+        "validation_findings_case_rate": 1.0,
+        "validation_blocker_case_count": 1,
+        "validation_blocker_case_rate": 0.5,
+        "session_end_report_case_count": 2,
+        "session_end_report_case_rate": 1.0,
+        "history_hit_count_mean": 1.5,
+        "validation_warn_count_mean": 1.0,
+        "validation_blocker_count_mean": 0.5,
+        "session_next_action_count_mean": 2.0,
+        "session_risk_count_mean": 1.0,
+    }
+
+
 def test_build_results_summary_preserves_source_plan_failure_signal_summary() -> None:
     summary = build_results_summary(
         {
@@ -1888,6 +1941,47 @@ def test_build_report_markdown_prefers_top_level_source_plan_validation_feedback
     assert "Present ratio: 1.0000; issue count mean: 2.0000; failure rate: 1.0000" in report
     assert "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000" in report
     assert "Selected test count mean: 1.0000; executed test count mean: 1.0000" in report
+
+
+def test_build_report_markdown_includes_wave1_context_governance_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-04-14T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {metric: 0.0 for metric in ALL_METRIC_ORDER},
+            "wave1_context_governance_summary": {
+                "case_count": 2,
+                "plan_available_case_count": 2,
+                "plan_available_case_rate": 1.0,
+                "history_hits_case_count": 1,
+                "history_hits_case_rate": 0.5,
+                "candidate_review_case_count": 2,
+                "candidate_review_case_rate": 1.0,
+                "candidate_review_watch_case_count": 1,
+                "candidate_review_watch_case_rate": 0.5,
+                "validation_findings_case_count": 2,
+                "validation_findings_case_rate": 1.0,
+                "validation_blocker_case_count": 1,
+                "validation_blocker_case_rate": 0.5,
+                "session_end_report_case_count": 2,
+                "session_end_report_case_rate": 1.0,
+                "history_hit_count_mean": 1.5,
+                "validation_warn_count_mean": 1.0,
+                "validation_blocker_count_mean": 0.5,
+                "session_next_action_count_mean": 2.0,
+                "session_risk_count_mean": 1.0,
+            },
+            "cases": [],
+        }
+    )
+
+    assert "## Wave 1 Context Governance Summary" in report
+    assert "Plan-available cases: 2/2 (1.0000)" in report
+    assert "History-hits cases: 1/2 (0.5000)" in report
+    assert "Candidate-review cases: 2/2 (1.0000); watch=1 (0.5000)" in report
+    assert "Validation-findings cases: 2/2 (1.0000); blocker=1 (0.5000)" in report
+    assert "| session_next_action_count_mean | 2.0000 |" in report
 
 
 def test_build_report_markdown_includes_source_plan_failure_signal_summary() -> None:

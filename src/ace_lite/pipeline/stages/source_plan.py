@@ -29,6 +29,12 @@ from ace_lite.source_plan.evidence_confidence import (
     annotate_chunk_confidence,
     build_confidence_summary,
 )
+from ace_lite.source_plan.report_only import (
+    build_candidate_review,
+    build_history_hits,
+    build_session_end_report,
+    build_validation_findings,
+)
 from ace_lite.validation.patch_artifact import validate_patch_artifact_contract_v1
 
 
@@ -301,6 +307,11 @@ def run_source_plan(
         ctx.state.get("validation", {}) if isinstance(ctx.state.get("validation"), dict) else {}
     )
     policy = ctx.state.get("__policy", {}) if isinstance(ctx.state.get("__policy"), dict) else {}
+    vcs_history = (
+        augment_stage.get("vcs_history", {})
+        if isinstance(augment_stage.get("vcs_history"), dict)
+        else {}
+    )
 
     memory_hits = _extract_memory_hits(memory_stage)
     profile_payload = (
@@ -417,6 +428,27 @@ def run_source_plan(
         or int(failure_signal_summary.get("probe_issue_count", 0) or 0) > 0
     )
     failure_signal_summary["source"] = "source_plan.validate_step"
+    history_hits = build_history_hits(
+        vcs_history=vcs_history,
+        focused_files=focused_files,
+    )
+    candidate_review = build_candidate_review(
+        focused_files=focused_files,
+        candidate_chunks=grounded_chunks[: max(1, int(chunk_top_k))],
+        evidence_summary=evidence_summary,
+        failure_signal_summary=failure_signal_summary,
+        validation_tests=validation_tests,
+    )
+    validation_findings = build_validation_findings(validation_result=validation_result)
+    session_end_report = build_session_end_report(
+        query=ctx.query,
+        focused_files=focused_files,
+        validation_tests=validation_tests,
+        diagnostics=diagnostics,
+        candidate_review=candidate_review,
+        validation_findings=validation_findings,
+        history_hits=history_hits,
+    )
 
     steps = build_source_plan_steps(
         index_stage=index_stage,
@@ -471,6 +503,10 @@ def run_source_plan(
         "file_cards": file_cards,
         "chunk_cards": chunk_cards,
         "card_summary": card_summary,
+        "history_hits": history_hits,
+        "candidate_review": candidate_review,
+        "validation_findings": validation_findings,
+        "session_end_report": session_end_report,
         "failure_signal_summary": failure_signal_summary,
         "policy_name": str(policy.get("name", "general")),
         "policy_version": str(policy.get("version", policy_version)),

@@ -913,6 +913,90 @@ def append_reward_log_summary(lines: list[str], results: dict[str, Any]) -> None
     lines.append("")
 
 
+def append_wave1_context_governance_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary = get_summary_mapping(results=results, key="wave1_context_governance_summary")
+    if not summary:
+        return
+
+    case_count = int(summary.get("case_count", 0) or 0)
+    lines.append("## Wave 1 Context Governance Summary")
+    lines.append("")
+    lines.append(
+        "- Plan-available cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("plan_available_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("plan_available_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- History-hits cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("history_hits_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("history_hits_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Candidate-review cases: {count}/{total} ({rate:.4f}); watch={watch_count} ({watch_rate:.4f})".format(
+            count=int(summary.get("candidate_review_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("candidate_review_case_rate", 0.0) or 0.0),
+            watch_count=int(summary.get("candidate_review_watch_case_count", 0) or 0),
+            watch_rate=float(
+                summary.get("candidate_review_watch_case_rate", 0.0) or 0.0
+            ),
+        )
+    )
+    lines.append(
+        "- Validation-findings cases: {count}/{total} ({rate:.4f}); blocker={blocker_count} ({blocker_rate:.4f})".format(
+            count=int(summary.get("validation_findings_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("validation_findings_case_rate", 0.0) or 0.0),
+            blocker_count=int(summary.get("validation_blocker_case_count", 0) or 0),
+            blocker_rate=float(
+                summary.get("validation_blocker_case_rate", 0.0) or 0.0
+            ),
+        )
+    )
+    lines.append(
+        "- Session-end-report cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("session_end_report_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("session_end_report_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("| --- | ---: |")
+    lines.append(
+        "| history_hit_count_mean | {value:.4f} |".format(
+            value=float(summary.get("history_hit_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| validation_warn_count_mean | {value:.4f} |".format(
+            value=float(summary.get("validation_warn_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| validation_blocker_count_mean | {value:.4f} |".format(
+            value=float(summary.get("validation_blocker_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| session_next_action_count_mean | {value:.4f} |".format(
+            value=float(summary.get("session_next_action_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append(
+        "| session_risk_count_mean | {value:.4f} |".format(
+            value=float(summary.get("session_risk_count_mean", 0.0) or 0.0)
+        )
+    )
+    lines.append("")
+
+
 def append_retrieval_control_plane_gate_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
@@ -1069,5 +1153,6 @@ __all__ = [
     "append_retrieval_control_plane_gate_summary",
     "append_retrieval_default_strategy_summary",
     "append_reward_log_summary",
+    "append_wave1_context_governance_summary",
     "format_decision_event",
 ]
