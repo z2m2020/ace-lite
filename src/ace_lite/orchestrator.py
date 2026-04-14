@@ -12,10 +12,6 @@ from ace_lite.memory import (
     MemoryProvider,
 )
 from ace_lite.memory_long_term import LongTermMemoryCaptureService, LongTermMemoryStore
-from ace_lite.orchestrator_augment_support import (
-    build_orchestrator_augment_runtime,
-    resolve_augment_candidates,
-)
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.orchestrator_contracts import (
     PlanRequestAdapter,
@@ -54,6 +50,7 @@ from ace_lite.orchestrator_source_plan_support import (
     build_orchestrator_source_plan_runtime,
 )
 from ace_lite.orchestrator_stage_runtime_support import (
+    run_orchestrator_augment_stage,
     run_orchestrator_index_stage,
     run_orchestrator_repomap_stage,
     run_orchestrator_validation_stage,
@@ -66,7 +63,6 @@ from ace_lite.pipeline.registry import (
     iter_stage_descriptors,
 )
 from ace_lite.pipeline.stage_tags import build_stage_tags
-from ace_lite.pipeline.stages.augment import run_diagnostics_augment
 from ace_lite.pipeline.stages.memory import run_memory
 from ace_lite.pipeline.stages.skills import route_skills, run_skills
 from ace_lite.pipeline.stages.source_plan import run_source_plan
@@ -761,36 +757,11 @@ class AceOrchestrator:
         )
 
     def _run_augment(self, *, ctx: StageContext) -> dict[str, Any]:
-        cfg = self._config
-        runtime = build_orchestrator_augment_runtime(ctx_state=ctx.state)
-        candidates = resolve_augment_candidates(
-            index_stage=runtime.index_stage,
-            repomap_stage=runtime.repomap_stage,
-            index_files=runtime.index_files,
+        return run_orchestrator_augment_stage(
+            ctx=ctx,
+            config=self._config,
+            lsp_broker=self._lsp_broker,
         )
-        payload = run_diagnostics_augment(
-            root=ctx.root,
-            query=ctx.query,
-            index_stage={"candidate_files": candidates},
-            enabled=cfg.lsp.enabled,
-            top_n=cfg.lsp.top_n,
-            broker=self._lsp_broker,
-            xref_enabled=cfg.lsp.xref_enabled,
-            xref_top_n=cfg.lsp.xref_top_n,
-            xref_time_budget_ms=cfg.lsp.time_budget_ms,
-            candidate_chunks=runtime.candidate_chunks,
-            junit_xml_path=cfg.tests.junit_xml,
-            coverage_json_path=cfg.tests.coverage_json,
-            sbfl_json_path=cfg.tests.sbfl_json,
-            sbfl_metric=cfg.tests.sbfl_metric,
-            vcs_enabled=cfg.cochange.enabled,
-            vcs_worktree_override=runtime.vcs_worktree_override,
-        )
-        payload["policy_name"] = runtime.policy_name
-        payload["policy_version"] = (
-            runtime.policy_version or str(cfg.retrieval.policy_version)
-        )
-        return payload
 
     def _run_skills(self, *, ctx: StageContext) -> dict[str, Any]:
         runtime = build_orchestrator_skills_runtime(

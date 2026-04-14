@@ -3,9 +3,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from ace_lite.orchestrator_augment_support import (
+    build_orchestrator_augment_runtime,
+    resolve_augment_candidates,
+)
 from ace_lite.orchestrator_validation_support import (
     build_orchestrator_validation_runtime,
 )
+from ace_lite.pipeline.stages.augment import run_diagnostics_augment
 from ace_lite.pipeline.stages.index import IndexStageConfig, run_index
 from ace_lite.pipeline.stages.repomap import run_repomap
 from ace_lite.pipeline.stages.validation import run_validation_stage
@@ -52,6 +57,43 @@ def run_orchestrator_repomap_stage(
     )
 
 
+def run_orchestrator_augment_stage(
+    *,
+    ctx: StageContext,
+    config: Any,
+    lsp_broker: Any,
+) -> dict[str, Any]:
+    runtime = build_orchestrator_augment_runtime(ctx_state=ctx.state)
+    candidates = resolve_augment_candidates(
+        index_stage=runtime.index_stage,
+        repomap_stage=runtime.repomap_stage,
+        index_files=runtime.index_files,
+    )
+    payload = run_diagnostics_augment(
+        root=ctx.root,
+        query=ctx.query,
+        index_stage={"candidate_files": candidates},
+        enabled=config.lsp.enabled,
+        top_n=config.lsp.top_n,
+        broker=lsp_broker,
+        xref_enabled=config.lsp.xref_enabled,
+        xref_top_n=config.lsp.xref_top_n,
+        xref_time_budget_ms=config.lsp.time_budget_ms,
+        candidate_chunks=runtime.candidate_chunks,
+        junit_xml_path=config.tests.junit_xml,
+        coverage_json_path=config.tests.coverage_json,
+        sbfl_json_path=config.tests.sbfl_json,
+        sbfl_metric=config.tests.sbfl_metric,
+        vcs_enabled=config.cochange.enabled,
+        vcs_worktree_override=runtime.vcs_worktree_override,
+    )
+    payload["policy_name"] = runtime.policy_name
+    payload["policy_version"] = (
+        runtime.policy_version or str(config.retrieval.policy_version)
+    )
+    return payload
+
+
 def run_orchestrator_validation_stage(
     *,
     ctx: StageContext,
@@ -83,6 +125,7 @@ def run_orchestrator_validation_stage(
 
 
 __all__ = [
+    "run_orchestrator_augment_stage",
     "run_orchestrator_index_stage",
     "run_orchestrator_repomap_stage",
     "run_orchestrator_validation_stage",

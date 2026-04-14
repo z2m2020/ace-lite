@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from ace_lite.orchestrator_stage_runtime_support import (
+    run_orchestrator_augment_stage,
     run_orchestrator_index_stage,
     run_orchestrator_repomap_stage,
     run_orchestrator_validation_stage,
@@ -55,6 +56,104 @@ def test_run_orchestrator_index_stage_builds_index_config_and_executes(
     assert captured["run_index_kwargs"] == {
         "ctx": ctx,
         "config": "index-config",
+    }
+
+
+def test_run_orchestrator_augment_stage_builds_payload_and_applies_policy(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_build_runtime(**kwargs):  # type: ignore[no-untyped-def]
+        assert kwargs == {"ctx_state": {"augment": True}}
+        return SimpleNamespace(
+            index_stage={"candidate_files": [{"path": "src/a.py"}]},
+            repomap_stage={"candidate_files": [{"path": "src/b.py"}]},
+            index_files=[{"path": "src/a.py"}],
+            candidate_chunks=[{"chunk": 1}],
+            vcs_worktree_override="worktree",
+            policy_name="strict",
+            policy_version="",
+        )
+
+    def fake_resolve_candidates(**kwargs):  # type: ignore[no-untyped-def]
+        captured["resolve_candidates_kwargs"] = kwargs
+        return [{"path": "src/final.py"}]
+
+    def fake_run_diagnostics_augment(**kwargs):  # type: ignore[no-untyped-def]
+        captured["augment_kwargs"] = kwargs
+        return {"stage": "augment"}
+
+    monkeypatch.setattr(
+        "ace_lite.orchestrator_stage_runtime_support.build_orchestrator_augment_runtime",
+        fake_build_runtime,
+    )
+    monkeypatch.setattr(
+        "ace_lite.orchestrator_stage_runtime_support.resolve_augment_candidates",
+        fake_resolve_candidates,
+    )
+    monkeypatch.setattr(
+        "ace_lite.orchestrator_stage_runtime_support.run_diagnostics_augment",
+        fake_run_diagnostics_augment,
+    )
+
+    config = SimpleNamespace(
+        lsp=SimpleNamespace(
+            enabled=True,
+            top_n=5,
+            xref_enabled=True,
+            xref_top_n=3,
+            time_budget_ms=125.0,
+        ),
+        tests=SimpleNamespace(
+            junit_xml="junit.xml",
+            coverage_json="coverage.json",
+            sbfl_json="sbfl.json",
+            sbfl_metric="ochiai",
+        ),
+        cochange=SimpleNamespace(enabled=True),
+        retrieval=SimpleNamespace(policy_version="fallback-v3"),
+    )
+    ctx = StageContext(
+        query="bug query",
+        repo="demo-repo",
+        root="demo-root",
+        state={"augment": True},
+    )
+
+    result = run_orchestrator_augment_stage(
+        ctx=ctx,
+        config=config,
+        lsp_broker="broker",
+    )
+
+    assert result == {
+        "stage": "augment",
+        "policy_name": "strict",
+        "policy_version": "fallback-v3",
+    }
+    assert captured["resolve_candidates_kwargs"] == {
+        "index_stage": {"candidate_files": [{"path": "src/a.py"}]},
+        "repomap_stage": {"candidate_files": [{"path": "src/b.py"}]},
+        "index_files": [{"path": "src/a.py"}],
+    }
+    assert captured["augment_kwargs"] == {
+        "root": "demo-root",
+        "query": "bug query",
+        "index_stage": {"candidate_files": [{"path": "src/final.py"}]},
+        "enabled": True,
+        "top_n": 5,
+        "broker": "broker",
+        "xref_enabled": True,
+        "xref_top_n": 3,
+        "xref_time_budget_ms": 125.0,
+        "candidate_chunks": [{"chunk": 1}],
+        "junit_xml_path": "junit.xml",
+        "coverage_json_path": "coverage.json",
+        "sbfl_json_path": "sbfl.json",
+        "sbfl_metric": "ochiai",
+        "vcs_enabled": True,
+        "vcs_worktree_override": "worktree",
     }
 
 

@@ -26,9 +26,9 @@ class TestOrchestratorSeamBoundaries:
 
         expected_tokens = (
             "build_orchestrator_memory_runtime",
-            "build_orchestrator_augment_runtime",
             "build_orchestrator_skills_runtime",
             "build_orchestrator_source_plan_runtime",
+            "run_orchestrator_augment_stage",
             "run_orchestrator_index_stage",
             "run_orchestrator_repomap_stage",
             "run_orchestrator_validation_stage",
@@ -62,11 +62,12 @@ class TestOrchestratorSeamBoundaries:
         method_block = _extract_method_block("_run_augment")
 
         assert "def _resolve_augment_candidates(" not in orchestrator_text
-        assert "runtime = build_orchestrator_augment_runtime(ctx_state=ctx.state)" in method_block
-        assert "resolve_augment_candidates(" in method_block
-        assert "candidate_chunks=runtime.candidate_chunks" in method_block
-        assert 'runtime.index_stage.get("candidate_chunks"' not in method_block
-        assert 'runtime.policy.get("name"' not in method_block
+        assert "return run_orchestrator_augment_stage(" in method_block
+        assert "config=self._config" in method_block
+        assert "lsp_broker=self._lsp_broker" in method_block
+        assert "build_orchestrator_augment_runtime(" not in method_block
+        assert "resolve_augment_candidates(" not in method_block
+        assert "run_diagnostics_augment(" not in method_block
         assert 'ctx.state.get("index"' not in method_block
         assert 'ctx.state.get("repomap"' not in method_block
 
