@@ -20,8 +20,26 @@ def test_build_orchestrator_augment_runtime_normalizes_optional_state() -> None:
     assert runtime.index_stage == {"candidate_files": [{"path": "src/a.py"}]}
     assert runtime.repomap_stage == {"focused_files": ["src/a.py"]}
     assert runtime.index_files == {"src/a.py": {"module": "demo.a"}}
+    assert runtime.candidate_chunks == []
     assert runtime.vcs_worktree_override == {"enabled": True}
-    assert runtime.policy == {"name": "feature", "version": "v2"}
+    assert runtime.policy_name == "feature"
+    assert runtime.policy_version == "v2"
+
+
+def test_build_orchestrator_augment_runtime_normalizes_candidate_chunks() -> None:
+    runtime = build_orchestrator_augment_runtime(
+        ctx_state={
+            "index": {
+                "candidate_files": [{"path": "src/a.py"}],
+                "candidate_chunks": [
+                    {"path": "src/a.py", "qualified_name": "demo.a"},
+                    "skip-me",
+                ],
+            }
+        }
+    )
+
+    assert runtime.candidate_chunks == [{"path": "src/a.py", "qualified_name": "demo.a"}]
 
 
 def test_resolve_augment_candidates_prefers_focused_file_order() -> None:

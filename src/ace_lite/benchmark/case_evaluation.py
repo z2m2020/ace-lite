@@ -6,9 +6,10 @@ from typing import Any, cast
 
 from ace_lite.benchmark.case_evaluation_context import build_candidate_context
 from ace_lite.benchmark.case_evaluation_details import classify_chunk_stage_miss
-from ace_lite.benchmark.case_evaluation_diagnostics import (
-    build_case_evaluation_diagnostics,
+from ace_lite.benchmark.case_evaluation_diagnostics_builder import (
+    build_case_evaluation_diagnostics_from_namespace,
 )
+from ace_lite.benchmark.case_evaluation_inputs import build_case_evaluation_inputs
 from ace_lite.benchmark.case_evaluation_matching import (
     collect_candidate_match_details,
     collect_chunk_match_details,
@@ -30,30 +31,14 @@ def evaluate_case_result(
     latency_ms: float,
     include_case_details: bool = True,
 ) -> dict[str, Any]:
-    comparison_lane = str(case.get("comparison_lane") or "").strip()
-    expected_keys = case.get("expected_keys", [])
-    if isinstance(expected_keys, str):
-        expected = [item.strip() for item in expected_keys.split(";") if item.strip()]
-    else:
-        expected = [str(item).strip() for item in expected_keys if str(item).strip()]
-
-    top_k = int(case.get("top_k", 8))
-    index_payload = plan_payload.get("index", {}) if isinstance(plan_payload.get("index"), dict) else {}
-    index_metadata = (
-        index_payload.get("metadata", {})
-        if isinstance(index_payload.get("metadata"), dict)
-        else {}
-    )
-    index_benchmark_filters = (
-        index_payload.get("benchmark_filters", {})
-        if isinstance(index_payload.get("benchmark_filters"), dict)
-        else {}
-    )
-    source_plan_payload = (
-        plan_payload.get("source_plan", {})
-        if isinstance(plan_payload.get("source_plan"), dict)
-        else {}
-    )
+    inputs = build_case_evaluation_inputs(case=case, plan_payload=plan_payload)
+    comparison_lane = inputs.comparison_lane
+    expected = inputs.expected
+    top_k = inputs.top_k
+    index_payload = inputs.index_payload
+    index_metadata = inputs.index_metadata
+    index_benchmark_filters = inputs.index_benchmark_filters
+    source_plan_payload = inputs.source_plan_payload
     candidate_context = build_candidate_context(
         case=case,
         index_payload=index_payload,
@@ -496,41 +481,8 @@ def evaluate_case_result(
     docs_enabled_flag = metrics.docs_enabled_flag
     docs_hit = metrics.docs_hit
     hint_inject = metrics.hint_inject
-    diagnostics = build_case_evaluation_diagnostics(
-        case=case,
-        expected=expected,
-        recall_hit=recall_hit,
-        validation_tests=validation_tests,
-        candidate_file_count=len(top_candidates),
-        candidate_chunk_count=len(candidate_chunks),
-        chunk_hit_at_k=chunk_hit_at_k,
-        noise_rate=noise,
-        docs_enabled=docs_enabled_flag,
-        docs_hit=docs_hit,
-        dependency_recall=dependency_recall,
-        neighbor_paths=neighbor_paths,
-        skills_budget_exhausted=skills_budget_exhausted,
-        memory_gate_skipped=memory_gate_skipped,
-        memory_gate_skip_reason=memory_gate_skip_reason,
-        memory_fallback_reason=memory_fallback_reason,
-        memory_namespace_fallback=memory_namespace_fallback,
-        candidate_ranker_fallbacks=candidate_ranker_fallbacks,
-        exact_search_payload=exact_search_payload,
-        second_pass_payload=second_pass_payload,
-        refine_pass_payload=refine_pass_payload,
-        docs_backend_fallback_reason=docs_backend_fallback_reason,
-        parallel_docs_timed_out=parallel_docs_timed_out,
-        parallel_worktree_timed_out=parallel_worktree_timed_out,
-        embedding_adaptive_budget_applied=embedding_adaptive_budget_applied,
-        embedding_time_budget_exceeded=embedding_time_budget_exceeded,
-        embedding_fallback=embedding_fallback,
-        chunk_semantic_time_budget_exceeded=(
-            chunk_semantic_time_budget_exceeded
-        ),
-        chunk_semantic_fallback=chunk_semantic_fallback,
-        chunk_semantic_reason=chunk_semantic_reason,
-        xref_budget_exhausted=xref_budget_exhausted,
-        chunk_guard_payload=chunk_guard_payload,
+    diagnostics = build_case_evaluation_diagnostics_from_namespace(
+        namespace=locals()
     )
     task_success_config = diagnostics.task_success_config
     task_success_failed_checks = diagnostics.task_success_failed_checks

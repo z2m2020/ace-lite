@@ -9,8 +9,10 @@ class OrchestratorAugmentRuntime:
     index_stage: dict[str, Any]
     repomap_stage: dict[str, Any]
     index_files: dict[str, dict[str, Any]]
+    candidate_chunks: list[dict[str, Any]]
     vcs_worktree_override: dict[str, Any] | None
-    policy: dict[str, Any]
+    policy_name: str
+    policy_version: str
 
 
 def build_orchestrator_augment_runtime(*, ctx_state: dict[str, Any]) -> OrchestratorAugmentRuntime:
@@ -29,6 +31,12 @@ def build_orchestrator_augment_runtime(*, ctx_state: dict[str, Any]) -> Orchestr
         if isinstance(ctx_state.get("__index_files"), dict)
         else {}
     )
+    raw_candidate_chunks = (
+        index_stage.get("candidate_chunks", []) if isinstance(index_stage, dict) else []
+    )
+    candidate_chunks = [
+        item for item in raw_candidate_chunks if isinstance(item, dict)
+    ] if isinstance(raw_candidate_chunks, list) else []
     vcs_worktree_override = ctx_state.get("__vcs_worktree")
     if not isinstance(vcs_worktree_override, dict):
         vcs_worktree_override = None
@@ -41,8 +49,10 @@ def build_orchestrator_augment_runtime(*, ctx_state: dict[str, Any]) -> Orchestr
         index_stage=index_stage,
         repomap_stage=repomap_stage,
         index_files=index_files,
+        candidate_chunks=candidate_chunks,
         vcs_worktree_override=vcs_worktree_override,
-        policy=policy,
+        policy_name=str(policy.get("name", "general")),
+        policy_version=str(policy.get("version", "")),
     )
 
 

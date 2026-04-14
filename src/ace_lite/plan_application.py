@@ -8,6 +8,24 @@ from typing import Any
 from ace_lite.plan_contract_summary import build_plan_contract_summary
 from ace_lite.plan_timeout import PlanTimeoutOutcome, execute_with_timeout
 
+_REPORT_ONLY_ARTIFACT_FIELDS = (
+    "context_report",
+    "retrieval_graph_view",
+    "skill_catalog",
+    "benchmark_report",
+    "benchmark_summary",
+    "checkpoint_artifacts",
+)
+_TOP_LEVEL_STAGE_NAMES = (
+    "memory",
+    "index",
+    "repomap",
+    "augment",
+    "skills",
+    "source_plan",
+    "validation",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class PlanQuickFallback:
@@ -101,8 +119,9 @@ def execute_timed_plan_with_fallback(
 def build_plan_contract_summary_from_payload(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
-    index_payload = payload.get("index")
-    source_plan_payload = payload.get("source_plan")
+    normalized = sanitize_external_plan_payload(payload)
+    index_payload = normalized.get("index")
+    source_plan_payload = normalized.get("source_plan")
     if not isinstance(index_payload, dict) or not isinstance(source_plan_payload, dict):
         return {}
     return build_plan_contract_summary(
@@ -111,8 +130,22 @@ def build_plan_contract_summary_from_payload(payload: Any) -> dict[str, Any]:
     )
 
 
+def sanitize_external_plan_payload(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    for field in _REPORT_ONLY_ARTIFACT_FIELDS:
+        payload.pop(field, None)
+    for stage_name in _TOP_LEVEL_STAGE_NAMES:
+        stage_payload = payload.get(stage_name)
+        if not isinstance(stage_payload, dict):
+            continue
+        for field in _REPORT_ONLY_ARTIFACT_FIELDS:
+            stage_payload.pop(field, None)
+    return payload
+
+
 def attach_plan_contract_summary(payload: Any) -> dict[str, Any]:
-    normalized = payload if isinstance(payload, dict) else {}
+    normalized = sanitize_external_plan_payload(payload)
     summary = build_plan_contract_summary_from_payload(normalized)
     if summary:
         normalized["contract_summary"] = summary
@@ -126,4 +159,5 @@ __all__ = [
     "build_plan_contract_summary_from_payload",
     "execute_timed_plan_with_fallback",
     "resolve_plan_quick_fallback",
+    "sanitize_external_plan_payload",
 ]

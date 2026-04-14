@@ -47,6 +47,7 @@ Checks:
 - [x] Missing non-empty `description` field
 - [x] Suspicious mojibake Unicode in any metadata field
 - [x] Overlap between error_keywords and intents/modules/topics
+- [x] Low-discriminative overlap across intents/modules/topics
 - [x] Duplicate `name` / `path` entries in a manifest
 - [x] Illegal default sections detection
 - [x] Token estimate bounds check
@@ -61,6 +62,7 @@ Checks:
 | `test_lint_skill_manifest_flags_missing_frontmatter_before_backfill` | Missing field detection |
 | `test_lint_skill_manifest_flags_missing_description` | Metadata-only discoverability guard |
 | `test_lint_skill_manifest_flags_mojibake_metadata_terms` | Unicode suspicious detection |
+| `test_lint_skill_manifest_flags_low_discriminative_routing_overlap` | Routing metadata discriminative-power warning |
 | `test_lint_skill_manifest_flags_duplicate_name_and_path` | Manifest uniqueness guard |
 | `test_repo_skills_pass_frontmatter_lint` | Repository skills validation |
 
@@ -70,9 +72,9 @@ Checks:
 
 ## Potential Enhancements (Future)
 
-### E1: Intent/Module Overlap Warning
+### E1: Weighted Overlap Severity
 
-Warn if a skill has intents/modules that overlap too much (low discriminative power).
+Escalate overlap severity when the same term appears across all routing fields and dominates the manifest.
 
 ---
 

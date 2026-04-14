@@ -6,6 +6,7 @@ from ace_lite.plan_application import (
     build_plan_contract_summary_from_payload,
     execute_timed_plan_with_fallback,
     resolve_plan_quick_fallback,
+    sanitize_external_plan_payload,
 )
 from ace_lite.plan_timeout import PlanTimeoutOutcome
 
@@ -107,3 +108,25 @@ def test_attach_plan_contract_summary_mutates_payload_when_available() -> None:
         "source_plan_subgraph_payload_version": "subgraph-v2",
         "subgraph_taxonomy_version": "taxonomy-v2",
     }
+
+
+def test_sanitize_external_plan_payload_removes_report_only_fields() -> None:
+    payload = {
+        "context_report": {"schema_version": "context_report_v1"},
+        "retrieval_graph_view": {"schema_version": "retrieval_graph_view_v1"},
+        "source_plan": {
+            "steps": [],
+            "context_report": {"schema_version": "context_report_v1"},
+        },
+        "validation": {
+            "enabled": False,
+            "skill_catalog": {"markdown": "# catalog"},
+        },
+    }
+
+    sanitized = sanitize_external_plan_payload(payload)
+
+    assert "context_report" not in sanitized
+    assert "retrieval_graph_view" not in sanitized
+    assert "context_report" not in sanitized["source_plan"]
+    assert "skill_catalog" not in sanitized["validation"]

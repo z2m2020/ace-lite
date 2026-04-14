@@ -390,6 +390,99 @@ def test_validate_stage_output_rejects_invalid_source_plan_patch_artifacts_type(
     assert exc.reason == "source_plan.patch_artifacts"
 
 
+@pytest.mark.parametrize(
+    ("stage_name", "field_name"),
+    [
+        ("source_plan", "context_report"),
+        ("source_plan", "retrieval_graph_view"),
+        ("validation", "skill_catalog"),
+        ("validation", "benchmark_report"),
+    ],
+)
+def test_validate_stage_output_rejects_report_only_fields(
+    stage_name: str,
+    field_name: str,
+) -> None:
+    payload: dict[str, object]
+    if stage_name == "source_plan":
+        payload = {
+            "repo": "r",
+            "root": "/tmp",
+            "query": "q",
+            "stages": [],
+            "constraints": [],
+            "diagnostics": [],
+            "xref": {},
+            "tests": {},
+            "validation_tests": [],
+            "candidate_chunks": [],
+            "chunk_steps": [],
+            "chunk_budget_used": 0,
+            "chunk_budget_limit": 0,
+            "chunk_disclosure": "refs",
+            "policy_name": "general",
+            "policy_version": "v1",
+            "steps": [],
+            "writeback_template": {},
+        }
+    else:
+        payload = {
+            "enabled": False,
+            "reason": "disabled",
+            "sandbox": {
+                "enabled": False,
+                "sandbox_root": "",
+                "patch_applied": False,
+                "cleanup_ok": False,
+                "restore_ok": False,
+                "apply_result": {},
+            },
+            "diagnostics": [],
+            "diagnostic_count": 0,
+            "xref_enabled": False,
+            "xref": {},
+            "result": {
+                "schema_version": "validation_result_v1",
+                "syntax": {"ok": True, "issues": [], "issue_count": 0},
+                "type": {"ok": True, "issues": [], "issue_count": 0},
+                "tests": {
+                    "ok": True,
+                    "issues": [],
+                    "issue_count": 0,
+                    "selected": [],
+                    "executed": [],
+                },
+                "environment": {
+                    "ok": True,
+                    "sandboxed": False,
+                    "runner": "disabled",
+                    "artifacts": [],
+                    "degraded_reasons": [],
+                },
+                "summary": {
+                    "ok": True,
+                    "status": "skipped",
+                    "issue_count": 0,
+                    "replay_key": "",
+                    "artifact_refs": [],
+                    "comparison_key": "abc123",
+                },
+            },
+            "patch_artifact_present": False,
+            "policy_name": "general",
+            "policy_version": "v1",
+        }
+
+    payload[field_name] = {}
+
+    with pytest.raises(StageContractError) as exc_info:
+        validate_stage_output(stage_name, payload)
+
+    exc = exc_info.value
+    assert exc.error_code == "stage_contract.forbidden_field"
+    assert exc.reason == f"{stage_name}.{field_name}"
+
+
 def test_orchestrator_plan_includes_contract_error_payload(tmp_path, monkeypatch) -> None:
     orchestrator = AceOrchestrator(config=OrchestratorConfig())
 

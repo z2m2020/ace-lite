@@ -504,6 +504,86 @@ class TestEvaluateBenchmarkGate:
         assert gate.checks["cache_hit_ratio"]["observed"] is None
         assert gate.summary == "benchmark gates failed: cache_hit_ratio"
 
+    def test_passes_cold_and_warm_cache_gates_from_metadata(self):
+        comparison = BenchmarkComparison(
+            baseline=BenchmarkResult(
+                name="baseline",
+                iterations=10,
+                total_time_ms=120.0,
+                avg_time_ms=12.0,
+                min_time_ms=10.0,
+                max_time_ms=14.0,
+            ),
+            optimized=BenchmarkResult(
+                name="optimized",
+                iterations=10,
+                total_time_ms=60.0,
+                avg_time_ms=6.0,
+                min_time_ms=5.0,
+                max_time_ms=7.0,
+                metadata={
+                    "cold_avg_time_ms": 18.0,
+                    "warm_avg_time_ms": 4.0,
+                    "warm_cache_hit_ratio": 0.95,
+                },
+            ),
+        )
+
+        gate = evaluate_benchmark_gate(
+            name="index_cache",
+            comparison=comparison,
+            thresholds=BenchmarkGateThresholds(
+                max_cold_avg_time_ms=20.0,
+                max_warm_avg_time_ms=5.0,
+                min_warm_cache_hit_ratio=0.90,
+            ),
+        )
+
+        assert gate.passed is True
+        assert gate.checks["cold_avg_time_ms"]["passed"] is True
+        assert gate.checks["warm_avg_time_ms"]["passed"] is True
+        assert gate.checks["warm_cache_hit_ratio"]["passed"] is True
+
+    def test_fails_when_cold_or_warm_metadata_gates_miss_thresholds(self):
+        comparison = BenchmarkComparison(
+            baseline=BenchmarkResult(
+                name="baseline",
+                iterations=10,
+                total_time_ms=120.0,
+                avg_time_ms=12.0,
+                min_time_ms=10.0,
+                max_time_ms=14.0,
+            ),
+            optimized=BenchmarkResult(
+                name="optimized",
+                iterations=10,
+                total_time_ms=80.0,
+                avg_time_ms=8.0,
+                min_time_ms=7.0,
+                max_time_ms=9.0,
+                metadata={
+                    "cold_avg_time_ms": 28.0,
+                    "warm_avg_time_ms": 7.0,
+                    "warm_cache_hit_ratio": 0.40,
+                },
+            ),
+        )
+
+        gate = evaluate_benchmark_gate(
+            name="index_cache",
+            comparison=comparison,
+            thresholds=BenchmarkGateThresholds(
+                max_cold_avg_time_ms=20.0,
+                max_warm_avg_time_ms=5.0,
+                min_warm_cache_hit_ratio=0.90,
+            ),
+        )
+
+        assert gate.passed is False
+        assert gate.summary == (
+            "benchmark gates failed: cold_avg_time_ms, warm_avg_time_ms, warm_cache_hit_ratio"
+        )
+
 
 class TestBenchmarkJSONSerialization:
     """Tests for benchmark_json_serialization."""

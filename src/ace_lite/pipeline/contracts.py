@@ -5,6 +5,15 @@ from typing import Any
 from ace_lite.exceptions import StageContractError
 from ace_lite.pipeline.registry import get_stage_descriptor
 
+_LAYER_REPORT_ONLY_FIELDS = {
+    "context_report",
+    "retrieval_graph_view",
+    "skill_catalog",
+    "benchmark_report",
+    "benchmark_summary",
+    "checkpoint_artifacts",
+}
+
 
 def validate_stage_output(stage_name: str, output: Any) -> None:
     normalized = str(stage_name or "").strip().lower()
@@ -104,6 +113,24 @@ def _require_number(output: dict[str, Any], key: str, *, stage: str) -> float:
     return float(value)
 
 
+def _reject_report_only_fields(
+    output: dict[str, Any],
+    *,
+    stage: str,
+    forbidden_fields: set[str] | frozenset[str],
+) -> None:
+    for field in sorted(forbidden_fields):
+        if field not in output:
+            continue
+        raise StageContractError(
+            f"report-only field must not appear in stage output: {field}",
+            stage=stage,
+            error_code="stage_contract.forbidden_field",
+            reason=f"{stage}.{field}",
+            context={"field": field},
+        )
+
+
 def _validate_memory(output: dict[str, Any]) -> None:
     stage = "memory"
     _require_str(output, "query", stage=stage)
@@ -185,6 +212,11 @@ def _validate_skills(output: dict[str, Any]) -> None:
 
 def _validate_source_plan(output: dict[str, Any]) -> None:
     stage = "source_plan"
+    _reject_report_only_fields(
+        output,
+        stage=stage,
+        forbidden_fields=_LAYER_REPORT_ONLY_FIELDS,
+    )
     _require_str(output, "repo", stage=stage)
     _require_str(output, "root", stage=stage)
     _require_str(output, "query", stage=stage)
@@ -255,6 +287,11 @@ def _validate_source_plan(output: dict[str, Any]) -> None:
 
 def _validate_validation(output: dict[str, Any]) -> None:
     stage = "validation"
+    _reject_report_only_fields(
+        output,
+        stage=stage,
+        forbidden_fields=_LAYER_REPORT_ONLY_FIELDS,
+    )
     _require_bool(output, "enabled", stage=stage)
     _require_str(output, "reason", stage=stage)
     _require_dict(output, "sandbox", stage=stage)

@@ -8,7 +8,8 @@ from typing import Any
 class OrchestratorValidationRuntime:
     source_plan_stage: dict[str, Any]
     index_stage: dict[str, Any]
-    policy: dict[str, Any]
+    policy_name: str
+    policy_version: str
     patch_artifact: dict[str, Any] | None
 
 
@@ -36,7 +37,8 @@ def build_orchestrator_validation_runtime(
     return OrchestratorValidationRuntime(
         source_plan_stage=source_plan_stage,
         index_stage=index_stage,
-        policy=policy,
+        policy_name=str(policy.get("name", "general")),
+        policy_version=str(policy.get("version", "")),
         patch_artifact=patch_artifact,
     )
 

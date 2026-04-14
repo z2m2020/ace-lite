@@ -8,6 +8,7 @@ from ace_lite.plan_application import (
     build_plan_contract_summary_from_payload,
     execute_timed_plan_with_fallback,
     resolve_plan_quick_fallback,
+    sanitize_external_plan_payload,
 )
 from ace_lite.plan_timeout import (
     PLAN_TIMEOUT_RECOMMENDATIONS,
@@ -165,6 +166,7 @@ def handle_plan_request(
             "recommendations": list(PLAN_TIMEOUT_RECOMMENDATIONS),
         }
 
+    plan_payload = sanitize_external_plan_payload(execution.payload)
     summary = {
         "ok": True,
         "query": normalized_query,
@@ -172,28 +174,25 @@ def handle_plan_request(
         "root": str(root_path),
         "config_pack": config_pack_meta,
         "source_plan_steps": len(
-            execution.payload.get("source_plan", {}).get("steps", [])
-            if isinstance(execution.payload, dict)
-            and isinstance(execution.payload.get("source_plan"), dict)
+            plan_payload.get("source_plan", {}).get("steps", [])
+            if isinstance(plan_payload.get("source_plan"), dict)
             else []
         ),
         "candidate_files": len(
-            execution.payload.get("source_plan", {}).get("candidate_files", [])
-            if isinstance(execution.payload, dict)
-            and isinstance(execution.payload.get("source_plan"), dict)
+            plan_payload.get("source_plan", {}).get("candidate_files", [])
+            if isinstance(plan_payload.get("source_plan"), dict)
             else []
         ),
         "total_ms": float(
-            execution.payload.get("observability", {}).get("total_ms", 0.0)
-            if isinstance(execution.payload, dict)
-            and isinstance(execution.payload.get("observability"), dict)
+            plan_payload.get("observability", {}).get("total_ms", 0.0)
+            if isinstance(plan_payload.get("observability"), dict)
             else 0.0
         ),
     }
-    if isinstance(execution.payload, dict):
-        summary.update(build_plan_contract_summary_from_payload(execution.payload))
+    if plan_payload:
+        summary.update(build_plan_contract_summary_from_payload(plan_payload))
     if include_full_payload:
-        summary["plan"] = execution.payload
+        summary["plan"] = plan_payload
     return summary
 
 

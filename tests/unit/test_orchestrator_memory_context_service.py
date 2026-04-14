@@ -135,6 +135,30 @@ def test_build_profile_payload_injects_facts_deterministically(tmp_path: Path) -
     ]
 
 
+def test_build_profile_payload_returns_error_payload_when_store_resolution_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    service = _build_service(root=tmp_path)
+    service.config.memory.profile.enabled = True
+    monkeypatch.setattr(
+        MemoryContextService,
+        "resolve_profile_store",
+        lambda self, *, root: (_ for _ in ()).throw(RuntimeError("profile-store-boom")),
+    )
+
+    payload = service.build_profile_payload(
+        root=str(tmp_path),
+        tokenizer_model="gpt-4o-mini",
+    )
+
+    assert payload["enabled"] is True
+    assert payload["error"] == "profile-store-boom"
+    assert payload["facts"] == []
+    assert payload["selected_count"] == 0
+    assert payload["selected_est_tokens_total"] == 0
+
+
 def test_build_capture_payload_preserves_reason_for_non_triggered_capture(
     tmp_path: Path,
 ) -> None:
@@ -153,6 +177,44 @@ def test_build_capture_payload_preserves_reason_for_non_triggered_capture(
     )
 
     assert payload == {
+        "enabled": True,
+        "triggered": False,
+        "namespace": "repo:demo",
+        "matched_keywords": ["fix"],
+        "captured_items": 0,
+        "reason": "min_query_length_guard",
+        "query_length": 16,
+        "warning": None,
+    }
+
+
+def test_attach_memory_stage_payloads_combines_profile_and_capture(
+    tmp_path: Path,
+) -> None:
+    service = _build_service(root=tmp_path)
+    service.config.memory.profile.enabled = True
+    service.config.memory.profile.top_n = 1
+    service.config.memory.profile.token_budget = 20
+    service.config.memory.capture.enabled = True
+    store = ProfileStore(path=tmp_path / "profile.json")
+    store.add_fact("alpha preference", confidence=0.9)
+
+    payload = service.attach_memory_stage_payloads(
+        payload={"results": []},
+        query="fix auth bug now",
+        repo="demo",
+        root=str(tmp_path),
+        namespace="repo:demo",
+        matched_keywords=["fix"],
+        triggered=False,
+        reason="min_query_length_guard",
+        query_length=16,
+        tokenizer_model="gpt-4o-mini",
+    )
+
+    assert payload["profile"]["enabled"] is True
+    assert payload["profile"]["selected_count"] == 1
+    assert payload["capture"] == {
         "enabled": True,
         "triggered": False,
         "namespace": "repo:demo",
@@ -186,3 +248,29 @@ def test_capture_long_term_stage_observation_passes_session_run_id(tmp_path: Pat
     assert payload == {"ok": True, "stage": "source_plan"}
     assert captured["source_run_id"] == "session-123"
     assert captured["repo"] == "demo"
+
+
+def test_capture_long_term_stage_observation_downgrades_capture_error(
+    tmp_path: Path,
+) -> None:
+    class _CaptureService:
+        def capture_stage_observation(self, **kwargs: object) -> dict[str, object]:
+            raise RuntimeError("ltm-capture-boom")
+
+    service = _build_service(
+        root=tmp_path,
+        long_term_capture_service=_CaptureService(),
+    )
+
+    payload = service.capture_long_term_stage_observation(
+        stage_name="validation",
+        ctx=StageContext(query="q", repo="demo", root=str(tmp_path)),
+        stage_payload={"steps": []},
+    )
+
+    assert payload == {
+        "ok": False,
+        "stage": "validation",
+        "reason": "capture_failed:RuntimeError",
+        "message": "ltm-capture-boom",
+    }

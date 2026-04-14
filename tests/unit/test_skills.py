@@ -353,6 +353,33 @@ def test_lint_skill_manifest_flags_mojibake_metadata_terms() -> None:
     assert {item["keyword"] for item in issues} == {suspicious_one, suspicious_two}
 
 
+def test_lint_skill_manifest_flags_low_discriminative_routing_overlap() -> None:
+    issues = lint_skill_manifest(
+        [
+            {
+                "name": "memory-review",
+                "path": "skills/memory-review.md",
+                "description": "review memory routing",
+                "intents": ["memory", "review"],
+                "modules": ["memory", "review"],
+                "topics": ["retrieval"],
+                "error_keywords": [],
+            }
+        ]
+    )
+
+    assert any(
+        item["field"] == "routing_metadata"
+        and item["keyword"] == "memory"
+        and "discriminative power" in item["message"]
+        for item in issues
+    )
+    assert any(
+        item["field"] == "routing_metadata" and item["keyword"] == "review"
+        for item in issues
+    )
+
+
 def test_lint_skill_manifest_flags_missing_default_section_heading(tmp_path: Path) -> None:
     (tmp_path / "bad-sections.md").write_text(
         textwrap.dedent(

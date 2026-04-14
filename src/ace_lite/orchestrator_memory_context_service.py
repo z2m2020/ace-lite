@@ -215,6 +215,40 @@ class MemoryContextService:
             payload["matched_keywords"] = list(matched_keywords)
         return payload
 
+    def attach_memory_stage_payloads(
+        self,
+        *,
+        payload: dict[str, Any],
+        query: str,
+        repo: str,
+        root: str,
+        namespace: str | None,
+        matched_keywords: list[str],
+        triggered: bool,
+        reason: str,
+        query_length: int,
+        tokenizer_model: str,
+    ) -> dict[str, Any]:
+        if not self.config.memory.profile.enabled:
+            payload["profile"] = {"enabled": False, "facts": [], "selected_count": 0}
+        else:
+            payload["profile"] = self.build_profile_payload(
+                root=root,
+                tokenizer_model=tokenizer_model,
+            )
+
+        payload["capture"] = self.build_capture_payload(
+            query=query,
+            repo=repo,
+            root=root,
+            namespace=namespace,
+            matched_keywords=matched_keywords,
+            triggered=triggered,
+            reason=reason,
+            query_length=query_length,
+        )
+        return payload
+
     def capture_long_term_stage_observation(
         self,
         *,

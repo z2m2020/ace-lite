@@ -17,7 +17,8 @@ def test_build_orchestrator_validation_runtime_normalizes_state() -> None:
 
     assert runtime.source_plan_stage == {"steps": [{"stage": "validate"}]}
     assert runtime.index_stage == {"candidate_files": [{"path": "src/a.py"}]}
-    assert runtime.policy == {"name": "feature", "version": "v2"}
+    assert runtime.policy_name == "feature"
+    assert runtime.policy_version == "v2"
     assert runtime.patch_artifact == {"path": "patch.diff"}
 
 
@@ -33,5 +34,6 @@ def test_build_orchestrator_validation_runtime_falls_back_for_invalid_types() ->
 
     assert runtime.source_plan_stage == {}
     assert runtime.index_stage == {}
-    assert runtime.policy == {}
+    assert runtime.policy_name == "general"
+    assert runtime.policy_version == ""
     assert runtime.patch_artifact is None

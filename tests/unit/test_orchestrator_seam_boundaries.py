@@ -49,8 +49,11 @@ class TestOrchestratorSeamBoundaries:
         method_block = _extract_method_block("_run_memory")
 
         assert "runtime = build_orchestrator_memory_runtime(" in method_block
+        assert "return self._memory_context_service.attach_memory_stage_payloads(" in method_block
         assert "normalize_temporal_input(" not in method_block
         assert "ctx.state.get(" not in method_block
+        assert "build_profile_payload(" not in method_block
+        assert "build_capture_payload(" not in method_block
 
     def test_run_augment_does_not_reintroduce_private_candidate_helper(self) -> None:
         orchestrator_text = _read_orchestrator_text()
@@ -59,6 +62,9 @@ class TestOrchestratorSeamBoundaries:
         assert "def _resolve_augment_candidates(" not in orchestrator_text
         assert "runtime = build_orchestrator_augment_runtime(ctx_state=ctx.state)" in method_block
         assert "resolve_augment_candidates(" in method_block
+        assert "candidate_chunks=runtime.candidate_chunks" in method_block
+        assert 'runtime.index_stage.get("candidate_chunks"' not in method_block
+        assert 'runtime.policy.get("name"' not in method_block
         assert 'ctx.state.get("index"' not in method_block
         assert 'ctx.state.get("repomap"' not in method_block
 
@@ -76,6 +82,9 @@ class TestOrchestratorSeamBoundaries:
         method_block = _extract_method_block("_run_validation")
 
         assert "runtime = build_orchestrator_validation_runtime(ctx_state=ctx.state)" in method_block
+        assert "policy_name=runtime.policy_name" in method_block
+        assert "policy_version=runtime.policy_version" in method_block
+        assert 'runtime.policy.get("name"' not in method_block
         assert 'ctx.state.get("source_plan"' not in method_block
         assert 'ctx.state.get("index"' not in method_block
         assert 'ctx.state.get("_validation_patch_artifact"' not in method_block

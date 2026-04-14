@@ -731,15 +731,8 @@ class AceOrchestrator:
                 self._config.memory.postprocess.diversity_similarity_threshold
             ),
         )
-        if not self._config.memory.profile.enabled:
-            payload["profile"] = {"enabled": False, "facts": [], "selected_count": 0}
-        else:
-            payload["profile"] = self._memory_context_service.build_profile_payload(
-                root=root,
-                tokenizer_model=self._tokenizer_model,
-            )
-
-        payload["capture"] = self._memory_context_service.build_capture_payload(
+        return self._memory_context_service.attach_memory_stage_payloads(
+            payload=payload,
             query=query,
             repo=repo,
             root=root,
@@ -748,8 +741,8 @@ class AceOrchestrator:
             triggered=bool(runtime.extraction.triggered),
             reason=runtime.extraction.reason,
             query_length=runtime.extraction.query_length,
+            tokenizer_model=self._tokenizer_model,
         )
-        return payload
 
     def _run_index(self, *, ctx: StageContext) -> dict[str, Any]:
         return run_index(
@@ -795,9 +788,7 @@ class AceOrchestrator:
             xref_enabled=cfg.lsp.xref_enabled,
             xref_top_n=cfg.lsp.xref_top_n,
             xref_time_budget_ms=cfg.lsp.time_budget_ms,
-            candidate_chunks=runtime.index_stage.get("candidate_chunks", [])
-            if isinstance(runtime.index_stage, dict)
-            else [],
+            candidate_chunks=runtime.candidate_chunks,
             junit_xml_path=cfg.tests.junit_xml,
             coverage_json_path=cfg.tests.coverage_json,
             sbfl_json_path=cfg.tests.sbfl_json,
@@ -805,9 +796,9 @@ class AceOrchestrator:
             vcs_enabled=cfg.cochange.enabled,
             vcs_worktree_override=runtime.vcs_worktree_override,
         )
-        payload["policy_name"] = str(runtime.policy.get("name", "general"))
-        payload["policy_version"] = str(
-            runtime.policy.get("version", cfg.retrieval.policy_version)
+        payload["policy_name"] = runtime.policy_name
+        payload["policy_version"] = (
+            runtime.policy_version or str(cfg.retrieval.policy_version)
         )
         return payload
 
@@ -873,10 +864,8 @@ class AceOrchestrator:
             sandbox_timeout_seconds=cfg.validation.sandbox_timeout_seconds,
             broker=self._lsp_broker,
             patch_artifact=runtime.patch_artifact,
-            policy_name=str(runtime.policy.get("name", "general")),
-            policy_version=str(
-                runtime.policy.get("version", cfg.retrieval.policy_version)
-            ),
+            policy_name=runtime.policy_name,
+            policy_version=runtime.policy_version or str(cfg.retrieval.policy_version),
             preference_capture_store=preference_capture_store,
             preference_capture_repo_key=ctx.repo,
         )

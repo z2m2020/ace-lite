@@ -139,6 +139,9 @@ class BenchmarkGateThresholds:
     max_avg_time_ms: float | None = None
     max_memory_delta_bytes: int | None = None
     min_cache_hit_ratio: float | None = None
+    max_cold_avg_time_ms: float | None = None
+    max_warm_avg_time_ms: float | None = None
+    min_warm_cache_hit_ratio: float | None = None
 
 
 @dataclass
@@ -469,6 +472,16 @@ def _cache_hit_ratio_from_result(result: BenchmarkResult) -> float | None:
         return None
 
 
+def _numeric_metadata_value(result: BenchmarkResult, key: str) -> float | None:
+    value = result.metadata.get(key)
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def evaluate_benchmark_gate(
     *,
     name: str,
@@ -515,6 +528,46 @@ def evaluate_benchmark_gate(
             ),
             "observed": observed_cache_hit,
             "required": required_cache_hit,
+        }
+
+    if thresholds.max_cold_avg_time_ms is not None:
+        observed_cold_avg = _numeric_metadata_value(
+            comparison.optimized, "cold_avg_time_ms"
+        )
+        allowed_cold_avg = float(thresholds.max_cold_avg_time_ms)
+        checks["cold_avg_time_ms"] = {
+            "passed": (
+                observed_cold_avg is not None and observed_cold_avg <= allowed_cold_avg
+            ),
+            "observed": observed_cold_avg,
+            "required": allowed_cold_avg,
+        }
+
+    if thresholds.max_warm_avg_time_ms is not None:
+        observed_warm_avg = _numeric_metadata_value(
+            comparison.optimized, "warm_avg_time_ms"
+        )
+        allowed_warm_avg = float(thresholds.max_warm_avg_time_ms)
+        checks["warm_avg_time_ms"] = {
+            "passed": (
+                observed_warm_avg is not None and observed_warm_avg <= allowed_warm_avg
+            ),
+            "observed": observed_warm_avg,
+            "required": allowed_warm_avg,
+        }
+
+    if thresholds.min_warm_cache_hit_ratio is not None:
+        observed_warm_cache_hit = _numeric_metadata_value(
+            comparison.optimized, "warm_cache_hit_ratio"
+        )
+        required_warm_cache_hit = float(thresholds.min_warm_cache_hit_ratio)
+        checks["warm_cache_hit_ratio"] = {
+            "passed": (
+                observed_warm_cache_hit is not None
+                and observed_warm_cache_hit >= required_warm_cache_hit
+            ),
+            "observed": observed_warm_cache_hit,
+            "required": required_warm_cache_hit,
         }
 
     failed = [name for name, payload in checks.items() if not bool(payload.get("passed"))]

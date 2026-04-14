@@ -458,6 +458,31 @@ def _matches_error_keyword(query_keyword: str, skill_keyword: str) -> bool:
     )
 
 
+def _lint_routing_metadata_overlap(entry: dict[str, Any]) -> list[dict[str, str]]:
+    issues: list[dict[str, str]] = []
+    name = str(entry.get("name") or "").strip() or "(unknown)"
+    path = str(entry.get("path") or "").strip()
+    intents = _collect_exact_terms(to_string_list(entry.get("intents") or []))
+    modules = _collect_exact_terms(to_string_list(entry.get("modules") or []))
+    overlap_terms = sorted(intents & modules)
+    if len(overlap_terms) < 2:
+        return issues
+    for term in overlap_terms:
+        issues.append(
+            {
+                "name": name,
+                "path": path,
+                "field": "routing_metadata",
+                "keyword": term,
+                "message": (
+                    "routing metadata overlaps too much across intents/modules; "
+                    f"term '{term}' appears in both fields and reduces discriminative power"
+                ),
+            }
+        )
+    return issues
+
+
 def _lint_skill_entry(entry: dict[str, Any]) -> list[dict[str, str]]:
     issues: list[dict[str, str]] = []
     error_keywords = _collect_exact_terms(entry.get("error_keywords") or [])
@@ -544,6 +569,7 @@ def _lint_skill_entry(entry: dict[str, Any]) -> list[dict[str, str]]:
                     "message": "do not duplicate the same term across error_keywords and intents/modules/topics",
                 }
             )
+    issues.extend(_lint_routing_metadata_overlap(entry))
     issues.extend(_lint_default_sections(entry))
     issues.extend(_lint_token_estimate(entry))
     return issues
