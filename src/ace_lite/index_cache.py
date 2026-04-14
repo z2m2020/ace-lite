@@ -211,6 +211,7 @@ def load_index_cache(
     root_dir: str | Path,
     languages: Iterable[str] | None,
     current_sha: str | None = None,
+    allow_sha_mismatch: bool = False,
 ) -> dict[str, Any] | None:
     path = Path(cache_path)
     if not path.exists() or not path.is_file():
@@ -234,7 +235,7 @@ def load_index_cache(
 
     cached = _INDEX_MEMORY_CACHE.get(cache_key)
     if cached is not None and cached[0] == mtime_ns:
-        if resolved_current_sha is not None:
+        if resolved_current_sha is not None and not allow_sha_mismatch:
             cached_sha = cached[1].get("git_head_sha")
             if (
                 isinstance(cached_sha, str)
@@ -266,6 +267,7 @@ def load_index_cache(
         return None
     if (
         resolved_current_sha is not None
+        and not allow_sha_mismatch
         and isinstance(payload_sha, str)
         and payload_sha
         and payload_sha != resolved_current_sha
@@ -328,11 +330,114 @@ def detect_changed_files_from_git(*, root_dir: str | Path) -> list[str]:
     return normalized
 
 
+def detect_changed_files_between_git_refs(
+    *,
+    root_dir: str | Path,
+    base_sha: str,
+    head_sha: str,
+) -> list[str] | None:
+    root = Path(root_dir)
+    if _resolve_git_dir(root=root) is None:
+        return None
+
+    resolved_base_sha = str(base_sha or "").strip().lower()
+    resolved_head_sha = str(head_sha or "").strip().lower()
+    if not _is_hex_sha(resolved_base_sha) or not _is_hex_sha(resolved_head_sha):
+        return None
+    if resolved_base_sha == resolved_head_sha:
+        return []
+
+    returncode, stdout, _stderr, timed_out = run_capture_output(
+        [
+            "git",
+            "diff",
+            "--name-status",
+            "--find-renames",
+            "--find-copies",
+            "-z",
+            resolved_base_sha,
+            resolved_head_sha,
+            "--",
+        ],
+        cwd=root,
+        timeout_seconds=_git_timeout_seconds(),
+        env_overrides={"GIT_TERMINAL_PROMPT": "0"},
+    )
+    if timed_out or returncode != 0:
+        return None
+
+    changed = _parse_git_diff_name_status_output(str(stdout or ""))
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in changed:
+        path = _normalize_changed_path(item)
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        normalized.append(path)
+    return normalized
+
+
 def _parse_git_status_output(stdout: str) -> list[str]:
     text = str(stdout or "")
     if "\0" in text:
         return _parse_git_status_porcelain_z(text)
     return _parse_git_status_porcelain_lines(text)
+
+
+def _parse_git_diff_name_status_output(stdout: str) -> list[str]:
+    text = str(stdout or "")
+    if "\0" in text:
+        return _parse_git_diff_name_status_z(text)
+    return _parse_git_diff_name_status_lines(text)
+
+
+def _parse_git_diff_name_status_lines(stdout: str) -> list[str]:
+    changed: list[str] = []
+    for line in str(stdout or "").splitlines():
+        text = str(line or "").strip()
+        if not text:
+            continue
+        parts = text.split("\t")
+        if not parts:
+            continue
+        status = parts[0].strip().upper()
+        if status.startswith(("R", "C")) and len(parts) >= 3:
+            changed.extend([parts[1].strip(), parts[2].strip()])
+            continue
+        if len(parts) >= 2:
+            changed.append(parts[1].strip())
+    return changed
+
+
+def _parse_git_diff_name_status_z(stdout: str) -> list[str]:
+    changed: list[str] = []
+    rows = str(stdout or "").split("\0")
+    cursor = 0
+    total = len(rows)
+    while cursor < total:
+        status = str(rows[cursor] or "").strip().upper()
+        cursor += 1
+        if not status:
+            continue
+        if status.startswith(("R", "C")):
+            if cursor + 1 >= total:
+                break
+            old_path = str(rows[cursor] or "").strip()
+            new_path = str(rows[cursor + 1] or "").strip()
+            cursor += 2
+            if old_path:
+                changed.append(old_path)
+            if new_path:
+                changed.append(new_path)
+            continue
+        if cursor >= total:
+            break
+        path = str(rows[cursor] or "").strip()
+        cursor += 1
+        if path:
+            changed.append(path)
+    return changed
 
 
 def _parse_git_status_porcelain_lines(stdout: str) -> list[str]:
@@ -409,6 +514,19 @@ def _filter_index_changed_files(
         filtered.append(path)
 
     return filtered
+
+
+def _merge_changed_files(*groups: Iterable[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for item in group:
+            path = _normalize_changed_path(str(item or ""))
+            if not path or path in seen:
+                continue
+            seen.add(path)
+            merged.append(path)
+    return merged
 
 
 def _file_fingerprint(*, path: Path) -> tuple[int, int] | None:
@@ -693,6 +811,28 @@ def expand_changed_files_with_reverse_dependencies(
     return [*ordered_seeds, *discovered], len(discovered)
 
 
+def _sync_cache_metadata_if_needed(
+    *,
+    cache: dict[str, Any],
+    cache_path: str | Path,
+    aceignore_state: dict[str, Any],
+    current_sha: str | None,
+) -> dict[str, Any]:
+    updated = False
+    if not _aceignore_state_matches(cache=cache, current=aceignore_state):
+        cache["aceignore"] = dict(aceignore_state)
+        updated = True
+    if (
+        current_sha is not None
+        and str(cache.get("git_head_sha") or "").strip().lower() != current_sha
+    ):
+        cache["git_head_sha"] = current_sha
+        updated = True
+    if updated:
+        save_index_cache(payload=cache, cache_path=cache_path)
+    return cache
+
+
 def build_or_refresh_index(
     *,
     root_dir: str | Path,
@@ -708,6 +848,40 @@ def build_or_refresh_index(
         languages=languages,
         current_sha=current_sha,
     )
+    stale_cache_reused = False
+    changed_files_detected: list[str] | None = None
+    if cache is None and incremental:
+        stale_cache = load_index_cache(
+            cache_path=cache_path,
+            root_dir=root_dir,
+            languages=languages,
+            current_sha=current_sha,
+            allow_sha_mismatch=True,
+        )
+        stale_sha = (
+            str(stale_cache.get("git_head_sha") or "").strip().lower()
+            if isinstance(stale_cache, dict)
+            else ""
+        )
+        history_changed_files = (
+            detect_changed_files_between_git_refs(
+                root_dir=root_dir,
+                base_sha=stale_sha,
+                head_sha=current_sha or "",
+            )
+            if stale_cache is not None
+            and current_sha is not None
+            and _is_hex_sha(stale_sha)
+            and stale_sha != current_sha
+            else None
+        )
+        if stale_cache is not None and history_changed_files is not None:
+            cache = stale_cache
+            stale_cache_reused = True
+            changed_files_detected = _merge_changed_files(
+                history_changed_files,
+                detect_changed_files_from_git(root_dir=root_dir),
+            )
 
     if cache is None:
         payload = build_index(root_dir, languages=languages)
@@ -725,8 +899,16 @@ def build_or_refresh_index(
     if not incremental:
         return cache, {"cache_hit": True, "mode": "cache_only", "changed_files": 0}
 
-    changed_files_detected = detect_changed_files_from_git(root_dir=root_dir)
+    if changed_files_detected is None:
+        changed_files_detected = detect_changed_files_from_git(root_dir=root_dir)
     if not changed_files_detected:
+        if stale_cache_reused:
+            cache = _sync_cache_metadata_if_needed(
+                cache=cache,
+                cache_path=cache_path,
+                aceignore_state=aceignore_state,
+                current_sha=current_sha,
+            )
         return cache, {"cache_hit": True, "mode": "cache_only", "changed_files": 0}
 
     if any(
@@ -752,9 +934,12 @@ def build_or_refresh_index(
             if _normalize_changed_path(str(item or "")).lower() != ".aceignore"
         ]
         if not changed_files_detected:
-            if not _aceignore_state_matches(cache=cache, current=aceignore_state):
-                cache["aceignore"] = dict(aceignore_state)
-                save_index_cache(payload=cache, cache_path=cache_path)
+            cache = _sync_cache_metadata_if_needed(
+                cache=cache,
+                cache_path=cache_path,
+                aceignore_state=aceignore_state,
+                current_sha=current_sha,
+            )
             return cache, {
                 "cache_hit": True,
                 "mode": "cache_only",
@@ -767,9 +952,12 @@ def build_or_refresh_index(
         changed_files=changed_files_detected, languages=languages
     )
     if not changed_files_index:
-        if not _aceignore_state_matches(cache=cache, current=aceignore_state):
-            cache["aceignore"] = dict(aceignore_state)
-            save_index_cache(payload=cache, cache_path=cache_path)
+        cache = _sync_cache_metadata_if_needed(
+            cache=cache,
+            cache_path=cache_path,
+            aceignore_state=aceignore_state,
+            current_sha=current_sha,
+        )
         return cache, {
             "cache_hit": True,
             "mode": "cache_only",
@@ -785,9 +973,12 @@ def build_or_refresh_index(
         index_files=index_files,
     )
     if not effective_changed_files:
-        if not _aceignore_state_matches(cache=cache, current=aceignore_state):
-            cache["aceignore"] = dict(aceignore_state)
-            save_index_cache(payload=cache, cache_path=cache_path)
+        cache = _sync_cache_metadata_if_needed(
+            cache=cache,
+            cache_path=cache_path,
+            aceignore_state=aceignore_state,
+            current_sha=current_sha,
+        )
         return cache, {
             "cache_hit": True,
             "mode": "cache_only",
@@ -817,6 +1008,8 @@ def build_or_refresh_index(
         "mode": "incremental_update",
         "changed_files": len(expanded_changed_files),
     }
+    if stale_cache_reused:
+        info["sha_bridge"] = True
     if reverse_added > 0:
         info["changed_files_detected"] = len(changed_files_detected)
         info["reverse_dependencies_added"] = int(reverse_added)
@@ -825,6 +1018,7 @@ def build_or_refresh_index(
 
 __all__ = [
     "build_or_refresh_index",
+    "detect_changed_files_between_git_refs",
     "detect_changed_files_from_git",
     "expand_changed_files_with_reverse_dependencies",
     "load_index_cache",

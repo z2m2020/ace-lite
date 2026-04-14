@@ -72,6 +72,11 @@ def build_skill_manifest(skills_dir: str | Path) -> list[dict[str, Any]]:
             missing_frontmatter.append("token_estimate")
         if not default_sections:
             missing_frontmatter.append("default_sections")
+        declared_frontmatter_keys = {str(key).strip() for key in metadata}
+        if not declared_frontmatter_keys.intersection(
+            {"error_keywords", "errors", "triggers"}
+        ):
+            missing_frontmatter.append("error_keywords")
         headings = _extract_headings(body) if needs_body_scan else []
         if token_estimate is None:
             token_estimate = _estimate_skill_token_estimate(
@@ -96,6 +101,7 @@ def build_skill_manifest(skills_dir: str | Path) -> list[dict[str, Any]]:
             "headings": headings,
             "manifest_load_mode": "body_scan" if needs_body_scan else "metadata_only",
             "_missing_frontmatter": missing_frontmatter,
+            "_declared_frontmatter_keys": sorted(declared_frontmatter_keys),
         }
         manifest.append(entry)
 
@@ -216,9 +222,53 @@ def select_skills(
 
 
 def lint_skill_manifest(manifest: list[dict[str, Any]]) -> list[dict[str, str]]:
-    issues: list[dict[str, str]] = []
+    issues = _lint_manifest_duplicates(manifest)
     for entry in manifest:
         issues.extend(_lint_skill_entry(entry))
+    return issues
+
+
+def _lint_manifest_duplicates(manifest: list[dict[str, Any]]) -> list[dict[str, str]]:
+    issues: list[dict[str, str]] = []
+    seen_names: dict[str, str] = {}
+    seen_paths: dict[str, str] = {}
+    for entry in manifest:
+        name = str(entry.get("name") or "").strip()
+        path = str(entry.get("path") or "").strip()
+        if name:
+            existing_path = seen_names.get(name)
+            if existing_path is not None:
+                issues.append(
+                    {
+                        "name": name,
+                        "path": path,
+                        "field": "name",
+                        "keyword": name,
+                        "message": (
+                            "skill manifest name must be unique; "
+                            f"duplicate detected with {existing_path or '(unknown path)'}"
+                        ),
+                    }
+                )
+            else:
+                seen_names[name] = path
+        if path:
+            existing_name = seen_paths.get(path)
+            if existing_name is not None:
+                issues.append(
+                    {
+                        "name": name or "(unknown)",
+                        "path": path,
+                        "field": "path",
+                        "keyword": path,
+                        "message": (
+                            "skill manifest path must be unique; "
+                            f"duplicate detected with {existing_name or '(unknown name)'}"
+                        ),
+                    }
+                )
+            else:
+                seen_paths[path] = name
     return issues
 
 
@@ -435,6 +485,20 @@ def _lint_skill_entry(entry: dict[str, Any]) -> list[dict[str, str]]:
             }
         )
 
+    if not str(entry.get("description") or "").strip():
+        issues.append(
+            {
+                "name": name,
+                "path": path,
+                "field": "description",
+                "keyword": "",
+                "message": (
+                    "description must be a non-empty frontmatter field; "
+                    "empty descriptions degrade metadata-only routing and catalog discoverability"
+                ),
+            }
+        )
+
     metadata_fields = (
         ("name", [entry.get("name") or ""]),
         ("description", [entry.get("description") or ""]),
@@ -563,6 +627,10 @@ def _lint_token_estimate(entry: dict[str, Any]) -> list[dict[str, str]]:
                     f"declared={declared}, estimated≈{estimated}"
                 ),
             }
+        )
+        issues[-1]["message"] = (
+            "token_estimate looks suspicious relative to the current markdown body; "
+            f"declared={declared}, estimated={estimated}"
         )
     return issues
 

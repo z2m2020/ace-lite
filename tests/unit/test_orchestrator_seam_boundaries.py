@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _read_orchestrator_text() -> str:
+    return (REPO_ROOT / "src" / "ace_lite" / "orchestrator.py").read_text(
+        encoding="utf-8"
+    )
+
+
+def _extract_method_block(method_name: str) -> str:
+    source = _read_orchestrator_text()
+    pattern = rf"^    def {method_name}\(.*?(?=^    def |\Z)"
+    match = re.search(pattern, source, flags=re.MULTILINE | re.DOTALL)
+    assert match is not None, f"Method block not found: {method_name}"
+    return match.group(0)
+
+
+class TestOrchestratorSeamBoundaries:
+    def test_orchestrator_imports_support_runtime_builders(self) -> None:
+        orchestrator_text = _read_orchestrator_text()
+
+        expected_tokens = (
+            "build_orchestrator_memory_runtime",
+            "build_orchestrator_augment_runtime",
+            "build_orchestrator_validation_runtime",
+            "build_orchestrator_skills_runtime",
+            "build_orchestrator_source_plan_runtime",
+            "load_orchestrator_plugins",
+            "apply_post_stage_state_updates",
+        )
+        for token in expected_tokens:
+            assert token in orchestrator_text
+
+    def test_orchestrator_keeps_stage_state_updates_in_shared_support(self) -> None:
+        orchestrator_text = _read_orchestrator_text()
+
+        assert "apply_post_stage_state_updates(" in orchestrator_text
+        assert (
+            "precompute_skills_route_fn=lambda: self._precompute_skills_route(ctx=ctx)"
+            in orchestrator_text
+        )
+
+    def test_run_memory_delegates_temporal_and_namespace_runtime_building(self) -> None:
+        method_block = _extract_method_block("_run_memory")
+
+        assert "runtime = build_orchestrator_memory_runtime(" in method_block
+        assert "normalize_temporal_input(" not in method_block
+        assert "ctx.state.get(" not in method_block
+
+    def test_run_augment_does_not_reintroduce_private_candidate_helper(self) -> None:
+        orchestrator_text = _read_orchestrator_text()
+        method_block = _extract_method_block("_run_augment")
+
+        assert "def _resolve_augment_candidates(" not in orchestrator_text
+        assert "runtime = build_orchestrator_augment_runtime(ctx_state=ctx.state)" in method_block
+        assert "resolve_augment_candidates(" in method_block
+        assert 'ctx.state.get("index"' not in method_block
+        assert 'ctx.state.get("repomap"' not in method_block
+
+    def test_skills_stage_uses_support_runtime_instead_of_raw_state_reads(self) -> None:
+        run_skills_block = _extract_method_block("_run_skills")
+        precompute_block = _extract_method_block("_precompute_skills_route")
+
+        assert "runtime = build_orchestrator_skills_runtime(" in run_skills_block
+        assert "runtime = build_orchestrator_skills_runtime(" in precompute_block
+        assert 'ctx.state["_skills_route"]' not in run_skills_block
+        assert 'ctx.state.get("_skills_route"' not in run_skills_block
+        assert 'index_stage.get("module_hint"' not in precompute_block
+
+    def test_validation_stage_uses_support_runtime_for_state_normalization(self) -> None:
+        method_block = _extract_method_block("_run_validation")
+
+        assert "runtime = build_orchestrator_validation_runtime(ctx_state=ctx.state)" in method_block
+        assert 'ctx.state.get("source_plan"' not in method_block
+        assert 'ctx.state.get("index"' not in method_block
+        assert 'ctx.state.get("_validation_patch_artifact"' not in method_block
+
+    def test_plugin_loading_keeps_enabled_gate_in_plugin_support(self) -> None:
+        method_block = _extract_method_block("_load_plugins")
+
+        assert "return load_orchestrator_plugins(" in method_block
+        assert "plugins_enabled=bool(self._config.plugins.enabled)" in method_block
+        assert "if not self._config.plugins.enabled" not in method_block
+        assert "return HookBus(), []" not in method_block

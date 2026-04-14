@@ -150,7 +150,7 @@ def test_build_health_payload_adds_structured_stale_process_warning(
     payload = build_health_response_payload(
         config=config,
         request_stats={"active_request_count": 0},
-        version="0.3.65",
+        version="0.3.66",
         version_info={"drifted": False},
         runtime_identity=_runtime_identity(stale=True),
         now_iso_fn=lambda: "2026-03-26T00:00:00+00:00",
@@ -192,7 +192,7 @@ def test_build_health_payload_adds_long_running_request_warning(
             "current_request_runtime_ms": 30500.0,
             "recent_requests": [],
         },
-        version="0.3.65",
+        version="0.3.66",
         version_info={"drifted": False},
         runtime_identity=_runtime_identity(),
         now_iso_fn=lambda: "2026-03-26T00:00:00+00:00",

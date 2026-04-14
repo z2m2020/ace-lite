@@ -12,6 +12,10 @@ from ace_lite.memory import (
     MemoryProvider,
 )
 from ace_lite.memory_long_term import LongTermMemoryCaptureService, LongTermMemoryStore
+from ace_lite.orchestrator_augment_support import (
+    build_orchestrator_augment_runtime,
+    resolve_augment_candidates,
+)
 from ace_lite.orchestrator_config import OrchestratorConfig
 from ace_lite.orchestrator_contracts import (
     PlanRequestAdapter,
@@ -22,9 +26,15 @@ from ace_lite.orchestrator_contracts import (
 from ace_lite.orchestrator_memory_context_service import (
     MemoryContextService,
 )
+from ace_lite.orchestrator_memory_support import (
+    build_orchestrator_memory_runtime,
+)
 from ace_lite.orchestrator_payload_builder import (
     build_default_validation_payload,
     build_orchestrator_plan_payload,
+)
+from ace_lite.orchestrator_plugin_support import (
+    load_orchestrator_plugins,
 )
 from ace_lite.orchestrator_runtime_observability_service import (
     RuntimeObservabilityService,
@@ -34,8 +44,18 @@ from ace_lite.orchestrator_runtime_support import (
     run_orchestrator_lifecycle,
     run_orchestrator_preparation,
 )
+from ace_lite.orchestrator_skills_support import (
+    build_orchestrator_skills_runtime,
+)
 from ace_lite.orchestrator_source_plan_replay_service import (
     SourcePlanReplayService,
+)
+from ace_lite.orchestrator_source_plan_support import (
+    build_orchestrator_source_plan_runtime,
+)
+from ace_lite.orchestrator_stage_state import apply_post_stage_state_updates
+from ace_lite.orchestrator_validation_support import (
+    build_orchestrator_validation_runtime,
 )
 from ace_lite.pipeline.hooks import HookBus
 from ace_lite.pipeline.registry import (
@@ -330,40 +350,21 @@ class AceOrchestrator:
             return exc
 
         ctx.state[stage_name] = stage_payload
-        if stage_name == "validation":
-            selected_patch_artifact = (
-                stage_payload.get("patch_artifact", {})
-                if isinstance(stage_payload, dict)
-                else {}
-            )
-            if isinstance(selected_patch_artifact, dict) and selected_patch_artifact:
-                ctx.state["_validation_patch_artifact"] = dict(selected_patch_artifact)
-            else:
-                ctx.state.pop("_validation_patch_artifact", None)
-
-            selected_patch_artifacts = (
-                stage_payload.get("patch_artifacts", [])
-                if isinstance(stage_payload, dict)
-                else []
-            )
-            if isinstance(selected_patch_artifacts, list) and selected_patch_artifacts:
-                ctx.state["_validation_patch_artifacts"] = [
-                    dict(item) for item in selected_patch_artifacts if isinstance(item, dict)
-                ]
-            else:
-                ctx.state.pop("_validation_patch_artifacts", None)
-        if stage_name == "augment":
-            if self._config.skills.precomputed_routing_enabled:
-                ctx.state["_skills_route"] = self._precompute_skills_route(ctx=ctx)
-            else:
-                ctx.state.pop("_skills_route", None)
         capture_payload = self._capture_long_term_stage_observation(
             stage_name=stage_name,
             ctx=ctx,
             stage_payload=stage_payload,
         )
-        if capture_payload is not None:
-            ctx.state.setdefault("_long_term_capture", []).append(capture_payload)
+        apply_post_stage_state_updates(
+            stage_name=stage_name,
+            ctx_state=ctx.state,
+            stage_payload=stage_payload,
+            precomputed_routing_enabled=bool(
+                self._config.skills.precomputed_routing_enabled
+            ),
+            precompute_skills_route_fn=lambda: self._precompute_skills_route(ctx=ctx),
+            capture_payload=capture_payload,
+        )
         logger.debug("stage.end", extra={"stage": stage_name, "repo": repo})
         return None
 
@@ -576,9 +577,11 @@ class AceOrchestrator:
         )
 
     def _load_plugins(self, *, root: str) -> tuple[HookBus, list[str]]:
-        if not self._config.plugins.enabled:
-            return HookBus(), []
-        return self._plugin_loader.load_hooks(repo_root=root)
+        return load_orchestrator_plugins(
+            plugins_enabled=bool(self._config.plugins.enabled),
+            plugin_loader=self._plugin_loader,
+            root=root,
+        )
 
     def _record_durable_stats(
         self,
@@ -680,23 +683,14 @@ class AceOrchestrator:
         query = ctx.query
         repo = ctx.repo
         root = ctx.root
-
-        def normalize_temporal_input(value: Any) -> str | None:
-            if value is None:
-                return None
-            normalized = str(value).strip()
-            return normalized or None
-
-        container_tag, namespace_mode, namespace_source = self._resolve_memory_namespace(
+        runtime = build_orchestrator_memory_runtime(
+            query=query,
             repo=repo,
             root=root,
+            ctx_state=ctx.state,
+            resolve_memory_namespace_fn=self._resolve_memory_namespace,
+            extract_signal_fn=self._signal_extractor.extract,
         )
-        temporal_input = (
-            ctx.state.get("temporal", {}) if isinstance(ctx.state.get("temporal"), dict) else {}
-        )
-        time_range = temporal_input.get("time_range")
-        start_date = temporal_input.get("start_date")
-        end_date = temporal_input.get("end_date")
         payload = run_memory(
             memory_provider=self._memory_provider,
             query=query,
@@ -705,18 +699,18 @@ class AceOrchestrator:
             timeline_enabled=self._config.memory.timeline_enabled,
             preview_max_chars=self._config.memory.preview_max_chars,
             tokenizer_model=self._tokenizer_model,
-            container_tag=container_tag,
-            time_range=normalize_temporal_input(time_range),
-            start_date=normalize_temporal_input(start_date),
-            end_date=normalize_temporal_input(end_date),
+            container_tag=runtime.container_tag,
+            time_range=runtime.time_range,
+            start_date=runtime.start_date,
+            end_date=runtime.end_date,
             temporal_enabled=bool(self._config.memory.temporal.enabled),
             recency_boost_enabled=bool(
                 self._config.memory.temporal.recency_boost_enabled
             ),
             recency_boost_max=float(self._config.memory.temporal.recency_boost_max),
             timezone_mode=str(self._config.memory.temporal.timezone_mode),
-            namespace_mode=namespace_mode,
-            namespace_source=namespace_source,
+            namespace_mode=runtime.namespace_mode,
+            namespace_source=runtime.namespace_source,
             gate_enabled=bool(self._config.memory.gate.enabled),
             gate_mode=str(self._config.memory.gate.mode),
             postprocess_enabled=bool(self._config.memory.postprocess.enabled),
@@ -745,16 +739,15 @@ class AceOrchestrator:
                 tokenizer_model=self._tokenizer_model,
             )
 
-        extraction = self._signal_extractor.extract(query)
         payload["capture"] = self._memory_context_service.build_capture_payload(
             query=query,
             repo=repo,
             root=root,
-            namespace=container_tag,
-            matched_keywords=list(extraction.matched_keywords),
-            triggered=bool(extraction.triggered),
-            reason=extraction.reason,
-            query_length=extraction.query_length,
+            namespace=runtime.container_tag,
+            matched_keywords=list(runtime.extraction.matched_keywords),
+            triggered=bool(runtime.extraction.triggered),
+            reason=runtime.extraction.reason,
+            query_length=runtime.extraction.query_length,
         )
         return payload
 
@@ -786,21 +779,11 @@ class AceOrchestrator:
 
     def _run_augment(self, *, ctx: StageContext) -> dict[str, Any]:
         cfg = self._config
-        index_stage = ctx.state.get("index", {})
-        repomap_stage = ctx.state.get("repomap", {})
-        index_files = ctx.state.get("__index_files", {})
-        vcs_worktree_override = ctx.state.get("__vcs_worktree")
-        if not isinstance(vcs_worktree_override, dict):
-            vcs_worktree_override = None
-        policy = (
-            ctx.state.get("__policy", {})
-            if isinstance(ctx.state.get("__policy"), dict)
-            else {}
-        )
-        candidates = self._resolve_augment_candidates(
-            index_stage=index_stage,
-            repomap_stage=repomap_stage,
-            index_files=index_files,
+        runtime = build_orchestrator_augment_runtime(ctx_state=ctx.state)
+        candidates = resolve_augment_candidates(
+            index_stage=runtime.index_stage,
+            repomap_stage=runtime.repomap_stage,
+            index_files=runtime.index_files,
         )
         payload = run_diagnostics_augment(
             root=ctx.root,
@@ -812,98 +795,88 @@ class AceOrchestrator:
             xref_enabled=cfg.lsp.xref_enabled,
             xref_top_n=cfg.lsp.xref_top_n,
             xref_time_budget_ms=cfg.lsp.time_budget_ms,
-            candidate_chunks=index_stage.get("candidate_chunks", [])
-            if isinstance(index_stage, dict)
+            candidate_chunks=runtime.index_stage.get("candidate_chunks", [])
+            if isinstance(runtime.index_stage, dict)
             else [],
             junit_xml_path=cfg.tests.junit_xml,
             coverage_json_path=cfg.tests.coverage_json,
             sbfl_json_path=cfg.tests.sbfl_json,
             sbfl_metric=cfg.tests.sbfl_metric,
             vcs_enabled=cfg.cochange.enabled,
-            vcs_worktree_override=vcs_worktree_override,
+            vcs_worktree_override=runtime.vcs_worktree_override,
         )
-        payload["policy_name"] = str(policy.get("name", "general"))
+        payload["policy_name"] = str(runtime.policy.get("name", "general"))
         payload["policy_version"] = str(
-            policy.get("version", cfg.retrieval.policy_version)
+            runtime.policy.get("version", cfg.retrieval.policy_version)
         )
         return payload
 
     def _run_skills(self, *, ctx: StageContext) -> dict[str, Any]:
+        runtime = build_orchestrator_skills_runtime(
+            ctx_state=ctx.state,
+            precomputed_routing_enabled=bool(
+                self._config.skills.precomputed_routing_enabled
+            ),
+        )
         return run_skills(
             ctx=ctx,
             skill_manifest=self._skill_manifest,
             top_n=self._config.skills.top_n,
             token_budget=self._config.skills.token_budget,
-            routed_payload=(
-                ctx.state.get("_skills_route")
-                if self._config.skills.precomputed_routing_enabled
-                and isinstance(ctx.state.get("_skills_route"), dict)
-                else None
-            ),
+            routed_payload=runtime.routed_payload,
         )
 
     def _precompute_skills_route(self, *, ctx: StageContext) -> dict[str, Any]:
-        index_stage = ctx.state.get("index", {})
-        module_hint = (
-            str(index_stage.get("module_hint", "") or "")
-            if isinstance(index_stage, dict)
-            else ""
+        runtime = build_orchestrator_skills_runtime(
+            ctx_state=ctx.state,
+            precomputed_routing_enabled=bool(
+                self._config.skills.precomputed_routing_enabled
+            ),
         )
         return route_skills(
             query=ctx.query,
-            module_hint=module_hint,
+            module_hint=runtime.module_hint,
             skill_manifest=self._skill_manifest,
             top_n=self._config.skills.top_n,
         )
 
     def _run_source_plan(self, *, ctx: StageContext) -> dict[str, Any]:
-        cfg = self._config
+        runtime = build_orchestrator_source_plan_runtime(
+            config=self._config,
+            pipeline_order=tuple(self.PIPELINE_ORDER),
+        )
         return run_source_plan(
             ctx=ctx,
-            pipeline_order=self.PIPELINE_ORDER,
-            chunk_top_k=cfg.chunking.top_k,
-            chunk_per_file_limit=cfg.chunking.per_file_limit,
-            chunk_token_budget=cfg.chunking.token_budget,
-            chunk_disclosure=cfg.chunking.disclosure,
-            policy_version=cfg.retrieval.policy_version,
+            pipeline_order=runtime.pipeline_order,
+            chunk_top_k=runtime.chunk_top_k,
+            chunk_per_file_limit=runtime.chunk_per_file_limit,
+            chunk_token_budget=runtime.chunk_token_budget,
+            chunk_disclosure=runtime.chunk_disclosure,
+            policy_version=runtime.policy_version,
         )
 
     def _run_validation(self, *, ctx: StageContext) -> dict[str, Any]:
         cfg = self._config
-        policy = (
-            ctx.state.get("__policy", {})
-            if isinstance(ctx.state.get("__policy"), dict)
-            else {}
-        )
+        runtime = build_orchestrator_validation_runtime(ctx_state=ctx.state)
         preference_capture_store = self._resolve_validation_preference_capture_store(
             root=ctx.root,
         )
         return run_validation_stage(
             root=ctx.root,
             query=ctx.query,
-            source_plan_stage=(
-                ctx.state.get("source_plan", {})
-                if isinstance(ctx.state.get("source_plan"), dict)
-                else {}
-            ),
-            index_stage=(
-                ctx.state.get("index", {})
-                if isinstance(ctx.state.get("index"), dict)
-                else {}
-            ),
+            source_plan_stage=runtime.source_plan_stage,
+            index_stage=runtime.index_stage,
             enabled=cfg.validation.enabled,
             include_xref=cfg.validation.include_xref,
             top_n=cfg.validation.top_n,
             xref_top_n=cfg.validation.xref_top_n,
             sandbox_timeout_seconds=cfg.validation.sandbox_timeout_seconds,
             broker=self._lsp_broker,
-            patch_artifact=(
-                ctx.state.get("_validation_patch_artifact")
-                if isinstance(ctx.state.get("_validation_patch_artifact"), dict)
-                else None
+            patch_artifact=runtime.patch_artifact,
+            policy_name=str(runtime.policy.get("name", "general")),
+            policy_version=str(
+                runtime.policy.get("version", cfg.retrieval.policy_version)
             ),
-            policy_name=str(policy.get("name", "general")),
-            policy_version=str(policy.get("version", cfg.retrieval.policy_version)),
             preference_capture_store=preference_capture_store,
             preference_capture_repo_key=ctx.repo,
         )
@@ -914,69 +887,6 @@ class AceOrchestrator:
         if path.is_absolute():
             return path
         return Path(root) / path
-
-    @staticmethod
-    def _resolve_augment_candidates(
-        *,
-        index_stage: dict[str, Any],
-        repomap_stage: dict[str, Any],
-        index_files: dict[str, dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        base_candidates = (
-            index_stage.get("candidate_files", [])
-            if isinstance(index_stage, dict)
-            else []
-        )
-        if not isinstance(base_candidates, list):
-            base_candidates = []
-
-        focused = (
-            repomap_stage.get("focused_files", [])
-            if isinstance(repomap_stage, dict)
-            else []
-        )
-        if not isinstance(focused, list):
-            focused = []
-        if not focused:
-            return [item for item in base_candidates if isinstance(item, dict)]
-
-        by_path = {
-            str(item.get("path", "")): item
-            for item in base_candidates
-            if isinstance(item, dict) and str(item.get("path", "")).strip()
-        }
-
-        resolved: list[dict[str, Any]] = []
-        for path in focused:
-            relative_path = str(path).strip()
-            if not relative_path:
-                continue
-            if relative_path in by_path:
-                resolved.append(by_path[relative_path])
-                continue
-
-            entry = (
-                index_files.get(relative_path, {})
-                if isinstance(index_files, dict)
-                else {}
-            )
-            if not isinstance(entry, dict):
-                continue
-            resolved.append(
-                {
-                    "path": relative_path,
-                    "module": entry.get("module", ""),
-                    "language": entry.get("language", ""),
-                    "score": 0,
-                    "symbol_count": len(entry.get("symbols", []))
-                    if isinstance(entry.get("symbols", []), list)
-                    else 0,
-                    "import_count": len(entry.get("imports", []))
-                    if isinstance(entry.get("imports", []), list)
-                    else 0,
-                }
-            )
-        return resolved
 
 __all__ = [
     "BM25_B",

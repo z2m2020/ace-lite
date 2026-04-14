@@ -43,8 +43,13 @@ Records which required fields are missing **before** backfill.
 Checks:
 - [x] Workflow keywords in error_keywords field
 - [x] Missing `token_estimate` and `default_sections`
+- [x] Missing explicit `error_keywords` declaration
+- [x] Missing non-empty `description` field
 - [x] Suspicious mojibake Unicode in any metadata field
 - [x] Overlap between error_keywords and intents/modules/topics
+- [x] Duplicate `name` / `path` entries in a manifest
+- [x] Illegal default sections detection
+- [x] Token estimate bounds check
 
 ---
 
@@ -54,7 +59,9 @@ Checks:
 |---|---|
 | `test_lint_skill_manifest_flags_workflow_error_keywords` | Blocklist enforcement |
 | `test_lint_skill_manifest_flags_missing_frontmatter_before_backfill` | Missing field detection |
+| `test_lint_skill_manifest_flags_missing_description` | Metadata-only discoverability guard |
 | `test_lint_skill_manifest_flags_mojibake_metadata_terms` | Unicode suspicious detection |
+| `test_lint_skill_manifest_flags_duplicate_name_and_path` | Manifest uniqueness guard |
 | `test_repo_skills_pass_frontmatter_lint` | Repository skills validation |
 
 **Run**: `pytest -q tests/unit/test_skills.py -k lint`
@@ -63,15 +70,7 @@ Checks:
 
 ## Potential Enhancements (Future)
 
-### E1: Illegal Default Sections Detection
-
-Detect if `default_sections` references non-existent headings.
-
-### E2: Token Estimate Bounds Check
-
-Warn if `token_estimate` is suspiciously low or high for a given skill.
-
-### E3: Intent/Module Overlap Warning
+### E1: Intent/Module Overlap Warning
 
 Warn if a skill has intents/modules that overlap too much (low discriminative power).
 

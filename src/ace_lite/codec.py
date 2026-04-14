@@ -324,12 +324,15 @@ def dumps_to_str(obj: Any, codec: str | None = None) -> str:
 def benchmark_codecs(
     data: dict[str, Any],
     iterations: int = 1000,
-) -> dict[str, dict[str, float]]:
+    *,
+    track_memory: bool = False,
+) -> dict[str, dict[str, float | int | None]]:
     """Benchmark different JSON codecs.
 
     Args:
         data: Data to benchmark
         iterations: Number of iterations
+        track_memory: Whether to record resident-memory deltas for each codec step
 
     Returns:
         Dict of benchmark results keyed by codec name
@@ -337,8 +340,10 @@ def benchmark_codecs(
 
     from ace_lite.performance_benchmark import BenchmarkConfig, BenchmarkRunner
 
-    results: dict[str, dict[str, float]] = {}
-    runner = BenchmarkRunner(BenchmarkConfig(iterations=iterations))
+    results: dict[str, dict[str, float | int | None]] = {}
+    runner = BenchmarkRunner(
+        BenchmarkConfig(iterations=iterations, track_memory=track_memory)
+    )
 
     for codec_name in get_codec_registry().available_codecs:
         codec = get_codec_registry().get(codec_name)
@@ -359,6 +364,14 @@ def benchmark_codecs(
             "dumps_avg_ms": serialize_result.avg_time_ms,
             "loads_avg_ms": deserialize_result.avg_time_ms,
             "total_avg_ms": serialize_result.avg_time_ms + deserialize_result.avg_time_ms,
+            "dumps_memory_delta_bytes": serialize_result.memory_delta_bytes,
+            "loads_memory_delta_bytes": deserialize_result.memory_delta_bytes,
+            "total_memory_delta_bytes": (
+                (serialize_result.memory_delta_bytes or 0)
+                + (deserialize_result.memory_delta_bytes or 0)
+                if track_memory
+                else None
+            ),
         }
 
     return results

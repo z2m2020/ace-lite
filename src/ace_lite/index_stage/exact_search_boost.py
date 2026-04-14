@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 RunExactSearchFn = Callable[..., Any]
-ScoreExactSearchHitsFn = Callable[[dict[str, int]], dict[str, float]]
+ScoreExactSearchHitsFn = Callable[..., dict[str, float]]
 
 
 @dataclass(slots=True)

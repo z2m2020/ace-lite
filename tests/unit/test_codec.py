@@ -240,6 +240,42 @@ class TestBenchmarkCodecs:
             assert metrics["dumps_avg_ms"] >= 0
             assert metrics["loads_avg_ms"] >= 0
             assert metrics["total_avg_ms"] >= 0
+            assert metrics["dumps_memory_delta_bytes"] is None
+            assert metrics["loads_memory_delta_bytes"] is None
+            assert metrics["total_memory_delta_bytes"] is None
+
+    def test_benchmark_results_include_memory_deltas_when_enabled(self, monkeypatch):
+        """Test codec benchmarks surface memory deltas when tracking is enabled."""
+
+        class _FakeResult:
+            def __init__(self, avg_time_ms: float, memory_delta_bytes: int):
+                self.avg_time_ms = avg_time_ms
+                self.memory_delta_bytes = memory_delta_bytes
+
+        observed: dict[str, object] = {}
+
+        class _FakeRunner:
+            def __init__(self, config):
+                observed["track_memory"] = config.track_memory
+
+            def run(self, name, func):
+                func()
+                if str(name).endswith("_dumps"):
+                    return _FakeResult(1.0, 128)
+                return _FakeResult(2.0, 256)
+
+        monkeypatch.setattr(
+            "ace_lite.performance_benchmark.BenchmarkRunner",
+            _FakeRunner,
+        )
+
+        data = {"key": "value"}
+        results = benchmark_codecs(data, iterations=2, track_memory=True)
+
+        assert observed["track_memory"] is True
+        assert results["json"]["dumps_memory_delta_bytes"] == 128
+        assert results["json"]["loads_memory_delta_bytes"] == 256
+        assert results["json"]["total_memory_delta_bytes"] == 384
 
 
 class TestCodecInterface:

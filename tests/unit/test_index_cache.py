@@ -142,6 +142,31 @@ def test_load_index_cache_rejects_git_head_mismatch(
     )
 
 
+def test_load_index_cache_allows_git_head_mismatch_when_requested(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cache_path = tmp_path / "index.json"
+    payload = {
+        "root_dir": str(tmp_path.resolve()),
+        "configured_languages": ["python"],
+        "git_head_sha": "a" * 40,
+        "files": {},
+    }
+    cache_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    monkeypatch.setattr(index_cache, "_get_git_head_sha", lambda **_: "b" * 40)
+
+    loaded = index_cache.load_index_cache(
+        cache_path=cache_path,
+        root_dir=tmp_path,
+        languages=["python"],
+        allow_sha_mismatch=True,
+    )
+
+    assert loaded is not None
+    assert loaded.get("git_head_sha") == "a" * 40
+
+
 def test_build_or_refresh_index_cache_only_when_no_changes(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -579,6 +604,80 @@ def test_build_or_refresh_index_rebuilds_when_git_head_changes(
     assert second_payload.get("git_head_sha") == "b" * 40
 
 
+def test_build_or_refresh_index_reuses_stale_cache_with_git_ref_bridge(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "new.py").write_text("value = 1\n", encoding="utf-8")
+    cache_path = tmp_path / "context-map" / "index.json"
+    calls = {"build": 0}
+    current_sha = {"value": "a" * 40}
+    observed: dict[str, object] = {}
+
+    def fake_get_git_head_sha(**_):
+        return current_sha["value"]
+
+    def fake_build_index(root_dir, languages=None):
+        calls["build"] += 1
+        return {
+            "root_dir": str(Path(root_dir).resolve()),
+            "configured_languages": ["python"],
+            "files": {"existing.py": {"path": "existing.py"}},
+        }
+
+    def fake_update(existing_index, root_dir, changed_files, languages=None):
+        observed["changed_files"] = list(changed_files)
+        return {
+            **existing_index,
+            "root_dir": str(Path(root_dir).resolve()),
+            "configured_languages": ["python"],
+            "files": {
+                **existing_index.get("files", {}),
+                "new.py": {"path": "new.py"},
+            },
+        }
+
+    monkeypatch.setattr(index_cache, "_get_git_head_sha", fake_get_git_head_sha)
+    monkeypatch.setattr(index_cache, "build_index", fake_build_index)
+    monkeypatch.setattr(index_cache, "update_index", fake_update)
+    monkeypatch.setattr(
+        index_cache,
+        "detect_changed_files_between_git_refs",
+        lambda **_: ["new.py"],
+    )
+    monkeypatch.setattr(index_cache, "detect_changed_files_from_git", lambda **_: [])
+
+    first_payload, first_info = index_cache.build_or_refresh_index(
+        root_dir=tmp_path,
+        cache_path=cache_path,
+        languages=["python"],
+        incremental=True,
+    )
+
+    assert calls["build"] == 1
+    assert first_info["mode"] == "full_build"
+    assert first_payload.get("git_head_sha") == "a" * 40
+
+    current_sha["value"] = "b" * 40
+
+    second_payload, second_info = index_cache.build_or_refresh_index(
+        root_dir=tmp_path,
+        cache_path=cache_path,
+        languages=["python"],
+        incremental=True,
+    )
+
+    assert calls["build"] == 1
+    assert observed["changed_files"] == ["new.py"]
+    assert second_info == {
+        "cache_hit": True,
+        "mode": "incremental_update",
+        "changed_files": 1,
+        "sha_bridge": True,
+    }
+    assert second_payload.get("git_head_sha") == "b" * 40
+
+
 def test_load_index_cache_memory_cache_mtime_change_triggers_reload(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -772,6 +871,25 @@ def test_detect_changed_files_parses_porcelain_z_rename(
         "src/new.py",
         "docs/read me.md",
     ]
+
+
+def test_detect_changed_files_between_git_refs_parses_rename_and_modify(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / ".git").mkdir()
+
+    def fake_run_capture_output(*args, **kwargs):
+        return 0, "R100\0src/old.py\0src/new.py\0M\0src/app.py\0", "", False
+
+    monkeypatch.setattr(index_cache, "run_capture_output", fake_run_capture_output)
+
+    changed = index_cache.detect_changed_files_between_git_refs(
+        root_dir=tmp_path,
+        base_sha="a" * 40,
+        head_sha="b" * 40,
+    )
+
+    assert changed == ["src/old.py", "src/new.py", "src/app.py"]
 
 
 def test_expand_changed_files_with_reverse_dependencies_depth_two() -> None:

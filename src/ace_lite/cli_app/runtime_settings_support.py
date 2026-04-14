@@ -8,6 +8,7 @@ from ace_lite.cli_app.runtime_mcp_ops import (
     load_mcp_env_snapshot,
     mcp_env_snapshot_path,
 )
+from ace_lite.config_validator import validate_orchestrator_config
 from ace_lite.runtime_settings import RuntimeSettingsManager
 from ace_lite.runtime_settings_store import (
     build_runtime_settings_record,
@@ -134,6 +135,7 @@ def resolve_runtime_settings_bundle(
 
 def build_runtime_settings_governance_payload(bundle: dict[str, Any]) -> dict[str, Any]:
     resolved = bundle["resolved"]
+    config_warnings = validate_orchestrator_config(resolved.snapshot.get("plan"))
     current_path = bundle["resolved_current_path"]
     lkg_path = bundle["resolved_lkg_path"]
     current_record = inspect_runtime_settings_record(current_path)
@@ -174,6 +176,10 @@ def build_runtime_settings_governance_payload(bundle: dict[str, Any]) -> dict[st
         governance_state = "current_invalid"
     return {
         "governance_state": governance_state,
+        "config_consistency_state": "warning" if config_warnings else "clean",
+        "config_warning_count": len(config_warnings),
+        "config_warning_codes": [item["code"] for item in config_warnings],
+        "config_warnings": config_warnings,
         "current_path": str(current_path),
         "last_known_good_path": str(lkg_path),
         "persisted_source": bundle.get("persisted_source"),

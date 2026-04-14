@@ -72,11 +72,13 @@ class TestBenchmarkResult:
             avg_time_ms=10.0,
             min_time_ms=8.0,
             max_time_ms=12.0,
+            memory_delta_bytes=256,
         )
 
         d = result.to_dict()
         assert d["name"] == "test"
         assert d["iterations"] == 10
+        assert d["memory_delta_bytes"] == 256
         assert d["ops_per_second"] > 0
 
 
@@ -176,6 +178,60 @@ class TestBenchmarkComparison:
 
         assert comparison.percent_improvement == 50.0  # (10-5)/10 * 100
 
+    def test_memory_saved_bytes(self):
+        """Test resident-memory savings calculation."""
+        baseline = BenchmarkResult(
+            name="baseline",
+            iterations=10,
+            total_time_ms=100.0,
+            avg_time_ms=10.0,
+            min_time_ms=8.0,
+            max_time_ms=12.0,
+            memory_delta_bytes=8192,
+        )
+        optimized = BenchmarkResult(
+            name="optimized",
+            iterations=10,
+            total_time_ms=50.0,
+            avg_time_ms=5.0,
+            min_time_ms=4.0,
+            max_time_ms=6.0,
+            memory_delta_bytes=4096,
+        )
+
+        comparison = BenchmarkComparison(baseline=baseline, optimized=optimized)
+
+        assert comparison.memory_saved_bytes == 4096
+        assert comparison.memory_percent_improvement == 50.0
+
+    def test_to_dict_includes_memory_comparison(self):
+        """Test comparison serialization includes memory deltas when available."""
+        baseline = BenchmarkResult(
+            name="baseline",
+            iterations=10,
+            total_time_ms=100.0,
+            avg_time_ms=10.0,
+            min_time_ms=8.0,
+            max_time_ms=12.0,
+            memory_delta_bytes=2048,
+        )
+        optimized = BenchmarkResult(
+            name="optimized",
+            iterations=10,
+            total_time_ms=50.0,
+            avg_time_ms=5.0,
+            min_time_ms=4.0,
+            max_time_ms=6.0,
+            memory_delta_bytes=1024,
+        )
+
+        comparison = BenchmarkComparison(baseline=baseline, optimized=optimized)
+
+        payload = comparison.to_dict()
+
+        assert payload["memory_saved_bytes"] == 1024
+        assert payload["memory_percent_improvement"] == 50.0
+
 
 class TestBenchmarkConfig:
     """Tests for BenchmarkConfig."""
@@ -268,6 +324,30 @@ class TestBenchmarkRunner:
 
         assert comparison.speedup_ratio > 1.0  # Optimized should be faster
 
+    def test_run_with_memory_tracking(self, monkeypatch):
+        """Test running benchmark with memory tracking enabled."""
+        runner = BenchmarkRunner(BenchmarkConfig(iterations=3, track_memory=True))
+
+        class _FakeTracker:
+            def delta(self):
+                return {"rss_delta": 4096, "vms_delta": 8192}
+
+        class _FakeMemoryContext:
+            def __enter__(self):
+                return _FakeTracker()
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        monkeypatch.setattr(
+            "ace_lite.performance_benchmark.track_memory",
+            lambda: _FakeMemoryContext(),
+        )
+
+        result = runner.run("memory-tracked", lambda: 1)
+
+        assert result.memory_delta_bytes == 4096
+
 
 class TestDetermineOptimization:
     """Tests for determine_optimization."""
@@ -311,6 +391,43 @@ class TestDetermineOptimization:
         )
 
         assert recommendation.recommended is False
+
+    def test_reasoning_includes_memory_tradeoff_when_available(self, monkeypatch):
+        """Test reasoning includes memory savings when comparison carries memory deltas."""
+
+        def fake_compare(self, name, baseline_func, optimized_func):
+            del self, name, baseline_func, optimized_func
+            return BenchmarkComparison(
+                baseline=BenchmarkResult(
+                    name="baseline",
+                    iterations=10,
+                    total_time_ms=100.0,
+                    avg_time_ms=10.0,
+                    min_time_ms=8.0,
+                    max_time_ms=12.0,
+                    memory_delta_bytes=8192,
+                ),
+                optimized=BenchmarkResult(
+                    name="optimized",
+                    iterations=10,
+                    total_time_ms=50.0,
+                    avg_time_ms=5.0,
+                    min_time_ms=4.0,
+                    max_time_ms=6.0,
+                    memory_delta_bytes=4096,
+                ),
+            )
+
+        monkeypatch.setattr(BenchmarkRunner, "compare", fake_compare)
+
+        recommendation = determine_optimization(
+            "test_feature",
+            lambda: 1,
+            lambda: 1,
+            threshold=1.1,
+        )
+
+        assert "Memory saved: 4096 bytes (50.00%)" in recommendation.reasoning
 
 
 class TestBenchmarkJSONSerialization:

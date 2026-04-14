@@ -63,6 +63,12 @@ class RuntimeCommandDomainDescriptor:
     handlers: tuple[str, ...]
 
 
+def _coerce_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
+
+
 def _merge_unique_messages(*groups: list[str]) -> list[str]:
     merged: list[str] = []
     seen: set[str] = set()
@@ -77,21 +83,9 @@ def _merge_unique_messages(*groups: list[str]) -> list[str]:
 
 
 def _build_mcp_session_summary(payload: dict[str, Any]) -> dict[str, Any]:
-    session_health = (
-        dict(payload.get("stdio_session_health"))
-        if isinstance(payload.get("stdio_session_health"), dict)
-        else {}
-    )
-    runtime_identity = (
-        dict(payload.get("runtime_identity"))
-        if isinstance(payload.get("runtime_identity"), dict)
-        else {}
-    )
-    request_stats = (
-        dict(payload.get("request_stats"))
-        if isinstance(payload.get("request_stats"), dict)
-        else {}
-    )
+    session_health = _coerce_mapping(payload.get("stdio_session_health"))
+    runtime_identity = _coerce_mapping(payload.get("runtime_identity"))
+    request_stats = _coerce_mapping(payload.get("request_stats"))
     return {
         "status": str(session_health.get("status") or "unknown"),
         "scope": str(session_health.get("scope") or ""),

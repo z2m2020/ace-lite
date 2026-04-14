@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 import time
 from collections.abc import Generator
-from typing import Any
+from typing import Any, Literal
 
 
 class SpinnerProgress:
@@ -48,7 +48,9 @@ class SpinnerProgress:
         self._running = True
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+    def __exit__(
+        self, exc_type: Any, exc_val: Any, exc_tb: Any
+    ) -> Literal[False]:
         """Stop the spinner."""
         self._running = False
         self.stream.write("\r" + " " * (len(self.message) + 5) + "\r")
@@ -90,7 +92,9 @@ class ProgressContext:
             self.stream.flush()
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+    def __exit__(
+        self, exc_type: Any, exc_val: Any, exc_tb: Any
+    ) -> Literal[False]:
         """Finish progress tracking."""
         if self.verbose:
             elapsed = time.time() - (self._start_time or 0)

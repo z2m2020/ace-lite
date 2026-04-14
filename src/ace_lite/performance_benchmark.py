@@ -61,6 +61,7 @@ class BenchmarkResult:
             "min_time_ms": self.min_time_ms,
             "max_time_ms": self.max_time_ms,
             "std_dev_ms": self.std_dev_ms,
+            "memory_delta_bytes": self.memory_delta_bytes,
             "ops_per_second": self.ops_per_second,
             "metadata": self.metadata,
         }
@@ -95,6 +96,28 @@ class BenchmarkComparison:
             ) * 100
         return 0.0
 
+    @property
+    def memory_saved_bytes(self) -> int | None:
+        """Calculate resident-memory savings for optimized implementation."""
+        baseline_memory = self.baseline.memory_delta_bytes
+        optimized_memory = self.optimized.memory_delta_bytes
+        if baseline_memory is None or optimized_memory is None:
+            return None
+        return baseline_memory - optimized_memory
+
+    @property
+    def memory_percent_improvement(self) -> float | None:
+        """Calculate percentage memory improvement when memory tracking is enabled."""
+        baseline_memory = self.baseline.memory_delta_bytes
+        memory_saved = self.memory_saved_bytes
+        if (
+            baseline_memory is None
+            or baseline_memory == 0
+            or memory_saved is None
+        ):
+            return None
+        return (memory_saved / baseline_memory) * 100
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -103,6 +126,8 @@ class BenchmarkComparison:
             "speedup_ratio": self.speedup_ratio,
             "time_saved_ms": self.time_saved_ms,
             "percent_improvement": self.percent_improvement,
+            "memory_saved_bytes": self.memory_saved_bytes,
+            "memory_percent_improvement": self.memory_percent_improvement,
         }
 
 
@@ -170,15 +195,28 @@ class BenchmarkRunner:
 
         # Benchmark iterations
         times_ms: list[float] = []
-        start_time = time.perf_counter()
+        total_time_ms = 0.0
+        memory_delta_bytes: int | None = None
 
-        for _ in range(self.config.iterations):
-            iter_start = time.perf_counter()
-            func()
-            iter_end = time.perf_counter()
-            times_ms.append((iter_end - iter_start) * 1000)
-
-        total_time_ms = (time.perf_counter() - start_time) * 1000
+        if self.config.track_memory:
+            with track_memory() as memory_tracker:
+                start_time = time.perf_counter()
+                for _ in range(self.config.iterations):
+                    iter_start = time.perf_counter()
+                    func()
+                    iter_end = time.perf_counter()
+                    times_ms.append((iter_end - iter_start) * 1000)
+                total_time_ms = (time.perf_counter() - start_time) * 1000
+                memory_delta = memory_tracker.delta()
+                memory_delta_bytes = int(memory_delta.get("rss_delta", 0) or 0)
+        else:
+            start_time = time.perf_counter()
+            for _ in range(self.config.iterations):
+                iter_start = time.perf_counter()
+                func()
+                iter_end = time.perf_counter()
+                times_ms.append((iter_end - iter_start) * 1000)
+            total_time_ms = (time.perf_counter() - start_time) * 1000
 
         # Calculate statistics
         avg_time_ms = sum(times_ms) / len(times_ms)
@@ -194,6 +232,7 @@ class BenchmarkRunner:
             min_time_ms=min_time_ms,
             max_time_ms=max_time_ms,
             std_dev_ms=std_dev_ms,
+            memory_delta_bytes=memory_delta_bytes,
             metadata=metadata or {},
         )
 
@@ -420,6 +459,18 @@ def determine_optimization(
         f"Speedup: {speedup:.2f}x",
         f"Time saved: {comparison.time_saved_ms:.2f}ms per operation",
     ]
+    if comparison.memory_saved_bytes is not None:
+        memory_saved = comparison.memory_saved_bytes
+        memory_percent = comparison.memory_percent_improvement
+        if memory_saved > 0:
+            memory_reason = f"Memory saved: {memory_saved} bytes"
+        elif memory_saved < 0:
+            memory_reason = f"Memory overhead: {abs(memory_saved)} bytes"
+        else:
+            memory_reason = "Memory delta unchanged"
+        if memory_percent is not None:
+            memory_reason = f"{memory_reason} ({memory_percent:.2f}%)"
+        reasoning_parts.append(memory_reason)
     if recommended:
         reasoning_parts.append(f"Exceeds threshold of {threshold}x")
     else:

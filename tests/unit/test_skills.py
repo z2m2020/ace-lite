@@ -266,6 +266,7 @@ def test_lint_skill_manifest_flags_workflow_error_keywords() -> None:
             {
                 "name": "bad-skill",
                 "path": "skills/bad.md",
+                "description": "bad skill for lint coverage",
                 "intents": ["review"],
                 "modules": ["docs"],
                 "topics": ["handoff"],
@@ -298,9 +299,37 @@ def test_lint_skill_manifest_flags_missing_frontmatter_before_backfill(
     issues = lint_skill_manifest(manifest)
 
     assert {item["field"] for item in issues} == {
+        "error_keywords",
         "default_sections",
         "token_estimate",
     }
+
+
+def test_lint_skill_manifest_flags_missing_description(tmp_path: Path) -> None:
+    (tmp_path / "missing-description.md").write_text(
+        textwrap.dedent(
+            """
+            ---
+            name: missing-description
+            default_sections: [Workflow]
+            token_estimate: 32
+            error_keywords: [timeout]
+            ---
+            # Workflow
+            Description is missing from frontmatter on purpose.
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_skill_manifest(tmp_path)
+    issues = lint_skill_manifest(manifest)
+
+    assert any(
+        item["field"] == "description" and "metadata-only routing" in item["message"]
+        for item in issues
+    )
 
 
 def test_lint_skill_manifest_flags_mojibake_metadata_terms() -> None:
@@ -376,6 +405,39 @@ def test_lint_skill_manifest_flags_suspicious_token_estimate(tmp_path: Path) -> 
     issues = lint_skill_manifest(manifest)
 
     assert any(item["field"] == "token_estimate" and item["keyword"] == "1" for item in issues)
+    assert any(
+        item["field"] == "token_estimate"
+        and "estimated=" in item["message"]
+        and "estimated��" not in item["message"]
+        for item in issues
+    )
+
+
+def test_lint_skill_manifest_flags_duplicate_name_and_path() -> None:
+    issues = lint_skill_manifest(
+        [
+            {
+                "name": "duplicate-skill",
+                "path": "skills/one.md",
+                "description": "duplicate one",
+                "intents": ["review"],
+                "modules": ["docs"],
+                "topics": ["handoff"],
+                "error_keywords": [],
+            },
+            {
+                "name": "duplicate-skill",
+                "path": "skills/one.md",
+                "description": "duplicate two",
+                "intents": ["review"],
+                "modules": ["docs"],
+                "topics": ["handoff"],
+                "error_keywords": [],
+            },
+        ]
+    )
+
+    assert {item["field"] for item in issues} == {"name", "path"}
 
 
 def test_repo_skills_pass_frontmatter_lint() -> None:

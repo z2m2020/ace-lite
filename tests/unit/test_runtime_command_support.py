@@ -285,6 +285,45 @@ def test_build_runtime_settings_governance_payload_reports_current_and_lkg_state
     assert governance["last_known_good_record_valid"] is True
     assert governance["resolved_matches_current"] is False
     assert governance["persisted_selected_profile"] == "team-default"
+    assert governance["config_consistency_state"] == "clean"
+    assert governance["config_warning_count"] == 0
+
+
+def test_build_runtime_settings_governance_payload_reports_config_warnings(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  plugins:\n"
+            "    enabled: false\n"
+            "    remote_slot_allowlist: [observability.mcp_plugins]\n"
+            "  trace:\n"
+            "    export_enabled: false\n"
+            "    otlp_enabled: true\n"
+            "    otlp_endpoint: http://collector:4318/v1/traces\n"
+        ),
+        encoding="utf-8",
+    )
+
+    bundle = resolve_runtime_settings_bundle(
+        root=str(tmp_path),
+        config_file=".ace-lite.yml",
+        mcp_name="ace-lite",
+        runtime_profile=None,
+        use_snapshot=False,
+        current_path=str(tmp_path / "current-settings.json"),
+        last_known_good_path=str(tmp_path / "last-known-good.json"),
+    )
+    governance = build_runtime_settings_governance_payload(bundle)
+
+    assert governance["config_consistency_state"] == "warning"
+    assert governance["config_warning_count"] == 3
+    assert set(governance["config_warning_codes"]) == {
+        "CFG-PLUGINS-001",
+        "CFG-TRACE-001",
+        "CFG-TRACE-002",
+    }
 
 
 def test_collect_runtime_settings_persist_payload_writes_current_and_lkg(
