@@ -8,6 +8,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.77] - 2026-04-14
+
+### Changed
+
+- Added explicit typed bridge casts in `orchestrator_runtime_support.py` so the runtime-support wrapper seam no longer leaks `Any` across lifecycle, source-plan replay, finalization, and agent-loop passthrough helpers.
+- Expanded the strict hotspot `mypy` override to include `ace_lite.orchestrator_runtime_support`, closing the immediate no-any-return follow-up identified after the Wave19 scope tightening.
+
 ## [0.3.76] - 2026-04-14
 
 ### Changed

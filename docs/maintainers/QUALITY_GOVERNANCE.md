@@ -95,12 +95,15 @@ These suites freeze three contracts that are easy to drift during refactors:
 - The stricter per-module override currently covers:
   - `ace_lite.orchestrator_runtime_support_types`
   - `ace_lite.orchestrator_runtime_finalization`
+  - `ace_lite.orchestrator_runtime_support`
   - `ace_lite.cli_app.orchestrator_factory_support`
   - `ace_lite.cli_app.orchestrator_factory`
-- `ace_lite.orchestrator_runtime_support` is intentionally excluded from this
-  first typed-hotspot batch because it still has known `no-any-return`
-  findings. Treat that file as the next dedicated cleanup wave instead of
-  diluting the seam-level gate added here.
+- As of `0.3.77`, the `orchestrator_runtime_support.py` wrapper seam has also
+  been promoted into the stricter hotspot batch after its remaining
+  `no-any-return` passthrough regressions were closed.
+- The next typing cleanup target should move downstream into the next compat or
+  runtime helper that still leaks `Any`, rather than reopening these wrapper
+  seams.
 
 ## Local Commands
 
