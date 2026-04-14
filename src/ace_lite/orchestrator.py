@@ -53,10 +53,11 @@ from ace_lite.orchestrator_source_plan_replay_service import (
 from ace_lite.orchestrator_source_plan_support import (
     build_orchestrator_source_plan_runtime,
 )
-from ace_lite.orchestrator_stage_state import apply_post_stage_state_updates
-from ace_lite.orchestrator_validation_support import (
-    build_orchestrator_validation_runtime,
+from ace_lite.orchestrator_stage_runtime_support import (
+    run_orchestrator_repomap_stage,
+    run_orchestrator_validation_stage,
 )
+from ace_lite.orchestrator_stage_state import apply_post_stage_state_updates
 from ace_lite.pipeline.hooks import HookBus
 from ace_lite.pipeline.registry import (
     CORE_PIPELINE_ORDER,
@@ -67,10 +68,8 @@ from ace_lite.pipeline.stage_tags import build_stage_tags
 from ace_lite.pipeline.stages.augment import run_diagnostics_augment
 from ace_lite.pipeline.stages.index import IndexStageConfig, run_index
 from ace_lite.pipeline.stages.memory import run_memory
-from ace_lite.pipeline.stages.repomap import run_repomap
 from ace_lite.pipeline.stages.skills import route_skills, run_skills
 from ace_lite.pipeline.stages.source_plan import run_source_plan
-from ace_lite.pipeline.stages.validation import run_validation_stage
 from ace_lite.pipeline.types import StageContext, StageMetric
 from ace_lite.plugins.loader import PluginLoader
 from ace_lite.preference_capture_store import DurablePreferenceCaptureStore
@@ -757,17 +756,10 @@ class AceOrchestrator:
         )
 
     def _run_repomap(self, *, ctx: StageContext) -> dict[str, Any]:
-        cfg = self._config
-        return run_repomap(
+        return run_orchestrator_repomap_stage(
             ctx=ctx,
-            repomap_enabled=cfg.repomap.enabled,
-            repomap_neighbor_limit=cfg.repomap.neighbor_limit,
-            repomap_budget_tokens=cfg.repomap.budget_tokens,
-            repomap_top_k=cfg.repomap.top_k,
-            repomap_ranking_profile=cfg.repomap.ranking_profile,
-            repomap_signal_weights=cfg.repomap.signal_weights,
+            config=self._config,
             tokenizer_model=self._tokenizer_model,
-            policy_version=cfg.retrieval.policy_version,
         )
 
     def _run_augment(self, *, ctx: StageContext) -> dict[str, Any]:
@@ -847,27 +839,13 @@ class AceOrchestrator:
         )
 
     def _run_validation(self, *, ctx: StageContext) -> dict[str, Any]:
-        cfg = self._config
-        runtime = build_orchestrator_validation_runtime(ctx_state=ctx.state)
-        preference_capture_store = self._resolve_validation_preference_capture_store(
-            root=ctx.root,
-        )
-        return run_validation_stage(
-            root=ctx.root,
-            query=ctx.query,
-            source_plan_stage=runtime.source_plan_stage,
-            index_stage=runtime.index_stage,
-            enabled=cfg.validation.enabled,
-            include_xref=cfg.validation.include_xref,
-            top_n=cfg.validation.top_n,
-            xref_top_n=cfg.validation.xref_top_n,
-            sandbox_timeout_seconds=cfg.validation.sandbox_timeout_seconds,
-            broker=self._lsp_broker,
-            patch_artifact=runtime.patch_artifact,
-            policy_name=runtime.policy_name,
-            policy_version=runtime.policy_version or str(cfg.retrieval.policy_version),
-            preference_capture_store=preference_capture_store,
-            preference_capture_repo_key=ctx.repo,
+        return run_orchestrator_validation_stage(
+            ctx=ctx,
+            config=self._config,
+            lsp_broker=self._lsp_broker,
+            resolve_validation_preference_capture_store_fn=(
+                self._resolve_validation_preference_capture_store
+            ),
         )
 
     @staticmethod

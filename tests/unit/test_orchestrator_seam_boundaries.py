@@ -27,9 +27,10 @@ class TestOrchestratorSeamBoundaries:
         expected_tokens = (
             "build_orchestrator_memory_runtime",
             "build_orchestrator_augment_runtime",
-            "build_orchestrator_validation_runtime",
             "build_orchestrator_skills_runtime",
             "build_orchestrator_source_plan_runtime",
+            "run_orchestrator_repomap_stage",
+            "run_orchestrator_validation_stage",
             "load_orchestrator_plugins",
             "apply_post_stage_state_updates",
         )
@@ -78,13 +79,23 @@ class TestOrchestratorSeamBoundaries:
         assert 'ctx.state.get("_skills_route"' not in run_skills_block
         assert 'index_stage.get("module_hint"' not in precompute_block
 
+    def test_repomap_stage_uses_stage_runtime_support_shell(self) -> None:
+        method_block = _extract_method_block("_run_repomap")
+
+        assert "return run_orchestrator_repomap_stage(" in method_block
+        assert "config=self._config" in method_block
+        assert "tokenizer_model=self._tokenizer_model" in method_block
+        assert "return run_repomap(" not in method_block
+
     def test_validation_stage_uses_support_runtime_for_state_normalization(self) -> None:
         method_block = _extract_method_block("_run_validation")
 
-        assert "runtime = build_orchestrator_validation_runtime(ctx_state=ctx.state)" in method_block
-        assert "policy_name=runtime.policy_name" in method_block
-        assert "policy_version=runtime.policy_version" in method_block
-        assert 'runtime.policy.get("name"' not in method_block
+        assert "return run_orchestrator_validation_stage(" in method_block
+        assert "config=self._config" in method_block
+        assert "lsp_broker=self._lsp_broker" in method_block
+        assert "resolve_validation_preference_capture_store_fn=(" in method_block
+        assert "build_orchestrator_validation_runtime(" not in method_block
+        assert "run_validation_stage(" not in method_block
         assert 'ctx.state.get("source_plan"' not in method_block
         assert 'ctx.state.get("index"' not in method_block
         assert 'ctx.state.get("_validation_patch_artifact"' not in method_block
