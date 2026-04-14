@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from contextlib import suppress
 from pathlib import Path
@@ -26,6 +27,27 @@ from ace_lite.runtime_stats_schema import (
     RuntimeStatsScope,
     build_runtime_stats_migration_bootstrap,
     build_runtime_stats_scope_rows,
+)
+
+_SQLITE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validated_sqlite_identifier(name: str) -> str:
+    normalized = str(name or "").strip()
+    if not _SQLITE_IDENTIFIER_RE.fullmatch(normalized):
+        raise ValueError(f"invalid_sqlite_identifier:{normalized or '<empty>'}")
+    return normalized
+
+
+_RUNTIME_STATS_INVOCATIONS_TABLE = _validated_sqlite_identifier(
+    RUNTIME_STATS_INVOCATIONS_TABLE
+)
+_RUNTIME_STATS_ROLLUPS_TABLE = _validated_sqlite_identifier(RUNTIME_STATS_ROLLUPS_TABLE)
+_RUNTIME_STATS_STAGE_ROLLUPS_TABLE = _validated_sqlite_identifier(
+    RUNTIME_STATS_STAGE_ROLLUPS_TABLE
+)
+_RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE = _validated_sqlite_identifier(
+    RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE
 )
 
 
@@ -229,7 +251,7 @@ class DurableStatsStore:
             for item in normalized_excluded_event_classes:
                 clauses.append("event_class != ?")
                 params.append(item)
-            sql = f"SELECT invocation_id FROM {RUNTIME_STATS_INVOCATIONS_TABLE}"
+            sql = f"SELECT invocation_id FROM {_RUNTIME_STATS_INVOCATIONS_TABLE}"  # nosec B608
             if clauses:
                 sql += " WHERE " + " AND ".join(clauses)
             sql += " ORDER BY finished_at, invocation_id"
@@ -245,7 +267,7 @@ class DurableStatsStore:
 
     def _load_invocation(self, conn: Any, invocation_id: str) -> RuntimeInvocationStats | None:
         row = conn.execute(
-            f"SELECT * FROM {RUNTIME_STATS_INVOCATIONS_TABLE} WHERE invocation_id = ?",
+            f"SELECT * FROM {_RUNTIME_STATS_INVOCATIONS_TABLE} WHERE invocation_id = ?",  # nosec B608
             (invocation_id,),
         ).fetchone()
         if row is None:
@@ -283,7 +305,7 @@ class DurableStatsStore:
     def _upsert_invocation_row(self, conn: Any, stats: RuntimeInvocationStats) -> None:
         payload = stats.to_storage_payload()
         conn.execute(
-            f"INSERT INTO {RUNTIME_STATS_INVOCATIONS_TABLE}("
+            f"INSERT INTO {_RUNTIME_STATS_INVOCATIONS_TABLE}("  # nosec B608
             "invocation_id, session_id, repo_key, profile_key, event_class, settings_fingerprint, "
             "status, contract_error_code, degraded_reason_codes, stage_latency_json, "
             "learning_router_rollout_json, plan_replay_hit, plan_replay_safe_hit, "
@@ -359,7 +381,7 @@ class DurableStatsStore:
                 )
             for reason_code in stats.degraded_reason_codes:
                 conn.execute(
-                    f"INSERT INTO {RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE}("
+                    f"INSERT INTO {_RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE}("  # nosec B608
                     "scope_kind, scope_key, repo_key, profile_key, reason_code, event_count, last_seen_at"
                     ") VALUES (?, ?, ?, ?, ?, 1, ?) "
                     "ON CONFLICT(scope_kind, scope_key, reason_code) DO UPDATE SET "
@@ -387,7 +409,7 @@ class DurableStatsStore:
         updated_at: str,
     ) -> None:
         conn.execute(
-            f"INSERT INTO {RUNTIME_STATS_ROLLUPS_TABLE}("
+            f"INSERT INTO {_RUNTIME_STATS_ROLLUPS_TABLE}("  # nosec B608
             "scope_kind, scope_key, repo_key, profile_key, "
             "invocation_count, success_count, degraded_count, failure_count, "
             "contract_error_count, plan_replay_hit_count, plan_replay_safe_hit_count, "
@@ -438,7 +460,7 @@ class DurableStatsStore:
         updated_at: str,
     ) -> None:
         conn.execute(
-            f"INSERT INTO {RUNTIME_STATS_STAGE_ROLLUPS_TABLE}("
+            f"INSERT INTO {_RUNTIME_STATS_STAGE_ROLLUPS_TABLE}("  # nosec B608
             "scope_kind, scope_key, repo_key, profile_key, stage_name, "
             "invocation_count, latency_ms_sum, latency_ms_min, latency_ms_max, latency_ms_last, updated_at"
             ") VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?) "
@@ -470,16 +492,16 @@ class DurableStatsStore:
     def _rebuild_scope(self, conn: Any, scope: RuntimeStatsScope) -> None:
         invocations = self._load_scope_invocations(conn, scope)
         conn.execute(
-            f"DELETE FROM {RUNTIME_STATS_STAGE_ROLLUPS_TABLE} WHERE scope_kind = ? AND scope_key = ?",
+            f"DELETE FROM {_RUNTIME_STATS_STAGE_ROLLUPS_TABLE} WHERE scope_kind = ? AND scope_key = ?",  # nosec B608
             (scope.kind, scope.scope_key),
         )
         conn.execute(
-            f"DELETE FROM {RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE} WHERE scope_kind = ? AND scope_key = ?",
+            f"DELETE FROM {_RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE} WHERE scope_kind = ? AND scope_key = ?",  # nosec B608
             (scope.kind, scope.scope_key),
         )
         if not invocations:
             conn.execute(
-                f"DELETE FROM {RUNTIME_STATS_ROLLUPS_TABLE} WHERE scope_kind = ? AND scope_key = ?",
+                f"DELETE FROM {_RUNTIME_STATS_ROLLUPS_TABLE} WHERE scope_kind = ? AND scope_key = ?",  # nosec B608
                 (scope.kind, scope.scope_key),
             )
             return
@@ -500,7 +522,7 @@ class DurableStatsStore:
                 degraded_counts[reason_code] = degraded_counts.get(reason_code, 0) + 1
 
         conn.execute(
-            f"INSERT INTO {RUNTIME_STATS_ROLLUPS_TABLE}("
+            f"INSERT INTO {_RUNTIME_STATS_ROLLUPS_TABLE}("  # nosec B608
             "scope_kind, scope_key, repo_key, profile_key, "
             "invocation_count, success_count, degraded_count, failure_count, "
             "contract_error_count, plan_replay_hit_count, plan_replay_safe_hit_count, "
@@ -540,7 +562,7 @@ class DurableStatsStore:
         )
         for stage_name, values in stage_values.items():
             conn.execute(
-                f"INSERT INTO {RUNTIME_STATS_STAGE_ROLLUPS_TABLE}("
+                f"INSERT INTO {_RUNTIME_STATS_STAGE_ROLLUPS_TABLE}("  # nosec B608
                 "scope_kind, scope_key, repo_key, profile_key, stage_name, "
                 "invocation_count, latency_ms_sum, latency_ms_min, latency_ms_max, latency_ms_last, updated_at"
                 ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -560,7 +582,7 @@ class DurableStatsStore:
             )
         for reason_code, event_count in degraded_counts.items():
             conn.execute(
-                f"INSERT INTO {RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE}("
+                f"INSERT INTO {_RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE}("  # nosec B608
                 "scope_kind, scope_key, repo_key, profile_key, reason_code, event_count, last_seen_at"
                 ") VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -575,7 +597,7 @@ class DurableStatsStore:
             )
 
     def _load_scope_invocations(self, conn: Any, scope: RuntimeStatsScope) -> list[RuntimeInvocationStats]:
-        sql = f"SELECT invocation_id FROM {RUNTIME_STATS_INVOCATIONS_TABLE}"
+        sql = f"SELECT invocation_id FROM {_RUNTIME_STATS_INVOCATIONS_TABLE}"  # nosec B608
         params: tuple[Any, ...] = ()
         if scope.kind == "session":
             sql += " WHERE session_id = ?"
@@ -608,18 +630,18 @@ class DurableStatsStore:
         scope_key: str,
     ) -> RuntimeScopeRollup | None:
         row = conn.execute(
-            f"SELECT * FROM {RUNTIME_STATS_ROLLUPS_TABLE} WHERE scope_kind = ? AND scope_key = ?",
+            f"SELECT * FROM {_RUNTIME_STATS_ROLLUPS_TABLE} WHERE scope_kind = ? AND scope_key = ?",  # nosec B608
             (scope_kind, scope_key),
         ).fetchone()
         if row is None:
             return None
         stage_rows = conn.execute(
             f"SELECT stage_name, invocation_count, latency_ms_sum, latency_ms_min, latency_ms_max, latency_ms_last, updated_at "
-            f"FROM {RUNTIME_STATS_STAGE_ROLLUPS_TABLE} WHERE scope_kind = ? AND scope_key = ? ORDER BY stage_name",
+            f"FROM {_RUNTIME_STATS_STAGE_ROLLUPS_TABLE} WHERE scope_kind = ? AND scope_key = ? ORDER BY stage_name",  # nosec B608
             (scope_kind, scope_key),
         ).fetchall()
         degraded_rows = conn.execute(
-            f"SELECT reason_code, event_count, last_seen_at FROM {RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE} "
+            f"SELECT reason_code, event_count, last_seen_at FROM {_RUNTIME_STATS_DEGRADED_ROLLUPS_TABLE} "  # nosec B608
             "WHERE scope_kind = ? AND scope_key = ? ORDER BY reason_code",
             (scope_kind, scope_key),
         ).fetchall()

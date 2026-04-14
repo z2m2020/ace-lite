@@ -18,6 +18,10 @@ from time import perf_counter
 from typing import Any, cast
 
 from ace_lite.cli_app.orchestrator_factory import create_memory_provider, run_plan
+from ace_lite.cli_app.runtime_settings_support import (
+    build_runtime_settings_governance_payload,
+    resolve_runtime_settings_bundle,
+)
 from ace_lite.indexer import build_index
 from ace_lite.indexing_resilience import build_index_with_resilience
 from ace_lite.mcp_server.config import AceLiteMcpConfig
@@ -74,6 +78,10 @@ from ace_lite.mcp_server.service_retrieval_graph_view_handlers import (
 from ace_lite.parsers.languages import parse_language_csv
 from ace_lite.plan_quick import build_plan_quick
 from ace_lite.repomap.builder import build_repo_map
+from ace_lite.runtime_settings_store import (
+    DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH,
+    DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH,
+)
 from ace_lite.skills import build_skill_catalog, build_skill_manifest
 from ace_lite.vcs_history import collect_git_head_snapshot
 from ace_lite.version import get_version, get_version_info
@@ -244,6 +252,7 @@ class AceLiteMcpService:
 
     def health(self) -> dict[str, Any]:
         version_info = get_version_info()
+        settings_governance = self._health_settings_governance_payload()
         return cast(
             dict[str, Any],
             build_health_response_payload(
@@ -252,8 +261,40 @@ class AceLiteMcpService:
                 version=get_version(),
                 version_info=version_info,
                 runtime_identity=cast(Any, self._runtime_identity_payload()),
+                settings_governance=settings_governance,
             ),
         )
+
+    def _health_settings_governance_payload(self) -> dict[str, Any]:
+        try:
+            bundle = resolve_runtime_settings_bundle(
+                root=str(self._config.default_root),
+                config_file=".ace-lite.yml",
+                mcp_name="ace-lite",
+                runtime_profile=None,
+                use_snapshot=False,
+                current_path=DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH,
+                last_known_good_path=DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH,
+            )
+            return cast(dict[str, Any], build_runtime_settings_governance_payload(bundle))
+        except Exception as exc:
+            return {
+                "governance_state": "health_governance_unavailable",
+                "config_consistency_state": "warning",
+                "config_warning_count": 1,
+                "config_warning_codes": ["CFG-HEALTH-001"],
+                "config_warnings": [
+                    {
+                        "code": "CFG-HEALTH-001",
+                        "path": "health.settings_governance",
+                        "severity": "warning",
+                        "message": (
+                            "runtime settings governance unavailable; "
+                            f"{exc.__class__.__name__}: {exc}"
+                        ),
+                    }
+                ],
+            }
 
     def index(
         self,

@@ -3,13 +3,15 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from ace_lite.runtime_stats import RuntimeInvocationStats, RuntimeStageLatency
 from ace_lite.runtime_stats_schema import (
     RUNTIME_STATS_DEFAULT_EVENT_CLASS,
     RUNTIME_STATS_DOCTOR_EVENT_CLASS,
     RUNTIME_STATS_INVOCATIONS_TABLE,
 )
-from ace_lite.runtime_stats_store import DurableStatsStore
+from ace_lite.runtime_stats_store import DurableStatsStore, _validated_sqlite_identifier
 
 
 def _scope_map(snapshot: object) -> dict[str, dict]:
@@ -269,3 +271,8 @@ def test_durable_stats_store_load_invocation_tolerates_legacy_rows_missing_new_c
     assert loaded.plan_replay_store_written is False
     assert loaded.trace_exported is False
     assert loaded.trace_export_failed is False
+
+
+def test_validated_sqlite_identifier_rejects_invalid_runtime_stats_table_name() -> None:
+    with pytest.raises(ValueError, match="invalid_sqlite_identifier"):
+        _validated_sqlite_identifier("runtime-stats;drop table")

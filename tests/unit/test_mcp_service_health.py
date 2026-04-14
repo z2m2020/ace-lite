@@ -90,6 +90,7 @@ def test_build_health_payload_reports_memory_disabled_recommendations(
         "current_request_runtime_ms": 0.0,
         "message": "No stale-process or stuck-request signal detected for the current MCP process.",
     }
+    assert payload["settings_governance"] == {}
     assert payload["staleness_warning"] is None
     assert payload["timestamp"] == "2026-03-14T00:00:00+00:00"
 
@@ -205,3 +206,38 @@ def test_build_health_payload_adds_long_running_request_warning(
     )
     assert payload["stdio_session_health"]["reason_codes"] == ["long_running_request"]
     assert payload["stdio_session_health"]["restart_recommended"] is True
+
+
+def test_build_health_payload_surfaces_config_consistency_warnings(
+    tmp_path: Path,
+) -> None:
+    config = _make_config(tmp_path)
+
+    payload = build_health_response_payload(
+        config=config,
+        request_stats={"active_request_count": 0},
+        version="0.3.66",
+        version_info={"drifted": False},
+        runtime_identity=_runtime_identity(),
+        settings_governance={
+            "config_consistency_state": "warning",
+            "config_warning_count": 1,
+            "config_warning_codes": ["CFG-TRACE-001"],
+            "config_warnings": [
+                {
+                    "code": "CFG-TRACE-001",
+                    "path": "plan.trace.otlp_enabled",
+                    "severity": "warning",
+                    "message": "trace.export_enabled=false so OTLP export stays disabled even though otlp_enabled=true",
+                }
+            ],
+        },
+        now_iso_fn=lambda: "2026-03-26T00:00:00+00:00",
+    )
+
+    assert payload["settings_governance"]["config_warning_codes"] == ["CFG-TRACE-001"]
+    assert any("Config consistency warning (CFG-TRACE-001)" in item for item in payload["warnings"])
+    assert any(
+        "health.settings_governance.config_warnings" in item
+        for item in payload["recommendations"]
+    )

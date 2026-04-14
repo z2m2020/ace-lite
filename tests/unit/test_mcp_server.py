@@ -142,6 +142,8 @@ def test_mcp_service_health_reports_defaults(tmp_path: Path) -> None:
     assert payload["runtime_identity"]["process_started_at"]
     assert payload["runtime_identity"]["module_path"].endswith("service.py")
     assert payload["stdio_session_health"]["status"] == "ok"
+    assert isinstance(payload["settings_governance"], dict)
+    assert "config_consistency_state" in payload["settings_governance"]
     assert payload["staleness_warning"] is None
     assert payload["request_stats"]["active_request_count"] == 0
     assert payload["request_stats"]["total_request_count"] == 0

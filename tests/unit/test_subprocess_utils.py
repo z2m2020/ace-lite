@@ -67,12 +67,39 @@ def test_terminate_process_tree_windows_uses_taskkill(monkeypatch) -> None:
         return None
 
     monkeypatch.setattr(subprocess_utils.sys, "platform", "win32")
+    monkeypatch.setattr(
+        subprocess_utils.shutil,
+        "which",
+        lambda name: "C:/Windows/System32/taskkill.exe",
+    )
     monkeypatch.setattr(subprocess_utils.subprocess, "run", fake_run)
 
     subprocess_utils._terminate_process_tree(Proc())  # type: ignore[arg-type]
 
-    assert observed["args"] == ["taskkill", "/F", "/T", "/PID", "42"]
+    args = observed["args"]
+    assert isinstance(args, list)
+    assert str(args[0]).replace("\\", "/") == "C:/Windows/System32/taskkill.exe"
+    assert args[1:] == ["/F", "/T", "/PID", "42"]
     assert "killed" not in observed
+
+
+def test_terminate_process_tree_windows_falls_back_to_proc_kill_without_taskkill(
+    monkeypatch,
+) -> None:
+    observed = {"kill_calls": 0}
+
+    class Proc:
+        pid = 42
+
+        def kill(self) -> None:
+            observed["kill_calls"] += 1
+
+    monkeypatch.setattr(subprocess_utils.sys, "platform", "win32")
+    monkeypatch.setattr(subprocess_utils.shutil, "which", lambda name: None)
+
+    subprocess_utils._terminate_process_tree(Proc())  # type: ignore[arg-type]
+
+    assert observed["kill_calls"] == 1
 
 
 def test_terminate_process_tree_non_windows_falls_back_to_proc_kill(monkeypatch) -> None:
@@ -178,6 +205,11 @@ def test_terminate_process_tree_swallow_exceptions(monkeypatch) -> None:
         raise OSError("taskkill missing")
 
     monkeypatch.setattr(subprocess_utils.sys, "platform", "win32")
+    monkeypatch.setattr(
+        subprocess_utils.shutil,
+        "which",
+        lambda name: "C:/Windows/System32/taskkill.exe",
+    )
     monkeypatch.setattr(subprocess_utils.subprocess, "run", fake_run)
 
     # No exception should leak out.

@@ -59,6 +59,7 @@ class HealthPayload(TypedDict):
     stdio_session_health: dict[str, Any]
     staleness_warning: dict[str, Any] | None
     request_stats: dict[str, Any]
+    settings_governance: dict[str, Any]
     warnings: list[str]
     recommendations: list[str]
     timestamp: str
@@ -159,6 +160,7 @@ def build_health_response_payload(
     version: str,
     version_info: dict[str, Any],
     runtime_identity: RuntimeIdentityPayload,
+    settings_governance: dict[str, Any] | None = None,
     now_iso_fn: Callable[[], str] | None = None,
 ) -> HealthPayload:
     memory_primary = str(config.memory_primary or "none").strip().lower() or "none"
@@ -176,6 +178,14 @@ def build_health_response_payload(
     ]
     warnings: list[str] = []
     recommendations: list[str] = []
+    normalized_settings_governance = (
+        dict(settings_governance) if isinstance(settings_governance, dict) else {}
+    )
+    config_warnings = (
+        list(normalized_settings_governance.get("config_warnings", []))
+        if isinstance(normalized_settings_governance.get("config_warnings"), list)
+        else []
+    )
     if bool(normalized_version_info.get("drifted")):
         warnings.append(
             "Version drift detected: pyproject.toml="
@@ -194,6 +204,19 @@ def build_health_response_payload(
                 "Set ACE_LITE_MEMORY_SECONDARY=rest",
                 "Set ACE_LITE_MCP_BASE_URL / ACE_LITE_REST_BASE_URL to your OpenMemory endpoint",
             ]
+        )
+    for item in config_warnings:
+        if not isinstance(item, dict):
+            continue
+        message = str(item.get("message") or "").strip()
+        code = str(item.get("code") or "").strip()
+        if not message:
+            continue
+        prefix = f"Config consistency warning ({code})" if code else "Config consistency warning"
+        warnings.append(f"{prefix}: {message}")
+    if config_warnings:
+        recommendations.append(
+            "Review health.settings_governance.config_warnings to reconcile inactive or conflicting runtime settings."
         )
     if bool(runtime_identity.get("stale_process_suspected")):
         warnings.append(
@@ -308,6 +331,7 @@ def build_health_response_payload(
         "stdio_session_health": stdio_session_health,
         "staleness_warning": staleness_warning,
         "request_stats": request_stats,
+        "settings_governance": normalized_settings_governance,
         "warnings": warnings,
         "recommendations": recommendations,
         "timestamp": timestamp,

@@ -10,11 +10,13 @@ import time
 from ace_lite.performance_benchmark import (
     BenchmarkComparison,
     BenchmarkConfig,
+    BenchmarkGateThresholds,
     BenchmarkResult,
     BenchmarkRunner,
     TuningRecommendation,
     benchmark_json_serialization,
     determine_optimization,
+    evaluate_benchmark_gate,
 )
 
 
@@ -428,6 +430,79 @@ class TestDetermineOptimization:
         )
 
         assert "Memory saved: 4096 bytes (50.00%)" in recommendation.reasoning
+
+
+class TestEvaluateBenchmarkGate:
+    """Tests for explicit benchmark regression gates."""
+
+    def test_passes_when_all_thresholds_are_met(self):
+        comparison = BenchmarkComparison(
+            baseline=BenchmarkResult(
+                name="baseline",
+                iterations=10,
+                total_time_ms=100.0,
+                avg_time_ms=10.0,
+                min_time_ms=8.0,
+                max_time_ms=12.0,
+                memory_delta_bytes=4096,
+                metadata={"cache_hit_ratio": 0.20},
+            ),
+            optimized=BenchmarkResult(
+                name="optimized",
+                iterations=10,
+                total_time_ms=50.0,
+                avg_time_ms=5.0,
+                min_time_ms=4.0,
+                max_time_ms=6.0,
+                memory_delta_bytes=1024,
+                metadata={"cache_hit_ratio": 0.92},
+            ),
+        )
+
+        gate = evaluate_benchmark_gate(
+            name="json_codec",
+            comparison=comparison,
+            thresholds=BenchmarkGateThresholds(
+                min_speedup_ratio=1.5,
+                max_avg_time_ms=6.0,
+                max_memory_delta_bytes=2048,
+                min_cache_hit_ratio=0.8,
+            ),
+        )
+
+        assert gate.passed is True
+        assert gate.summary == "all benchmark gates passed"
+        assert all(item["passed"] is True for item in gate.checks.values())
+
+    def test_fails_when_required_cache_hit_ratio_is_missing(self):
+        comparison = BenchmarkComparison(
+            baseline=BenchmarkResult(
+                name="baseline",
+                iterations=10,
+                total_time_ms=80.0,
+                avg_time_ms=8.0,
+                min_time_ms=7.0,
+                max_time_ms=9.0,
+            ),
+            optimized=BenchmarkResult(
+                name="optimized",
+                iterations=10,
+                total_time_ms=60.0,
+                avg_time_ms=6.0,
+                min_time_ms=5.0,
+                max_time_ms=7.0,
+            ),
+        )
+
+        gate = evaluate_benchmark_gate(
+            name="index_cache",
+            comparison=comparison,
+            thresholds=BenchmarkGateThresholds(min_cache_hit_ratio=0.75),
+        )
+
+        assert gate.passed is False
+        assert gate.checks["cache_hit_ratio"]["observed"] is None
+        assert gate.summary == "benchmark gates failed: cache_hit_ratio"
 
 
 class TestBenchmarkJSONSerialization:

@@ -120,7 +120,21 @@ def test_build_runtime_doctor_payload_exposes_canonical_doctor_reason_codes(
         runtime_settings_support,
         "resolve_runtime_settings_bundle",
         lambda **kwargs: {
-            "resolved": type("Resolved", (), {"snapshot": {"plan": {"plugins": {}}}})()
+            "resolved": type("Resolved", (), {"snapshot": {"plan": {"plugins": {}}}})(),
+            "governance": {
+                "governance_state": "aligned",
+                "config_consistency_state": "warning",
+                "config_warning_count": 1,
+                "config_warning_codes": ["CFG-TRACE-001"],
+                "config_warnings": [
+                    {
+                        "code": "CFG-TRACE-001",
+                        "path": "plan.trace.otlp_enabled",
+                        "severity": "warning",
+                        "message": "trace.export_enabled=false so OTLP export stays disabled",
+                    }
+                ],
+            },
         },
     )
     monkeypatch.setattr(
@@ -131,7 +145,11 @@ def test_build_runtime_doctor_payload_exposes_canonical_doctor_reason_codes(
     monkeypatch.setattr(
         runtime_settings_support,
         "build_runtime_settings_payload",
-        lambda bundle: {"settings": {}, "fingerprint": "fp-doctor"},
+        lambda bundle: {
+            "settings": {},
+            "fingerprint": "fp-doctor",
+            "governance": bundle["governance"],
+        },
     )
     monkeypatch.setattr(
         runtime_command_support,
@@ -201,6 +219,8 @@ def test_build_runtime_doctor_payload_exposes_canonical_doctor_reason_codes(
         "git_unavailable",
         "install_drift",
     ]
+    assert payload["settings_governance"]["config_consistency_state"] == "warning"
+    assert payload["settings_governance"]["config_warning_codes"] == ["CFG-TRACE-001"]
 
 
 def test_persist_runtime_doctor_invocation_records_degraded_event(tmp_path: Path) -> None:

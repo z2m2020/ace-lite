@@ -3,8 +3,11 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from ace_lite.stage_artifact_cache import StageArtifactCache
 from ace_lite.stage_artifact_cache_gc import (
+    _validated_sqlite_identifier,
     run_bounded_stage_artifact_cache_gc,
     vacuum_stage_artifact_cache,
     verify_stage_artifact_cache,
@@ -171,3 +174,8 @@ def test_run_bounded_stage_artifact_cache_gc_honors_inline_delete_budget(
     assert result["deleted_total"] == 2
     assert result["deleted_temp_payloads"] == 2
     assert cache.store.load_entry(stage_name="source_plan", cache_key="cccccccccccccccc") is not None
+
+
+def test_validated_sqlite_identifier_rejects_invalid_stage_cache_table_name() -> None:
+    with pytest.raises(ValueError, match="invalid_sqlite_identifier"):
+        _validated_sqlite_identifier("stage-cache entries")

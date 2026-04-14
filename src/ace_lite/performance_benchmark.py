@@ -131,6 +131,34 @@ class BenchmarkComparison:
         }
 
 
+@dataclass
+class BenchmarkGateThresholds:
+    """Thresholds for benchmark regression gates."""
+
+    min_speedup_ratio: float | None = None
+    max_avg_time_ms: float | None = None
+    max_memory_delta_bytes: int | None = None
+    min_cache_hit_ratio: float | None = None
+
+
+@dataclass
+class BenchmarkGateResult:
+    """Evaluation result for benchmark regression gates."""
+
+    name: str
+    passed: bool
+    checks: dict[str, dict[str, Any]]
+    summary: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "passed": self.passed,
+            "checks": self.checks,
+            "summary": self.summary,
+        }
+
+
 # =============================================================================
 # Benchmark Runner
 # =============================================================================
@@ -431,6 +459,78 @@ class TuningRecommendation:
     reasoning: str
 
 
+def _cache_hit_ratio_from_result(result: BenchmarkResult) -> float | None:
+    value = result.metadata.get("cache_hit_ratio")
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def evaluate_benchmark_gate(
+    *,
+    name: str,
+    comparison: BenchmarkComparison,
+    thresholds: BenchmarkGateThresholds,
+) -> BenchmarkGateResult:
+    """Evaluate benchmark results against explicit regression gates."""
+
+    checks: dict[str, dict[str, Any]] = {}
+
+    if thresholds.min_speedup_ratio is not None:
+        observed = float(comparison.speedup_ratio)
+        required = float(thresholds.min_speedup_ratio)
+        checks["speedup_ratio"] = {
+            "passed": observed >= required,
+            "observed": observed,
+            "required": required,
+        }
+
+    if thresholds.max_avg_time_ms is not None:
+        observed = float(comparison.optimized.avg_time_ms)
+        allowed = float(thresholds.max_avg_time_ms)
+        checks["avg_time_ms"] = {
+            "passed": observed <= allowed,
+            "observed": observed,
+            "required": allowed,
+        }
+
+    if thresholds.max_memory_delta_bytes is not None:
+        observed_memory = comparison.optimized.memory_delta_bytes
+        allowed_memory = int(thresholds.max_memory_delta_bytes)
+        checks["memory_delta_bytes"] = {
+            "passed": observed_memory is not None and int(observed_memory) <= allowed_memory,
+            "observed": observed_memory,
+            "required": allowed_memory,
+        }
+
+    if thresholds.min_cache_hit_ratio is not None:
+        observed_cache_hit = _cache_hit_ratio_from_result(comparison.optimized)
+        required_cache_hit = float(thresholds.min_cache_hit_ratio)
+        checks["cache_hit_ratio"] = {
+            "passed": (
+                observed_cache_hit is not None and observed_cache_hit >= required_cache_hit
+            ),
+            "observed": observed_cache_hit,
+            "required": required_cache_hit,
+        }
+
+    failed = [name for name, payload in checks.items() if not bool(payload.get("passed"))]
+    summary = (
+        "all benchmark gates passed"
+        if not failed
+        else f"benchmark gates failed: {', '.join(failed)}"
+    )
+    return BenchmarkGateResult(
+        name=name,
+        passed=not failed,
+        checks=checks,
+        summary=summary,
+    )
+
+
 def determine_optimization(
     feature: str,
     baseline_func: Callable[[], Any],
@@ -492,11 +592,14 @@ def determine_optimization(
 __all__ = [
     "BenchmarkComparison",
     "BenchmarkConfig",
+    "BenchmarkGateResult",
+    "BenchmarkGateThresholds",
     "BenchmarkResult",
     "BenchmarkRunner",
     "TuningRecommendation",
     "benchmark_json_serialization",
     "benchmark_parallel_processing",
     "determine_optimization",
+    "evaluate_benchmark_gate",
     "track_memory",
 ]

@@ -23,6 +23,12 @@ from ace_lite.vcs_worktree import collect_git_worktree_summary
 from ace_lite.version import get_version_info
 
 
+def _coerce_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
+
+
 def _collect_runtime_doctor_degraded_reason_codes(
     *,
     cache_report: dict[str, Any],
@@ -350,6 +356,7 @@ def build_runtime_doctor_payload(
 ) -> dict[str, Any]:
     from ace_lite.cli_app.runtime_command_support import collect_runtime_mcp_doctor_payload
     from ace_lite.cli_app.runtime_settings_support import (
+        build_runtime_settings_governance_payload,
         build_runtime_settings_payload,
         resolve_effective_runtime_skills_dir,
         resolve_runtime_settings_bundle,
@@ -430,6 +437,16 @@ def build_runtime_doctor_payload(
         ),
         doctor_reason_codes=degraded_reason_codes,
     )
+    settings_payload = build_runtime_settings_payload(bundle)
+    settings_governance = (
+        _coerce_mapping(settings_payload.get("governance"))
+        if isinstance(settings_payload.get("governance"), dict)
+        else (
+            _coerce_mapping(bundle.get("governance"))
+            if isinstance(bundle.get("governance"), dict)
+            else build_runtime_settings_governance_payload(bundle)
+        )
+    )
     return {
         "ok": (
             bool(integration.get("ok"))
@@ -439,7 +456,8 @@ def build_runtime_doctor_payload(
         ),
         "event": "runtime_doctor",
         "degraded_reason_codes": degraded_reason_codes,
-        "settings": build_runtime_settings_payload(bundle),
+        "settings": settings_payload,
+        "settings_governance": settings_governance,
         "stats": runtime_stats,
         "next_cycle_input": next_cycle_input,
         "cache": cache_report,

@@ -1,17 +1,29 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 
+def _resolve_windows_executable(name: str) -> str | None:
+    resolved = shutil.which(str(name or "").strip())
+    if not resolved:
+        return None
+    return str(Path(resolved))
+
+
 def _terminate_process_tree(proc: subprocess.Popen[str]) -> None:
     try:
         if sys.platform == "win32":
+            taskkill_executable = _resolve_windows_executable("taskkill")
+            if not taskkill_executable:
+                proc.kill()
+                return
             subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                [taskkill_executable, "/F", "/T", "/PID", str(proc.pid)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -15,6 +16,20 @@ from ace_lite.stage_artifact_cache_store import (
     StageArtifactCacheEntry,
     build_stage_artifact_cache_migration_bootstrap,
     normalize_stage_artifact_cache_entry,
+)
+
+_SQLITE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validated_sqlite_identifier(name: str) -> str:
+    normalized = str(name or "").strip()
+    if not _SQLITE_IDENTIFIER_RE.fullmatch(normalized):
+        raise ValueError(f"invalid_sqlite_identifier:{normalized or '<empty>'}")
+    return normalized
+
+
+_STAGE_ARTIFACT_CACHE_ENTRIES_TABLE = _validated_sqlite_identifier(
+    STAGE_ARTIFACT_CACHE_ENTRIES_TABLE
 )
 
 
@@ -176,7 +191,7 @@ def vacuum_stage_artifact_cache(
                                 }
                             )
                     conn.execute(
-                        f"DELETE FROM {STAGE_ARTIFACT_CACHE_ENTRIES_TABLE} WHERE stage_name = ? AND cache_key = ?",
+                        f"DELETE FROM {_STAGE_ARTIFACT_CACHE_ENTRIES_TABLE} WHERE stage_name = ? AND cache_key = ?",  # nosec B608
                         (
                             str(item.get("stage_name") or "").strip(),
                             str(item.get("cache_key") or "").strip(),
@@ -295,7 +310,7 @@ def run_bounded_stage_artifact_cache_gc(
                         payload_path.unlink(missing_ok=True)
                         deleted_expired_payload_files += 1
                 conn.execute(
-                    f"DELETE FROM {STAGE_ARTIFACT_CACHE_ENTRIES_TABLE} WHERE stage_name = ? AND cache_key = ?",
+                    f"DELETE FROM {_STAGE_ARTIFACT_CACHE_ENTRIES_TABLE} WHERE stage_name = ? AND cache_key = ?",  # nosec B608
                     (entry.stage_name, entry.cache_key),
                 )
                 deleted_total += 1
@@ -357,7 +372,7 @@ def _load_entries(*, cache: StageArtifactCache) -> list[StageArtifactCacheEntry]
     )
     try:
         rows = conn.execute(
-            f"SELECT * FROM {STAGE_ARTIFACT_CACHE_ENTRIES_TABLE} ORDER BY stage_name, cache_key"
+            f"SELECT * FROM {_STAGE_ARTIFACT_CACHE_ENTRIES_TABLE} ORDER BY stage_name, cache_key"  # nosec B608
         ).fetchall()
     finally:
         conn.close()
