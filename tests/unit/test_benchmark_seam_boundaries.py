@@ -56,13 +56,14 @@ class TestBenchmarkSeamBoundaries:
             "from ace_lite.benchmark.case_evaluation_details import classify_chunk_stage_miss",
             "from ace_lite.benchmark.case_evaluation_diagnostics_builder import (",
             "build_case_evaluation_diagnostics_from_namespace",
+            "from ace_lite.benchmark.case_evaluation_payload_builders import (",
+            "build_case_detail_payload_from_namespace",
+            "build_case_evaluation_row_from_namespace",
             "from ace_lite.benchmark.case_evaluation_inputs import build_case_evaluation_inputs",
             "collect_candidate_match_details",
             "collect_chunk_match_details",
             "build_case_evaluation_metrics",
-            "build_case_detail_payload",
             "coerce_chunk_refs",
-            "build_case_evaluation_row",
         )
         for token in expected_tokens:
             assert token in case_eval_text
