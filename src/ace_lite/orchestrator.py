@@ -342,7 +342,32 @@ class AceOrchestrator:
             )
             return exc
 
-        ctx.state[stage_name] = stage_payload
+        self._store_stage_state(
+            stage_name=stage_name,
+            ctx=ctx,
+            stage_payload=stage_payload,
+        )
+        logger.debug("stage.end", extra={"stage": stage_name, "repo": repo})
+        return None
+
+    @staticmethod
+    def _context_state(*, ctx: StageContext) -> dict[str, Any]:
+        return ctx.state
+
+    @classmethod
+    def _get_stage_state(cls, *, ctx: StageContext, stage_name: str) -> dict[str, Any]:
+        value = cls._context_state(ctx=ctx).get(stage_name)
+        return dict(value) if isinstance(value, dict) else {}
+
+    def _store_stage_state(
+        self,
+        *,
+        stage_name: str,
+        ctx: StageContext,
+        stage_payload: dict[str, Any],
+    ) -> None:
+        ctx_state = self._context_state(ctx=ctx)
+        ctx_state[stage_name] = stage_payload
         capture_payload = self._capture_long_term_stage_observation(
             stage_name=stage_name,
             ctx=ctx,
@@ -350,7 +375,7 @@ class AceOrchestrator:
         )
         apply_post_stage_state_updates(
             stage_name=stage_name,
-            ctx_state=ctx.state,
+            ctx_state=ctx_state,
             stage_payload=stage_payload,
             precomputed_routing_enabled=bool(
                 self._config.skills.precomputed_routing_enabled
@@ -358,8 +383,6 @@ class AceOrchestrator:
             precompute_skills_route_fn=lambda: self._precompute_skills_route(ctx=ctx),
             capture_payload=capture_payload,
         )
-        logger.debug("stage.end", extra={"stage": stage_name, "repo": repo})
-        return None
 
     def _build_plan_payload(
         self,
@@ -633,7 +656,7 @@ class AceOrchestrator:
             query=query,
             repo=repo,
             root=root,
-            ctx_state=ctx.state,
+            ctx_state=self._context_state(ctx=ctx),
             resolve_memory_namespace_fn=self._resolve_memory_namespace,
             extract_signal_fn=self._signal_extractor.extract,
         )

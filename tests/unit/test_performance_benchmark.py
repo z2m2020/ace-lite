@@ -6,6 +6,7 @@ Tests verify the performance benchmark framework (QO-3101/QO-3102).
 from __future__ import annotations
 
 import copy
+import json
 import time
 
 from ace_lite.performance_benchmark import (
@@ -19,6 +20,7 @@ from ace_lite.performance_benchmark import (
     determine_optimization,
     evaluate_benchmark_gate,
 )
+from ace_lite.pipeline.stages import skills as skills_stage
 from ace_lite.pipeline.stages import memory as memory_stage
 from ace_lite.repomap.cache_utils import selective_copy_payload
 
@@ -391,6 +393,125 @@ class TestMemoryStageTokenEstimateBenchmark:
             "cached_estimate",
             cached_estimate,
         )
+        comparison = BenchmarkComparison(baseline=baseline, optimized=optimized)
+
+        assert comparison.speedup_ratio > 1.0
+
+
+class TestStageArtifactHotTierCopyBenchmark:
+    """Focused benchmark coverage for stage-artifact hot tier copy strategy."""
+
+    def test_selective_copy_beats_json_roundtrip_for_stage_artifact_payload(
+        self,
+    ) -> None:
+        payload = {
+            "source_plan": {
+                "steps": [
+                    {
+                        "id": idx,
+                        "stage": "source_plan",
+                        "paths": [f"src/module_{idx}.py", f"tests/test_{idx}.py"],
+                        "reason": "grounded evidence " * 3,
+                    }
+                    for idx in range(24)
+                ],
+                "metrics": {
+                    "selected_count": 24,
+                    "neighbor_count": 18,
+                    "direct_evidence_ratio": 1.0,
+                },
+            }
+        }
+
+        runner = BenchmarkRunner(
+            BenchmarkConfig(
+                warmup_iterations=2,
+                iterations=200,
+                min_duration_seconds=0.0,
+            )
+        )
+
+        baseline = runner.run(
+            "json_roundtrip",
+            lambda: json.loads(json.dumps(payload, ensure_ascii=False)),
+        )
+        optimized = runner.run(
+            "selective_copy",
+            lambda: selective_copy_payload(payload),
+        )
+        comparison = BenchmarkComparison(baseline=baseline, optimized=optimized)
+
+        assert comparison.speedup_ratio > 1.0
+
+
+class TestVCSHistoryCacheCopyBenchmark:
+    """Focused benchmark coverage for vcs-history cache copy strategy."""
+
+    def test_selective_copy_beats_deepcopy_for_commit_history_payload(self) -> None:
+        payload = {
+            "enabled": True,
+            "reason": "ok",
+            "path_count": 3,
+            "commit_count": 20,
+            "commits": [
+                {
+                    "hash": f"{idx:040x}",
+                    "committed_at": "2026-02-14T00:00:00+00:00",
+                    "author": "Alice",
+                    "subject": "Fix bug " * 3,
+                    "files": [f"src/module_{idx}.py", f"tests/test_{idx}.py"],
+                }
+                for idx in range(20)
+            ],
+            "elapsed_ms": 12.5,
+            "timeout_seconds": 0.35,
+            "limit": 20,
+            "cache_hit": False,
+        }
+
+        runner = BenchmarkRunner(
+            BenchmarkConfig(
+                warmup_iterations=2,
+                iterations=200,
+                min_duration_seconds=0.0,
+            )
+        )
+
+        baseline = runner.run("deepcopy", lambda: copy.deepcopy(payload))
+        optimized = runner.run("selective_copy", lambda: selective_copy_payload(payload))
+        comparison = BenchmarkComparison(baseline=baseline, optimized=optimized)
+
+        assert comparison.speedup_ratio > 1.0
+
+
+class TestSkillsTokenEstimateBenchmark:
+    """Focused benchmark coverage for skills token-estimate reuse."""
+
+    def test_cached_token_estimate_beats_direct_estimate_for_repeated_skill_text(
+        self,
+    ) -> None:
+        repeated_payload = [("same fallback text " * 24).strip()] * 64
+
+        def direct_estimate() -> list[int]:
+            return [skills_stage.estimate_tokens(item) for item in repeated_payload]
+
+        def cached_estimate() -> list[int]:
+            cache: dict[str, int] = {}
+            return [
+                skills_stage._estimate_tokens_cached(item, cache=cache)
+                for item in repeated_payload
+            ]
+
+        runner = BenchmarkRunner(
+            BenchmarkConfig(
+                warmup_iterations=2,
+                iterations=200,
+                min_duration_seconds=0.0,
+            )
+        )
+
+        baseline = runner.run("direct_estimate", direct_estimate)
+        optimized = runner.run("cached_estimate", cached_estimate)
         comparison = BenchmarkComparison(baseline=baseline, optimized=optimized)
 
         assert comparison.speedup_ratio > 1.0

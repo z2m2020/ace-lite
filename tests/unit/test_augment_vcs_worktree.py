@@ -57,3 +57,35 @@ def test_run_diagnostics_augment_uses_vcs_worktree_override(
     )
 
     assert payload["vcs_worktree"] == override
+
+
+def test_run_diagnostics_augment_fail_opens_vcs_worktree_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def raise_worktree(*args: object, **kwargs: object) -> dict[str, Any]:
+        raise RuntimeError("worktree unavailable")
+
+    monkeypatch.setattr(
+        augment_stage,
+        "collect_git_worktree_summary",
+        raise_worktree,
+    )
+
+    payload = run_diagnostics_augment(
+        root=str(tmp_path),
+        query="q",
+        index_stage={"candidate_files": [{"path": "src/app.py", "language": "python"}]},
+        enabled=True,
+        top_n=3,
+        broker=None,
+        xref_enabled=False,
+        xref_top_n=1,
+        xref_time_budget_ms=100,
+    )
+
+    assert payload["reason"] == "broker_unavailable"
+    assert payload["vcs_worktree"]["enabled"] is True
+    assert payload["vcs_worktree"]["reason"] == "error"
+    assert payload["vcs_worktree"]["changed_count"] == 0
+    assert payload["vcs_worktree"]["error"] == "worktree unavailable"

@@ -13,6 +13,7 @@ from ace_lite.pipeline.stages.skills import (
     route_skills,
     run_skills,
 )
+from ace_lite.pipeline.stages import skills as skills_stage
 from ace_lite.pipeline.types import StageContext
 from ace_lite.skills import (
     build_skill_catalog,
@@ -573,6 +574,85 @@ def test_run_skills_enforces_token_budget(
     assert payload["token_budget"] == 1
     assert payload["token_budget_used"] == 0
     assert payload["skipped_for_budget"]
+    assert payload["budget_candidate_expanded"] is False
+
+
+def test_run_skills_can_expand_budget_candidate_pool_when_top_n_cannot_fit(
+    monkeypatch,
+) -> None:
+    manifest = [
+        {"name": "big-a", "path": "skills/big-a.md", "description": "big-a", "token_estimate": 9},
+        {"name": "big-b", "path": "skills/big-b.md", "description": "big-b", "token_estimate": 8},
+        {"name": "big-c", "path": "skills/big-c.md", "description": "big-c", "token_estimate": 7},
+        {"name": "small-fit", "path": "skills/small-fit.md", "description": "small-fit", "token_estimate": 2},
+    ]
+
+    def fake_select_skills(query_ctx, skill_manifest, top_n=3):
+        del query_ctx
+        return [dict(item) for item in skill_manifest[:top_n]]
+
+    monkeypatch.setattr(skills_stage, "select_skills", fake_select_skills)
+    monkeypatch.setattr(skills_stage, "load_sections", lambda path, headings: {"Workflow": f"{path}:{headings}"})
+
+    ctx = StageContext(
+        query="fix openmemory 405 issue",
+        repo="demo",
+        root=".",
+        state={"index": {"module_hint": "infra.mcp"}},
+    )
+    payload = run_skills(
+        ctx=ctx,
+        skill_manifest=manifest,
+        token_budget=3,
+        top_n=3,
+    )
+
+    assert payload["budget_candidate_expanded"] is True
+    assert payload["budget_expanded_candidate_count"] == 1
+    assert [item["name"] for item in payload["selected"]] == ["small-fit"]
+    assert payload["token_budget_used"] == payload["selected"][0]["estimated_tokens"]
+    assert payload["skipped_for_budget"]
+
+
+def test_run_skills_reuses_token_estimate_cache_for_manifest_and_selected_fallbacks(
+    monkeypatch,
+) -> None:
+    manifest = [
+        {
+            "name": "sample-skill",
+            "path": "skills/sample.md",
+            "description": "same fallback text",
+            "default_sections": [],
+        }
+    ]
+    calls = 0
+
+    monkeypatch.setattr(skills_stage, "select_skills", lambda query_ctx, skill_manifest, top_n=3: [dict(skill_manifest[0])])
+    monkeypatch.setattr(skills_stage, "load_sections", lambda path, headings: {})
+
+    def fake_estimate_tokens(text: str) -> int:
+        assert text == "same fallback text"
+        nonlocal calls
+        calls += 1
+        return 6
+
+    monkeypatch.setattr(skills_stage, "estimate_tokens", fake_estimate_tokens)
+
+    ctx = StageContext(
+        query="fix openmemory 405 issue",
+        repo="demo",
+        root=".",
+        state={"index": {"module_hint": "infra.mcp"}},
+    )
+    payload = run_skills(
+        ctx=ctx,
+        skill_manifest=manifest,
+        token_budget=50,
+    )
+
+    assert calls == 2
+    assert payload["selected"][0]["estimated_tokens"] == 6
+    assert payload["selected_manifest_token_estimate_total"] == 6
 
 
 def test_run_skills_can_reuse_precomputed_route(

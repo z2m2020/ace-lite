@@ -58,6 +58,108 @@ def _empty_vcs_worktree_payload(*, reason: str) -> dict[str, Any]:
     }
 
 
+def _empty_vcs_worktree_diffstat() -> dict[str, Any]:
+    return {
+        "file_count": 0,
+        "binary_count": 0,
+        "additions": 0,
+        "deletions": 0,
+        "files": [],
+        "error": None,
+        "timed_out": False,
+        "truncated": False,
+    }
+
+
+def _format_fail_open_error(*, exc: BaseException, fallback: str) -> str:
+    message = str(exc).strip()
+    return message[:240] if message else fallback
+
+
+def _error_vcs_history_payload(
+    *,
+    error: str,
+    path_count: int,
+    limit: int,
+) -> dict[str, Any]:
+    payload = _empty_vcs_history_payload(reason="error")
+    payload["enabled"] = True
+    payload["path_count"] = max(0, int(path_count))
+    payload["limit"] = max(1, int(limit))
+    payload["error"] = str(error)
+    payload["elapsed_ms"] = 0.0
+    payload["timeout_seconds"] = 0.0
+    return payload
+
+
+def _error_vcs_worktree_payload(*, error: str, max_files: int) -> dict[str, Any]:
+    return {
+        "enabled": True,
+        "reason": "error",
+        "changed_count": 0,
+        "staged_count": 0,
+        "unstaged_count": 0,
+        "untracked_count": 0,
+        "entries": [],
+        "diffstat": {
+            "staged": _empty_vcs_worktree_diffstat(),
+            "unstaged": _empty_vcs_worktree_diffstat(),
+        },
+        "error": str(error),
+        "elapsed_ms": 0.0,
+        "timeout_seconds": 0.0,
+        "max_files": max(1, int(max_files)),
+        "truncated": False,
+    }
+
+
+def _collect_vcs_history_fail_open(
+    *,
+    root: str,
+    candidate_paths: list[str],
+    history_limit_files: int,
+) -> dict[str, Any]:
+    selected_paths = candidate_paths[: max(1, int(history_limit_files))]
+    try:
+        payload = collect_git_commit_history(
+            repo_root=root,
+            paths=selected_paths,
+            limit=12,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        return _error_vcs_history_payload(
+            error=_format_fail_open_error(exc=exc, fallback="vcs_history_error"),
+            path_count=len(selected_paths),
+            limit=12,
+        )
+    if isinstance(payload, dict):
+        return payload
+    return _error_vcs_history_payload(
+        error="invalid_vcs_history_payload",
+        path_count=len(selected_paths),
+        limit=12,
+    )
+
+
+def _collect_vcs_worktree_fail_open(*, root: str, max_files: int) -> dict[str, Any]:
+    try:
+        payload = collect_git_worktree_summary(
+            repo_root=root,
+            max_files=max_files,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        return _error_vcs_worktree_payload(
+            error=_format_fail_open_error(exc=exc, fallback="vcs_worktree_error"),
+            max_files=max_files,
+        )
+    if isinstance(payload, dict):
+        return payload
+    return _error_vcs_worktree_payload(
+        error="invalid_vcs_worktree_payload",
+        max_files=max_files,
+    )
+
+
 def _normalize_path(value: str) -> str:
     return str(value or "").strip().replace("\\", "/")
 
@@ -652,15 +754,18 @@ def run_diagnostics_augment(
 
     if vcs_enabled:
         history_limit_files = max(1, min(8, int(top_n)))
-        vcs_history = collect_git_commit_history(
-            repo_root=root,
-            paths=candidate_paths[:history_limit_files],
-            limit=12,
+        vcs_history = _collect_vcs_history_fail_open(
+            root=root,
+            candidate_paths=candidate_paths,
+            history_limit_files=history_limit_files,
         )
         if isinstance(vcs_worktree_override, dict) and vcs_worktree_override:
             vcs_worktree = vcs_worktree_override
         else:
-            vcs_worktree = collect_git_worktree_summary(repo_root=root, max_files=48)
+            vcs_worktree = _collect_vcs_worktree_fail_open(
+                root=root,
+                max_files=48,
+            )
     else:
         vcs_history = _empty_vcs_history_payload(reason="disabled")
         vcs_worktree = _empty_vcs_worktree_payload(reason="disabled")
@@ -713,6 +818,5 @@ def run_diagnostics_augment(
 
 
 __all__ = ["SBFL_METRIC_CHOICES", "run_diagnostics_augment"]
-
 
 

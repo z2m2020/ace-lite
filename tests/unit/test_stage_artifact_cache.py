@@ -183,3 +183,73 @@ def test_stage_artifact_cache_estimates_token_weight_when_missing(tmp_path: Path
     assert entry.token_weight > 0
     assert snapshot["entry_count"] == 1
     assert snapshot["token_total"] == entry.token_weight
+
+
+def test_stage_artifact_cache_hot_tier_isolates_payload_from_caller_mutation(
+    tmp_path: Path,
+) -> None:
+    cache = StageArtifactCache(
+        repo_root=tmp_path,
+        hot_max_entries=4,
+        hot_max_tokens=100,
+    )
+    payload = {
+        "source_plan": {
+            "steps": [{"id": 1, "stage": "index"}],
+            "meta": {"owner": "seed"},
+        }
+    }
+
+    cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+        query_hash="1111222233334444",
+        fingerprint="fp-a",
+        payload=payload,
+        token_weight=4,
+    )
+
+    payload["source_plan"]["steps"][0]["id"] = 99
+    payload["source_plan"]["meta"]["owner"] = "mutated"
+
+    loaded = cache.get_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+    )
+
+    assert loaded is not None
+    assert loaded.payload["source_plan"]["steps"][0]["id"] == 1
+    assert loaded.payload["source_plan"]["meta"]["owner"] == "seed"
+
+
+def test_stage_artifact_cache_hot_tier_returns_nested_isolated_payload(
+    tmp_path: Path,
+) -> None:
+    cache = StageArtifactCache(
+        repo_root=tmp_path,
+        hot_max_entries=4,
+        hot_max_tokens=100,
+    )
+    cache.put_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+        query_hash="1111222233334444",
+        fingerprint="fp-a",
+        payload={"source_plan": {"steps": [{"id": 1, "stage": "index"}]}},
+        token_weight=4,
+    )
+
+    first = cache.get_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+    )
+    assert first is not None
+    first.payload["source_plan"]["steps"][0]["id"] = 88
+
+    second = cache.get_artifact(
+        stage_name="source_plan",
+        cache_key="aaaaaaaaaaaaaaaa",
+    )
+
+    assert second is not None
+    assert second.payload["source_plan"]["steps"][0]["id"] == 1

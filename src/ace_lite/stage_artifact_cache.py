@@ -22,6 +22,7 @@ from ace_lite.stage_artifact_cache_store import (
     resolve_stage_artifact_payload_root,
     resolve_stage_artifact_temp_root,
 )
+from ace_lite.repomap.cache_utils import selective_copy_payload
 from ace_lite.token_estimator import estimate_payload_tokens, normalize_tokenizer_model
 
 WriteStepRecorder = Callable[[str], None]
@@ -60,10 +61,7 @@ class _StageArtifactHotTier:
             if entry is None:
                 return None
             self._entries.move_to_end(key)
-            return cast(
-                dict[str, Any],
-                json.loads(json.dumps(entry.payload, ensure_ascii=False)),
-            )
+            return selective_copy_payload(entry.payload)
 
     def put(
         self,
@@ -91,7 +89,7 @@ class _StageArtifactHotTier:
             self._entries[key] = _StageArtifactHotEntry(
                 stage_name=str(stage_name),
                 cache_key=str(cache_key),
-                payload=json.loads(json.dumps(payload, ensure_ascii=False)),
+                payload=selective_copy_payload(payload),
                 token_weight=normalized_weight,
             )
             self._token_total += normalized_weight

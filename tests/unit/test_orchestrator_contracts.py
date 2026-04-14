@@ -256,6 +256,25 @@ class TestBuilders:
         assert projection["plugin_action_log"] == [{"stage": "index"}]
         assert projection["plugin_conflicts"] == []
 
+    def test_project_orchestrator_state_returns_isolated_stage_mappings(self):
+        """Projected stage mappings should not alias the raw ctx.state dicts."""
+        raw_state = {
+            "memory": {"hits": 1},
+            "index": {"module_hint": "billing.service"},
+            "validation": {"enabled": True},
+        }
+
+        projection = project_orchestrator_state(
+            raw_state,
+            default_validation_payload={"enabled": False, "reason": "disabled"},
+        )
+
+        projection["memory"]["hits"] = 2
+        projection["index"]["module_hint"] = "orders.service"
+
+        assert raw_state["memory"] == {"hits": 1}
+        assert raw_state["index"] == {"module_hint": "billing.service"}
+
 
 class TestPlanRequestAdapter:
     """Tests for PlanRequestAdapter."""

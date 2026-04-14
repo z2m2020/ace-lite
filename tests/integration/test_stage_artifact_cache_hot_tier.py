@@ -98,8 +98,9 @@ def test_stage_artifact_cache_hot_tier_same_key_warm_hits_do_not_accumulate(
             cache_key=stable_key,
         )
         assert hit is not None
+        hit.payload["source_plan"]["steps"][0]["id"] = 77
         assert hit.payload == {
-            "source_plan": {"steps": [{"id": 1, "stage": "source_plan"}]}
+            "source_plan": {"steps": [{"id": 77, "stage": "source_plan"}]}
         }
 
     snapshot = writer.hot_tier_snapshot()
@@ -113,3 +114,12 @@ def test_stage_artifact_cache_hot_tier_same_key_warm_hits_do_not_accumulate(
             "token_weight": 4,
         }
     ]
+
+    final_hit = writer.get_artifact(
+        stage_name="source_plan",
+        cache_key=stable_key,
+    )
+    assert final_hit is not None
+    assert final_hit.payload == {
+        "source_plan": {"steps": [{"id": 1, "stage": "source_plan"}]}
+    }

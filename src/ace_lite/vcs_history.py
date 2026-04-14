@@ -7,6 +7,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
+from ace_lite.repomap.cache_utils import selective_copy_payload
 from ace_lite.subprocess_utils import run_capture_output
 
 _GIT_TERMINAL_ENV = {"GIT_TERMINAL_PROMPT": "0"}
@@ -247,7 +248,7 @@ def collect_git_commit_history(
     if cache_key is not None:
         cached = _GIT_COMMIT_HISTORY_MEMORY.get(cache_key)
         if isinstance(cached, dict):
-            materialized = copy.deepcopy(cached)
+            materialized = selective_copy_payload(cached)
             cached_elapsed_ms = max(
                 0.0, float(materialized.get("elapsed_ms", 0.0) or 0.0)
             )
@@ -320,7 +321,7 @@ def collect_git_commit_history(
         "cache_hit": False,
     }
     if cache_key is not None:
-        _GIT_COMMIT_HISTORY_MEMORY[cache_key] = copy.deepcopy(payload)
+        _GIT_COMMIT_HISTORY_MEMORY[cache_key] = selective_copy_payload(payload)
     return payload
 
 

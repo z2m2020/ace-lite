@@ -145,6 +145,24 @@ _INTENT_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
+def _estimate_tokens_cached(
+    text: str,
+    *,
+    cache: dict[str, int] | None = None,
+) -> int:
+    normalized = str(text or "").strip()
+    if not normalized:
+        return 1
+    if cache is not None:
+        cached = cache.get(normalized)
+        if isinstance(cached, int) and cached > 0:
+            return cached
+    estimated = max(1, int(estimate_tokens(normalized)))
+    if cache is not None:
+        cache[normalized] = estimated
+    return estimated
+
+
 def _coerce_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
@@ -232,6 +250,7 @@ def route_skills(
 ) -> dict[str, Any]:
     started = perf_counter()
     query_ctx = build_query_ctx(query=query, module_hint=module_hint)
+    token_estimate_cache: dict[str, int] = {}
     selected = select_skills(
         query_ctx,
         skill_manifest,
@@ -245,7 +264,10 @@ def route_skills(
         "metadata_only_routing": True,
         "route_latency_ms": route_latency_ms,
         "selected_manifest_token_estimate_total": sum(
-            _manifest_skill_token_estimate(item)
+            _manifest_skill_token_estimate(
+                item,
+                token_estimate_cache=token_estimate_cache,
+            )
             for item in selected
             if isinstance(item, dict)
         ),
@@ -289,17 +311,33 @@ def run_skills(
     resolved_budget = _normalize_skill_token_budget(token_budget)
     route_latency_ms = float(routed.get("route_latency_ms", 0.0) or 0.0)
     routing_mode = str(routed.get("routing_mode") or "metadata_only").strip()
+    token_estimate_cache: dict[str, int] = {}
     selected_manifest_token_estimate_total = _coerce_int(
         routed.get(
             "selected_manifest_token_estimate_total",
             sum(
-                _manifest_skill_token_estimate(item)
+                _manifest_skill_token_estimate(
+                    item,
+                    token_estimate_cache=token_estimate_cache,
+                )
                 for item in selected
                 if isinstance(item, dict)
             ),
         )
         or 0
     )
+    budget_expanded_candidate_count = 0
+    budget_candidate_expanded = False
+    if resolved_budget is not None and not isinstance(routed_payload, dict):
+        selected, budget_expanded_candidate_count = _extend_selected_for_budget(
+            selected=selected,
+            skill_manifest=skill_manifest,
+            query_ctx=query_ctx,
+            token_budget=resolved_budget,
+            top_n=top_n,
+            token_estimate_cache=token_estimate_cache,
+        )
+        budget_candidate_expanded = budget_expanded_candidate_count > 0
 
     hydrated: list[dict[str, Any]] = []
     selected_token_estimate_total = 0
@@ -307,7 +345,10 @@ def run_skills(
     hydrated_sections_count = 0
     hydration_started = perf_counter()
     for item in selected:
-        estimated_tokens = _manifest_skill_token_estimate(item)
+        estimated_tokens = _manifest_skill_token_estimate(
+            item,
+            token_estimate_cache=token_estimate_cache,
+        )
         if (
             resolved_budget is not None
             and selected_token_estimate_total + estimated_tokens > resolved_budget
@@ -325,7 +366,11 @@ def run_skills(
             headings = list(item.get("headings") or [])[:2]
         sections = load_sections(item["path"], headings)
         hydrated_sections_count += len(sections)
-        estimated_tokens = _estimate_selected_skill_tokens(item=item, sections=sections)
+        estimated_tokens = _estimate_selected_skill_tokens(
+            item=item,
+            sections=sections,
+            token_estimate_cache=token_estimate_cache,
+        )
         selected_token_estimate_total += estimated_tokens
         hydrated.append(
             {
@@ -354,6 +399,8 @@ def run_skills(
         "selected_manifest_token_estimate_total": selected_manifest_token_estimate_total,
         "hydrated_skill_count": len(hydrated),
         "hydrated_sections_count": hydrated_sections_count,
+        "budget_candidate_expanded": budget_candidate_expanded,
+        "budget_expanded_candidate_count": budget_expanded_candidate_count,
         "budget_exhausted": bool(skipped_for_budget),
         "skipped_for_budget": skipped_for_budget,
         "selected": hydrated,
@@ -361,7 +408,10 @@ def run_skills(
 
 
 def _estimate_selected_skill_tokens(
-    *, item: dict[str, Any], sections: dict[str, str]
+    *,
+    item: dict[str, Any],
+    sections: dict[str, str],
+    token_estimate_cache: dict[str, int] | None = None,
 ) -> int:
     declared = _coerce_int(item.get("token_estimate"))
     if declared > 0:
@@ -372,18 +422,65 @@ def _estimate_selected_skill_tokens(
             f"## {title}\n{content}".strip() for title, content in sections.items()
         )
         if text:
-            return int(estimate_tokens(text))
+            return _estimate_tokens_cached(text, cache=token_estimate_cache)
 
     fallback = str(item.get("description") or item.get("name") or "").strip()
-    return int(estimate_tokens(fallback)) if fallback else 1
+    return _estimate_tokens_cached(fallback, cache=token_estimate_cache) if fallback else 1
 
 
-def _manifest_skill_token_estimate(item: dict[str, Any]) -> int:
+def _manifest_skill_token_estimate(
+    item: dict[str, Any],
+    *,
+    token_estimate_cache: dict[str, int] | None = None,
+) -> int:
     declared = _coerce_int(item.get("token_estimate"))
     if declared > 0:
         return declared
     fallback = str(item.get("description") or item.get("name") or "").strip()
-    return int(estimate_tokens(fallback)) if fallback else 1
+    return _estimate_tokens_cached(fallback, cache=token_estimate_cache) if fallback else 1
+
+
+def _skill_identity(item: dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(item.get("path") or "").strip(),
+        str(item.get("name") or "").strip(),
+    )
+
+
+def _extend_selected_for_budget(
+    *,
+    selected: list[dict[str, Any]],
+    skill_manifest: list[dict[str, Any]],
+    query_ctx: dict[str, Any],
+    token_budget: int,
+    top_n: int,
+    token_estimate_cache: dict[str, int],
+) -> tuple[list[dict[str, Any]], int]:
+    if len(selected) >= len(skill_manifest):
+        return selected, 0
+
+    expanded = select_skills(
+        query_ctx,
+        skill_manifest,
+        top_n=max(len(skill_manifest), max(0, int(top_n))),
+    )
+    seen = {_skill_identity(item) for item in selected if isinstance(item, dict)}
+    extra_candidates: list[dict[str, Any]] = []
+    for item in expanded:
+        if not isinstance(item, dict):
+            continue
+        if _skill_identity(item) in seen:
+            continue
+        estimated_tokens = _manifest_skill_token_estimate(
+            item,
+            token_estimate_cache=token_estimate_cache,
+        )
+        if estimated_tokens > int(token_budget):
+            continue
+        extra_candidates.append(item)
+    if not extra_candidates:
+        return selected, 0
+    return [*selected, *extra_candidates], len(extra_candidates)
 
 
 def _normalize_skill_token_budget(value: int | None) -> int | None:

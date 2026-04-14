@@ -26,6 +26,19 @@ def test_build_orchestrator_augment_runtime_normalizes_optional_state() -> None:
     assert runtime.policy_version == "v2"
 
 
+def test_build_orchestrator_augment_runtime_drops_invalid_worktree_override() -> None:
+    runtime = build_orchestrator_augment_runtime(
+        ctx_state={
+            "__vcs_worktree": ["invalid"],
+            "__policy": {"name": "feature", "version": "v2"},
+        }
+    )
+
+    assert runtime.vcs_worktree_override is None
+    assert runtime.policy_name == "feature"
+    assert runtime.policy_version == "v2"
+
+
 def test_build_orchestrator_augment_runtime_normalizes_candidate_chunks() -> None:
     runtime = build_orchestrator_augment_runtime(
         ctx_state={
