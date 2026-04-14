@@ -135,12 +135,74 @@ def test_store_and_load_cached_plan_round_trip(tmp_path: Path) -> None:
     assert cache_path.exists()
 
 
+def test_store_and_load_cached_plan_round_trip_keeps_nested_payload_isolated(
+    tmp_path: Path,
+) -> None:
+    cache_path = default_plan_replay_cache_path(root=str(tmp_path))
+    key = "plan-key"
+    payload = {
+        "query": "fix auth flow",
+        "source_plan": {
+            "steps": [{"id": 1, "stage": "index", "paths": ["src/app.py"]}]
+        },
+    }
+
+    assert store_cached_plan(
+        cache_path=cache_path,
+        key=key,
+        payload=payload,
+        meta={"policy_version": "v1"},
+    )
+
+    first = load_cached_plan(cache_path=cache_path, key=key)
+    assert first is not None
+    first["source_plan"]["steps"][0]["paths"].append("src/extra.py")
+
+    second = load_cached_plan(cache_path=cache_path, key=key)
+    assert second is not None
+    assert second["source_plan"]["steps"][0]["paths"] == ["src/app.py"]
+
+
 def test_load_cached_plan_fails_open_on_invalid_json(tmp_path: Path) -> None:
     cache_path = default_plan_replay_cache_path(root=str(tmp_path))
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text("{not-json", encoding="utf-8")
 
     assert load_cached_plan(cache_path=cache_path, key="missing") is None
+
+
+def test_load_cached_plan_legacy_json_keeps_nested_payload_isolated(tmp_path: Path) -> None:
+    cache_path = default_plan_replay_cache_path(root=str(tmp_path))
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(
+        """
+{
+  "schema_version": "plan-replay-cache-v1",
+  "entries": [
+    {
+      "key": "plan-key",
+      "updated_at_epoch": 100.0,
+      "payload": {
+        "source_plan": {
+          "steps": [
+            {"id": 1, "paths": ["src/app.py"]}
+          ]
+        }
+      }
+    }
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    first = load_cached_plan(cache_path=cache_path, key="plan-key")
+    assert first is not None
+    first["source_plan"]["steps"][0]["paths"].append("src/extra.py")
+
+    second = load_cached_plan(cache_path=cache_path, key="plan-key")
+    assert second is not None
+    assert second["source_plan"]["steps"][0]["paths"] == ["src/app.py"]
 
 
 def test_load_cached_plan_with_meta_reports_backend_origin(tmp_path: Path) -> None:

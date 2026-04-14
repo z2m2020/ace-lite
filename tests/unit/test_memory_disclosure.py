@@ -12,6 +12,7 @@ from ace_lite.memory_long_term import (
 )
 from ace_lite.orchestrator import AceOrchestrator
 from ace_lite.orchestrator_config import OrchestratorConfig
+from ace_lite.pipeline.stages import memory as memory_stage
 from ace_lite.pipeline.types import StageContext
 from ace_lite.profile_store import ProfileStore
 
@@ -154,6 +155,93 @@ def test_run_memory_full_returns_hits_and_previews() -> None:
     assert payload["cost"]["full_est_tokens_total"] >= 1
     assert payload["cost"]["fetch_est_tokens_total"] >= 1
     assert payload["timeline"]["groups"][0]["date_bucket"] == "2026-02-11"
+
+
+def test_run_memory_full_reuses_preview_token_estimate_when_preview_matches_text(
+    monkeypatch,
+) -> None:
+    provider = _FakeMemoryProvider(
+        [
+            MemoryRecord(
+                text="hello world",
+                score=0.5,
+                metadata={"id": "m1"},
+            )
+        ]
+    )
+    calls = 0
+
+    def fake_estimate_tokens(text: str, *, model: str) -> int:
+        del text, model
+        nonlocal calls
+        calls += 1
+        return 99
+
+    monkeypatch.setattr(memory_stage, "estimate_tokens", fake_estimate_tokens)
+
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(memory={"disclosure_mode": "full"}),
+    )
+    payload = _run_memory_stage(orch, query="q")
+
+    assert calls == 0
+    assert payload["cost"]["full_est_tokens_total"] == payload["hits_preview"][0]["est_tokens"]
+    assert payload["cost"]["fetch_est_tokens_total"] == payload["hits_preview"][0]["est_tokens"]
+
+
+def test_run_memory_full_still_estimates_full_text_when_preview_differs(
+    monkeypatch,
+) -> None:
+    class _ShortPreviewProvider(_FakeMemoryProvider):
+        def search_compact(
+            self,
+            query: str,
+            *,
+            limit: int | None = None,
+            container_tag: str | None = None,
+        ) -> list[MemoryRecordCompact]:
+            del query, limit, container_tag
+            return [
+                MemoryRecordCompact(
+                    handle="m1",
+                    preview="hello",
+                    score=0.5,
+                    metadata={"id": "m1"},
+                    est_tokens=1,
+                    source="fake",
+                )
+            ]
+
+    provider = _ShortPreviewProvider(
+        [
+            MemoryRecord(
+                text="hello world",
+                score=0.5,
+                metadata={"id": "m1"},
+            )
+        ]
+    )
+    calls = 0
+
+    def fake_estimate_tokens(text: str, *, model: str) -> int:
+        assert text == "hello world"
+        assert model == "gpt-4o-mini"
+        nonlocal calls
+        calls += 1
+        return 9
+
+    monkeypatch.setattr(memory_stage, "estimate_tokens", fake_estimate_tokens)
+
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(memory={"disclosure_mode": "full"}),
+    )
+    payload = _run_memory_stage(orch, query="q")
+
+    assert calls == 1
+    assert payload["cost"]["full_est_tokens_total"] == 9
+    assert payload["cost"]["fetch_est_tokens_total"] == 9
 
 
 def test_run_memory_exposes_ltm_selected_and_attribution_in_compact_mode(
