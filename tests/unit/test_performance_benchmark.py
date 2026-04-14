@@ -5,6 +5,7 @@ Tests verify the performance benchmark framework (QO-3101/QO-3102).
 
 from __future__ import annotations
 
+import copy
 import time
 
 from ace_lite.performance_benchmark import (
@@ -18,6 +19,8 @@ from ace_lite.performance_benchmark import (
     determine_optimization,
     evaluate_benchmark_gate,
 )
+from ace_lite.pipeline.stages import memory as memory_stage
+from ace_lite.repomap.cache_utils import selective_copy_payload
 
 
 class TestBenchmarkResult:
@@ -259,6 +262,138 @@ class TestBenchmarkConfig:
         assert config.warmup_iterations == 5
         assert config.iterations == 20
         assert config.track_memory is True
+
+
+class TestIndexCandidateCacheCopyBenchmark:
+    """Focused benchmark coverage for index cache payload-copy strategy."""
+
+    def test_selective_copy_beats_deepcopy_for_index_candidate_payload(self) -> None:
+        payload = {
+            "candidate_files": [
+                {
+                    "path": f"src/module_{idx}.py",
+                    "score": float(idx),
+                    "signals": {"bm25": idx / 10.0, "heuristic": idx / 20.0},
+                }
+                for idx in range(32)
+            ],
+            "candidate_chunks": [
+                {
+                    "path": f"src/module_{idx}.py",
+                    "snippet": "x = 1\n" * 8,
+                    "score_breakdown": {"semantic": idx / 15.0},
+                }
+                for idx in range(16)
+            ],
+            "metadata": {
+                "timings_ms": {"candidate_generation": 12.5, "rerank": 4.5},
+                "selection": {"top_k": 12, "pool_cap": 64},
+            },
+        }
+
+        runner = BenchmarkRunner(
+            BenchmarkConfig(
+                warmup_iterations=2,
+                iterations=200,
+                min_duration_seconds=0.0,
+            )
+        )
+
+        baseline = runner.run("deepcopy", lambda: copy.deepcopy(payload))
+        optimized = runner.run("selective_copy", lambda: selective_copy_payload(payload))
+        comparison = BenchmarkComparison(baseline=baseline, optimized=optimized)
+
+        assert comparison.speedup_ratio > 1.0
+
+    def test_selective_copy_beats_deepcopy_for_plan_replay_payload(self) -> None:
+        payload = {
+            "query": "fix auth flow",
+            "index": {
+                "candidate_files": [
+                    {"path": f"src/module_{idx}.py", "score": float(idx)}
+                    for idx in range(24)
+                ]
+            },
+            "source_plan": {
+                "steps": [
+                    {
+                        "id": idx,
+                        "stage": "source_plan",
+                        "paths": [f"src/module_{idx}.py", f"tests/test_{idx}.py"],
+                        "rationale": "grounded evidence " * 4,
+                    }
+                    for idx in range(12)
+                ]
+            },
+            "observability": {
+                "stage_metrics": [
+                    {"stage": "index", "elapsed_ms": 12.5 + idx}
+                    for idx in range(6)
+                ],
+                "plan_replay_cache": {"enabled": True, "hit": True},
+            },
+        }
+
+        runner = BenchmarkRunner(
+            BenchmarkConfig(
+                warmup_iterations=2,
+                iterations=200,
+                min_duration_seconds=0.0,
+            )
+        )
+
+        baseline = runner.run("deepcopy", lambda: copy.deepcopy(payload))
+        optimized = runner.run("selective_copy", lambda: selective_copy_payload(payload))
+        comparison = BenchmarkComparison(baseline=baseline, optimized=optimized)
+
+        assert comparison.speedup_ratio > 1.0
+
+
+class TestMemoryStageTokenEstimateBenchmark:
+    """Focused benchmark coverage for memory-stage token estimation reuse."""
+
+    def test_cached_token_estimate_beats_direct_estimate_for_repeated_memory_text(
+        self,
+    ) -> None:
+        text = ("agent memory retrieval " * 64).strip()
+        repeated_payload = [text] * 96
+
+        def direct_estimate() -> list[int]:
+            return [
+                memory_stage.estimate_tokens(item, model="gpt-4o-mini")
+                for item in repeated_payload
+            ]
+
+        def cached_estimate() -> list[int]:
+            cache: dict[tuple[str, str], int] = {}
+            return [
+                memory_stage._estimate_tokens_cached(
+                    item,
+                    model="gpt-4o-mini",
+                    cache=cache,
+                )
+                for item in repeated_payload
+            ]
+
+        runner = BenchmarkRunner(
+            BenchmarkConfig(
+                warmup_iterations=2,
+                iterations=200,
+                min_duration_seconds=0.0,
+            )
+        )
+
+        baseline = runner.run(
+            "direct_estimate",
+            direct_estimate,
+        )
+        optimized = runner.run(
+            "cached_estimate",
+            cached_estimate,
+        )
+        comparison = BenchmarkComparison(baseline=baseline, optimized=optimized)
+
+        assert comparison.speedup_ratio > 1.0
 
 
 class TestBenchmarkRunner:

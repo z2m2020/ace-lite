@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import hashlib
 import json
 import sqlite3
@@ -10,6 +9,7 @@ from pathlib import Path
 from time import time
 from typing import Any
 
+from ace_lite.repomap.cache_utils import selective_copy_payload
 from ace_lite.stage_artifact_cache import StageArtifactCache
 
 _SCHEMA_VERSION = "index-candidate-cache-v1"
@@ -19,6 +19,7 @@ _STAGE_NAME = "index_candidates"
 _INDEX_CANDIDATE_ARTIFACT_MEMORY: dict[
     tuple[str, str, str], tuple[int, int, dict[str, Any]]
 ] = {}
+_INDEX_CANDIDATE_CACHE_MEMORY: dict[tuple[str, str], tuple[int, int, dict[str, Any]]] = {}
 
 
 def default_index_candidate_cache_path(*, root: str) -> Path:
@@ -182,7 +183,7 @@ def load_cached_index_candidates_checked(
             continue
         legacy_payload = entry.get("payload")
         if isinstance(legacy_payload, dict):
-            return copy.deepcopy(legacy_payload)
+            return selective_copy_payload(legacy_payload)
         if backend != "stage_artifact_cache":
             continue
 
@@ -197,13 +198,13 @@ def load_cached_index_candidates_checked(
         )
         if cached is None:
             continue
-        materialized = copy.deepcopy(cached.payload)
+        materialized = cached.payload
         _store_artifact_memory(
             cache_path=cache_path,
             key=key,
             payload=materialized,
         )
-        return materialized
+        return selective_copy_payload(materialized)
     return None
 
 
@@ -236,7 +237,7 @@ def store_cached_index_candidates(
                 "meta": _normalize_cache_meta(item.get("meta")),
                 "stage_name": str(item.get("stage_name") or _STAGE_NAME),
                 **(
-                    {"payload": copy.deepcopy(item["payload"])}
+                    {"payload": selective_copy_payload(item["payload"])}
                     if isinstance(item.get("payload"), dict)
                     else {}
                 ),
@@ -251,7 +252,7 @@ def store_cached_index_candidates(
             query_hash=_build_query_hash(str(normalized_meta.get("query") or "")),
             fingerprint=str(key),
             settings_fingerprint=_build_meta_fingerprint(normalized_meta),
-            payload=copy.deepcopy(payload),
+            payload=selective_copy_payload(payload),
             token_weight=_estimate_payload_token_weight(payload),
             ttl_seconds=max(0, int(normalized_meta.get("ttl_seconds") or 0)),
             content_version=str(normalized_meta.get("content_version") or _SCHEMA_VERSION),
@@ -360,6 +361,18 @@ def _is_entry_expired(
 
 def _load_cache_payload(*, cache_path: Path, schema_version: str) -> dict[str, Any] | None:
     try:
+        stat = cache_path.stat()
+    except OSError:
+        return None
+    if not cache_path.is_file():
+        return None
+
+    memory_key = (str(schema_version), str(cache_path.resolve()))
+    cached = _INDEX_CANDIDATE_CACHE_MEMORY.get(memory_key)
+    if cached is not None and cached[0] == stat.st_mtime_ns and cached[1] == stat.st_size:
+        return cached[2]
+
+    try:
         raw = cache_path.read_text(encoding="utf-8")
     except OSError:
         return None
@@ -371,6 +384,7 @@ def _load_cache_payload(*, cache_path: Path, schema_version: str) -> dict[str, A
         return None
     if str(payload.get("schema_version") or "") != str(schema_version):
         return None
+    _INDEX_CANDIDATE_CACHE_MEMORY[memory_key] = (stat.st_mtime_ns, stat.st_size, payload)
     return payload
 
 
@@ -380,6 +394,17 @@ def _write_cache_payload(*, cache_path: Path, payload: dict[str, Any]) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    try:
+        stat = cache_path.stat()
+    except OSError:
+        _INDEX_CANDIDATE_CACHE_MEMORY.pop(
+            (str(payload.get("schema_version") or ""), str(cache_path.resolve())),
+            None,
+        )
+        return
+    _INDEX_CANDIDATE_CACHE_MEMORY[
+        (str(payload.get("schema_version") or ""), str(cache_path.resolve()))
+    ] = (stat.st_mtime_ns, stat.st_size, payload)
 
 
 def _load_artifact_memory(
@@ -398,7 +423,7 @@ def _load_artifact_memory(
     if cached[0] != stat.st_mtime_ns or cached[1] != stat.st_size:
         _INDEX_CANDIDATE_ARTIFACT_MEMORY.pop(memory_key, None)
         return None
-    return copy.deepcopy(cached[2])
+    return selective_copy_payload(cached[2])
 
 
 def _store_artifact_memory(
@@ -415,7 +440,7 @@ def _store_artifact_memory(
     _INDEX_CANDIDATE_ARTIFACT_MEMORY[memory_key] = (
         stat.st_mtime_ns,
         stat.st_size,
-        copy.deepcopy(payload),
+        selective_copy_payload(payload),
     )
 
 

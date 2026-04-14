@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -10,6 +9,7 @@ from pathlib import Path
 from time import time
 from typing import Any
 
+from ace_lite.repomap.cache_utils import selective_copy_payload
 from ace_lite.stage_artifact_cache import StageArtifactCache
 
 _SCHEMA_VERSION = "plan-replay-cache-v1"
@@ -100,7 +100,7 @@ def load_cached_plan_with_meta(
     manager = _build_stage_artifact_cache(cache_path=cache_path)
     cached = manager.get_artifact(stage_name="source_plan", cache_key=key)
     if cached is not None:
-        return copy.deepcopy(cached.payload), {
+        return selective_copy_payload(cached.payload), {
             "origin": "stage_artifact_cache",
             "policy_name": str(cached.entry.policy_name or "source_plan"),
             "trust_class": str(cached.entry.trust_class or "exact"),
@@ -122,7 +122,7 @@ def load_cached_plan_with_meta(
         if isinstance(cached_payload, dict):
             meta_raw = entry.get("meta")
             meta = meta_raw if isinstance(meta_raw, dict) else {}
-            return copy.deepcopy(cached_payload), {
+            return selective_copy_payload(cached_payload), {
                 "origin": "legacy_json",
                 "policy_name": str(meta.get("stage") or "source_plan"),
                 "trust_class": str(meta.get("trust_class") or ""),
@@ -149,7 +149,7 @@ def store_cached_plan(
             query_hash=_build_query_hash(str(normalized_meta.get("query") or "")),
             fingerprint=str(key),
             settings_fingerprint=str(normalized_meta.get("settings_fingerprint") or ""),
-            payload=copy.deepcopy(payload),
+            payload=selective_copy_payload(payload),
             token_weight=_estimate_payload_token_weight(payload),
             ttl_seconds=max(0, int(normalized_meta.get("ttl_seconds") or 0)),
             soft_ttl_seconds=max(0, int(normalized_meta.get("soft_ttl_seconds") or 0)),
@@ -198,7 +198,7 @@ def store_cached_plan(
             "key": str(key),
             "updated_at_epoch": round(float(time()), 3),
             "meta": _normalize_cache_meta(meta),
-            "payload": copy.deepcopy(payload),
+            "payload": selective_copy_payload(payload),
         },
     )
     if len(normalized_entries) > _MAX_ENTRIES:
@@ -215,7 +215,7 @@ def store_cached_plan(
 
 
 def strip_plan_replay_runtime_metadata(payload: dict[str, Any]) -> dict[str, Any]:
-    cloned = copy.deepcopy(payload)
+    cloned = selective_copy_payload(payload)
     observability = cloned.get("observability")
     if isinstance(observability, dict):
         observability.pop("plan_replay_cache", None)

@@ -24,6 +24,26 @@ logger = logging.getLogger(__name__)
 _LTM_FEEDBACK_SIGNALS = frozenset({"helpful", "stale", "harmful"})
 
 
+def _estimate_tokens_cached(
+    text: str,
+    *,
+    model: str,
+    cache: dict[tuple[str, str], int] | None = None,
+) -> int:
+    """Estimate tokens with optional per-run memoization."""
+    normalized = str(text or "")
+    cache_key = (model, normalized)
+    if cache is not None:
+        cached = cache.get(cache_key)
+        if isinstance(cached, int) and cached > 0:
+            return cached
+
+    estimated = max(1, int(estimate_tokens(normalized, model=model)))
+    if cache is not None:
+        cache[cache_key] = estimated
+    return estimated
+
+
 def memory_record_handle(record: MemoryRecord) -> str:
     """Generate a handle for a memory record.
 
@@ -282,6 +302,7 @@ def compact_memory_record(
     *,
     preview_max_chars: int = 280,
     tokenizer_model: str = "gpt-4o",
+    token_estimate_cache: dict[tuple[str, str], int] | None = None,
 ) -> dict[str, Any]:
     """Compact a memory record for preview display.
 
@@ -322,7 +343,11 @@ def compact_memory_record(
         1,
         int(
             record.est_tokens
-            or estimate_tokens(preview, model=tokenizer_model)
+            or _estimate_tokens_cached(
+                preview,
+                model=tokenizer_model,
+                cache=token_estimate_cache,
+            )
         ),
     )
 
@@ -648,6 +673,7 @@ def run_memory(
     )
     if isinstance(provider_namespace_fallback, str) and provider_namespace_fallback.strip():
         namespace_fallback = provider_namespace_fallback.strip()
+    token_estimate_cache: dict[tuple[str, str], int] = {}
     compact_rows: list[MemoryRecordCompact] = []
     if isinstance(compact_rows_raw, list):
         for row in compact_rows_raw:
@@ -673,9 +699,10 @@ def run_memory(
                             int(
                                 est_tokens_value
                                 if isinstance(est_tokens_value, int)
-                                else estimate_tokens(
+                                else _estimate_tokens_cached(
                                     str(row.get("preview") or row.get("text") or ""),
                                     model=tokenizer_model,
+                                    cache=token_estimate_cache,
                                 )
                             ),
                         ),
@@ -683,14 +710,16 @@ def run_memory(
                     )
                 )
 
-    hits_preview: list[dict[str, Any]] = [
-        compact_memory_record(
-            row,
-            preview_max_chars=preview_max_chars,
-            tokenizer_model=tokenizer_model,
+    hits_preview: list[dict[str, Any]] = []
+    for row in compact_rows:
+        hits_preview.append(
+            compact_memory_record(
+                row,
+                preview_max_chars=preview_max_chars,
+                tokenizer_model=tokenizer_model,
+                token_estimate_cache=token_estimate_cache,
+            )
         )
-        for row in compact_rows
-    ]
 
     requested_time_range = str(time_range or "").strip() or None
     requested_start_date = str(start_date or "").strip() or None
@@ -813,18 +842,18 @@ def run_memory(
         now=now,
     )
 
-    handles = [
-        str(item.get("handle") or "").strip()
-        for item in hits_preview
-        if isinstance(item, dict) and isinstance(item.get("handle"), str)
-    ]
-    handles = [handle for handle in handles if handle]
-
-    preview_tokens = sum(
-        int(item.get("est_tokens") or 0)
-        for item in hits_preview
-        if isinstance(item, dict)
-    )
+    handles: list[str] = []
+    preview_by_handle: dict[str, dict[str, Any]] = {}
+    preview_tokens = 0
+    for item in hits_preview:
+        if not isinstance(item, dict):
+            continue
+        preview_tokens += int(item.get("est_tokens") or 0)
+        handle = str(item.get("handle") or "").strip()
+        if not handle:
+            continue
+        handles.append(handle)
+        preview_by_handle[handle] = item
 
     hits: list[dict[str, Any]] | None = None
     full_tokens = 0
@@ -840,16 +869,12 @@ def run_memory(
             handle = str(record.handle or "").strip() or memory_record_handle(record)
             records_by_handle[handle] = record
 
-        preview_by_handle = {
-            str(item.get("handle") or "").strip(): item
-            for item in hits_preview
-            if isinstance(item, dict)
-        }
         hits = []
         for handle in handles:
             record = records_by_handle.get(handle)
+            preview_hit = preview_by_handle.get(handle, {})
             if record is None:
-                fallback = preview_by_handle.get(handle, {})
+                fallback = preview_hit
                 text = str(fallback.get("preview") or "")
                 metadata = fallback.get("metadata", {})
                 score = fallback.get("score")
@@ -868,10 +893,21 @@ def run_memory(
             else:
                 hit = record.to_dict()
                 hit["handle"] = handle
-                full_tokens += estimate_tokens(
-                    str(record.text or ""),
-                    model=tokenizer_model,
-                )
+                record_text = str(record.text or "")
+                preview_text = str(preview_hit.get("preview") or "")
+                preview_est_tokens = preview_hit.get("est_tokens")
+                if (
+                    isinstance(preview_est_tokens, int)
+                    and preview_est_tokens > 0
+                    and preview_text == record_text
+                ):
+                    full_tokens += int(preview_est_tokens)
+                else:
+                    full_tokens += _estimate_tokens_cached(
+                        record_text,
+                        model=tokenizer_model,
+                        cache=token_estimate_cache,
+                    )
                 boost = float(boost_by_handle.get(handle, 0.0) or 0.0)
                 if boost > 0.0:
                     base_score = (
