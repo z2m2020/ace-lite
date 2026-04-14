@@ -548,58 +548,11 @@ class AceOrchestrator:
             skills_payload=skills_payload
         )
 
-    def _export_stage_trace(
-        self,
-        *,
-        query: str,
-        repo: str,
-        root: str,
-        started_at: datetime,
-        total_ms: float,
-        stage_metrics: list[StageMetric],
-        plugin_policy_summary: dict[str, Any],
-    ) -> dict[str, Any]:
-        return self._runtime_observability_service.export_stage_trace(
-            query=query,
-            repo=repo,
-            root=root,
-            started_at=started_at,
-            total_ms=total_ms,
-            stage_metrics=stage_metrics,
-            plugin_policy_summary=plugin_policy_summary,
-        )
-
     def _load_plugins(self, *, root: str) -> tuple[HookBus, list[str]]:
         return load_orchestrator_plugins(
             plugins_enabled=bool(self._config.plugins.enabled),
             plugin_loader=self._plugin_loader,
             root=root,
-        )
-
-    def _record_durable_stats(
-        self,
-        *,
-        query: str,
-        repo: str,
-        root: str,
-        started_at: datetime,
-        total_ms: float,
-        stage_metrics: list[StageMetric],
-        contract_error: StageContractError | None,
-        replay_cache_info: dict[str, Any] | None,
-        trace_export: dict[str, Any],
-    ) -> dict[str, Any]:
-        return self._runtime_observability_service.record_durable_stats(
-            query=query,
-            repo=repo,
-            root=root,
-            started_at=started_at,
-            total_ms=total_ms,
-            stage_metrics=stage_metrics,
-            contract_error=contract_error,
-            replay_cache_info=replay_cache_info,
-            trace_export=trace_export,
-            learning_router_rollout_decision=self._last_learning_router_rollout_decision,
         )
 
     @staticmethod

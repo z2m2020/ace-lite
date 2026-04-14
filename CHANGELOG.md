@@ -8,6 +8,41 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.76] - 2026-04-14
+
+### Changed
+
+- Tightened `mypy` checks for the typed orchestration support seams added in the recent finalization and factory refactor waves, without yet widening the scope to `orchestrator_runtime_support.py`.
+- Updated quality governance guidance to mark the new strict hotspot boundary and preserve `orchestrator_runtime_support.py` as the next focused typing cleanup target.
+
+## [0.3.75] - 2026-04-14
+
+### Changed
+
+- Canonicalized `validation_rich` trend reporting so the default latest input now resolves to `validation_rich/latest/summary.json`, while `tuned/latest` remains an explicit override path.
+- Added trend-report metadata for latest input semantics to reduce ambiguity between canonical current and explicit latest-report overrides.
+
+## [0.3.74] - 2026-04-14
+
+### Changed
+
+- Extracted grouped-config normalization and runtime projection payload-map assembly from `create_orchestrator()` into `orchestrator_factory_support.py`, reducing factory shell density without changing CLI config behavior.
+- Added a direct unit seam for factory payload-map assembly so grouped overrides remain locked outside the `create_orchestrator()` entrypoint.
+
+## [0.3.73] - 2026-04-14
+
+### Changed
+
+- Added a typed finalization dependency boundary so orchestrator runtime finalization now consumes a single dataclass-backed dependency object instead of multiple loose callback and runtime-handle parameters.
+- Exposed minimal Protocol contracts for finalization payload building, trace export, durable stats recording, and runtime state/manager hooks to support further orchestration typing work.
+
+## [0.3.72] - 2026-04-14
+
+### Changed
+
+- Simplified orchestrator finalization by removing trace and durable-stats passthrough helpers from `AceOrchestrator` and injecting the finalization runtime with explicit payload/observability callbacks.
+- Promoted skill metadata linting to the default quality gate and added a `skills/`-aware pre-commit validation path that runs `pytest -q tests/unit/test_skills.py -k lint`.
+
 ## [0.3.65] - 2026-04-13
 
 ### Added

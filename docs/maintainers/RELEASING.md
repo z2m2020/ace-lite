@@ -226,6 +226,11 @@ also build the report-only trend artifact for the same evidence set:
 python scripts/build_validation_rich_trend_report.py --history-root artifacts/benchmark/validation_rich --latest-report artifacts/benchmark/validation_rich/latest/summary.json --output-dir artifacts/benchmark/validation_rich/trend/latest
 ```
 
+If you omit `--latest-report`, the script will now auto-resolve the canonical
+current lane artifact at `artifacts/benchmark/validation_rich/latest/summary.json`.
+Do not rely on `tuned/latest` as an implicit latest source; pass it explicitly only
+for side-by-side comparison flows.
+
 Review:
 
 - `artifacts/benchmark/validation_rich/trend/latest/validation_rich_trend_report.json`

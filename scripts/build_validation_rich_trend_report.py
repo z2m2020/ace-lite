@@ -109,6 +109,23 @@ def _iter_summary_paths(*, history_root: Path, latest_report: Path | None, limit
     return paths
 
 
+def _canonical_latest_report_path(*, history_root: Path) -> Path:
+    return (history_root / "latest" / "summary.json").resolve()
+
+
+def _resolve_latest_report(
+    *,
+    history_root: Path,
+    latest_report: Path | None,
+) -> tuple[Path | None, str]:
+    if isinstance(latest_report, Path):
+        return latest_report.resolve(), "explicit_override"
+    canonical = _canonical_latest_report_path(history_root=history_root)
+    if canonical.exists() and canonical.is_file():
+        return canonical, "canonical_current"
+    return None, "none"
+
+
 def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     metrics_raw = payload.get("metrics")
     metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
@@ -204,6 +221,8 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         f"- Generated: {payload.get('generated_at', '')}",
         f"- Report only: {bool(payload.get('report_only', True))}",
         f"- History count: {int(payload.get('history_count', 0) or 0)}",
+        f"- Latest report mode: {payload.get('latest_report_mode', '')}",
+        f"- Latest report path: {payload.get('latest_report_path', '')}",
         "",
     ]
 
@@ -533,7 +552,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 "| --- | ---: | ---: | ---: |",
             ]
         )
-        for metric_name in ("case_count",) + METRIC_NAMES:
+        for metric_name in ("case_count", *METRIC_NAMES):
             row_raw = delta.get(metric_name)
             row = row_raw if isinstance(row_raw, dict) else {}
             precision = 0 if metric_name == "case_count" else 4
@@ -604,7 +623,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 generated=str(row.get("generated_at", "")),
                 repo=str(row.get("repo", "") or ""),
                 case_count=int(row.get("case_count", 0) or 0),
-                regressed="?" if bool(row.get("regressed", False)) else "?",
+                regressed="yes" if bool(row.get("regressed", False)) else "no",
                 task_success=_safe_float(metrics.get("task_success_rate"), 0.0),
                 precision=_safe_float(metrics.get("precision_at_k"), 0.0),
                 noise=_safe_float(metrics.get("noise_rate"), 0.0),
@@ -646,10 +665,14 @@ def main() -> int:
 
     project_root = Path(__file__).resolve().parents[1]
     history_root = _resolve_path(root=project_root, value=str(args.history_root))
-    latest_report = (
+    latest_report_arg = (
         _resolve_path(root=project_root, value=str(args.latest_report))
         if str(args.latest_report).strip()
         else None
+    )
+    latest_report, latest_report_mode = _resolve_latest_report(
+        history_root=history_root,
+        latest_report=latest_report_arg,
     )
     output_dir = _resolve_path(root=project_root, value=str(args.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -696,6 +719,11 @@ def main() -> int:
     report_payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "report_only": True,
+        "latest_report_mode": latest_report_mode,
+        "latest_report_path": str(latest_report) if isinstance(latest_report, Path) else "",
+        "canonical_latest_report_path": str(
+            _canonical_latest_report_path(history_root=history_root)
+        ),
         "history_count": len(rows),
         "latest": latest,
         "previous": previous,

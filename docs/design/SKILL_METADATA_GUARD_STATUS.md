@@ -68,6 +68,9 @@ Checks:
 
 **Run**: `pytest -q tests/unit/test_skills.py -k lint`
 
+As of `0.3.75`, the same lint slice is also part of the default `scripts/run_quality_gate.py`
+flow and the `scripts/run_precommit_validation.py` skills-only fast path.
+
 ---
 
 ## Potential Enhancements (Future)
@@ -86,6 +89,9 @@ pytest -q tests/unit/test_skills.py
 
 # Run lint-specific tests
 pytest -q tests/unit/test_skills.py -k lint
+
+# Run the default quality gate (includes skills lint)
+python scripts/run_quality_gate.py --root . --output-dir artifacts/quality/latest --pip-audit-baseline benchmark/quality/pip_audit_baseline.json --fail-on-new-vulns
 ```
 
 ---

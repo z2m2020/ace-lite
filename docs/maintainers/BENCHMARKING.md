@@ -314,6 +314,11 @@ python scripts/build_validation_rich_trend_report.py \
   --output-dir artifacts/benchmark/validation_rich/trend/latest
 ```
 
+If `--latest-report` is omitted, the script now defaults to the canonical
+current lane artifact under `artifacts/benchmark/validation_rich/latest/summary.json`.
+`artifacts/benchmark/validation_rich/tuned/latest/summary.json` remains an
+explicit override input for comparison workflows rather than an implicit trend source.
+
 The trend report is report-only. Use it to review current-vs-previous deltas for
 `task_success_rate`, `precision_at_k`, `noise_rate`, `validation_test_count`,
 `missing_validation_rate`, and `evidence_insufficient_rate` before tightening

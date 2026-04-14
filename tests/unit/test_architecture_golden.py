@@ -565,15 +565,24 @@ class TestArchitectureSeamsAndGuardrailsGolden:
 
     def test_orchestrator_cross_cutting_seams_exist(self) -> None:
         orchestrator_text = _read_repo_text("src/ace_lite/orchestrator.py")
+        finalization_text = _read_repo_text(
+            "src/ace_lite/orchestrator_runtime_finalization.py"
+        )
+        support_text = _read_repo_text("src/ace_lite/orchestrator_runtime_support.py")
+        support_types_text = _read_repo_text(
+            "src/ace_lite/orchestrator_runtime_support_types.py"
+        )
 
         expected_methods = (
-            "def _export_stage_trace(",
-            "def _record_durable_stats(",
+            "def _build_plan_payload(",
             "def _resolve_memory_namespace(",
             "def _capture_memory_signal(",
         )
         for method_signature in expected_methods:
             assert method_signature in orchestrator_text
+        assert "dependencies: OrchestratorFinalizationDependencies" in finalization_text
+        assert "build_orchestrator_finalization_dependencies(" in support_text
+        assert "class OrchestratorFinalizationDependencies:" in support_types_text
 
     def test_orchestrator_replay_fingerprint_seams_exist(self) -> None:
         orchestrator_text = _read_repo_text("src/ace_lite/orchestrator.py")

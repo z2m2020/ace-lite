@@ -71,3 +71,14 @@ def test_precommit_validation_uses_docs_validator_for_docs_only_changes() -> Non
 
     assert plan.reason == "docs_validation"
     assert plan.commands == (("python", "scripts/validate_docs_cli_snippets.py"),)
+
+
+def test_precommit_validation_uses_skills_lint_for_skills_only_changes() -> None:
+    plan = _build_validation_plan(
+        changed_files=["skills/agent-first-eval-lab/SKILL.md"]
+    )
+
+    assert plan.reason == "skills_metadata_validation"
+    assert plan.commands == (
+        ("python", "-m", "pytest", "-q", "tests/unit/test_skills.py", "-k", "lint"),
+    )

@@ -99,6 +99,7 @@ def test_run_quality_gate_passes_when_no_new_vulns(
     assert summary["passed"] is True
     assert summary["pip_audit"]["new_count"] == 0
     assert (output_dir / "logs" / "ruff.stdout.txt").exists()
+    assert (output_dir / "logs" / "skills_lint.stdout.txt").exists()
     assert (output_dir / "logs" / "pip_audit.stdout.txt").exists()
 
 
@@ -385,6 +386,18 @@ def test_run_quality_gate_reports_hotspot_checks_without_failing_gate(
     assert hotspot_checks[0]["report_only"] is True
     assert hotspot_checks[0]["passed"] is False
     assert hotspot_checks[1]["passed"] is True
+
+
+def test_quality_commands_include_skills_lint_before_mypy(tmp_path: Path) -> None:
+    module = _load_script("run_quality_gate.py")
+    commands = module._quality_commands(
+        python_exe=sys.executable,
+        coverage_json_path=tmp_path / "coverage.json",
+    )
+
+    names = [name for name, _command in commands]
+    assert "skills_lint" in names
+    assert names.index("skills_lint") < names.index("mypy")
 
 
 def test_main_accepts_hotspot_path_arguments(

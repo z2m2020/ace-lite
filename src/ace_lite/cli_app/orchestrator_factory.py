@@ -13,25 +13,12 @@ from ace_lite.cli_app.orchestrator_factory_support import (
 )
 from ace_lite.cli_app.orchestrator_factory_support import (
     build_adaptive_router_run_plan_section_spec,
-    build_chunking_payload,
     build_chunking_run_plan_section_spec,
-    build_cochange_payload,
-    build_embeddings_payload,
-    build_index_payload,
-    build_lsp_payload,
-    build_memory_payload,
     build_memory_run_plan_section_spec,
+    build_orchestrator_projection_payload_map,
     build_passthrough_run_plan_section_specs,
-    build_plan_replay_cache_payload,
-    build_plugins_payload,
-    build_repomap_payload,
-    build_retrieval_payload,
     build_retrieval_run_plan_section_spec,
-    build_scip_payload,
-    build_skills_payload,
-    build_tests_payload,
-    build_tokenizer_payload,
-    build_trace_payload,
+    normalize_orchestrator_group_configs,
 )
 from ace_lite.cli_app.orchestrator_factory_support import (
     merge_group_or_flat_sections as _merge_group_or_flat_sections,
@@ -420,255 +407,175 @@ def create_orchestrator(
     else:
         provider = NullMemoryProvider()
 
-    retrieval_group = _normalize_group_mapping(retrieval_config)
-    adaptive_router_group = _normalize_group_mapping(adaptive_router_config)
-    plugins_group = _normalize_group_mapping(plugins_config)
-    repomap_group = _normalize_group_mapping(repomap_config)
-    lsp_group = _normalize_group_mapping(lsp_config)
-    chunking_group = _normalize_group_mapping(chunking_config)
-    tokenizer_group = _normalize_group_mapping(tokenizer_config)
-    trace_group = _normalize_group_mapping(trace_config)
-    plan_replay_cache_group = _normalize_group_mapping(plan_replay_cache_config)
-    memory_group = _normalize_group_mapping(memory_config)
-    skills_group = _normalize_group_mapping(skills_config)
-    index_group = _normalize_group_mapping(index_config)
-    embeddings_group = _normalize_group_mapping(embeddings_config)
-    cochange_group = _normalize_group_mapping(cochange_config)
-    tests_group = _normalize_group_mapping(tests_config)
-    scip_group = _normalize_group_mapping(scip_config)
-
-    memory_payload = build_memory_payload(
-        memory_group=memory_group,
-        memory_disclosure_mode=memory_disclosure_mode,
-        memory_preview_max_chars=memory_preview_max_chars,
-        memory_strategy=memory_strategy,
-        memory_gate_enabled=memory_gate_enabled,
-        memory_gate_mode=memory_gate_mode,
-        memory_timeline_enabled=memory_timeline_enabled,
-        memory_container_tag=(
-            str(memory_container_tag) if memory_container_tag is not None else None
-        ),
-        memory_auto_tag_mode=(
-            str(memory_auto_tag_mode) if memory_auto_tag_mode is not None else None
-        ),
-        memory_profile_enabled=memory_profile_enabled,
-        memory_profile_path=str(memory_profile_path),
-        memory_profile_top_n=memory_profile_top_n,
-        memory_profile_token_budget=memory_profile_token_budget,
-        memory_profile_expiry_enabled=memory_profile_expiry_enabled,
-        memory_profile_ttl_days=memory_profile_ttl_days,
-        memory_profile_max_age_days=memory_profile_max_age_days,
-        memory_feedback_enabled=memory_feedback_enabled,
-        memory_feedback_path=str(memory_feedback_path),
-        memory_feedback_max_entries=memory_feedback_max_entries,
-        memory_feedback_boost_per_select=memory_feedback_boost_per_select,
-        memory_feedback_max_boost=memory_feedback_max_boost,
-        memory_feedback_decay_days=memory_feedback_decay_days,
-        memory_long_term_enabled=memory_long_term_enabled,
-        memory_long_term_path=str(memory_long_term_path),
-        memory_long_term_top_n=memory_long_term_top_n,
-        memory_long_term_token_budget=memory_long_term_token_budget,
-        memory_long_term_write_enabled=memory_long_term_write_enabled,
-        memory_long_term_as_of_enabled=memory_long_term_as_of_enabled,
-        memory_capture_enabled=memory_capture_enabled,
-        memory_capture_notes_path=str(memory_capture_notes_path),
-        memory_capture_min_query_length=memory_capture_min_query_length,
-        memory_capture_keywords=memory_capture_keywords,
-        memory_notes_enabled=memory_notes_enabled,
-        memory_notes_path=str(memory_notes_path),
-        memory_notes_limit=memory_notes_limit,
-        memory_notes_mode=memory_notes_mode,
-        memory_notes_expiry_enabled=memory_notes_expiry_enabled,
-        memory_notes_ttl_days=memory_notes_ttl_days,
-        memory_notes_max_age_days=memory_notes_max_age_days,
-        memory_postprocess_enabled=memory_postprocess_enabled,
-        memory_postprocess_noise_filter_enabled=(
-            memory_postprocess_noise_filter_enabled
-        ),
-        memory_postprocess_length_norm_anchor_chars=(
-            memory_postprocess_length_norm_anchor_chars
-        ),
-        memory_postprocess_time_decay_half_life_days=(
-            memory_postprocess_time_decay_half_life_days
-        ),
-        memory_postprocess_hard_min_score=memory_postprocess_hard_min_score,
-        memory_postprocess_diversity_enabled=memory_postprocess_diversity_enabled,
-        memory_postprocess_diversity_similarity_threshold=(
-            memory_postprocess_diversity_similarity_threshold
-        ),
-    )
-    skills_payload = build_skills_payload(
-        skills_group=skills_group,
-        skills_dir=str(skills_dir),
-        precomputed_routing_enabled=precomputed_skills_routing_enabled,
-    )
-
-    index_payload = build_index_payload(
-        index_group=index_group,
-        index_languages=index_languages,
-        index_cache_path=str(index_cache_path),
-        index_incremental=index_incremental,
-        conventions_files=conventions_files,
-    )
-
-    embeddings_payload = build_embeddings_payload(
-        embeddings_group=embeddings_group,
-        embedding_enabled=embedding_enabled,
-        embedding_provider=embedding_provider,
-        embedding_model=embedding_model,
-        embedding_dimension=embedding_dimension,
-        embedding_index_path=str(embedding_index_path),
-        embedding_rerank_pool=embedding_rerank_pool,
-        embedding_lexical_weight=embedding_lexical_weight,
-        embedding_semantic_weight=embedding_semantic_weight,
-        embedding_min_similarity=embedding_min_similarity,
-        embedding_fail_open=embedding_fail_open,
-    )
-
-    cochange_payload = build_cochange_payload(
-        cochange_group=cochange_group,
-        cochange_enabled=cochange_enabled,
-        cochange_cache_path=str(cochange_cache_path),
-        cochange_lookback_commits=cochange_lookback_commits,
-        cochange_half_life_days=cochange_half_life_days,
-        cochange_top_neighbors=cochange_top_neighbors,
-        cochange_boost_weight=cochange_boost_weight,
-    )
-
-    tests_payload = build_tests_payload(
-        tests_group=tests_group,
-        junit_xml=junit_xml,
-        coverage_json=coverage_json,
-        sbfl_json=sbfl_json,
-        sbfl_metric=sbfl_metric,
-    )
-
-    scip_payload = build_scip_payload(
-        scip_group=scip_group,
-        scip_enabled=scip_enabled,
-        scip_index_path=str(scip_index_path),
-        scip_provider=scip_provider,
-        scip_generate_fallback=scip_generate_fallback,
-    )
-
-    retrieval_payload = build_retrieval_payload(
-        retrieval_group=retrieval_group,
-        adaptive_router_group=adaptive_router_group,
-        top_k_files=top_k_files,
-        min_candidate_score=min_candidate_score,
-        candidate_relative_threshold=candidate_relative_threshold,
-        candidate_ranker=candidate_ranker,
-        exact_search_enabled=exact_search_enabled,
-        deterministic_refine_enabled=deterministic_refine_enabled,
-        exact_search_time_budget_ms=exact_search_time_budget_ms,
-        exact_search_max_paths=exact_search_max_paths,
-        hybrid_re2_fusion_mode=hybrid_re2_fusion_mode,
-        hybrid_re2_rrf_k=hybrid_re2_rrf_k,
-        hybrid_re2_bm25_weight=hybrid_re2_bm25_weight,
-        hybrid_re2_heuristic_weight=hybrid_re2_heuristic_weight,
-        hybrid_re2_coverage_weight=hybrid_re2_coverage_weight,
-        hybrid_re2_combined_scale=hybrid_re2_combined_scale,
-        retrieval_policy=retrieval_policy,
-        policy_version=policy_version,
-        adaptive_router_enabled=adaptive_router_enabled,
-        adaptive_router_mode=adaptive_router_mode,
-        adaptive_router_model_path=str(adaptive_router_model_path),
-        adaptive_router_state_path=str(adaptive_router_state_path),
-        adaptive_router_arm_set=adaptive_router_arm_set,
-        adaptive_router_online_bandit_enabled=adaptive_router_online_bandit_enabled,
-        adaptive_router_online_bandit_experiment_enabled=adaptive_router_online_bandit_experiment_enabled,
-    )
-
-    repomap_payload = build_repomap_payload(
-        repomap_group=repomap_group,
-        repomap_enabled=repomap_enabled,
-        repomap_top_k=repomap_top_k,
-        repomap_neighbor_limit=repomap_neighbor_limit,
-        repomap_budget_tokens=repomap_budget_tokens,
-        repomap_ranking_profile=repomap_ranking_profile,
-        repomap_signal_weights=repomap_signal_weights,
-    )
-
-    lsp_payload = build_lsp_payload(
-        lsp_group=lsp_group,
-        lsp_enabled=lsp_enabled,
-        lsp_top_n=lsp_top_n,
-        lsp_commands=lsp_commands,
-        lsp_xref_enabled=lsp_xref_enabled,
-        lsp_xref_top_n=lsp_xref_top_n,
-        lsp_time_budget_ms=lsp_time_budget_ms,
-        lsp_xref_commands=lsp_xref_commands,
-    )
-
-    plugins_payload = build_plugins_payload(
-        plugins_group=plugins_group,
-        plugins_enabled=plugins_enabled,
-        remote_slot_policy_mode=remote_slot_policy_mode,
-        remote_slot_allowlist=remote_slot_allowlist,
-    )
-
-    chunking_payload = build_chunking_payload(
-        chunking_group=chunking_group,
-        chunk_top_k=chunk_top_k,
-        chunk_per_file_limit=chunk_per_file_limit,
-        chunk_disclosure=chunk_disclosure,
-        chunk_signature=chunk_signature,
-        chunk_snippet_max_lines=chunk_snippet_max_lines,
-        chunk_snippet_max_chars=chunk_snippet_max_chars,
-        chunk_token_budget=chunk_token_budget,
-        chunk_guard_enabled=chunk_guard_enabled,
-        chunk_guard_mode=chunk_guard_mode,
-        chunk_guard_lambda_penalty=chunk_guard_lambda_penalty,
-        chunk_guard_min_pool=chunk_guard_min_pool,
-        chunk_guard_max_pool=chunk_guard_max_pool,
-        chunk_guard_min_marginal_utility=chunk_guard_min_marginal_utility,
-        chunk_guard_compatibility_min_overlap=chunk_guard_compatibility_min_overlap,
-        chunk_diversity_enabled=chunk_diversity_enabled,
-        chunk_diversity_path_penalty=chunk_diversity_path_penalty,
-        chunk_diversity_symbol_family_penalty=chunk_diversity_symbol_family_penalty,
-        chunk_diversity_kind_penalty=chunk_diversity_kind_penalty,
-        chunk_diversity_locality_penalty=chunk_diversity_locality_penalty,
-        chunk_diversity_locality_window=chunk_diversity_locality_window,
-    )
-
-    tokenizer_payload = build_tokenizer_payload(
-        tokenizer_group=tokenizer_group,
-        tokenizer_model=tokenizer_model,
-    )
-
-    trace_payload = build_trace_payload(
-        trace_group=trace_group,
-        trace_export_enabled=trace_export_enabled,
-        trace_export_path=str(trace_export_path),
-        trace_otlp_enabled=trace_otlp_enabled,
-        trace_otlp_endpoint=trace_otlp_endpoint,
-        trace_otlp_timeout_seconds=trace_otlp_timeout_seconds,
-    )
-
-    plan_replay_cache_payload = build_plan_replay_cache_payload(
-        plan_replay_cache_group=plan_replay_cache_group,
-        plan_replay_cache_enabled=plan_replay_cache_enabled,
-        plan_replay_cache_path=str(plan_replay_cache_path),
+    groups = normalize_orchestrator_group_configs(
+        memory_config=memory_config,
+        skills_config=skills_config,
+        index_config=index_config,
+        embeddings_config=embeddings_config,
+        cochange_config=cochange_config,
+        tests_config=tests_config,
+        scip_config=scip_config,
+        retrieval_config=retrieval_config,
+        adaptive_router_config=adaptive_router_config,
+        plugins_config=plugins_config,
+        repomap_config=repomap_config,
+        lsp_config=lsp_config,
+        chunking_config=chunking_config,
+        tokenizer_config=tokenizer_config,
+        trace_config=trace_config,
+        plan_replay_cache_config=plan_replay_cache_config,
     )
 
     config = build_orchestrator_runtime_projection(
-        {
-            "memory": memory_payload,
-            "skills": skills_payload,
-            "retrieval": retrieval_payload,
-            "index": index_payload,
-            "repomap": repomap_payload,
-            "lsp": lsp_payload,
-            "plugins": plugins_payload,
-            "chunking": chunking_payload,
-            "tokenizer": tokenizer_payload,
-            "cochange": cochange_payload,
-            "tests": tests_payload,
-            "scip": scip_payload,
-            "embeddings": embeddings_payload,
-            "trace": trace_payload,
-            "plan_replay_cache": plan_replay_cache_payload,
-        }
+        build_orchestrator_projection_payload_map(
+            groups=groups,
+            memory_disclosure_mode=memory_disclosure_mode,
+            memory_preview_max_chars=memory_preview_max_chars,
+            memory_strategy=memory_strategy,
+            memory_gate_enabled=memory_gate_enabled,
+            memory_gate_mode=memory_gate_mode,
+            memory_timeline_enabled=memory_timeline_enabled,
+            memory_container_tag=(
+                str(memory_container_tag) if memory_container_tag is not None else None
+            ),
+            memory_auto_tag_mode=(
+                str(memory_auto_tag_mode) if memory_auto_tag_mode is not None else None
+            ),
+            memory_profile_enabled=memory_profile_enabled,
+            memory_profile_path=str(memory_profile_path),
+            memory_profile_top_n=memory_profile_top_n,
+            memory_profile_token_budget=memory_profile_token_budget,
+            memory_profile_expiry_enabled=memory_profile_expiry_enabled,
+            memory_profile_ttl_days=memory_profile_ttl_days,
+            memory_profile_max_age_days=memory_profile_max_age_days,
+            memory_feedback_enabled=memory_feedback_enabled,
+            memory_feedback_path=str(memory_feedback_path),
+            memory_feedback_max_entries=memory_feedback_max_entries,
+            memory_feedback_boost_per_select=memory_feedback_boost_per_select,
+            memory_feedback_max_boost=memory_feedback_max_boost,
+            memory_feedback_decay_days=memory_feedback_decay_days,
+            memory_long_term_enabled=memory_long_term_enabled,
+            memory_long_term_path=str(memory_long_term_path),
+            memory_long_term_top_n=memory_long_term_top_n,
+            memory_long_term_token_budget=memory_long_term_token_budget,
+            memory_long_term_write_enabled=memory_long_term_write_enabled,
+            memory_long_term_as_of_enabled=memory_long_term_as_of_enabled,
+            memory_capture_enabled=memory_capture_enabled,
+            memory_capture_notes_path=str(memory_capture_notes_path),
+            memory_capture_min_query_length=memory_capture_min_query_length,
+            memory_capture_keywords=memory_capture_keywords,
+            memory_notes_enabled=memory_notes_enabled,
+            memory_notes_path=str(memory_notes_path),
+            memory_notes_limit=memory_notes_limit,
+            memory_notes_mode=memory_notes_mode,
+            memory_notes_expiry_enabled=memory_notes_expiry_enabled,
+            memory_notes_ttl_days=memory_notes_ttl_days,
+            memory_notes_max_age_days=memory_notes_max_age_days,
+            memory_postprocess_enabled=memory_postprocess_enabled,
+            memory_postprocess_noise_filter_enabled=memory_postprocess_noise_filter_enabled,
+            memory_postprocess_length_norm_anchor_chars=memory_postprocess_length_norm_anchor_chars,
+            memory_postprocess_time_decay_half_life_days=memory_postprocess_time_decay_half_life_days,
+            memory_postprocess_hard_min_score=memory_postprocess_hard_min_score,
+            memory_postprocess_diversity_enabled=memory_postprocess_diversity_enabled,
+            memory_postprocess_diversity_similarity_threshold=memory_postprocess_diversity_similarity_threshold,
+            skills_dir=str(skills_dir),
+            precomputed_routing_enabled=precomputed_skills_routing_enabled,
+            top_k_files=top_k_files,
+            index_languages=index_languages,
+            index_cache_path=str(index_cache_path),
+            index_incremental=index_incremental,
+            conventions_files=conventions_files,
+            min_candidate_score=min_candidate_score,
+            candidate_relative_threshold=candidate_relative_threshold,
+            candidate_ranker=candidate_ranker,
+            exact_search_enabled=exact_search_enabled,
+            deterministic_refine_enabled=deterministic_refine_enabled,
+            exact_search_time_budget_ms=exact_search_time_budget_ms,
+            exact_search_max_paths=exact_search_max_paths,
+            hybrid_re2_fusion_mode=hybrid_re2_fusion_mode,
+            hybrid_re2_rrf_k=hybrid_re2_rrf_k,
+            hybrid_re2_bm25_weight=hybrid_re2_bm25_weight,
+            hybrid_re2_heuristic_weight=hybrid_re2_heuristic_weight,
+            hybrid_re2_coverage_weight=hybrid_re2_coverage_weight,
+            hybrid_re2_combined_scale=hybrid_re2_combined_scale,
+            retrieval_policy=retrieval_policy,
+            policy_version=policy_version,
+            adaptive_router_enabled=adaptive_router_enabled,
+            adaptive_router_mode=adaptive_router_mode,
+            adaptive_router_model_path=str(adaptive_router_model_path),
+            adaptive_router_state_path=str(adaptive_router_state_path),
+            adaptive_router_arm_set=adaptive_router_arm_set,
+            adaptive_router_online_bandit_enabled=adaptive_router_online_bandit_enabled,
+            adaptive_router_online_bandit_experiment_enabled=adaptive_router_online_bandit_experiment_enabled,
+            embedding_enabled=embedding_enabled,
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
+            embedding_dimension=embedding_dimension,
+            embedding_index_path=str(embedding_index_path),
+            embedding_rerank_pool=embedding_rerank_pool,
+            embedding_lexical_weight=embedding_lexical_weight,
+            embedding_semantic_weight=embedding_semantic_weight,
+            embedding_min_similarity=embedding_min_similarity,
+            embedding_fail_open=embedding_fail_open,
+            cochange_enabled=cochange_enabled,
+            cochange_cache_path=str(cochange_cache_path),
+            cochange_lookback_commits=cochange_lookback_commits,
+            cochange_half_life_days=cochange_half_life_days,
+            cochange_top_neighbors=cochange_top_neighbors,
+            cochange_boost_weight=cochange_boost_weight,
+            junit_xml=junit_xml,
+            coverage_json=coverage_json,
+            sbfl_json=sbfl_json,
+            sbfl_metric=sbfl_metric,
+            scip_enabled=scip_enabled,
+            scip_index_path=str(scip_index_path),
+            scip_provider=scip_provider,
+            scip_generate_fallback=scip_generate_fallback,
+            repomap_enabled=repomap_enabled,
+            repomap_top_k=repomap_top_k,
+            repomap_neighbor_limit=repomap_neighbor_limit,
+            repomap_budget_tokens=repomap_budget_tokens,
+            repomap_ranking_profile=repomap_ranking_profile,
+            repomap_signal_weights=repomap_signal_weights,
+            lsp_enabled=lsp_enabled,
+            lsp_top_n=lsp_top_n,
+            lsp_commands=lsp_commands,
+            lsp_xref_enabled=lsp_xref_enabled,
+            lsp_xref_top_n=lsp_xref_top_n,
+            lsp_time_budget_ms=lsp_time_budget_ms,
+            lsp_xref_commands=lsp_xref_commands,
+            plugins_enabled=plugins_enabled,
+            remote_slot_policy_mode=remote_slot_policy_mode,
+            remote_slot_allowlist=remote_slot_allowlist,
+            chunk_top_k=chunk_top_k,
+            chunk_per_file_limit=chunk_per_file_limit,
+            chunk_disclosure=chunk_disclosure,
+            chunk_signature=chunk_signature,
+            chunk_snippet_max_lines=chunk_snippet_max_lines,
+            chunk_snippet_max_chars=chunk_snippet_max_chars,
+            chunk_token_budget=chunk_token_budget,
+            chunk_guard_enabled=chunk_guard_enabled,
+            chunk_guard_mode=chunk_guard_mode,
+            chunk_guard_lambda_penalty=chunk_guard_lambda_penalty,
+            chunk_guard_min_pool=chunk_guard_min_pool,
+            chunk_guard_max_pool=chunk_guard_max_pool,
+            chunk_guard_min_marginal_utility=chunk_guard_min_marginal_utility,
+            chunk_guard_compatibility_min_overlap=chunk_guard_compatibility_min_overlap,
+            chunk_diversity_enabled=chunk_diversity_enabled,
+            chunk_diversity_path_penalty=chunk_diversity_path_penalty,
+            chunk_diversity_symbol_family_penalty=chunk_diversity_symbol_family_penalty,
+            chunk_diversity_kind_penalty=chunk_diversity_kind_penalty,
+            chunk_diversity_locality_penalty=chunk_diversity_locality_penalty,
+            chunk_diversity_locality_window=chunk_diversity_locality_window,
+            tokenizer_model=tokenizer_model,
+            trace_export_enabled=trace_export_enabled,
+            trace_export_path=str(trace_export_path),
+            trace_otlp_enabled=trace_otlp_enabled,
+            trace_otlp_endpoint=trace_otlp_endpoint,
+            trace_otlp_timeout_seconds=trace_otlp_timeout_seconds,
+            plan_replay_cache_enabled=plan_replay_cache_enabled,
+            plan_replay_cache_path=str(plan_replay_cache_path),
+        )
     )
 
     runtime_manager = RuntimeManager(

@@ -638,6 +638,10 @@ def _quality_commands(
 ) -> list[tuple[str, list[str]]]:
     return [
         ("ruff", [python_exe, "-m", "ruff", "check", *RUFF_TARGETS]),
+        (
+            "skills_lint",
+            [python_exe, "-m", "pytest", "-q", "tests/unit/test_skills.py", "-k", "lint"],
+        ),
         ("mypy", [python_exe, "-m", "mypy"]),
         (
             "bandit",

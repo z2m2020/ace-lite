@@ -5,6 +5,7 @@
 Establish a repeatable quality gate for `ace-lite-engine` that combines:
 
 - linting (`ruff`)
+- skill metadata linting (`pytest -q tests/unit/test_skills.py -k lint`)
 - type checks (`mypy`)
 - security scanning (`bandit`)
 - dependency auditing (`pip-audit`)
@@ -86,6 +87,21 @@ These suites freeze three contracts that are easy to drift during refactors:
   with `scripts/run_quality_gate.py` whenever a refactor wave moves the largest
   remaining concentration risks into new helper/support modules
 
+## Typed Hotspot Scope (2026-04-14)
+
+- `mypy` tightening now starts to move from general utility/helper seams into
+  the typed orchestration boundaries created by the recent Wave16/Wave17
+  refactors.
+- The stricter per-module override currently covers:
+  - `ace_lite.orchestrator_runtime_support_types`
+  - `ace_lite.orchestrator_runtime_finalization`
+  - `ace_lite.cli_app.orchestrator_factory_support`
+  - `ace_lite.cli_app.orchestrator_factory`
+- `ace_lite.orchestrator_runtime_support` is intentionally excluded from this
+  first typed-hotspot batch because it still has known `no-any-return`
+  findings. Treat that file as the next dedicated cleanup wave instead of
+  diluting the seam-level gate added here.
+
 ## Local Commands
 
 ```powershell
@@ -93,6 +109,7 @@ pip install -e .[dev]
 python scripts/validate_docs_cli_snippets.py
 python scripts/run_precommit_validation.py --staged
 pre-commit install
+python -m pytest -q tests/unit/test_skills.py -k lint
 python scripts/run_quality_gate.py --root . --output-dir artifacts/quality/latest --pip-audit-baseline benchmark/quality/pip_audit_baseline.json --fail-on-new-vulns --friction-log artifacts/friction/events.jsonl
 python scripts/run_quality_gate.py --root . --output-dir artifacts/quality/hotspots --hotspot-path src/ace_lite/orchestrator.py --hotspot-path src/ace_lite/plan_quick.py
 python scripts/build_friction_report.py --events-path artifacts/friction/events.jsonl --output-dir artifacts/friction/latest
@@ -100,6 +117,7 @@ python scripts/log_friction_event.py --stage planning --expected "ace_plan_quick
 ```
 
 `run_quality_gate.py` now also emits report-only hotspot `ruff` and `mypy` results for the tracked hotspot file set. These hotspot checks are observability-only and do not flip the overall gate result, but they give maintainers a stable way to track whether the highest-risk files are converging.
+The blocking gate now also runs the repository skill frontmatter lint slice so metadata regressions fail fast before release packaging.
 
 When a refactor wave is working through the hotspot backlog incrementally, use
 `--hotspot-path` to narrow the report-only hotspot checks and summary to the

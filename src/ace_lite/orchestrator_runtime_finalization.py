@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from ace_lite.exceptions import StageContractError
-from ace_lite.orchestrator_runtime_support_types import OrchestratorFinalizationResult
+from ace_lite.orchestrator_runtime_support_types import (
+    OrchestratorFinalizationDependencies,
+    OrchestratorFinalizationResult,
+)
 from ace_lite.pipeline.types import StageContext, StageMetric
 
 
 def execute_orchestrator_finalization(
     *,
-    orchestrator: Any,
     query: str,
     repo: str,
     root_path: str,
@@ -20,14 +23,15 @@ def execute_orchestrator_finalization(
     ctx: StageContext,
     stage_metrics: list[StageMetric],
     plugins_loaded: list[str],
-    started_at: Any,
+    started_at: datetime,
     total_ms: float,
     contract_error: StageContractError | None,
     replay_cache_info: dict[str, Any],
+    dependencies: OrchestratorFinalizationDependencies,
     apply_contract_error_to_payload_fn: Callable[..., None],
     validate_context_plan_fn: Callable[[dict[str, Any]], None],
 ) -> OrchestratorFinalizationResult:
-    payload = orchestrator._build_plan_payload(
+    payload = dependencies.build_plan_payload(
         query=query,
         repo=repo,
         root=root_path,
@@ -46,7 +50,7 @@ def execute_orchestrator_finalization(
     )
     validate_context_plan_fn(payload)
 
-    trace_export = orchestrator._export_stage_trace(
+    trace_export = dependencies.export_stage_trace(
         query=query,
         repo=repo,
         root=root_path,
@@ -58,7 +62,7 @@ def execute_orchestrator_finalization(
     if trace_export.get("enabled"):
         payload["observability"]["trace_export"] = trace_export
 
-    durable_stats = orchestrator._record_durable_stats(
+    durable_stats = dependencies.record_durable_stats(
         query=query,
         repo=repo,
         root=root_path,
@@ -70,10 +74,10 @@ def execute_orchestrator_finalization(
         trace_export=trace_export,
     )
     payload["observability"]["durable_stats"] = durable_stats
-    orchestrator._runtime_state.note_plan_root(root_path)
-    orchestrator._runtime_state.note_durable_stats(durable_stats)
-    if orchestrator._runtime_manager is not None:
-        orchestrator._runtime_manager.ensure_shutdown_hooks()
+    dependencies.runtime_state.note_plan_root(root_path)
+    dependencies.runtime_state.note_durable_stats(durable_stats)
+    if dependencies.runtime_manager is not None:
+        dependencies.runtime_manager.ensure_shutdown_hooks()
 
     return OrchestratorFinalizationResult(
         payload=payload,

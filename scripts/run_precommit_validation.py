@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import subprocess
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +19,7 @@ _FULL_PYTEST_FILES = {
     ".github/workflows/ci.yml",
 }
 _DOC_PREFIXES = ("docs/",)
+_SKILLS_PREFIXES = ("skills/",)
 
 
 @dataclass(frozen=True)
@@ -105,6 +105,16 @@ def _build_validation_plan(*, changed_files: Sequence[str]) -> ValidationPlan:
             commands=(("python", "-m", "pytest", "-q", *unit_tests),),
             requires_version_sync=pyproject_changed,
             reason="unit_tests_only",
+        )
+
+    if any(path.startswith(prefix) for prefix in _SKILLS_PREFIXES for path in normalized):
+        return ValidationPlan(
+            changed_files=normalized,
+            commands=(
+                ("python", "-m", "pytest", "-q", "tests/unit/test_skills.py", "-k", "lint"),
+            ),
+            requires_version_sync=pyproject_changed,
+            reason="skills_metadata_validation",
         )
 
     if any(path.startswith(prefix) for prefix in _DOC_PREFIXES for path in normalized):

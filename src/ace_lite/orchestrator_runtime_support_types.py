@@ -1,13 +1,71 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from ace_lite.exceptions import StageContractError
 from ace_lite.pipeline.hooks import HookBus
 from ace_lite.pipeline.registry import StageRegistry
 from ace_lite.pipeline.types import StageContext, StageMetric
+
+
+class FinalizationPlanPayloadBuilder(Protocol):
+    def __call__(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        conventions: dict[str, Any],
+        ctx: StageContext,
+        stage_metrics: list[StageMetric],
+        plugins_loaded: list[str],
+        total_ms: float,
+        contract_error: StageContractError | None,
+        replay_cache_info: dict[str, Any],
+    ) -> dict[str, Any]: ...
+
+
+class FinalizationTraceExporter(Protocol):
+    def __call__(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        started_at: datetime,
+        total_ms: float,
+        stage_metrics: list[StageMetric],
+        plugin_policy_summary: dict[str, Any],
+    ) -> dict[str, Any]: ...
+
+
+class FinalizationDurableStatsRecorder(Protocol):
+    def __call__(
+        self,
+        *,
+        query: str,
+        repo: str,
+        root: str,
+        started_at: datetime,
+        total_ms: float,
+        stage_metrics: list[StageMetric],
+        contract_error: StageContractError | None,
+        replay_cache_info: dict[str, Any] | None,
+        trace_export: dict[str, Any],
+    ) -> dict[str, Any]: ...
+
+
+class FinalizationRuntimeState(Protocol):
+    def note_plan_root(self, root: str | None) -> None: ...
+
+    def note_durable_stats(self, payload: dict[str, Any] | None) -> None: ...
+
+
+class FinalizationRuntimeManager(Protocol):
+    def ensure_shutdown_hooks(self) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +88,15 @@ class OrchestratorFinalizationResult:
     payload: dict[str, Any]
     trace_export: dict[str, Any]
     durable_stats: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class OrchestratorFinalizationDependencies:
+    build_plan_payload: FinalizationPlanPayloadBuilder
+    export_stage_trace: FinalizationTraceExporter
+    record_durable_stats: FinalizationDurableStatsRecorder
+    runtime_state: FinalizationRuntimeState
+    runtime_manager: FinalizationRuntimeManager | None
 
 
 @dataclass(slots=True)
@@ -97,7 +164,13 @@ __all__ = [
     "POST_SOURCE_PLAN_LIFECYCLE",
     "PRE_SOURCE_PLAN_LIFECYCLE",
     "SOURCE_PLAN_LIFECYCLE",
+    "FinalizationDurableStatsRecorder",
+    "FinalizationPlanPayloadBuilder",
+    "FinalizationRuntimeManager",
+    "FinalizationRuntimeState",
+    "FinalizationTraceExporter",
     "OrchestratorAgentLoopResult",
+    "OrchestratorFinalizationDependencies",
     "OrchestratorFinalizationResult",
     "OrchestratorLifecycleDescriptor",
     "OrchestratorLifecycleResult",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from ace_lite.agent_loop.controller import BoundedLoopController
@@ -37,6 +38,7 @@ from ace_lite.orchestrator_runtime_support_types import (
     PRE_SOURCE_PLAN_LIFECYCLE,
     SOURCE_PLAN_LIFECYCLE,
     OrchestratorAgentLoopResult,
+    OrchestratorFinalizationDependencies,
     OrchestratorFinalizationResult,
     OrchestratorLifecycleDescriptor,
     OrchestratorLifecycleResult,
@@ -121,13 +123,12 @@ def run_orchestrator_finalization(
     ctx: StageContext,
     stage_metrics: list[StageMetric],
     plugins_loaded: list[str],
-    started_at: Any,
+    started_at: datetime,
     total_ms: float,
     contract_error: StageContractError | None,
     replay_cache_info: dict[str, Any],
 ) -> OrchestratorFinalizationResult:
     return execute_orchestrator_finalization(
-        orchestrator=orchestrator,
         query=query,
         repo=repo,
         root_path=root_path,
@@ -139,8 +140,32 @@ def run_orchestrator_finalization(
         total_ms=total_ms,
         contract_error=contract_error,
         replay_cache_info=replay_cache_info,
+        dependencies=build_orchestrator_finalization_dependencies(
+            orchestrator=orchestrator
+        ),
         apply_contract_error_to_payload_fn=_apply_contract_error_to_payload,
         validate_context_plan_fn=validate_context_plan,
+    )
+
+
+def build_orchestrator_finalization_dependencies(
+    *,
+    orchestrator: Any,
+) -> OrchestratorFinalizationDependencies:
+    def _record_durable_stats(**kwargs: Any) -> dict[str, Any]:
+        return orchestrator._runtime_observability_service.record_durable_stats(
+            **kwargs,
+            learning_router_rollout_decision=(
+                orchestrator._last_learning_router_rollout_decision
+            ),
+        )
+
+    return OrchestratorFinalizationDependencies(
+        build_plan_payload=orchestrator._build_plan_payload,
+        export_stage_trace=orchestrator._runtime_observability_service.export_stage_trace,
+        record_durable_stats=_record_durable_stats,
+        runtime_state=orchestrator._runtime_state,
+        runtime_manager=orchestrator._runtime_manager,
     )
 
 
@@ -307,11 +332,13 @@ __all__ = [
     "PRE_SOURCE_PLAN_LIFECYCLE",
     "SOURCE_PLAN_LIFECYCLE",
     "OrchestratorAgentLoopResult",
+    "OrchestratorFinalizationDependencies",
     "OrchestratorFinalizationResult",
     "OrchestratorLifecycleDescriptor",
     "OrchestratorLifecycleResult",
     "OrchestratorPreparationResult",
     "OrchestratorSourcePlanReplayResult",
+    "build_orchestrator_finalization_dependencies",
     "finalize_source_plan_replay",
     "get_lifecycle_descriptor",
     "iter_lifecycle_descriptors",

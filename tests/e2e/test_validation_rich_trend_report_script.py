@@ -289,6 +289,8 @@ def test_validation_rich_trend_report_main_writes_summary(
         )
     )
     assert output["report_only"] is True
+    assert output["latest_report_mode"] == "explicit_override"
+    assert output["latest_report_path"] == str(report_b.resolve())
     assert output["history_count"] == 2
     assert output["latest"]["generated_at"] == "2026-03-12T00:00:00+00:00"
     assert output["previous"]["generated_at"] == "2026-03-11T00:00:00+00:00"
@@ -352,6 +354,7 @@ def test_validation_rich_trend_report_main_writes_summary(
         encoding="utf-8"
     )
     assert "- Report only: True" in markdown
+    assert "- Latest report mode: explicit_override" in markdown
     assert "## Latest Q2 Retrieval Control Plane Gate" in markdown
     assert "- Gate passed: True" in markdown
     assert "- Shadow coverage: 0.8500" in markdown
@@ -439,9 +442,101 @@ def test_validation_rich_trend_report_prefers_generated_at_over_file_mtime(
             encoding="utf-8"
         )
     )
+    assert output["latest_report_mode"] == "none"
     assert output["latest"]["generated_at"] == "2026-03-12T00:00:00+00:00"
     assert output["previous"]["generated_at"] == "2026-03-11T00:00:00+00:00"
     assert output["delta"]["task_success_rate"]["delta"] == pytest.approx(0.2)
+
+
+def test_validation_rich_trend_report_defaults_to_canonical_current_latest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("build_validation_rich_trend_report.py")
+
+    history_root = tmp_path / "history"
+    dated_report = history_root / "2026-03-18-wave5-budget-pass" / "summary.json"
+    canonical_latest = history_root / "latest" / "summary.json"
+    tuned_latest = history_root / "tuned" / "latest" / "summary.json"
+
+    _write_validation_rich_summary(
+        dated_report,
+        generated_at="2026-03-18T00:00:00+00:00",
+        repo="ace-lite-engine",
+        case_count=7,
+        regressed=False,
+        failed_checks=[],
+        task_success_rate=1.0,
+        precision_at_k=0.56,
+        noise_rate=0.44,
+        validation_test_count=5.0,
+        latency_p95_ms=130.0,
+        evidence_insufficient_rate=0.0,
+        missing_validation_rate=0.0,
+    )
+    _write_validation_rich_summary(
+        canonical_latest,
+        generated_at="2026-03-19T00:00:00+00:00",
+        repo="ace-lite-engine",
+        case_count=7,
+        regressed=False,
+        failed_checks=[],
+        task_success_rate=1.0,
+        precision_at_k=0.59,
+        noise_rate=0.41,
+        validation_test_count=5.0,
+        latency_p95_ms=127.0,
+        evidence_insufficient_rate=0.0,
+        missing_validation_rate=0.0,
+    )
+    _write_validation_rich_summary(
+        tuned_latest,
+        generated_at="2026-03-20T00:00:00+00:00",
+        repo="ace-lite-engine",
+        case_count=7,
+        regressed=False,
+        failed_checks=[],
+        task_success_rate=1.0,
+        precision_at_k=0.61,
+        noise_rate=0.39,
+        validation_test_count=5.0,
+        latency_p95_ms=999.0,
+        evidence_insufficient_rate=0.0,
+        missing_validation_rate=0.0,
+    )
+
+    def fake_git_diff(cmd, cwd, check, capture_output, text):
+        _ = (cmd, cwd, check, capture_output, text)
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_git_diff)
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        [
+            "build_validation_rich_trend_report.py",
+            "--history-root",
+            str(history_root),
+            "--output-dir",
+            str(tmp_path / "trend"),
+        ],
+    )
+
+    exit_code = module.main()
+    assert exit_code == 0
+
+    output = json.loads(
+        (tmp_path / "trend" / "validation_rich_trend_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert output["latest_report_mode"] == "canonical_current"
+    assert output["latest_report_path"] == str(canonical_latest.resolve())
+    assert output["canonical_latest_report_path"] == str(canonical_latest.resolve())
+    assert output["history_count"] == 2
+    assert output["latest"]["path"] == str(canonical_latest.resolve())
+    assert output["latest"]["metrics"]["latency_p95_ms"] == pytest.approx(127.0)
+    assert all("tuned/latest/summary.json" not in row["path"] for row in output["history"])
 
 
 def test_validation_rich_trend_report_handles_single_report(
