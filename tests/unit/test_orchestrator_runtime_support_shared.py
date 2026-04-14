@@ -15,6 +15,7 @@ def test_runtime_support_keeps_shared_helper_aliases() -> None:
 
 
 def test_runtime_support_compat_rerun_stage_resolver_preserves_post_validation_shortcut() -> None:
+    assert support._RUNTIME_SUPPORT_COMPAT.stage_groups.post_stage_names == ("validation",)
     assert support._resolve_agent_loop_rerun_stages(
         action_type="request_validation_retry"
     ) == ["validation"]

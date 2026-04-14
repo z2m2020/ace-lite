@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import ace_lite.benchmark.report as report_module
 from ace_lite.benchmark.report import (
     ALL_METRIC_ORDER,
     build_report_markdown,
@@ -3383,6 +3384,54 @@ def test_build_results_summary_includes_ltm_latency_alignment_summary() -> None:
         ][0]["feedback_signal"]
         == "helpful"
     )
+
+
+def test_build_report_markdown_prefers_precomputed_ltm_latency_alignment_summary(
+    monkeypatch,
+) -> None:
+    def _unexpected_recompute(*, results: dict[str, object]) -> dict[str, object]:
+        raise AssertionError("should use precomputed ltm latency alignment summary")
+
+    monkeypatch.setattr(
+        report_module,
+        "_build_ltm_latency_alignment_summary",
+        _unexpected_recompute,
+    )
+
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-04-14T00:00:00Z",
+            "repo": "demo",
+            "case_count": 1,
+            "metrics": {},
+            "runtime_stats_summary": {
+                "db_path": "runtime.db",
+                "summary": {},
+                "memory_health_summary": {
+                    "scope_kind": "session",
+                    "runtime_event_count": 1,
+                    "issue_count": 0,
+                    "open_issue_count": 0,
+                    "fix_count": 0,
+                    "resolution_rate": 0.0,
+                    "memory_stage_latency_ms_avg": 5.0,
+                },
+            },
+            "ltm_latency_alignment_summary": {
+                "benchmark_ltm_latency_overhead_ms": 4.0,
+                "runtime_memory_stage_latency_ms_avg": 5.0,
+                "alignment_gap_ms": 1.0,
+                "benchmark_to_runtime_ratio": 0.8,
+                "has_runtime_reference": True,
+                "has_benchmark_signal": True,
+                "comparable": True,
+            },
+        }
+    )
+
+    assert "Benchmark LTM latency overhead: 4.00 ms" in report
+    assert "Benchmark/runtime alignment gap: 1.00 ms" in report
+    assert "Benchmark/runtime ratio: 0.8000" in report
 
 
 def test_build_results_summary_adds_pq_003_overlay_from_case_plan_confidence_summary() -> None:

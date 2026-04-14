@@ -8,6 +8,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.78] - 2026-04-14
+
+### Changed
+
+- Split `orchestrator_runtime_support_compat.py` so stage-group rerun policy now lives behind `OrchestratorRuntimeStageGroups`, while compat patchpoint re-exports remain a thinner shell with Protocol-typed dependencies.
+- Reused precomputed `ltm_latency_alignment_summary` during benchmark report rendering and made `write_results()` reuse a single `build_results_summary()` result for both markdown rendering and `summary.json` emission.
+
 ## [0.3.77] - 2026-04-14
 
 ### Changed

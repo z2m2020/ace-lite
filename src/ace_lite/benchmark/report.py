@@ -1866,7 +1866,12 @@ def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> 
                     ),
                 )
             )
-        alignment_summary = _build_ltm_latency_alignment_summary(results=results)
+        alignment_summary_raw = results.get("ltm_latency_alignment_summary")
+        alignment_summary: dict[str, Any] = (
+            alignment_summary_raw if isinstance(alignment_summary_raw, dict) else {}
+        )
+        if not alignment_summary:
+            alignment_summary = _build_ltm_latency_alignment_summary(results=results)
         if alignment_summary:
             lines.append(
                 "- Benchmark LTM latency overhead: {value:.2f} ms".format(
@@ -2858,12 +2863,16 @@ def write_results(results: dict[str, Any], *, output_dir: str | Path) -> dict[st
     report_path = base / "report.md"
     summary_path = base / "summary.json"
 
+    summary = build_results_summary(results)
+    report_results = dict(results)
+    report_results.update(summary)
+
     results_path.write_text(
         json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    report_path.write_text(build_report_markdown(results), encoding="utf-8")
+    report_path.write_text(build_report_markdown(report_results), encoding="utf-8")
     summary_path.write_text(
-        json.dumps(build_results_summary(results), ensure_ascii=False, indent=2),
+        json.dumps(summary, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
