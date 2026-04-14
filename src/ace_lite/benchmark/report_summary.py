@@ -37,6 +37,7 @@ OPTIONAL_SUMMARY_MAPPING_KEYS = (
     "reward_log_summary",
     "runtime_stats_summary",
     "tuning_context_summary",
+    "workload_taxonomy_summary",
 )
 
 

@@ -215,6 +215,18 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "cache_hit": bool(cache.get("cache_hit", False)),
             "candidate_count": len(candidates) if isinstance(candidates, list) else 0,
             "candidate_chunk_count": len(chunks) if isinstance(chunks, list) else 0,
+            "chunk_source_line_read_count": int(
+                chunk_metrics.get("source_line_read_count", 0) or 0
+            ),
+            "chunk_source_line_read_path_count": int(
+                chunk_metrics.get("source_line_read_path_count", 0) or 0
+            ),
+            "chunk_signature_materialized_count": int(
+                chunk_metrics.get("signature_materialized_count", 0) or 0
+            ),
+            "chunk_snippet_materialized_count": int(
+                chunk_metrics.get("snippet_materialized_count", 0) or 0
+            ),
             "chunks_per_file_mean": float(
                 chunk_metrics.get("chunks_per_file_mean", 0.0) or 0.0
             ),
@@ -566,6 +578,21 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "available_count": int(output.get("available_count", 0) or 0),
             "token_budget": int(output.get("token_budget", 0) or 0),
             "token_budget_used": int(output.get("token_budget_used", 0) or 0),
+            "metadata_only_routing": bool(output.get("metadata_only_routing", False)),
+            "precomputed_route": str(output.get("routing_source", "")).strip().lower()
+            == "precomputed",
+            "route_latency_ms": float(output.get("route_latency_ms", 0.0) or 0.0),
+            "hydration_latency_ms": float(
+                output.get("hydration_latency_ms", 0.0) or 0.0
+            ),
+            "selected_manifest_token_estimate_total": int(
+                output.get("selected_manifest_token_estimate_total", 0) or 0
+            ),
+            "hydrated_skill_count": int(output.get("hydrated_skill_count", 0) or 0),
+            "hydrated_sections_count": int(
+                output.get("hydrated_sections_count", 0) or 0
+            ),
+            "markdown_bytes_loaded": int(output.get("markdown_bytes_loaded", 0) or 0),
             "budget_exhausted": bool(output.get("budget_exhausted", False)),
             "skipped_for_budget_count": len(output.get("skipped_for_budget", []))
             if isinstance(output.get("skipped_for_budget"), list)
@@ -591,6 +618,9 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "step_count": len(output.get("steps", []))
             if isinstance(output.get("steps"), list)
             else 0,
+            "candidate_file_count": len(output.get("candidate_files", []))
+            if isinstance(output.get("candidate_files"), list)
+            else 0,
             "candidate_chunk_count": len(chunks) if isinstance(chunks, list) else 0,
             "chunk_step_count": len(chunk_steps) if isinstance(chunk_steps, list) else 0,
             "validation_test_count": len(output.get("validation_tests", []))
@@ -614,6 +644,7 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "evidence_hint_only_ratio": float(
                 evidence_summary.get("hint_only_ratio", 0.0) or 0.0
             ),
+            "chunk_budget_limit": float(output.get("chunk_budget_limit", 0.0) or 0.0),
             "chunk_budget_used": float(output.get("chunk_budget_used", 0.0) or 0.0),
             "packing_graph_closure_preference_enabled": bool(
                 packing.get("graph_closure_preference_enabled", False)

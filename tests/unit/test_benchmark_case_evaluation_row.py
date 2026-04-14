@@ -123,6 +123,10 @@ def _base_row_kwargs() -> dict[str, object]:
         "skills_hydration_latency_ms": 2.4,
         "skills_metadata_only_routing": True,
         "skills_precomputed_route": True,
+        "candidate_rows_materialized_count": 4,
+        "candidate_chunks_materialized_count": 2,
+        "source_plan_candidate_chunks_materialized_count": 1,
+        "skills_markdown_bytes_loaded": 512,
         "plan_replay_cache_enabled": True,
         "plan_replay_cache_hit": True,
         "plan_replay_cache_stale_hit_safe": True,
@@ -349,6 +353,13 @@ def test_build_case_evaluation_row_contract() -> None:
     assert row["source_plan_validation_feedback_selected_test_count"] == 1.0
     assert row["source_plan_validation_feedback_executed_test_count"] == 1.0
     assert row["skills_budget_exhausted"] == 1.0
+    assert row["candidate_rows_materialized_count"] == 4.0
+    assert row["candidate_chunks_materialized_count"] == 2.0
+    assert row["source_plan_candidate_chunks_materialized_count"] == 1.0
+    assert row["skills_markdown_bytes_loaded"] == 512.0
+    assert row["budget_abort"] == 1.0
+    assert row["fallback_taken"] == 1.0
+    assert row["workload_taxonomy"] == "mixed_general"
     assert row["plan_replay_cache_hit"] == 1.0
     assert row["source_plan_granularity_preferred_count"] == 1.0
     assert row["source_plan_packed_path_ratio"] == 0.5

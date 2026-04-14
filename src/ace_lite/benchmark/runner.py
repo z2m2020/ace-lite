@@ -42,6 +42,7 @@ from ace_lite.benchmark.scoring import (
     build_validation_branch_gate_summary,
     build_validation_branch_summary,
     build_validation_probe_summary,
+    build_workload_taxonomy_summary,
     compare_metrics,
     detect_regression,
     evaluate_case_result,
@@ -587,6 +588,7 @@ class BenchmarkRunner:
             "feedback_observability_summary": build_feedback_observability_summary(
                 case_results
             ),
+            "workload_taxonomy_summary": build_workload_taxonomy_summary(case_results),
             "ltm_explainability_summary": build_ltm_explainability_summary(
                 case_results
             ),

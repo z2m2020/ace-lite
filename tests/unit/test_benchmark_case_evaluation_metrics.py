@@ -11,6 +11,7 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
             "selected": [{"name": "skill-a"}, {"name": "skill-b"}],
             "token_budget": 600,
             "token_budget_used": 250,
+            "markdown_bytes_loaded": 512,
             "budget_exhausted": True,
             "routing_source": "precomputed",
             "skipped_for_budget": [{"name": "skill-c"}],
@@ -114,8 +115,16 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
         "candidate_ranking": {
             "fallbacks": ["lexical_failopen"],
             "exact_search": {"requested": True},
-            "second_pass": {"applied": True},
-            "refine_pass": {"applied": False},
+            "second_pass": {
+                "applied": True,
+                "candidate_count_before": 4,
+                "candidate_count_after": 3,
+            },
+            "refine_pass": {
+                "applied": False,
+                "candidate_count_before": 3,
+                "candidate_count_after": 2,
+            },
             "multi_channel_rrf_enabled": True,
             "multi_channel_rrf_applied": True,
             "multi_channel_rrf_granularity_count": 3,
@@ -257,6 +266,10 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
     assert metrics.native_scip_reference_occurrence_count == 11
     assert metrics.native_scip_symbol_definition_count == 3
     assert metrics.skills_budget_exhausted is True
+    assert metrics.candidate_rows_materialized_count == 4
+    assert metrics.candidate_chunks_materialized_count == 2
+    assert metrics.source_plan_candidate_chunks_materialized_count == 1
+    assert metrics.skills_markdown_bytes_loaded == 512
     assert metrics.plan_replay_cache_hit is True
     assert metrics.source_plan_packed_path_ratio == 1.0
     assert metrics.router_online_bandit_requested is True

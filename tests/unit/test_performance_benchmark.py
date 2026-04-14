@@ -9,6 +9,7 @@ import copy
 import json
 import time
 
+from ace_lite.chunking import builder as chunk_builder
 from ace_lite.performance_benchmark import (
     BenchmarkComparison,
     BenchmarkConfig,
@@ -392,6 +393,92 @@ class TestMemoryStageTokenEstimateBenchmark:
         optimized = runner.run(
             "cached_estimate",
             cached_estimate,
+        )
+        comparison = BenchmarkComparison(baseline=baseline, optimized=optimized)
+
+        assert comparison.speedup_ratio > 1.0
+
+
+class TestChunkMaterializationBenchmark:
+    """Focused benchmark coverage for lazy chunk source-line materialization."""
+
+    def test_refs_lazy_materialization_beats_snippet_path_for_top_level_symbols(
+        self,
+        monkeypatch,
+    ) -> None:
+        files_map: dict[str, dict[str, object]] = {}
+        candidates: list[dict[str, object]] = []
+        for idx in range(12):
+            path = f"src/module_{idx}.py"
+            files_map[path] = {
+                "module": f"src.module_{idx}",
+                "language": "python",
+                "symbols": [
+                    {
+                        "kind": "function",
+                        "name": f"fn_{idx}",
+                        "qualified_name": f"fn_{idx}",
+                        "lineno": 1,
+                        "end_lineno": 2,
+                    }
+                ],
+                "references": [],
+                "imports": [],
+            }
+            candidates.append({"path": path, "score": 5.0 - (idx / 100.0)})
+
+        large_source_text = (
+            "def generated(value):\n"
+            + "".join(f"    payload_{idx} = value + {idx}\n" for idx in range(240))
+        )
+
+        def fake_read_file_lines(*, root: str, path: str) -> list[str]:
+            return large_source_text.splitlines()
+
+        monkeypatch.setattr(chunk_builder, "_read_file_lines", fake_read_file_lines)
+
+        common_kwargs = {
+            "root": ".",
+            "files_map": files_map,
+            "candidates": candidates,
+            "terms": ["generated", "payload"],
+            "top_k_files": len(candidates),
+            "top_k_chunks": len(candidates),
+            "per_file_limit": 1,
+            "token_budget": 8192,
+            "snippet_max_lines": 4,
+            "snippet_max_chars": 240,
+            "policy": {"chunk_weight": 1.0},
+            "tokenizer_model": "gpt-4o-mini",
+            "diversity_enabled": False,
+            "diversity_path_penalty": 0.0,
+            "diversity_symbol_family_penalty": 0.0,
+            "diversity_kind_penalty": 0.0,
+            "diversity_locality_penalty": 0.0,
+            "diversity_locality_window": 32,
+        }
+
+        runner = BenchmarkRunner(
+            BenchmarkConfig(
+                warmup_iterations=1,
+                iterations=40,
+                min_duration_seconds=0.0,
+            )
+        )
+
+        baseline = runner.run(
+            "snippet_disclosure",
+            lambda: chunk_builder.build_candidate_chunks(
+                **common_kwargs,
+                disclosure_mode="snippet",
+            ),
+        )
+        optimized = runner.run(
+            "refs_disclosure",
+            lambda: chunk_builder.build_candidate_chunks(
+                **common_kwargs,
+                disclosure_mode="refs",
+            ),
         )
         comparison = BenchmarkComparison(baseline=baseline, optimized=optimized)
 

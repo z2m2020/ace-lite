@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import ace_lite.skills as skills_module
 
 from ace_lite.pipeline.stages.skills import (
     extract_error_keywords,
@@ -118,6 +119,41 @@ def test_load_sections_by_heading(tmp_path: Path) -> None:
     assert "Beta" in sections["Usage"]
 
 
+def test_load_sections_by_heading_avoids_full_section_extraction(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    skill_file = tmp_path / "skill.md"
+    skill_file.write_text(
+        textwrap.dedent(
+            """
+            ---
+            name: sample
+            ---
+            # Intro
+            Alpha
+
+            # Usage
+            Beta
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        skills_module,
+        "_extract_sections",
+        lambda markdown_body: (_ for _ in ()).throw(
+            AssertionError("should not call _extract_sections for targeted load")
+        ),
+    )
+
+    sections = load_sections(skill_file, ["Usage"])
+    assert list(sections.keys()) == ["Usage"]
+    assert "Beta" in sections["Usage"]
+
+
 def test_build_manifest_estimates_token_cost_when_missing(tmp_path: Path) -> None:
     skill_file = tmp_path / "skill.md"
     skill_file.write_text(
@@ -137,6 +173,45 @@ def test_build_manifest_estimates_token_cost_when_missing(tmp_path: Path) -> Non
         ).strip()
         + "\n",
         encoding="utf-8",
+    )
+
+    manifest = build_skill_manifest(tmp_path)
+    assert manifest
+    assert int(manifest[0]["token_estimate"] or 0) > 0
+
+
+def test_build_manifest_estimate_with_default_sections_avoids_full_section_extraction(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    skill_file = tmp_path / "skill.md"
+    skill_file.write_text(
+        textwrap.dedent(
+            """
+            ---
+            name: sample-skill
+            description: sample
+            default_sections: [Workflow]
+            ---
+            # Workflow
+            This section has enough words to produce a non-zero token estimate.
+
+            # Extra
+            Extra details should not be required for the default estimate.
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        skills_module,
+        "_extract_sections",
+        lambda markdown_body: (_ for _ in ()).throw(
+            AssertionError(
+                "should not call _extract_sections for default_sections estimate"
+            )
+        ),
     )
 
     manifest = build_skill_manifest(tmp_path)
@@ -551,6 +626,7 @@ def test_run_skills_exposes_selected_token_estimates(
     assert payload["route_latency_ms"] >= 0.0
     assert payload["hydration_latency_ms"] >= 0.0
     assert payload["hydrated_skill_count"] == len(payload["selected"])
+    assert payload["markdown_bytes_loaded"] > 0
     assert payload["selected"][0]["estimated_tokens"] > 0
     assert payload["selected_token_estimate_total"] >= payload["selected"][0]["estimated_tokens"]
 
@@ -573,6 +649,7 @@ def test_run_skills_enforces_token_budget(
     assert payload["budget_exhausted"] is True
     assert payload["token_budget"] == 1
     assert payload["token_budget_used"] == 0
+    assert payload["markdown_bytes_loaded"] == 0
     assert payload["skipped_for_budget"]
     assert payload["budget_candidate_expanded"] is False
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any
 
 from ace_lite.benchmark.case_contracts import derive_benchmark_case_dev_feedback
@@ -37,6 +38,43 @@ def _time_delta_hours(*, start: Any, end: Any) -> float:
     if delta_seconds <= 0.0:
         return 0.0
     return float(delta_seconds) / 3600.0
+
+
+def _classify_workload_taxonomy(*, query: str, candidate_rows: int) -> str:
+    text = str(query or "").strip().lower()
+    if not text:
+        return "unknown"
+    if any(token in text for token in ("/", "\\", ".py", ".go", ".ts", ".tsx", "src/")):
+        return "path_exact"
+    if any(token in text for token in ("docs", "readme", "guide", "design", "文档", "说明")):
+        return "docs_intent"
+    if any(
+        token in text
+        for token in ("refactor", "rename", "restructure", "cleanup", "重构", "重命名")
+    ):
+        return "broad_refactor"
+    if any(
+        token in text
+        for token in (
+            "import",
+            "xref",
+            "dependency",
+            "dependencies",
+            "callee",
+            "caller",
+            "reference",
+            "references",
+            "依赖",
+            "引用",
+        )
+    ):
+        return "dependency_recall"
+    symbol_like = re.fullmatch(r"[A-Za-z_][\w.:/-]{0,79}", text) is not None
+    if symbol_like and len(text.split()) <= 2:
+        return "symbol_exact"
+    if candidate_rows >= 8 or len(text.split()) >= 8:
+        return "large_repo_broad_query"
+    return "mixed_general"
 
 
 def build_case_evaluation_row(
@@ -133,6 +171,10 @@ def build_case_evaluation_row(
     skills_hydration_latency_ms: float,
     skills_metadata_only_routing: bool,
     skills_precomputed_route: bool,
+    candidate_rows_materialized_count: int,
+    candidate_chunks_materialized_count: int,
+    source_plan_candidate_chunks_materialized_count: int,
+    skills_markdown_bytes_loaded: int,
     plan_replay_cache_enabled: bool,
     plan_replay_cache_hit: bool,
     plan_replay_cache_stale_hit_safe: bool,
@@ -349,6 +391,26 @@ def build_case_evaluation_row(
     feedback_surface = str(case.get("feedback_surface") or "").strip()
     retrieval_surface = str(case.get("retrieval_surface") or "").strip()
     deep_symbol_case = retrieval_surface == "deep_symbol"
+    budget_abort = bool(
+        skills_budget_exhausted
+        or xref_budget_exhausted
+        or embedding_time_budget_exceeded
+        or chunk_semantic_time_budget_exceeded
+        or parallel_docs_timed_out
+        or parallel_worktree_timed_out
+    )
+    fallback_taken = bool(
+        embedding_fallback
+        or chunk_semantic_fallback
+        or chunk_guard_fallback
+        or router_fallback_applied
+        or unsupported_language_fallback_count > 0
+        or graph_source_projection_fallback
+    )
+    workload_taxonomy = _classify_workload_taxonomy(
+        query=str(case.get("query", "") or ""),
+        candidate_rows=max(0, int(candidate_rows_materialized_count or 0)),
+    )
 
     return {
         "case_id": case.get("case_id", "unknown"),
@@ -525,6 +587,17 @@ def build_case_evaluation_row(
             1.0 if skills_metadata_only_routing else 0.0
         ),
         "skills_precomputed_route": 1.0 if skills_precomputed_route else 0.0,
+        "candidate_rows_materialized_count": float(candidate_rows_materialized_count),
+        "candidate_chunks_materialized_count": float(
+            candidate_chunks_materialized_count
+        ),
+        "source_plan_candidate_chunks_materialized_count": float(
+            source_plan_candidate_chunks_materialized_count
+        ),
+        "skills_markdown_bytes_loaded": float(skills_markdown_bytes_loaded),
+        "budget_abort": 1.0 if budget_abort else 0.0,
+        "fallback_taken": 1.0 if fallback_taken else 0.0,
+        "workload_taxonomy": workload_taxonomy,
         "plan_replay_cache_enabled": 1.0 if plan_replay_cache_enabled else 0.0,
         "plan_replay_cache_hit": 1.0 if plan_replay_cache_hit else 0.0,
         "plan_replay_cache_stale_hit_safe": (

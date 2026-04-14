@@ -55,6 +55,9 @@ def _append_case_section(
     lines.append(
         f"- capture_triggered: {float(case.get('capture_triggered', 0.0)):.4f}"
     )
+    workload_taxonomy = str(case.get("workload_taxonomy") or "").strip()
+    if workload_taxonomy:
+        lines.append(f"- workload_taxonomy: {workload_taxonomy}")
     lines.append(
         f"- ltm_selected_count: {float(case.get('ltm_selected_count', 0.0)):.4f}"
     )
@@ -201,6 +204,24 @@ def _append_case_section(
     lines.append(
         f"- plan_replay_cache_stale_hit_safe: {float(case.get('plan_replay_cache_stale_hit_safe', 0.0)):.4f}"
     )
+    lines.append(
+        "- candidate_rows_materialized_count: "
+        f"{float(case.get('candidate_rows_materialized_count', 0.0)):.4f}"
+    )
+    lines.append(
+        "- candidate_chunks_materialized_count: "
+        f"{float(case.get('candidate_chunks_materialized_count', 0.0)):.4f}"
+    )
+    lines.append(
+        "- source_plan_candidate_chunks_materialized_count: "
+        f"{float(case.get('source_plan_candidate_chunks_materialized_count', 0.0)):.4f}"
+    )
+    lines.append(
+        "- skills_markdown_bytes_loaded: "
+        f"{float(case.get('skills_markdown_bytes_loaded', 0.0)):.4f}"
+    )
+    lines.append(f"- budget_abort: {float(case.get('budget_abort', 0.0)):.4f}")
+    lines.append(f"- fallback_taken: {float(case.get('fallback_taken', 0.0)):.4f}")
     lines.append(
         f"- chunk_guard_enabled: {float(case.get('chunk_guard_enabled', 0.0)):.4f}"
     )

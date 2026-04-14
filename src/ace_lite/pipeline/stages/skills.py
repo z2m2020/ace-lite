@@ -343,6 +343,7 @@ def run_skills(
     selected_token_estimate_total = 0
     skipped_for_budget: list[dict[str, Any]] = []
     hydrated_sections_count = 0
+    markdown_bytes_loaded = 0
     hydration_started = perf_counter()
     for item in selected:
         estimated_tokens = _manifest_skill_token_estimate(
@@ -366,6 +367,7 @@ def run_skills(
             headings = list(item.get("headings") or [])[:2]
         sections = load_sections(item["path"], headings)
         hydrated_sections_count += len(sections)
+        markdown_bytes_loaded += _sections_markdown_bytes_loaded(sections)
         estimated_tokens = _estimate_selected_skill_tokens(
             item=item,
             sections=sections,
@@ -399,6 +401,7 @@ def run_skills(
         "selected_manifest_token_estimate_total": selected_manifest_token_estimate_total,
         "hydrated_skill_count": len(hydrated),
         "hydrated_sections_count": hydrated_sections_count,
+        "markdown_bytes_loaded": markdown_bytes_loaded,
         "budget_candidate_expanded": budget_candidate_expanded,
         "budget_expanded_candidate_count": budget_expanded_candidate_count,
         "budget_exhausted": bool(skipped_for_budget),
@@ -438,6 +441,14 @@ def _manifest_skill_token_estimate(
         return declared
     fallback = str(item.get("description") or item.get("name") or "").strip()
     return _estimate_tokens_cached(fallback, cache=token_estimate_cache) if fallback else 1
+
+
+def _sections_markdown_bytes_loaded(sections: dict[str, str]) -> int:
+    total = 0
+    for title, content in sections.items():
+        total += len(str(title or "").encode("utf-8"))
+        total += len(str(content or "").encode("utf-8"))
+    return total
 
 
 def _skill_identity(item: dict[str, Any]) -> tuple[str, str]:

@@ -49,6 +49,7 @@ _SUSPICIOUS_METADATA_CODEPOINTS = {
     0x940F,
     0x95C1,
 }
+_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)\s*$", flags=re.MULTILINE)
 
 
 def build_skill_manifest(skills_dir: str | Path) -> list[dict[str, Any]]:
@@ -281,21 +282,14 @@ def load_sections(
 
     text = path.read_text(encoding="utf-8", errors="replace")
     _, body = _split_frontmatter(text)
-    sections = _extract_sections(body)
-    if not sections:
-        plain = body.strip()
-        return {"Document": plain} if plain else {}
-
     if not headings:
+        sections = _extract_sections(body)
+        if not sections:
+            plain = body.strip()
+            return {"Document": plain} if plain else {}
         return sections
 
-    lowered = {key.lower(): key for key in sections}
-    selected: dict[str, str] = {}
-    for heading in headings:
-        key = lowered.get(str(heading).lower())
-        if key:
-            selected[key] = sections[key]
-    return selected
+    return _extract_selected_sections(markdown_body=body, headings=headings)
 
 
 def build_skill_catalog(manifest: list[dict[str, Any]]) -> str:
@@ -379,16 +373,12 @@ def _split_frontmatter(markdown_text: str) -> tuple[dict[str, Any], str]:
 def _extract_headings(markdown_body: str) -> list[str]:
     return [
         match.group(2).strip()
-        for match in re.finditer(
-            r"^(#{1,6})\s+(.+?)\s*$", markdown_body, flags=re.MULTILINE
-        )
+        for match in _HEADING_PATTERN.finditer(markdown_body)
     ]
 
 
 def _extract_sections(markdown_body: str) -> dict[str, str]:
-    matches = list(
-        re.finditer(r"^(#{1,6})\s+(.+?)\s*$", markdown_body, flags=re.MULTILINE)
-    )
+    matches = list(_HEADING_PATTERN.finditer(markdown_body))
     if not matches:
         return {}
 
@@ -402,6 +392,62 @@ def _extract_sections(markdown_body: str) -> dict[str, str]:
     return sections
 
 
+def _extract_selected_sections(
+    *,
+    markdown_body: str,
+    headings: list[str] | tuple[str, ...],
+) -> dict[str, str]:
+    normalized_headings = [
+        str(heading).strip()
+        for heading in headings
+        if str(heading).strip()
+    ]
+    if not normalized_headings:
+        return {}
+
+    target_keys = {heading.lower() for heading in normalized_headings}
+    matches = list(_HEADING_PATTERN.finditer(markdown_body))
+    if not matches:
+        return {}
+
+    matched_sections: dict[str, tuple[str, str]] = {}
+    for idx, match in enumerate(matches):
+        title = match.group(2).strip()
+        normalized_title = title.lower()
+        if normalized_title not in target_keys:
+            continue
+        start = match.end()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(markdown_body)
+        matched_sections[normalized_title] = (title, markdown_body[start:end].strip())
+
+    selected: dict[str, str] = {}
+    for heading in normalized_headings:
+        matched = matched_sections.get(heading.lower())
+        if matched is None:
+            continue
+        title, content = matched
+        selected[title] = content
+    return selected
+
+
+def _extract_first_sections(
+    *,
+    markdown_body: str,
+    limit: int,
+) -> dict[str, str]:
+    matches = list(_HEADING_PATTERN.finditer(markdown_body))
+    if not matches:
+        return {}
+
+    sections: dict[str, str] = {}
+    for idx, match in enumerate(matches[: max(1, int(limit))]):
+        title = match.group(2).strip()
+        start = match.end()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(markdown_body)
+        sections[title] = markdown_body[start:end].strip()
+    return sections
+
+
 def _tokenize(text: str) -> list[str]:
     return [
         token for token in re.split(r"[^a-z0-9_]+", text.lower()) if len(token) >= 3
@@ -411,19 +457,20 @@ def _tokenize(text: str) -> list[str]:
 def _estimate_skill_token_estimate(
     *, markdown_body: str, default_sections: list[str]
 ) -> int:
-    sections = _extract_sections(markdown_body)
-    if sections:
-        selected_sections = (
-            _select_sections_by_heading(sections=sections, headings=default_sections)
-            if default_sections
-            else dict(list(sections.items())[:2])
+    sections = (
+        _extract_selected_sections(
+            markdown_body=markdown_body,
+            headings=default_sections,
         )
-        if selected_sections:
-            text = "\n\n".join(
-                f"## {title}\n{content}".strip()
-                for title, content in selected_sections.items()
-            )
-            return int(estimate_tokens(text))
+        if default_sections
+        else _extract_first_sections(markdown_body=markdown_body, limit=2)
+    )
+    if sections:
+        text = "\n\n".join(
+            f"## {title}\n{content}".strip()
+            for title, content in sections.items()
+        )
+        return int(estimate_tokens(text))
 
     plain = markdown_body.strip()
     return int(estimate_tokens(plain)) if plain else 1

@@ -12,6 +12,10 @@ def test_index_stage_tags_include_adaptive_router_metadata() -> None:
             "candidate_chunks": [],
             "chunk_metrics": {
                 "candidate_chunk_count": 0,
+                "source_line_read_count": 12,
+                "source_line_read_path_count": 3,
+                "signature_materialized_count": 5,
+                "snippet_materialized_count": 2,
                 "chunk_budget_used": 0,
                 "robust_signature_count": 1,
                 "robust_signature_coverage_ratio": 1.0,
@@ -143,6 +147,10 @@ def test_index_stage_tags_include_adaptive_router_metadata() -> None:
     assert tags["chunk_guard_enabled"] is True
     assert tags["chunk_guard_mode"] == "report_only"
     assert tags["chunk_guard_candidate_pool"] == 2
+    assert tags["chunk_source_line_read_count"] == 12
+    assert tags["chunk_source_line_read_path_count"] == 3
+    assert tags["chunk_signature_materialized_count"] == 5
+    assert tags["chunk_snippet_materialized_count"] == 2
     assert tags["robust_signature_count"] == 1
     assert tags["robust_signature_coverage_ratio"] == 1.0
     assert tags["graph_prior_chunk_count"] == 1
@@ -198,9 +206,11 @@ def test_source_plan_stage_tags_include_packing_observability() -> None:
             "diagnostics": [],
             "constraints": ["keep deterministic ordering"],
             "steps": [{"stage": "source_plan"}],
+            "candidate_files": [{"path": "src/a.py"}, {"path": "src/b.py"}],
             "candidate_chunks": [{"path": "src/a.py"}],
             "chunk_steps": [{"chunk_ref": {"path": "src/a.py"}}],
             "validation_tests": ["pytest -q tests/unit/test_source_plan_properties.py"],
+            "chunk_budget_limit": 120.0,
             "chunk_budget_used": 88.0,
             "packing": {
                 "graph_closure_preference_enabled": True,
@@ -227,9 +237,11 @@ def test_source_plan_stage_tags_include_packing_observability() -> None:
     assert tags["evidence_direct_count"] == 1
     assert tags["evidence_neighbor_context_count"] == 1
     assert tags["evidence_hint_only_count"] == 1
+    assert tags["candidate_file_count"] == 2
     assert tags["evidence_direct_ratio"] == 1.0 / 3.0
     assert tags["evidence_neighbor_context_ratio"] == 1.0 / 3.0
     assert tags["evidence_hint_only_ratio"] == 1.0 / 3.0
+    assert tags["chunk_budget_limit"] == 120.0
     assert tags["packing_graph_closure_preference_enabled"] is True
     assert tags["packing_graph_closure_bonus_candidate_count"] == 2
     assert tags["packing_graph_closure_preferred_count"] == 1
@@ -287,6 +299,14 @@ def test_skills_stage_tags_include_budget_observability() -> None:
             "available_count": 4,
             "token_budget": 1200,
             "token_budget_used": 900,
+            "metadata_only_routing": True,
+            "routing_source": "precomputed",
+            "route_latency_ms": 1.2,
+            "hydration_latency_ms": 2.4,
+            "selected_manifest_token_estimate_total": 1100,
+            "hydrated_skill_count": 1,
+            "hydrated_sections_count": 3,
+            "markdown_bytes_loaded": 512,
             "budget_exhausted": True,
             "skipped_for_budget": [
                 {"name": "cross-agent-release-readiness", "estimated_tokens": 600}
@@ -300,6 +320,14 @@ def test_skills_stage_tags_include_budget_observability() -> None:
     assert tags["available_count"] == 4
     assert tags["token_budget"] == 1200
     assert tags["token_budget_used"] == 900
+    assert tags["metadata_only_routing"] is True
+    assert tags["precomputed_route"] is True
+    assert tags["route_latency_ms"] == 1.2
+    assert tags["hydration_latency_ms"] == 2.4
+    assert tags["selected_manifest_token_estimate_total"] == 1100
+    assert tags["hydrated_skill_count"] == 1
+    assert tags["hydrated_sections_count"] == 3
+    assert tags["markdown_bytes_loaded"] == 512
     assert tags["budget_exhausted"] is True
     assert tags["skipped_for_budget_count"] == 1
 

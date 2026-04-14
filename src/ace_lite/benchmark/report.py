@@ -35,6 +35,7 @@ from ace_lite.benchmark.report_observability import (
     append_retrieval_control_plane_gate_summary,
     append_retrieval_default_strategy_summary,
     append_reward_log_summary,
+    append_workload_taxonomy_summary,
     format_decision_event,
 )
 from ace_lite.benchmark.report_summary import (
@@ -2790,6 +2791,7 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     append_preference_observability_summary(lines, results)
     append_retrieval_default_strategy_summary(lines, results)
     append_retrieval_context_observability_summary(lines, results)
+    append_workload_taxonomy_summary(lines, results)
     _append_chunk_stage_miss_summary(lines, results)
     append_decision_observability_summary(lines, results)
     _append_stage_latency_summary(lines, results)

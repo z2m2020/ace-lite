@@ -69,6 +69,14 @@ def _build_ltm_attribution_preview(attribution: list[Any], *, limit: int = 2) ->
     return preview
 
 
+def _candidate_count_snapshot(payload: dict[str, Any], *, fallback: int = 0) -> int:
+    before = max(0, int(payload.get("candidate_count_before", 0) or 0))
+    after = max(0, int(payload.get("candidate_count_after", 0) or 0))
+    if before <= 0 and after <= 0:
+        return max(0, int(fallback or 0))
+    return max(before, after)
+
+
 @dataclass(frozen=True, slots=True)
 class CaseEvaluationMetrics:
     source_plan_evidence_summary: dict[str, float]
@@ -305,6 +313,10 @@ class CaseEvaluationMetrics:
     skills_hydration_latency_ms: float
     skills_metadata_only_routing: bool
     skills_precomputed_route: bool
+    candidate_rows_materialized_count: int
+    candidate_chunks_materialized_count: int
+    source_plan_candidate_chunks_materialized_count: int
+    skills_markdown_bytes_loaded: int
     plan_replay_cache_enabled: bool
     plan_replay_cache_hit: bool
     plan_replay_cache_stale_hit_safe: bool
@@ -1737,6 +1749,32 @@ def build_case_evaluation_metrics(
         )
         or 0.0
     )
+    candidate_rows_materialized_count = max(
+        _candidate_count_snapshot(second_pass_payload),
+        _candidate_count_snapshot(refine_pass_payload),
+        len([item for item in candidate_files if isinstance(item, dict)]),
+    )
+    candidate_chunks_materialized_count = len(
+        [item for item in raw_candidate_chunks if isinstance(item, dict)]
+    )
+    source_plan_candidate_chunks_materialized_count = max(
+        0,
+        int(
+            len([item for item in candidate_chunks if isinstance(item, dict)])
+            if source_plan_has_candidate_chunks
+            else source_plan_tags.get(
+                "candidate_chunk_count",
+                len(
+                    [
+                        item
+                        for item in _as_list(source_plan_payload.get("candidate_chunks"))
+                        if isinstance(item, dict)
+                    ]
+                ),
+            )
+            or 0
+        ),
+    )
     selected_skills = _as_list(skills_payload.get("selected"))
     skipped_for_budget = _as_list(skills_payload.get("skipped_for_budget"))
     skills_selected_count = float(
@@ -1763,6 +1801,18 @@ def build_case_evaluation_metrics(
     )
     skills_precomputed_route = (
         str(skills_payload.get("routing_source") or "").strip().lower() == "precomputed"
+    )
+    skills_markdown_bytes_loaded = max(
+        0,
+        int(
+            skills_payload.get(
+                "markdown_bytes_loaded",
+                _as_dict(_as_dict(stage_observability.get("skills")).get("tags")).get(
+                    "markdown_bytes_loaded", 0
+                ),
+            )
+            or 0
+        ),
     )
     observability_payload = _as_dict(plan_payload.get("observability"))
     plan_replay_cache_payload = _as_dict(observability_payload.get("plan_replay_cache"))
@@ -2390,6 +2440,12 @@ def build_case_evaluation_metrics(
         skills_hydration_latency_ms=skills_hydration_latency_ms,
         skills_metadata_only_routing=skills_metadata_only_routing,
         skills_precomputed_route=skills_precomputed_route,
+        candidate_rows_materialized_count=candidate_rows_materialized_count,
+        candidate_chunks_materialized_count=candidate_chunks_materialized_count,
+        source_plan_candidate_chunks_materialized_count=(
+            source_plan_candidate_chunks_materialized_count
+        ),
+        skills_markdown_bytes_loaded=skills_markdown_bytes_loaded,
         plan_replay_cache_enabled=plan_replay_cache_enabled,
         plan_replay_cache_hit=plan_replay_cache_hit,
         plan_replay_cache_stale_hit_safe=plan_replay_cache_stale_hit_safe,

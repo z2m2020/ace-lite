@@ -41,6 +41,7 @@ from ace_lite.benchmark.summaries import (
     build_validation_branch_gate_summary,
     build_validation_branch_summary,
     build_validation_probe_summary,
+    build_workload_taxonomy_summary,
     compare_metrics,
 )
 
@@ -78,6 +79,7 @@ __all__ = [
     "build_validation_branch_gate_summary",
     "build_validation_branch_summary",
     "build_validation_probe_summary",
+    "build_workload_taxonomy_summary",
     "compare_metrics",
     "detect_regression",
     "evaluate_case_result",

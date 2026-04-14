@@ -245,6 +245,254 @@ def test_build_candidate_chunks_attaches_internal_retrieval_context(
     assert metrics["contextual_sidecar_parent_symbol_coverage_ratio"] == 1.0
     assert metrics["contextual_sidecar_reference_hint_chunk_count"] == 2.0
     assert metrics["contextual_sidecar_reference_hint_coverage_ratio"] == 1.0
+    assert metrics["source_line_read_path_count"] == 1.0
+    assert metrics["signature_materialized_count"] == 0.0
+    assert metrics["snippet_materialized_count"] == 0.0
+
+
+def test_build_candidate_chunks_refs_top_level_symbols_skip_full_source_reads(
+    monkeypatch,
+) -> None:
+    calls: list[str] = []
+
+    def fake_read_file_lines(*, root: str, path: str) -> list[str]:
+        calls.append(path)
+        return ["def demo_fn(value):", "    return value"]
+
+    monkeypatch.setattr(chunk_builder, "_read_file_lines", fake_read_file_lines)
+
+    chunks, metrics = chunk_builder.build_candidate_chunks(
+        root=".",
+        files_map={
+            "src/demo.py": {
+                "module": "src.demo",
+                "language": "python",
+                "symbols": [
+                    {
+                        "kind": "function",
+                        "name": "demo_fn",
+                        "qualified_name": "demo_fn",
+                        "lineno": 1,
+                        "end_lineno": 2,
+                    }
+                ],
+                "references": [],
+            }
+        },
+        candidates=[{"path": "src/demo.py", "score": 3.0}],
+        terms=["demo"],
+        top_k_files=1,
+        top_k_chunks=2,
+        per_file_limit=1,
+        token_budget=256,
+        disclosure_mode="refs",
+        snippet_max_lines=3,
+        snippet_max_chars=200,
+        policy={"chunk_weight": 1.0},
+        tokenizer_model="gpt-4o-mini",
+        diversity_enabled=False,
+        diversity_path_penalty=0.0,
+        diversity_symbol_family_penalty=0.0,
+        diversity_kind_penalty=0.0,
+        diversity_locality_penalty=0.0,
+        diversity_locality_window=32,
+    )
+
+    assert chunks
+    assert calls == []
+    assert metrics["source_line_read_count"] == 0.0
+    assert metrics["source_line_read_path_count"] == 0.0
+    assert metrics["signature_materialized_count"] == 0.0
+    assert metrics["snippet_materialized_count"] == 0.0
+
+
+def test_build_candidate_chunks_snippet_mode_materializes_source_once_per_path(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    source_dir = tmp_path / "src"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    (source_dir / "demo.py").write_text(
+        "class DemoService:\n"
+        "    def run(self, token: str) -> bool:\n"
+        "        return bool(token)\n",
+        encoding="utf-8",
+    )
+
+    original_read_file_lines = chunk_builder._read_file_lines
+    calls: list[str] = []
+
+    def counting_read_file_lines(*, root: str, path: str) -> list[str]:
+        calls.append(path)
+        return original_read_file_lines(root=root, path=path)
+
+    monkeypatch.setattr(chunk_builder, "_read_file_lines", counting_read_file_lines)
+
+    chunks, metrics = chunk_builder.build_candidate_chunks(
+        root=str(tmp_path),
+        files_map={
+            "src/demo.py": {
+                "module": "src.demo",
+                "language": "python",
+                "symbols": [
+                    {
+                        "kind": "class",
+                        "name": "DemoService",
+                        "qualified_name": "src.demo.DemoService",
+                        "lineno": 1,
+                        "end_lineno": 3,
+                    },
+                    {
+                        "kind": "method",
+                        "name": "run",
+                        "qualified_name": "src.demo.DemoService.run",
+                        "lineno": 2,
+                        "end_lineno": 3,
+                    },
+                ],
+                "references": [],
+                "imports": [],
+            }
+        },
+        candidates=[{"path": "src/demo.py", "score": 4.0}],
+        terms=["run", "token"],
+        top_k_files=1,
+        top_k_chunks=4,
+        per_file_limit=2,
+        token_budget=512,
+        disclosure_mode="snippet",
+        snippet_max_lines=4,
+        snippet_max_chars=240,
+        policy={"chunk_weight": 1.0},
+        tokenizer_model="gpt-4o-mini",
+        diversity_enabled=False,
+        diversity_path_penalty=0.0,
+        diversity_symbol_family_penalty=0.0,
+        diversity_kind_penalty=0.0,
+        diversity_locality_penalty=0.0,
+        diversity_locality_window=32,
+    )
+
+    method_chunk = next(
+        item for item in chunks if item["qualified_name"] == "src.demo.DemoService.run"
+    )
+
+    assert calls == ["src/demo.py"]
+    assert method_chunk["snippet"]
+    assert method_chunk[CONTEXTUAL_CHUNKING_SIDECAR_KEY]["parent_signature"] == (
+        "class DemoService:"
+    )
+    assert metrics["source_line_read_count"] == 3.0
+    assert metrics["source_line_read_path_count"] == 1.0
+    assert metrics["signature_materialized_count"] == 2.0
+    assert metrics["snippet_materialized_count"] == 2.0
+
+
+def test_build_candidate_chunks_refs_defer_method_source_reads_until_selected(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    source_dir = tmp_path / "src"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    (source_dir / "a.py").write_text(
+        "class AlphaService:\n"
+        "    def run(self, token: str) -> bool:\n"
+        "        return bool(token)\n",
+        encoding="utf-8",
+    )
+    (source_dir / "b.py").write_text(
+        "class BetaService:\n"
+        "    def run(self, token: str) -> bool:\n"
+        "        return bool(token)\n",
+        encoding="utf-8",
+    )
+
+    original_read_file_lines = chunk_builder._read_file_lines
+    calls: list[str] = []
+
+    def counting_read_file_lines(*, root: str, path: str) -> list[str]:
+        calls.append(path)
+        return original_read_file_lines(root=root, path=path)
+
+    monkeypatch.setattr(chunk_builder, "_read_file_lines", counting_read_file_lines)
+
+    chunks, metrics = chunk_builder.build_candidate_chunks(
+        root=str(tmp_path),
+        files_map={
+            "src/a.py": {
+                "module": "src.a",
+                "language": "python",
+                "symbols": [
+                    {
+                        "kind": "class",
+                        "name": "AlphaService",
+                        "qualified_name": "src.a.AlphaService",
+                        "lineno": 1,
+                        "end_lineno": 3,
+                    },
+                    {
+                        "kind": "method",
+                        "name": "run",
+                        "qualified_name": "src.a.AlphaService.run",
+                        "lineno": 2,
+                        "end_lineno": 3,
+                    },
+                ],
+                "references": [],
+                "imports": [],
+            },
+            "src/b.py": {
+                "module": "src.b",
+                "language": "python",
+                "symbols": [
+                    {
+                        "kind": "class",
+                        "name": "BetaService",
+                        "qualified_name": "src.b.BetaService",
+                        "lineno": 1,
+                        "end_lineno": 3,
+                    },
+                    {
+                        "kind": "method",
+                        "name": "run",
+                        "qualified_name": "src.b.BetaService.run",
+                        "lineno": 2,
+                        "end_lineno": 3,
+                    },
+                ],
+                "references": [],
+                "imports": [],
+            },
+        },
+        candidates=[
+            {"path": "src/a.py", "score": 4.0},
+            {"path": "src/b.py", "score": 2.0},
+        ],
+        terms=["run", "token"],
+        top_k_files=2,
+        top_k_chunks=1,
+        per_file_limit=1,
+        token_budget=256,
+        disclosure_mode="refs",
+        snippet_max_lines=4,
+        snippet_max_chars=240,
+        policy={"chunk_weight": 1.0},
+        tokenizer_model="gpt-4o-mini",
+        diversity_enabled=False,
+        diversity_path_penalty=0.0,
+        diversity_symbol_family_penalty=0.0,
+        diversity_kind_penalty=0.0,
+        diversity_locality_penalty=0.0,
+        diversity_locality_window=32,
+    )
+
+    assert len(chunks) == 1
+    assert chunks[0]["qualified_name"] == "src.a.AlphaService.run"
+    assert calls == ["src/a.py"]
+    assert metrics["source_line_read_count"] == 3.0
+    assert metrics["source_line_read_path_count"] == 1.0
+    assert metrics["signature_materialized_count"] == 0.0
+    assert metrics["snippet_materialized_count"] == 0.0
 
 
 def test_build_candidate_chunks_uses_symbol_local_go_call_references(

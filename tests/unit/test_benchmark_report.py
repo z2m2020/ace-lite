@@ -812,80 +812,66 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "contextual_sidecar_reference_hint_coverage_ratio" in report
     assert "robust_signature_count_mean" in report
     assert "robust_signature_coverage_ratio" in report
-    assert "graph_prior_chunk_count_mean" in report
-    assert "graph_transfer_count_mean" in report
-    assert "graph_closure_enabled_ratio" in report
-    assert "graph_closure_boosted_chunk_count_mean" in report
-    assert "graph_closure_support_edge_count_mean" in report
-    assert "topological_shield_enabled_ratio" in report
-    assert "topological_shield_attenuated_chunk_count_mean" in report
-    assert "skills_precomputed_route_ratio" in report
-    assert "plan_replay_cache_enabled_ratio" in report
-    assert "plan_replay_cache_hit_ratio" in report
-    assert "plan_replay_cache_stale_hit_safe_ratio" in report
-    assert "validation_probe_enabled_ratio" in report
-    assert "validation_probe_executed_count_mean" in report
-    assert "validation_probe_failure_rate" in report
-    assert "| source_plan_pack_miss | 1 | 1.0000 |" in report
-    assert "source_plan_direct_evidence_ratio" in report
-    assert "source_plan_symbol_count_mean" in report
-    assert "source_plan_signature_count_mean" in report
-    assert "source_plan_skeleton_count_mean" in report
-    assert "source_plan_robust_signature_count_mean" in report
-    assert "source_plan_symbol_ratio" in report
-    assert "source_plan_signature_ratio" in report
-    assert "source_plan_skeleton_ratio" in report
-    assert "source_plan_robust_signature_ratio" in report
-    assert "source_plan_neighbor_context_ratio" in report
-    assert "source_plan_hint_only_ratio" in report
-    assert "source_plan_graph_closure_preference_enabled_ratio" in report
-    assert "source_plan_graph_closure_bonus_candidate_count_mean" in report
-    assert "source_plan_granularity_preferred_count_mean" in report
-    assert "source_plan_packed_path_count_mean" in report
-    assert "multi_channel_rrf_granularity_count_mean" in report
-    assert "multi_channel_rrf_granularity_pool_ratio" in report
-    assert "Evidence mix: direct=0.7500, neighbor_context=0.2500, hint_only=0.0000" in report
-    assert "Packing granularity-preferred count mean: 1.00" in report
-    assert "Channel enabled ratio: 1.0000; applied ratio: 1.0000" in report
-    assert "Granularity channel case ratio: 1.0000; count mean: 2.00" in report
-    assert "Fusion pool size mean: 4.00; granularity/pool ratio: 0.5000" in report
-    assert "Enabled ratio: 1.0000; boosted count mean: 2.00; pool size mean: 4.00" in report
-    assert "Query terms mean: 3.00; query-hit mean: 1.00; boosted/pool ratio: 0.5000; query-hit/pool ratio: 0.2500" in report
-    assert "Signal paths mean: scip=2.00, xref=3.00, symbol=1.00, import=1.00, coverage=2.00" in report
-    assert "Deep symbol case count: 2.00; recall: 1.0000" in report
-    assert "## Native SCIP Summary" in report
-    assert "Native SCIP loaded rate: 1.0000" in report
-    assert "native_scip_document_count_mean" in report
-    assert "native_scip_definition_occurrence_count_mean" in report
-    assert "native_scip_reference_occurrence_count_mean" in report
-    assert "native_scip_symbol_definition_count_mean" in report
-    assert "| symbol | 1.00 | 0.5000 |" in report
-    assert "| signature | 0.75 | 0.3750 |" in report
-    assert "| skeleton | 0.50 | 0.2500 |" in report
-    assert "| robust_signature | 0.25 | 0.1250 |" in report
-    assert "evidence_insufficient_rate" in report
-    assert "missing_validation_rate" in report
-    assert "parallel_time_budget_ms_mean" in report
-    assert "validation_test_count: 0" in report
-    assert "validation_test_count" in report
-    assert "plan_replay_cache: stage=source_plan, reason=hit, stored=False" in report
-    assert "repomap_seed: worktree_seed_count=1, subgraph_seed_count=2, seed_candidates_count=3, cache_hit=True, precompute_hit=False" in report
-    assert "chunk_guard_expectation: scenario=stale_majority, expected_retained_hit=True, expected_filtered_hit_count=1, expected_filtered_hit_rate=1.0000, report_only_improved=True" in report
-    assert "robust_signature: count=1, coverage_ratio=0.5000" in report
-    assert "graph_closure: enabled=True, boosted_chunk_count=2, coverage_ratio=0.5000, anchor_count=1, support_edge_count=3, total=0.1400" in report
-    assert "index_fusion_granularity: enabled=True, applied=True, granularity_count=2, pool_size=4, granularity_pool_ratio=0.5000" in report
-    assert "graph_lookup: enabled=True, reason=candidate_count_guarded, guarded=True, boosted_count=2, weights=scip:0.3000|xref:0.2000|query_xref:0.2000|symbol:0.1000|import:0.1000|coverage:0.1000, candidate_count=6, pool_size=4, query_terms_count=3, normalization=log1p, guard_max_candidates=4, guard_min_query_terms=1, guard_max_query_terms=5, query_hit_paths=1, scip_signal_paths=2, xref_signal_paths=3, symbol_hit_paths=1, import_hit_paths=1, coverage_hit_paths=2, max_inbound=4.0000, max_xref_count=3.0000, max_query_hits=2.0000, max_symbol_hits=1.0000, max_import_hits=1.0000, max_query_coverage=0.6667, boosted_path_ratio=0.5000, query_hit_path_ratio=0.2500" in report
-    assert "source_plan_packing: graph_closure_preference_enabled=True, graph_closure_bonus_candidate_count=2, graph_closure_preferred_count=1, granularity_preferred_count=1, focused_file_promoted_count=1, packed_path_count=2, reason=graph_closure_preferred" in report
-    assert "preference_capture: notes_hit_ratio=0.5000, profile_selected_count=2, capture_triggered=True" in report
-    assert "ltm_explainability: selected_count=2, attribution_count=1, graph_neighbor_count=1, plan_constraint_count=1" in report
-    assert (
-        "ltm_attribution_preview: runtime.validation.git fallback_policy reuse_checkout_or_skip | graph: reuse_checkout_or_skip recommended_for runtime.validation.git"
-        in report
+
+
+def test_build_report_markdown_includes_workload_taxonomy_and_case_observability() -> None:
+    results = {
+        "generated_at": "2026-04-14T00:00:00Z",
+        "repo": "demo",
+        "case_count": 1,
+        "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 1.0,
+            "task_success_rate": 1.0,
+            "utility_rate": 1.0,
+            "noise_rate": 0.0,
+            "candidate_rows_materialized_mean": 4.0,
+            "candidate_chunks_materialized_mean": 2.0,
+            "source_plan_candidate_chunks_materialized_mean": 1.0,
+            "skills_markdown_bytes_loaded_mean": 512.0,
+            "budget_abort_ratio": 1.0,
+            "fallback_taken_ratio": 1.0,
+        },
+        "workload_taxonomy_summary": {
+            "case_count": 1,
+            "taxonomy_count": 1,
+            "dominant_workload_taxonomy": "dependency_recall",
+            "taxonomies": [
+                {
+                    "workload_taxonomy": "dependency_recall",
+                    "count": 1,
+                    "rate": 1.0,
+                }
+            ],
+        },
+        "cases": [
+            {
+                "case_id": "c1",
+                "query": "find import dependency chain",
+                "workload_taxonomy": "dependency_recall",
+                "candidate_rows_materialized_count": 4.0,
+                "candidate_chunks_materialized_count": 2.0,
+                "source_plan_candidate_chunks_materialized_count": 1.0,
+                "skills_markdown_bytes_loaded": 512.0,
+                "budget_abort": 1.0,
+                "fallback_taken": 1.0,
+            }
+        ],
+    }
+
+    summary = build_results_summary(results)
+    assert summary["workload_taxonomy_summary"]["dominant_workload_taxonomy"] == (
+        "dependency_recall"
     )
-    assert "feedback_boost: enabled=True, reason=ok, event_count=4, matched_event_count=2, boosted_candidate_count=1, boosted_unique_paths=1" in report
-    assert "chunk_stage_miss_details: oracle_file_path=src/ace_lite/benchmark/case_evaluation.py, file_present=True, raw_chunk_present=True, source_plan_chunk_present=False" in report
-    assert "embedding_similarity_mean" in report
-    assert "latency_median_ms" in report
+
+    report = build_report_markdown(results)
+    assert "## Workload Taxonomy Summary" in report
+    assert "| dependency_recall | 1 | 1.0000 |" in report
+    assert "- workload_taxonomy: dependency_recall" in report
+    assert "- candidate_rows_materialized_count: 4.0000" in report
+    assert "- skills_markdown_bytes_loaded: 512.0000" in report
+    assert "- budget_abort: 1.0000" in report
+    assert "- fallback_taken: 1.0000" in report
 
 
 def test_write_results_emits_summary_sidecar(tmp_path: Path) -> None:

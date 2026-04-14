@@ -1042,6 +1042,48 @@ def append_decision_observability_summary(
         lines.append("")
 
 
+def append_workload_taxonomy_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary = get_summary_mapping(results=results, key="workload_taxonomy_summary")
+    if not summary:
+        return
+
+    rows_raw = summary.get("taxonomies")
+    rows = rows_raw if isinstance(rows_raw, list) else []
+    lines.append("## Workload Taxonomy Summary")
+    lines.append("")
+    lines.append(
+        "- Dominant taxonomy: {value}".format(
+            value=str(summary.get("dominant_workload_taxonomy") or "").strip()
+            or "(none)"
+        )
+    )
+    lines.append(
+        "- Observed taxonomies: {count}".format(
+            count=int(summary.get("taxonomy_count", 0) or 0)
+        )
+    )
+    lines.append("")
+    if not rows:
+        lines.append("- None")
+        lines.append("")
+        return
+    lines.append("| Taxonomy | Count | Rate |")
+    lines.append("| --- | ---: | ---: |")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "| {name} | {count} | {rate:.4f} |".format(
+                name=str(row.get("workload_taxonomy") or "").strip() or "unknown",
+                count=int(row.get("count", 0) or 0),
+                rate=float(row.get("rate", 0.0) or 0.0),
+            )
+        )
+    lines.append("")
+
+
 def format_decision_event(event: dict[str, Any]) -> str:
     stage = str(event.get("stage") or "").strip()
     action = str(event.get("action") or "").strip()
@@ -1069,5 +1111,6 @@ __all__ = [
     "append_retrieval_control_plane_gate_summary",
     "append_retrieval_default_strategy_summary",
     "append_reward_log_summary",
+    "append_workload_taxonomy_summary",
     "format_decision_event",
 ]

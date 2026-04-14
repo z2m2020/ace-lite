@@ -161,6 +161,10 @@ class ChunkMetrics:
     candidate_chunk_count: int = 0
     candidate_chunks_total: int = 0
     candidate_chunks_selected: int = 0
+    source_line_read_count: int = 0
+    source_line_read_path_count: int = 0
+    signature_materialized_count: int = 0
+    snippet_materialized_count: int = 0
     chunks_per_file_mean: float = 0.0
     chunk_budget_used: int = 0
     dedup_ratio: float = 0.0
@@ -212,6 +216,10 @@ class ChunkMetrics:
             "candidate_chunk_count": float(self.candidate_chunk_count),
             "candidate_chunks_total": float(self.candidate_chunks_total),
             "candidate_chunks_selected": float(self.candidate_chunks_selected),
+            "source_line_read_count": float(self.source_line_read_count),
+            "source_line_read_path_count": float(self.source_line_read_path_count),
+            "signature_materialized_count": float(self.signature_materialized_count),
+            "snippet_materialized_count": float(self.snippet_materialized_count),
             "chunks_per_file_mean": self.chunks_per_file_mean,
             "chunk_budget_used": float(self.chunk_budget_used),
             "dedup_ratio": self.dedup_ratio,

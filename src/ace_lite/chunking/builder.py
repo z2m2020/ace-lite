@@ -119,11 +119,12 @@ def read_signature_line(*, root: str, path: str, lineno: int) -> str:
     """Read a single signature line from the given file and line number."""
     try:
         source = (Path(root) / Path(path)).resolve()
-        lines = source.read_text(encoding="utf-8", errors="replace").splitlines()
-        index = max(0, int(lineno) - 1)
-        if index >= len(lines):
-            return ""
-        return lines[index].strip()[:240]
+        target_lineno = max(1, int(lineno))
+        with source.open("r", encoding="utf-8", errors="replace") as handle:
+            for current_lineno, line in enumerate(handle, start=1):
+                if current_lineno == target_lineno:
+                    return line.strip()[:240]
+        return ""
     except Exception:
         return ""
 
@@ -605,6 +606,130 @@ def estimate_chunk_tokens(
     return int(estimated)
 
 
+def _hydrate_selected_chunk_payload(
+    *,
+    root: str,
+    item: dict[str, Any],
+    files_map: dict[str, dict[str, Any]],
+    disclosure: str,
+    snippet_lines_limit: int,
+    snippet_chars_limit: int,
+    reference_hits_cache_key: str,
+    ensure_file_lines_fn: Any,
+) -> dict[str, Any]:
+    payload = dict(item)
+    path = str(payload.get("path") or "").strip()
+    if not path:
+        return payload
+
+    file_entry = files_map.get(path)
+    if not isinstance(file_entry, dict):
+        return payload
+
+    symbols = file_entry.get("symbols", [])
+    if not isinstance(symbols, list):
+        symbols = []
+
+    imports = (
+        file_entry.get("imports", [])
+        if isinstance(file_entry.get("imports"), list)
+        else []
+    )
+    references = (
+        file_entry.get("references", [])
+        if isinstance(file_entry.get("references"), list)
+        else []
+    )
+    qualified_name = str(payload.get("qualified_name") or "").strip()
+    kind = str(payload.get("kind") or "").strip().lower()
+    lineno = int(payload.get("lineno") or 0)
+    end_lineno = int(payload.get("end_lineno") or lineno)
+    if end_lineno < lineno:
+        end_lineno = lineno
+
+    resolved_disclosure = normalize_chunk_disclosure(
+        str(payload.get("disclosure") or disclosure)
+    )
+    materialized_file_lines = (
+        ensure_file_lines_fn(path) if resolved_disclosure == "snippet" or kind == "method" else []
+    )
+
+    signature = str(payload.get("signature") or "").strip()
+    if resolved_disclosure in {"signature", "snippet"} and not signature:
+        if materialized_file_lines:
+            signature = _extract_signature(
+                lines=materialized_file_lines,
+                lineno=lineno,
+            )
+        else:
+            signature = read_signature_line(
+                root=root,
+                path=path,
+                lineno=lineno,
+            )
+        if signature:
+            payload["signature"] = signature
+
+    if resolved_disclosure == "snippet" and not str(payload.get("snippet") or "").strip():
+        snippet = _extract_snippet(
+            lines=materialized_file_lines,
+            lineno=lineno,
+            end_lineno=end_lineno,
+            max_lines=snippet_lines_limit,
+            max_chars=snippet_chars_limit,
+            symbol={"qualified_name": qualified_name} if qualified_name else None,
+            all_symbols=symbols,
+            file_entry=file_entry,
+        )
+        if snippet:
+            payload["snippet"] = snippet
+
+    retrieval_context_sidecar = _build_contextual_chunking_sidecar(
+        files_map=files_map,
+        reference_hits_cache_key=reference_hits_cache_key,
+        path=path,
+        qualified_name=qualified_name,
+        kind=kind,
+        signature=str(payload.get("signature") or ""),
+        lines=materialized_file_lines,
+        start_line=lineno,
+        end_line=end_lineno,
+        symbol={"qualified_name": qualified_name} if qualified_name else None,
+        all_symbols=symbols,
+        file_entry=file_entry,
+    )
+    retrieval_context = render_retrieval_context_from_sidecar(
+        sidecar=retrieval_context_sidecar
+    )
+    if retrieval_context:
+        payload[RETRIEVAL_CONTEXT_SIDECAR_KEY] = retrieval_context
+    if retrieval_context_sidecar:
+        payload[CONTEXTUAL_CHUNKING_SIDECAR_KEY] = retrieval_context_sidecar
+
+    robust_signature = build_robust_signature_lite(
+        path=path,
+        qualified_name=qualified_name,
+        name=qualified_name.rsplit(".", 1)[-1] if qualified_name else "",
+        kind=kind,
+        signature=str(payload.get("signature") or ""),
+        imports=imports,
+        references=references,
+    )
+    robust_signature_summary = summarize_robust_signature(robust_signature)
+    if robust_signature_summary.get("available", False):
+        payload["robust_signature_summary"] = robust_signature_summary
+        payload[ROBUST_SIGNATURE_SIDECAR_KEY] = robust_signature
+
+    if is_skeleton_disclosure(resolved_disclosure):
+        payload["skeleton"] = build_chunk_skeleton(
+            chunk=payload,
+            disclosure_mode=resolved_disclosure,
+            robust_signature=robust_signature,
+        )
+
+    return payload
+
+
 def build_candidate_chunks(
     *,
     root: str,
@@ -675,9 +800,25 @@ def build_candidate_chunks(
     raw_chunk_candidates: list[dict[str, Any]] = []
     policy_chunk_weight = max(0.1, float(policy.get("chunk_weight", 1.0) or 1.0))
     disclosure = normalize_chunk_disclosure(disclosure_mode)
-    needs_source_lines = True
     snippet_lines_limit = max(1, int(snippet_max_lines))
     snippet_chars_limit = max(0, int(snippet_max_chars))
+    source_line_read_count = 0
+    source_line_read_paths: set[str] = set()
+    signature_materialized_count = 0
+    snippet_materialized_count = 0
+    file_lines_cache: dict[str, list[str]] = {}
+
+    def _ensure_file_lines_for_path(path: str) -> list[str]:
+        nonlocal source_line_read_count
+        normalized_path = str(path or "").strip()
+        if not normalized_path:
+            return []
+        if normalized_path not in file_lines_cache:
+            file_lines = _read_file_lines(root=root, path=normalized_path)
+            file_lines_cache[normalized_path] = file_lines
+            source_line_read_count += len(file_lines)
+            source_line_read_paths.add(normalized_path)
+        return file_lines_cache[normalized_path]
 
     ranked_files = [item for item in candidates if isinstance(item, dict)]
     for file_candidate in ranked_files[: max(1, int(top_k_files))]:
@@ -691,10 +832,6 @@ def build_candidate_chunks(
         symbols = file_entry.get("symbols", [])
         if not isinstance(symbols, list):
             continue
-
-        file_lines: list[str] = []
-        if needs_source_lines:
-            file_lines = _read_file_lines(root=root, path=path)
 
         language = str(file_entry.get("language") or "").strip().lower()
         imports = (
@@ -735,11 +872,31 @@ def build_candidate_chunks(
                 path=path,
                 file_entry=file_entry,
             )
-            signature = _extract_signature(lines=file_lines, lineno=lineno) if file_lines else ""
+            materialized_file_lines = (
+                _ensure_file_lines_for_path(path)
+                if resolved_disclosure == "snippet"
+                else []
+            )
+
+            signature = ""
+            if resolved_disclosure in {"signature", "snippet"}:
+                if materialized_file_lines:
+                    signature = _extract_signature(
+                        lines=materialized_file_lines,
+                        lineno=lineno,
+                    )
+                else:
+                    signature = read_signature_line(
+                        root=root,
+                        path=path,
+                        lineno=lineno,
+                    )
+                if signature:
+                    signature_materialized_count += 1
             snippet = ""
-            if resolved_disclosure == "snippet" and file_lines:
+            if resolved_disclosure == "snippet" and materialized_file_lines:
                 snippet = _extract_snippet(
-                    lines=file_lines,
+                    lines=materialized_file_lines,
                     lineno=lineno,
                     end_lineno=end_lineno,
                     max_lines=snippet_lines_limit,
@@ -748,23 +905,8 @@ def build_candidate_chunks(
                     all_symbols=symbols,
                     file_entry=file_entry,
                 )
-            retrieval_context_sidecar = _build_contextual_chunking_sidecar(
-                files_map=files_map,
-                reference_hits_cache_key=reference_hits_cache_key,
-                path=path,
-                qualified_name=qualified_name or name,
-                kind=kind,
-                signature=signature,
-                lines=file_lines,
-                start_line=lineno,
-                end_line=end_lineno,
-                symbol=symbol,
-                all_symbols=symbols,
-                file_entry=file_entry,
-            )
-            retrieval_context = render_retrieval_context_from_sidecar(
-                sidecar=retrieval_context_sidecar
-            )
+                if snippet:
+                    snippet_materialized_count += 1
             score, breakdown = score_chunk_candidate(
                 path=path,
                 module=str(file_entry.get("module") or ""),
@@ -796,20 +938,9 @@ def build_candidate_chunks(
                     "references_count": len(references),
                     "signature": signature,
                     "snippet": snippet,
-                    CONTEXTUAL_CHUNKING_SIDECAR_KEY: retrieval_context_sidecar,
-                    RETRIEVAL_CONTEXT_SIDECAR_KEY: retrieval_context,
                     "_requested_disclosure": disclosure,
                     "_resolved_disclosure": resolved_disclosure,
                     "_disclosure_fallback_reason": fallback_reason,
-                    ROBUST_SIGNATURE_SIDECAR_KEY: build_robust_signature_lite(
-                        path=path,
-                        qualified_name=qualified_name or name,
-                        name=name,
-                        kind=kind,
-                        signature=signature,
-                        imports=imports,
-                        references=references,
-                    ),
                     "score": round(float(score), 6),
                     "score_breakdown": dict(breakdown),
                 }
@@ -882,12 +1013,6 @@ def build_candidate_chunks(
         score_breakdown = item.get("score_breakdown")
         if not isinstance(score_breakdown, dict):
             score_breakdown = {}
-        robust_signature = (
-            item.get(ROBUST_SIGNATURE_SIDECAR_KEY)
-            if isinstance(item.get(ROBUST_SIGNATURE_SIDECAR_KEY), dict)
-            else None
-        )
-        robust_signature_summary = summarize_robust_signature(robust_signature)
         payload: dict[str, Any] = {
             "path": path,
             "qualified_name": qualified_name,
@@ -906,23 +1031,6 @@ def build_candidate_chunks(
         fallback_reason = str(item.get("_disclosure_fallback_reason") or "").strip()
         if fallback_reason:
             payload["disclosure_fallback_reason"] = fallback_reason
-        if robust_signature_summary.get("available", False):
-            payload["robust_signature_summary"] = robust_signature_summary
-            payload[ROBUST_SIGNATURE_SIDECAR_KEY] = robust_signature
-        retrieval_context = str(item.get(RETRIEVAL_CONTEXT_SIDECAR_KEY) or "").strip()
-        if retrieval_context:
-            payload[RETRIEVAL_CONTEXT_SIDECAR_KEY] = retrieval_context
-        retrieval_context_sidecar_value = item.get(CONTEXTUAL_CHUNKING_SIDECAR_KEY)
-        if isinstance(retrieval_context_sidecar_value, dict) and retrieval_context_sidecar_value:
-            payload[CONTEXTUAL_CHUNKING_SIDECAR_KEY] = dict(
-                retrieval_context_sidecar_value
-            )
-        if is_skeleton_disclosure(resolved_disclosure):
-            payload["skeleton"] = build_chunk_skeleton(
-                chunk=item,
-                disclosure_mode=resolved_disclosure,
-                robust_signature=robust_signature,
-            )
         if resolved_disclosure in {"signature", "snippet"}:
             payload["signature"] = signature
         if resolved_disclosure == "snippet":
@@ -1073,6 +1181,21 @@ def build_candidate_chunks(
         chosen_path = str(chosen.get("path") or "").strip()
         per_file_counter[chosen_path] = int(per_file_counter.get(chosen_path, 0)) + 1
         used_tokens += int(chosen_breakdown.get("estimated_tokens", 0) or 0)
+
+    selected = [
+        _hydrate_selected_chunk_payload(
+            root=root,
+            item=item,
+            files_map=files_map,
+            disclosure=disclosure,
+            snippet_lines_limit=snippet_lines_limit,
+            snippet_chars_limit=snippet_chars_limit,
+            reference_hits_cache_key=reference_hits_cache_key,
+            ensure_file_lines_fn=_ensure_file_lines_for_path,
+        )
+        for item in selected
+        if isinstance(item, dict)
+    ]
 
     file_counts = [count for count in per_file_counter.values() if count > 0]
     chunks_per_file_mean = (sum(file_counts) / len(file_counts)) if file_counts else 0.0
@@ -1227,6 +1350,10 @@ def build_candidate_chunks(
         candidate_chunk_count=selected_count,
         candidate_chunks_total=total_candidates,
         candidate_chunks_selected=selected_count,
+        source_line_read_count=int(source_line_read_count),
+        source_line_read_path_count=len(source_line_read_paths),
+        signature_materialized_count=int(signature_materialized_count),
+        snippet_materialized_count=int(snippet_materialized_count),
         chunks_per_file_mean=float(chunks_per_file_mean),
         chunk_budget_used=int(used_tokens),
         dedup_ratio=float(dedup_ratio),

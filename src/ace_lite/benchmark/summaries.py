@@ -355,6 +355,28 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
     skills_precomputed_route = [
         float(item.get("skills_precomputed_route", 0.0)) for item in case_results
     ]
+    candidate_rows_materialized_counts = [
+        float(item.get("candidate_rows_materialized_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    candidate_chunks_materialized_counts = [
+        float(item.get("candidate_chunks_materialized_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    source_plan_candidate_chunks_materialized_counts = [
+        float(item.get("source_plan_candidate_chunks_materialized_count", 0.0) or 0.0)
+        for item in case_results
+    ]
+    skills_markdown_bytes_loaded = [
+        float(item.get("skills_markdown_bytes_loaded", 0.0) or 0.0)
+        for item in case_results
+    ]
+    budget_abort_cases = [
+        float(item.get("budget_abort", 0.0) or 0.0) for item in case_results
+    ]
+    fallback_taken_cases = [
+        float(item.get("fallback_taken", 0.0) or 0.0) for item in case_results
+    ]
     plan_replay_cache_enabled = [
         float(item.get("plan_replay_cache_enabled", 0.0)) for item in case_results
     ]
@@ -1258,6 +1280,16 @@ def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
         "skills_skipped_for_budget_mean": mean(skills_skipped_for_budget),
         "skills_metadata_only_routing_ratio": mean(skills_metadata_only_routing),
         "skills_precomputed_route_ratio": mean(skills_precomputed_route),
+        "candidate_rows_materialized_mean": mean(candidate_rows_materialized_counts),
+        "candidate_chunks_materialized_mean": mean(
+            candidate_chunks_materialized_counts
+        ),
+        "source_plan_candidate_chunks_materialized_mean": mean(
+            source_plan_candidate_chunks_materialized_counts
+        ),
+        "skills_markdown_bytes_loaded_mean": mean(skills_markdown_bytes_loaded),
+        "budget_abort_ratio": mean(budget_abort_cases),
+        "fallback_taken_ratio": mean(fallback_taken_cases),
         "plan_replay_cache_enabled_ratio": mean(plan_replay_cache_enabled),
         "plan_replay_cache_hit_ratio": mean(plan_replay_cache_hits),
         "plan_replay_cache_stale_hit_safe_ratio": mean(
@@ -1695,6 +1727,34 @@ def build_repomap_seed_summary(*, metrics: dict[str, Any]) -> dict[str, float]:
             float(normalized_metrics.get("repomap_precompute_hit_ratio", 0.0) or 0.0),
             6,
         ),
+    }
+
+
+def build_workload_taxonomy_summary(case_results: list[dict[str, Any]]) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {"case_count": 0, "taxonomy_count": 0, "taxonomies": []}
+
+    counts: dict[str, int] = {}
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        taxonomy = str(item.get("workload_taxonomy") or "").strip() or "unknown"
+        counts[taxonomy] = counts.get(taxonomy, 0) + 1
+
+    rows = [
+        {
+            "workload_taxonomy": name,
+            "count": count,
+            "rate": float(count) / float(case_count),
+        }
+        for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    return {
+        "case_count": case_count,
+        "taxonomy_count": len(rows),
+        "dominant_workload_taxonomy": rows[0]["workload_taxonomy"] if rows else "",
+        "taxonomies": rows,
     }
 
 
@@ -2556,5 +2616,6 @@ __all__ = [
     "build_validation_branch_gate_summary",
     "build_validation_branch_summary",
     "build_validation_probe_summary",
+    "build_workload_taxonomy_summary",
     "compare_metrics",
 ]
