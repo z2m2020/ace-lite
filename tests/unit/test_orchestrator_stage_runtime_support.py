@@ -3,9 +3,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from ace_lite.orchestrator_stage_runtime_support import (
+    precompute_orchestrator_skills_route,
     run_orchestrator_augment_stage,
     run_orchestrator_index_stage,
     run_orchestrator_repomap_stage,
+    run_orchestrator_skills_stage,
     run_orchestrator_validation_stage,
 )
 from ace_lite.pipeline.types import StageContext
@@ -154,6 +156,114 @@ def test_run_orchestrator_augment_stage_builds_payload_and_applies_policy(
         "sbfl_metric": "ochiai",
         "vcs_enabled": True,
         "vcs_worktree_override": "worktree",
+    }
+
+
+def test_run_orchestrator_skills_stage_builds_runtime_and_forwards_payload(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_build_runtime(**kwargs):  # type: ignore[no-untyped-def]
+        assert kwargs == {
+            "ctx_state": {"index": {"module_hint": "pkg.core"}},
+            "precomputed_routing_enabled": True,
+        }
+        return SimpleNamespace(routed_payload={"route": True})
+
+    def fake_run_skills(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return {"stage": "skills"}
+
+    monkeypatch.setattr(
+        "ace_lite.orchestrator_stage_runtime_support.build_orchestrator_skills_runtime",
+        fake_build_runtime,
+    )
+    monkeypatch.setattr(
+        "ace_lite.orchestrator_stage_runtime_support.run_skills",
+        fake_run_skills,
+    )
+
+    config = SimpleNamespace(
+        skills=SimpleNamespace(
+            precomputed_routing_enabled=True,
+            top_n=6,
+            token_budget=1200,
+        )
+    )
+    ctx = StageContext(
+        query="query",
+        repo="repo",
+        root="root",
+        state={"index": {"module_hint": "pkg.core"}},
+    )
+
+    result = run_orchestrator_skills_stage(
+        ctx=ctx,
+        config=config,
+        skill_manifest={"manifest": True},
+    )
+
+    assert result == {"stage": "skills"}
+    assert captured == {
+        "ctx": ctx,
+        "skill_manifest": {"manifest": True},
+        "top_n": 6,
+        "token_budget": 1200,
+        "routed_payload": {"route": True},
+    }
+
+
+def test_precompute_orchestrator_skills_route_builds_runtime_and_routes(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_build_runtime(**kwargs):  # type: ignore[no-untyped-def]
+        assert kwargs == {
+            "ctx_state": {"index": {"module_hint": "pkg.api"}},
+            "precomputed_routing_enabled": False,
+        }
+        return SimpleNamespace(module_hint="pkg.api")
+
+    def fake_route_skills(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return {"route": "done"}
+
+    monkeypatch.setattr(
+        "ace_lite.orchestrator_stage_runtime_support.build_orchestrator_skills_runtime",
+        fake_build_runtime,
+    )
+    monkeypatch.setattr(
+        "ace_lite.orchestrator_stage_runtime_support.route_skills",
+        fake_route_skills,
+    )
+
+    config = SimpleNamespace(
+        skills=SimpleNamespace(
+            precomputed_routing_enabled=False,
+            top_n=4,
+        )
+    )
+    ctx = StageContext(
+        query="search query",
+        repo="repo",
+        root="root",
+        state={"index": {"module_hint": "pkg.api"}},
+    )
+
+    result = precompute_orchestrator_skills_route(
+        ctx=ctx,
+        config=config,
+        skill_manifest={"manifest": True},
+    )
+
+    assert result == {"route": "done"}
+    assert captured == {
+        "query": "search query",
+        "module_hint": "pkg.api",
+        "skill_manifest": {"manifest": True},
+        "top_n": 4,
     }
 
 

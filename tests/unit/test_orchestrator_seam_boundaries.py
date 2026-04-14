@@ -26,12 +26,13 @@ class TestOrchestratorSeamBoundaries:
 
         expected_tokens = (
             "build_orchestrator_memory_runtime",
-            "build_orchestrator_skills_runtime",
             "build_orchestrator_source_plan_runtime",
             "run_orchestrator_augment_stage",
             "run_orchestrator_index_stage",
             "run_orchestrator_repomap_stage",
+            "run_orchestrator_skills_stage",
             "run_orchestrator_validation_stage",
+            "precompute_orchestrator_skills_route",
             "load_orchestrator_plugins",
             "apply_post_stage_state_updates",
         )
@@ -75,8 +76,12 @@ class TestOrchestratorSeamBoundaries:
         run_skills_block = _extract_method_block("_run_skills")
         precompute_block = _extract_method_block("_precompute_skills_route")
 
-        assert "runtime = build_orchestrator_skills_runtime(" in run_skills_block
-        assert "runtime = build_orchestrator_skills_runtime(" in precompute_block
+        assert "return run_orchestrator_skills_stage(" in run_skills_block
+        assert "return precompute_orchestrator_skills_route(" in precompute_block
+        assert "build_orchestrator_skills_runtime(" not in run_skills_block
+        assert "build_orchestrator_skills_runtime(" not in precompute_block
+        assert "return run_skills(" not in run_skills_block
+        assert "return route_skills(" not in precompute_block
         assert 'ctx.state["_skills_route"]' not in run_skills_block
         assert 'ctx.state.get("_skills_route"' not in run_skills_block
         assert 'index_stage.get("module_hint"' not in precompute_block

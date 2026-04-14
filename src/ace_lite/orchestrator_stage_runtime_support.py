@@ -7,12 +7,16 @@ from ace_lite.orchestrator_augment_support import (
     build_orchestrator_augment_runtime,
     resolve_augment_candidates,
 )
+from ace_lite.orchestrator_skills_support import (
+    build_orchestrator_skills_runtime,
+)
 from ace_lite.orchestrator_validation_support import (
     build_orchestrator_validation_runtime,
 )
 from ace_lite.pipeline.stages.augment import run_diagnostics_augment
 from ace_lite.pipeline.stages.index import IndexStageConfig, run_index
 from ace_lite.pipeline.stages.repomap import run_repomap
+from ace_lite.pipeline.stages.skills import route_skills, run_skills
 from ace_lite.pipeline.stages.validation import run_validation_stage
 from ace_lite.pipeline.types import StageContext
 
@@ -94,6 +98,43 @@ def run_orchestrator_augment_stage(
     return payload
 
 
+def run_orchestrator_skills_stage(
+    *,
+    ctx: StageContext,
+    config: Any,
+    skill_manifest: Any,
+) -> dict[str, Any]:
+    runtime = build_orchestrator_skills_runtime(
+        ctx_state=ctx.state,
+        precomputed_routing_enabled=bool(config.skills.precomputed_routing_enabled),
+    )
+    return run_skills(
+        ctx=ctx,
+        skill_manifest=skill_manifest,
+        top_n=config.skills.top_n,
+        token_budget=config.skills.token_budget,
+        routed_payload=runtime.routed_payload,
+    )
+
+
+def precompute_orchestrator_skills_route(
+    *,
+    ctx: StageContext,
+    config: Any,
+    skill_manifest: Any,
+) -> dict[str, Any]:
+    runtime = build_orchestrator_skills_runtime(
+        ctx_state=ctx.state,
+        precomputed_routing_enabled=bool(config.skills.precomputed_routing_enabled),
+    )
+    return route_skills(
+        query=ctx.query,
+        module_hint=runtime.module_hint,
+        skill_manifest=skill_manifest,
+        top_n=config.skills.top_n,
+    )
+
+
 def run_orchestrator_validation_stage(
     *,
     ctx: StageContext,
@@ -125,8 +166,10 @@ def run_orchestrator_validation_stage(
 
 
 __all__ = [
+    "precompute_orchestrator_skills_route",
     "run_orchestrator_augment_stage",
     "run_orchestrator_index_stage",
     "run_orchestrator_repomap_stage",
+    "run_orchestrator_skills_stage",
     "run_orchestrator_validation_stage",
 ]

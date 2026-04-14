@@ -40,9 +40,6 @@ from ace_lite.orchestrator_runtime_support import (
     run_orchestrator_lifecycle,
     run_orchestrator_preparation,
 )
-from ace_lite.orchestrator_skills_support import (
-    build_orchestrator_skills_runtime,
-)
 from ace_lite.orchestrator_source_plan_replay_service import (
     SourcePlanReplayService,
 )
@@ -50,9 +47,11 @@ from ace_lite.orchestrator_source_plan_support import (
     build_orchestrator_source_plan_runtime,
 )
 from ace_lite.orchestrator_stage_runtime_support import (
+    precompute_orchestrator_skills_route,
     run_orchestrator_augment_stage,
     run_orchestrator_index_stage,
     run_orchestrator_repomap_stage,
+    run_orchestrator_skills_stage,
     run_orchestrator_validation_stage,
 )
 from ace_lite.orchestrator_stage_state import apply_post_stage_state_updates
@@ -64,7 +63,6 @@ from ace_lite.pipeline.registry import (
 )
 from ace_lite.pipeline.stage_tags import build_stage_tags
 from ace_lite.pipeline.stages.memory import run_memory
-from ace_lite.pipeline.stages.skills import route_skills, run_skills
 from ace_lite.pipeline.stages.source_plan import run_source_plan
 from ace_lite.pipeline.types import StageContext, StageMetric
 from ace_lite.plugins.loader import PluginLoader
@@ -764,32 +762,17 @@ class AceOrchestrator:
         )
 
     def _run_skills(self, *, ctx: StageContext) -> dict[str, Any]:
-        runtime = build_orchestrator_skills_runtime(
-            ctx_state=ctx.state,
-            precomputed_routing_enabled=bool(
-                self._config.skills.precomputed_routing_enabled
-            ),
-        )
-        return run_skills(
+        return run_orchestrator_skills_stage(
             ctx=ctx,
+            config=self._config,
             skill_manifest=self._skill_manifest,
-            top_n=self._config.skills.top_n,
-            token_budget=self._config.skills.token_budget,
-            routed_payload=runtime.routed_payload,
         )
 
     def _precompute_skills_route(self, *, ctx: StageContext) -> dict[str, Any]:
-        runtime = build_orchestrator_skills_runtime(
-            ctx_state=ctx.state,
-            precomputed_routing_enabled=bool(
-                self._config.skills.precomputed_routing_enabled
-            ),
-        )
-        return route_skills(
-            query=ctx.query,
-            module_hint=runtime.module_hint,
+        return precompute_orchestrator_skills_route(
+            ctx=ctx,
+            config=self._config,
             skill_manifest=self._skill_manifest,
-            top_n=self._config.skills.top_n,
         )
 
     def _run_source_plan(self, *, ctx: StageContext) -> dict[str, Any]:
