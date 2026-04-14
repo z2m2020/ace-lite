@@ -29,6 +29,7 @@ class TestOrchestratorSeamBoundaries:
             "build_orchestrator_augment_runtime",
             "build_orchestrator_skills_runtime",
             "build_orchestrator_source_plan_runtime",
+            "run_orchestrator_index_stage",
             "run_orchestrator_repomap_stage",
             "run_orchestrator_validation_stage",
             "load_orchestrator_plugins",
@@ -86,6 +87,18 @@ class TestOrchestratorSeamBoundaries:
         assert "config=self._config" in method_block
         assert "tokenizer_model=self._tokenizer_model" in method_block
         assert "return run_repomap(" not in method_block
+
+    def test_index_stage_uses_stage_runtime_support_shell(self) -> None:
+        method_block = _extract_method_block("_run_index")
+
+        assert "return run_orchestrator_index_stage(" in method_block
+        assert "config=self._config" in method_block
+        assert "tokenizer_model=self._tokenizer_model" in method_block
+        assert "cochange_neighbor_cap=self._COCHANGE_NEIGHBOR_CAP" in method_block
+        assert "cochange_min_neighbor_score=self._COCHANGE_MIN_NEIGHBOR_SCORE" in method_block
+        assert "cochange_max_boost=self._COCHANGE_MAX_BOOST" in method_block
+        assert "return run_index(" not in method_block
+        assert "IndexStageConfig.from_orchestrator_config(" not in method_block
 
     def test_validation_stage_uses_support_runtime_for_state_normalization(self) -> None:
         method_block = _extract_method_block("_run_validation")

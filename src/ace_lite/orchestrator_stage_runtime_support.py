@@ -6,9 +6,31 @@ from typing import Any
 from ace_lite.orchestrator_validation_support import (
     build_orchestrator_validation_runtime,
 )
+from ace_lite.pipeline.stages.index import IndexStageConfig, run_index
 from ace_lite.pipeline.stages.repomap import run_repomap
 from ace_lite.pipeline.stages.validation import run_validation_stage
 from ace_lite.pipeline.types import StageContext
+
+
+def run_orchestrator_index_stage(
+    *,
+    ctx: StageContext,
+    config: Any,
+    tokenizer_model: str,
+    cochange_neighbor_cap: int,
+    cochange_min_neighbor_score: float,
+    cochange_max_boost: float,
+) -> dict[str, Any]:
+    return run_index(
+        ctx=ctx,
+        config=IndexStageConfig.from_orchestrator_config(
+            config=config,
+            tokenizer_model=tokenizer_model,
+            cochange_neighbor_cap=cochange_neighbor_cap,
+            cochange_min_neighbor_score=cochange_min_neighbor_score,
+            cochange_max_boost=cochange_max_boost,
+        ),
+    )
 
 
 def run_orchestrator_repomap_stage(
@@ -61,6 +83,7 @@ def run_orchestrator_validation_stage(
 
 
 __all__ = [
+    "run_orchestrator_index_stage",
     "run_orchestrator_repomap_stage",
     "run_orchestrator_validation_stage",
 ]

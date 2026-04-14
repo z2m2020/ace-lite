@@ -54,6 +54,7 @@ from ace_lite.orchestrator_source_plan_support import (
     build_orchestrator_source_plan_runtime,
 )
 from ace_lite.orchestrator_stage_runtime_support import (
+    run_orchestrator_index_stage,
     run_orchestrator_repomap_stage,
     run_orchestrator_validation_stage,
 )
@@ -66,7 +67,6 @@ from ace_lite.pipeline.registry import (
 )
 from ace_lite.pipeline.stage_tags import build_stage_tags
 from ace_lite.pipeline.stages.augment import run_diagnostics_augment
-from ace_lite.pipeline.stages.index import IndexStageConfig, run_index
 from ace_lite.pipeline.stages.memory import run_memory
 from ace_lite.pipeline.stages.skills import route_skills, run_skills
 from ace_lite.pipeline.stages.source_plan import run_source_plan
@@ -744,15 +744,13 @@ class AceOrchestrator:
         )
 
     def _run_index(self, *, ctx: StageContext) -> dict[str, Any]:
-        return run_index(
+        return run_orchestrator_index_stage(
             ctx=ctx,
-            config=IndexStageConfig.from_orchestrator_config(
-                config=self._config,
-                tokenizer_model=self._tokenizer_model,
-                cochange_neighbor_cap=self._COCHANGE_NEIGHBOR_CAP,
-                cochange_min_neighbor_score=self._COCHANGE_MIN_NEIGHBOR_SCORE,
-                cochange_max_boost=self._COCHANGE_MAX_BOOST,
-            ),
+            config=self._config,
+            tokenizer_model=self._tokenizer_model,
+            cochange_neighbor_cap=self._COCHANGE_NEIGHBOR_CAP,
+            cochange_min_neighbor_score=self._COCHANGE_MIN_NEIGHBOR_SCORE,
+            cochange_max_boost=self._COCHANGE_MAX_BOOST,
         )
 
     def _run_repomap(self, *, ctx: StageContext) -> dict[str, Any]:

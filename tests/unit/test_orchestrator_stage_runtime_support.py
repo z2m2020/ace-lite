@@ -3,10 +3,59 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from ace_lite.orchestrator_stage_runtime_support import (
+    run_orchestrator_index_stage,
     run_orchestrator_repomap_stage,
     run_orchestrator_validation_stage,
 )
 from ace_lite.pipeline.types import StageContext
+
+
+def test_run_orchestrator_index_stage_builds_index_config_and_executes(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_from_orchestrator_config(**kwargs):  # type: ignore[no-untyped-def]
+        captured["config_kwargs"] = kwargs
+        return "index-config"
+
+    def fake_run_index(**kwargs):  # type: ignore[no-untyped-def]
+        captured["run_index_kwargs"] = kwargs
+        return {"stage": "index"}
+
+    monkeypatch.setattr(
+        "ace_lite.orchestrator_stage_runtime_support.IndexStageConfig.from_orchestrator_config",
+        fake_from_orchestrator_config,
+    )
+    monkeypatch.setattr(
+        "ace_lite.orchestrator_stage_runtime_support.run_index",
+        fake_run_index,
+    )
+
+    config = SimpleNamespace(name="cfg")
+    ctx = StageContext(query="q", repo="repo", root="root", state={})
+
+    result = run_orchestrator_index_stage(
+        ctx=ctx,
+        config=config,
+        tokenizer_model="tok-model",
+        cochange_neighbor_cap=8,
+        cochange_min_neighbor_score=0.2,
+        cochange_max_boost=0.9,
+    )
+
+    assert result == {"stage": "index"}
+    assert captured["config_kwargs"] == {
+        "config": config,
+        "tokenizer_model": "tok-model",
+        "cochange_neighbor_cap": 8,
+        "cochange_min_neighbor_score": 0.2,
+        "cochange_max_boost": 0.9,
+    }
+    assert captured["run_index_kwargs"] == {
+        "ctx": ctx,
+        "config": "index-config",
+    }
 
 
 def test_run_orchestrator_repomap_stage_forwards_runtime_config(
