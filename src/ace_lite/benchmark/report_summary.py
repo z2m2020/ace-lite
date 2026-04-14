@@ -40,18 +40,34 @@ OPTIONAL_SUMMARY_MAPPING_KEYS = (
 )
 
 
+def get_summary_mapping(*, results: dict[str, Any], key: str) -> dict[str, Any]:
+    raw = results.get(key)
+    return raw if isinstance(raw, dict) else {}
+
+
+def get_nested_mapping(*, payload: dict[str, Any], key: str) -> dict[str, Any]:
+    raw = payload.get(key)
+    return raw if isinstance(raw, dict) else {}
+
+
 def copy_optional_summary_sections(*, results: dict[str, Any]) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     for key in OPTIONAL_SUMMARY_MAPPING_KEYS:
-        raw = results.get(key)
-        if isinstance(raw, dict):
-            payload[key] = dict(raw)
+        summary = get_summary_mapping(results=results, key=key)
+        if summary:
+            payload[key] = dict(summary)
 
-    policy_profiles = results.get("policy_profile_distribution")
-    if isinstance(policy_profiles, dict) and policy_profiles:
+    policy_profiles = get_summary_mapping(
+        results=results, key="policy_profile_distribution"
+    )
+    if policy_profiles:
         payload["policy_profile_distribution"] = dict(policy_profiles)
 
     return payload
 
 
-__all__ = ["copy_optional_summary_sections"]
+__all__ = [
+    "copy_optional_summary_sections",
+    "get_nested_mapping",
+    "get_summary_mapping",
+]

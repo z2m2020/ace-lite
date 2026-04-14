@@ -5,13 +5,13 @@ from typing import Any
 from ace_lite.benchmark.report_metrics import (
     format_metric as _format_metric,
 )
+from ace_lite.benchmark.report_summary import get_nested_mapping, get_summary_mapping
 
 
 def append_preference_observability_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
-    summary_raw = results.get("preference_observability_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    summary = get_summary_mapping(results=results, key="preference_observability_summary")
     if not summary:
         return
 
@@ -64,13 +64,11 @@ def append_preference_observability_summary(
 def append_feedback_observability_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
-    summary_raw = results.get("feedback_observability_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    summary = get_summary_mapping(results=results, key="feedback_observability_summary")
     if not summary:
         return
 
-    reasons_raw = summary.get("reasons")
-    reasons: dict[str, Any] = reasons_raw if isinstance(reasons_raw, dict) else {}
+    reasons = get_nested_mapping(payload=summary, key="reasons")
 
     lines.append("## Feedback Observability Summary")
     lines.append("")
@@ -137,15 +135,12 @@ def append_feedback_observability_summary(
 def append_evidence_insufficiency_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
-    summary_raw = results.get("evidence_insufficiency_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    summary = get_summary_mapping(results=results, key="evidence_insufficiency_summary")
     if not summary:
         return
 
-    reasons_raw = summary.get("reasons")
-    reasons: dict[str, Any] = reasons_raw if isinstance(reasons_raw, dict) else {}
-    signals_raw = summary.get("signals")
-    signals: dict[str, Any] = signals_raw if isinstance(signals_raw, dict) else {}
+    reasons = get_nested_mapping(payload=summary, key="reasons")
+    signals = get_nested_mapping(payload=summary, key="signals")
     applicable_case_count = int(summary.get("applicable_case_count", 0) or 0)
 
     lines.append("## Evidence Insufficiency Summary")
@@ -205,15 +200,12 @@ def append_evidence_insufficiency_summary(
 def append_missing_context_risk_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
-    summary_raw = results.get("missing_context_risk_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    summary = get_summary_mapping(results=results, key="missing_context_risk_summary")
     if not summary:
         return
 
-    levels_raw = summary.get("levels")
-    levels: dict[str, Any] = levels_raw if isinstance(levels_raw, dict) else {}
-    signals_raw = summary.get("signals")
-    signals: dict[str, Any] = signals_raw if isinstance(signals_raw, dict) else {}
+    levels = get_nested_mapping(payload=summary, key="levels")
+    signals = get_nested_mapping(payload=summary, key="signals")
     applicable_case_count = int(summary.get("applicable_case_count", 0) or 0)
 
     lines.append("## Missing-Context Risk Summary")
@@ -294,8 +286,7 @@ def append_missing_context_risk_summary(
 def append_ltm_explainability_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
-    summary_raw = results.get("ltm_explainability_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    summary = get_summary_mapping(results=results, key="ltm_explainability_summary")
     if not summary:
         return
 
@@ -413,15 +404,11 @@ def append_ltm_explainability_summary(
 
 
 def append_feedback_loop_summary(lines: list[str], results: dict[str, Any]) -> None:
-    summary_raw = results.get("feedback_loop_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    summary = get_summary_mapping(results=results, key="feedback_loop_summary")
     if not summary:
         return
 
-    feedback_surfaces_raw = summary.get("feedback_surfaces")
-    feedback_surfaces: dict[str, Any] = (
-        feedback_surfaces_raw if isinstance(feedback_surfaces_raw, dict) else {}
-    )
+    feedback_surfaces = get_nested_mapping(payload=summary, key="feedback_surfaces")
 
     lines.append("## Feedback Loop Summary")
     lines.append("")

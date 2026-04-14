@@ -38,6 +38,13 @@ assembly shell and move report-only summary sections into support modules such
 as `src/ace_lite/benchmark/report_observability.py` rather than growing the
 shell again.
 
+As of `0.3.79`, shared summary-view helpers under
+`src/ace_lite/benchmark/report_summary.py` also own the repeated dict-unwrapping
+logic for report-only summary sections. Keep future report-stack cleanup flowing
+through those read-only helpers instead of duplicating new `summary_raw if
+isinstance(..., dict)` branches across `report.py` and
+`report_observability.py`.
+
 The current hotspot set is intentionally report-only. Update the target list in
 `benchmark/quality/hotspot_baseline.json` together with `scripts/run_quality_gate.py`
 when a new maintainability wave changes the main concentration risks.

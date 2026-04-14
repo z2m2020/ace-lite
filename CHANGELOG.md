@@ -8,6 +8,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.79] - 2026-04-14
+
+### Changed
+
+- Added shared benchmark summary-view helpers in `report_summary.py` so report-only consumers can read top-level and nested summary mappings without duplicating dict-unwrapping boilerplate.
+- Switched benchmark runtime-stats and observability report rendering paths to use the shared summary-view helpers, further shrinking the report stack's repetitive parsing surface while preserving report-layer governance boundaries.
+
 ## [0.3.78] - 2026-04-14
 
 ### Changed

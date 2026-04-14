@@ -37,7 +37,11 @@ from ace_lite.benchmark.report_observability import (
     append_reward_log_summary,
     format_decision_event,
 )
-from ace_lite.benchmark.report_summary import copy_optional_summary_sections
+from ace_lite.benchmark.report_summary import (
+    copy_optional_summary_sections,
+    get_nested_mapping,
+    get_summary_mapping,
+)
 from ace_lite.cli_app.runtime_stats_enrichment_support import (
     attach_runtime_memory_ltm_signal_summary,
 )
@@ -1741,38 +1745,24 @@ def _append_comparison_lane_summary(lines: list[str], results: dict[str, Any]) -
 
 
 def _append_runtime_stats_summary(lines: list[str], results: dict[str, Any]) -> None:
-    summary_raw = results.get("runtime_stats_summary")
-    summary: dict[str, Any] = summary_raw if isinstance(summary_raw, dict) else {}
+    summary = get_summary_mapping(results=results, key="runtime_stats_summary")
     if not summary:
         return
 
-    latest_raw = summary.get("latest_match")
-    latest: dict[str, Any] = latest_raw if isinstance(latest_raw, dict) else {}
-    scopes_raw = summary.get("summary")
-    scopes: dict[str, Any] = scopes_raw if isinstance(scopes_raw, dict) else {}
-    preference_snapshot_raw = summary.get("preference_snapshot")
-    preference_snapshot: dict[str, Any] = (
-        preference_snapshot_raw
-        if isinstance(preference_snapshot_raw, dict)
-        else {}
+    latest = get_nested_mapping(payload=summary, key="latest_match")
+    scopes = get_nested_mapping(payload=summary, key="summary")
+    preference_snapshot = get_nested_mapping(payload=summary, key="preference_snapshot")
+    memory_health_summary = get_nested_mapping(payload=summary, key="memory_health_summary")
+    ltm_explainability_summary = get_summary_mapping(
+        results=results, key="ltm_explainability_summary"
     )
-    memory_health_summary_raw = summary.get("memory_health_summary")
-    memory_health_summary: dict[str, Any] = (
-        memory_health_summary_raw
-        if isinstance(memory_health_summary_raw, dict)
-        else {}
-    )
-    ltm_explainability_summary_raw = results.get("ltm_explainability_summary")
-    if memory_health_summary and isinstance(ltm_explainability_summary_raw, dict):
+    if memory_health_summary and ltm_explainability_summary:
         memory_health_summary = attach_runtime_memory_ltm_signal_summary(
             memory_health_summary=memory_health_summary,
-            ltm_explainability_summary=ltm_explainability_summary_raw,
+            ltm_explainability_summary=ltm_explainability_summary,
         )
-    next_cycle_input_summary_raw = summary.get("next_cycle_input_summary")
-    next_cycle_input_summary: dict[str, Any] = (
-        next_cycle_input_summary_raw
-        if isinstance(next_cycle_input_summary_raw, dict)
-        else {}
+    next_cycle_input_summary = get_nested_mapping(
+        payload=summary, key="next_cycle_input_summary"
     )
 
     lines.append("## Runtime Stats Summary")
