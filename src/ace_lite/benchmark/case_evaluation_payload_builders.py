@@ -5,6 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from ace_lite.benchmark.case_evaluation_namespace_lookup import (
+    lookup_case_evaluation_value,
+)
 from ace_lite.benchmark.case_evaluation_output import build_case_detail_payload
 from ace_lite.benchmark.case_evaluation_row import build_case_evaluation_row
 
@@ -28,12 +31,11 @@ def build_case_detail_payload_from_namespace(
 
 
 def _lookup(namespace: Mapping[str, Any], key: str) -> Any:
-    try:
-        return namespace[key]
-    except KeyError as exc:
-        raise KeyError(
-            f"missing case-evaluation payload input: {key}"
-        ) from exc
+    return lookup_case_evaluation_value(
+        namespace,
+        key,
+        error_prefix="case-evaluation payload input",
+    )
 
 
 _ROW_ARGUMENT_NAMES = (

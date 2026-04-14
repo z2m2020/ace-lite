@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from ace_lite.benchmark.case_evaluation_diagnostics import (
@@ -129,3 +131,52 @@ def test_build_case_evaluation_diagnostics_from_namespace_raises_for_missing_inp
                 "chunk_guard_payload": {},
             }
         )
+
+
+def test_build_case_evaluation_diagnostics_from_namespace_reads_metrics_and_match_fallbacks() -> None:
+    namespace = {
+        "case": {"id": "case-1", "task_success": {"mode": "recall_or_validation"}},
+        "expected": ["src/app.py"],
+        "top_candidates": [{"path": "src/app.py"}, {"path": "src/other.py"}],
+        "candidate_context": SimpleNamespace(
+            candidate_chunks=[{"qualified_name": "src.app:demo"}]
+        ),
+        "candidate_match_details": {
+            "recall_hit": 1.0,
+            "noise": 0.1,
+        },
+        "chunk_match_details": {"chunk_hit_at_k": 1.0},
+        "metrics": SimpleNamespace(
+            validation_tests=["pytest tests/unit/test_demo.py"],
+            docs_enabled_flag=True,
+            docs_hit=0.5,
+            dependency_recall=0.25,
+            neighbor_paths=["src/dependency.py"],
+            skills_budget_exhausted=False,
+            memory_gate_skipped=False,
+            memory_gate_skip_reason="",
+            memory_fallback_reason="",
+            memory_namespace_fallback="",
+            candidate_ranker_fallbacks=[],
+            exact_search_payload={"enabled": True},
+            second_pass_payload={"enabled": False},
+            refine_pass_payload={"enabled": True},
+            docs_backend_fallback_reason="",
+            parallel_docs_timed_out=False,
+            parallel_worktree_timed_out=False,
+            embedding_adaptive_budget_applied=False,
+            embedding_time_budget_exceeded=False,
+            embedding_fallback=False,
+            chunk_semantic_time_budget_exceeded=False,
+            chunk_semantic_fallback=False,
+            chunk_semantic_reason="",
+            xref_budget_exhausted=False,
+            chunk_guard_payload={"enabled": False},
+        ),
+    }
+
+    diagnostics = build_case_evaluation_diagnostics_from_namespace(namespace=namespace)
+
+    assert diagnostics.task_success_hit == 1.0
+    assert isinstance(diagnostics.evidence_insufficiency, dict)
+    assert diagnostics.slo_downgrade_signals == []

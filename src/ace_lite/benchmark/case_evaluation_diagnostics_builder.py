@@ -9,6 +9,9 @@ from ace_lite.benchmark.case_evaluation_diagnostics import (
     CaseEvaluationDiagnostics,
     build_case_evaluation_diagnostics,
 )
+from ace_lite.benchmark.case_evaluation_namespace_lookup import (
+    lookup_case_evaluation_value,
+)
 
 
 def build_case_evaluation_diagnostics_from_namespace(
@@ -66,12 +69,11 @@ def build_case_evaluation_diagnostics_from_namespace(
 
 
 def _lookup(namespace: Mapping[str, Any], key: str) -> Any:
-    try:
-        return namespace[key]
-    except KeyError as exc:
-        raise KeyError(
-            f"missing case-evaluation diagnostics input: {key}"
-        ) from exc
+    return lookup_case_evaluation_value(
+        namespace,
+        key,
+        error_prefix="case-evaluation diagnostics input",
+    )
 
 
 __all__ = ["build_case_evaluation_diagnostics_from_namespace"]
