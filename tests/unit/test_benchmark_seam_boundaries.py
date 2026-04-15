@@ -10,6 +10,40 @@ def _read_repo_text(relative_path: str) -> str:
 
 
 class TestBenchmarkSeamBoundaries:
+    def test_report_observability_uses_memory_seam(self) -> None:
+        observability_text = _read_repo_text(
+            "src/ace_lite/benchmark/report_observability.py"
+        )
+
+        expected_tokens = (
+            "from ace_lite.benchmark.report_observability_memory import (",
+            "append_feedback_loop_summary as _append_feedback_loop_summary_impl",
+            "append_feedback_observability_summary as _append_feedback_observability_summary_impl",
+            "append_ltm_explainability_summary as _append_ltm_explainability_summary_impl",
+            "append_preference_observability_summary as _append_preference_observability_summary_impl",
+            "return _append_preference_observability_summary_impl(lines, results)",
+            "return _append_feedback_observability_summary_impl(lines, results)",
+            "return _append_ltm_explainability_summary_impl(lines, results)",
+            "return _append_feedback_loop_summary_impl(lines, results)",
+        )
+        for token in expected_tokens:
+            assert token in observability_text
+
+        forbidden_local_impl_tokens = (
+            'summary = get_summary_mapping(results=results, key="preference_observability_summary")',
+            'summary = get_summary_mapping(results=results, key="feedback_observability_summary")',
+            'summary = get_summary_mapping(results=results, key="ltm_explainability_summary")',
+            'summary = get_summary_mapping(results=results, key="feedback_loop_summary")',
+            'feedback_rows_raw = summary.get("feedback_signals")',
+            'feedback_surfaces = get_nested_mapping(payload=summary, key="feedback_surfaces")',
+            'lines.append("## Preference Observability Summary")',
+            'lines.append("## Feedback Observability Summary")',
+            'lines.append("## Long-Term Explainability Summary")',
+            'lines.append("## Feedback Loop Summary")',
+        )
+        for token in forbidden_local_impl_tokens:
+            assert token not in observability_text
+
     def test_benchmark_report_uses_report_observability_seam(self) -> None:
         report_text = _read_repo_text("src/ace_lite/benchmark/report.py")
 
