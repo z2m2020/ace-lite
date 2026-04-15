@@ -62,6 +62,8 @@ from ace_lite.pipeline.registry import (
     iter_stage_descriptors,
 )
 from ace_lite.pipeline.stage_tags import build_stage_tags
+from ace_lite.pipeline.stages.context_refine import run_context_refine
+from ace_lite.pipeline.stages.history_channel import run_history_channel
 from ace_lite.pipeline.stages.memory import run_memory
 from ace_lite.pipeline.stages.source_plan import run_source_plan
 from ace_lite.pipeline.types import StageContext, StageMetric
@@ -302,6 +304,8 @@ class AceOrchestrator:
             "repomap": lambda ctx: self._run_repomap(ctx=ctx),
             "augment": lambda ctx: self._run_augment(ctx=ctx),
             "skills": lambda ctx: self._run_skills(ctx=ctx),
+            "history_channel": lambda ctx: self._run_history_channel(ctx=ctx),
+            "context_refine": lambda ctx: self._run_context_refine(ctx=ctx),
             "source_plan": lambda ctx: self._run_source_plan(ctx=ctx),
             "validation": lambda ctx: self._run_validation(ctx=ctx),
         }
@@ -750,6 +754,12 @@ class AceOrchestrator:
             config=self._config,
             skill_manifest=self._skill_manifest,
         )
+
+    def _run_context_refine(self, *, ctx: StageContext) -> dict[str, Any]:
+        return run_context_refine(ctx=ctx)
+
+    def _run_history_channel(self, *, ctx: StageContext) -> dict[str, Any]:
+        return run_history_channel(ctx=ctx)
 
     def _run_source_plan(self, *, ctx: StageContext) -> dict[str, Any]:
         runtime = build_orchestrator_source_plan_runtime(

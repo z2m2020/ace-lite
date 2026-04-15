@@ -24,6 +24,7 @@ from ace_lite.benchmark.report_metrics import (
 )
 from ace_lite.benchmark.report_observability import (
     append_adaptive_router_observability_summary,
+    append_context_refine_summary,
     append_decision_observability_summary,
     append_evidence_insufficiency_summary,
     append_feedback_loop_summary,
@@ -2790,6 +2791,7 @@ def build_report_markdown(results: dict[str, Any]) -> str:
     append_feedback_observability_summary(lines, results)
     append_ltm_explainability_summary(lines, results)
     append_preference_observability_summary(lines, results)
+    append_context_refine_summary(lines, results)
     append_wave1_context_governance_summary(lines, results)
     append_retrieval_default_strategy_summary(lines, results)
     append_retrieval_context_observability_summary(lines, results)

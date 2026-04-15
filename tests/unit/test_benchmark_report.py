@@ -1482,6 +1482,43 @@ def test_build_results_summary_preserves_wave1_context_governance_summary() -> N
     }
 
 
+def test_build_results_summary_preserves_context_refine_summary() -> None:
+    summary = build_results_summary(
+        {
+            "repo": "demo",
+            "context_refine_summary": {
+                "case_count": 2,
+                "present_case_count": 2,
+                "present_case_rate": 1.0,
+                "watch_case_count": 1,
+                "watch_case_rate": 0.5,
+                "thin_context_case_count": 1,
+                "thin_context_case_rate": 0.5,
+                "keep_count_mean": 1.5,
+                "downrank_count_mean": 0.5,
+                "drop_count_mean": 0.5,
+                "need_more_read_count_mean": 1.0,
+                "focused_file_count_mean": 1.5,
+            },
+        }
+    )
+
+    assert summary["context_refine_summary"] == {
+        "case_count": 2,
+        "present_case_count": 2,
+        "present_case_rate": 1.0,
+        "watch_case_count": 1,
+        "watch_case_rate": 0.5,
+        "thin_context_case_count": 1,
+        "thin_context_case_rate": 0.5,
+        "keep_count_mean": 1.5,
+        "downrank_count_mean": 0.5,
+        "drop_count_mean": 0.5,
+        "need_more_read_count_mean": 1.0,
+        "focused_file_count_mean": 1.5,
+    }
+
+
 def test_build_results_summary_preserves_source_plan_failure_signal_summary() -> None:
     summary = build_results_summary(
         {
@@ -1968,6 +2005,37 @@ def test_build_report_markdown_includes_wave1_context_governance_summary() -> No
     assert "Candidate-review cases: 2/2 (1.0000); watch=1 (0.5000)" in report
     assert "Validation-findings cases: 2/2 (1.0000); blocker=1 (0.5000)" in report
     assert "| session_next_action_count_mean | 2.0000 |" in report
+
+
+def test_build_report_markdown_includes_context_refine_summary() -> None:
+    report = build_report_markdown(
+        {
+            "generated_at": "2026-04-15T00:00:00Z",
+            "repo": "demo",
+            "case_count": 2,
+            "metrics": {metric: 0.0 for metric in ALL_METRIC_ORDER},
+            "context_refine_summary": {
+                "case_count": 2,
+                "present_case_count": 2,
+                "present_case_rate": 1.0,
+                "watch_case_count": 1,
+                "watch_case_rate": 0.5,
+                "thin_context_case_count": 1,
+                "thin_context_case_rate": 0.5,
+                "keep_count_mean": 1.5,
+                "downrank_count_mean": 0.5,
+                "drop_count_mean": 0.5,
+                "need_more_read_count_mean": 1.0,
+                "focused_file_count_mean": 1.5,
+            },
+            "cases": [],
+        }
+    )
+
+    assert "## Context Refine Summary" in report
+    assert "Present cases: 2/2 (1.0000)" in report
+    assert "Watch cases: 1/2 (0.5000)" in report
+    assert "| keep_count_mean | 1.5000 |" in report
 
 
 def test_build_report_markdown_includes_source_plan_failure_signal_summary() -> None:

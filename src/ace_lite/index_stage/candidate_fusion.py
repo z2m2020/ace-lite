@@ -13,6 +13,7 @@ from ace_lite.embeddings import CrossEncoderProvider, EmbeddingProvider
 from ace_lite.index_stage.candidate_postprocess import CandidatePostprocessResult
 from ace_lite.index_stage.repo_paths import normalize_repo_path
 from ace_lite.rankers import fuse_rrf, normalize_rrf_scores
+from ace_lite.vcs_history import collect_git_commit_history
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,8 +86,106 @@ def _candidate_granularity_score(entry: dict[str, Any]) -> float:
     return float(len(classes) + len(functions))
 
 
+def _build_history_channel_payload(
+    *,
+    root: str,
+    pool_paths: list[str],
+    pool_set: set[str],
+    history_cap: int,
+) -> tuple[list[str], dict[str, Any]]:
+    effective_cap = max(1, int(history_cap))
+    payload: dict[str, Any] = {
+        "enabled": True,
+        "reason": "disabled",
+        "requested_path_count": len(pool_paths),
+        "commit_count": 0,
+        "top_paths": [],
+        "top_commits": [],
+        "error": None,
+    }
+    if not pool_paths:
+        payload["reason"] = "no_pool_paths"
+        return [], payload
+
+    history_payload = collect_git_commit_history(
+        repo_root=root,
+        paths=pool_paths,
+        limit=max(12, min(32, len(pool_paths) * 2)),
+    )
+    if not isinstance(history_payload, dict):
+        payload["reason"] = "invalid_history_payload"
+        payload["error"] = "invalid_history_payload"
+        return [], payload
+
+    payload["reason"] = str(history_payload.get("reason") or "unknown")
+    payload["commit_count"] = max(0, int(history_payload.get("commit_count", 0) or 0))
+    payload["error"] = history_payload.get("error")
+
+    commits = (
+        history_payload.get("commits", [])
+        if isinstance(history_payload.get("commits"), list)
+        else []
+    )
+    if not commits:
+        return [], payload
+
+    path_scores: dict[str, float] = {}
+    path_commit_counts: dict[str, int] = {}
+    path_latest_commit: dict[str, str] = {}
+    summarized_commits: list[dict[str, Any]] = []
+    for commit_index, commit in enumerate(commits, start=1):
+        if not isinstance(commit, dict):
+            continue
+        raw_files = commit.get("files", [])
+        files = raw_files if isinstance(raw_files, list) else []
+        matched_files: list[str] = []
+        recency_weight = 1.0 / float(commit_index)
+        for raw_path in files:
+            path = normalize_repo_path(str(raw_path or ""))
+            if not path or path not in pool_set:
+                continue
+            matched_files.append(path)
+            path_scores[path] = float(path_scores.get(path, 0.0) or 0.0) + recency_weight
+            path_commit_counts[path] = int(path_commit_counts.get(path, 0) or 0) + 1
+            if path not in path_latest_commit:
+                path_latest_commit[path] = str(commit.get("committed_at") or "")
+        if matched_files:
+            summarized_commits.append(
+                {
+                    "hash": str(commit.get("hash") or ""),
+                    "subject": str(commit.get("subject") or ""),
+                    "committed_at": str(commit.get("committed_at") or ""),
+                    "matched_files": matched_files[:6],
+                }
+            )
+
+    ranked_paths = [
+        path
+        for path, _score in sorted(
+            path_scores.items(),
+            key=lambda item: (
+                -float(item[1]),
+                -int(path_commit_counts.get(str(item[0]), 0) or 0),
+                str(item[0]),
+            ),
+        )
+    ]
+    payload["top_paths"] = [
+        {
+            "path": str(path),
+            "score": round(float(path_scores.get(path, 0.0) or 0.0), 6),
+            "commit_count": int(path_commit_counts.get(path, 0) or 0),
+            "latest_committed_at": str(path_latest_commit.get(path) or ""),
+        }
+        for path in ranked_paths[:8]
+    ]
+    payload["top_commits"] = summarized_commits[:6]
+    return ranked_paths[:effective_cap], payload
+
+
 def apply_multi_channel_rrf_fusion(
     *,
+    root: str,
     candidates: list[dict[str, Any]],
     files_map: dict[str, dict[str, Any]],
     docs_payload: dict[str, Any],
@@ -119,6 +218,7 @@ def apply_multi_channel_rrf_fusion(
     if memory_cap_effective <= 0:
         memory_cap_effective = max(8, normalized_top_k_files * 4)
     memory_cap_effective = min(memory_cap_effective, pool_cap_effective)
+    history_cap_effective = int(memory_cap_effective)
 
     payload: dict[str, Any] = {
         "enabled": True,
@@ -130,11 +230,20 @@ def apply_multi_channel_rrf_fusion(
             "code": int(code_cap_effective),
             "docs": int(docs_cap_effective),
             "memory": int(memory_cap_effective),
+            "history": int(history_cap_effective),
         },
         "channels": {
             "code": {"count": 0, "cap": int(code_cap_effective), "top": []},
             "docs": {"count": 0, "cap": int(docs_cap_effective), "top": []},
             "memory": {"count": 0, "cap": int(memory_cap_effective), "top": []},
+            "history": {
+                "count": 0,
+                "cap": int(history_cap_effective),
+                "top": [],
+                "commit_count": 0,
+                "reason": "disabled",
+                "error": None,
+            },
             "granularity": {"count": 0, "cap": int(code_cap_effective), "top": []},
         },
         "fused": {
@@ -214,6 +323,13 @@ def apply_multi_channel_rrf_fusion(
         if len(memory_ranking) >= memory_cap_effective:
             break
 
+    history_ranking, history_payload = _build_history_channel_payload(
+        root=root,
+        pool_paths=pool_paths,
+        pool_set=pool_set,
+        history_cap=history_cap_effective,
+    )
+
     granularity_scored_paths: list[tuple[float, str]] = []
     for path in pool_paths:
         file_entry = files_map.get(path)
@@ -238,19 +354,43 @@ def apply_multi_channel_rrf_fusion(
     payload["channels"]["code"]["count"] = len(code_ranking)
     payload["channels"]["docs"]["count"] = len(docs_ranking)
     payload["channels"]["memory"]["count"] = len(memory_ranking)
+    payload["channels"]["history"]["count"] = len(history_ranking)
     payload["channels"]["granularity"]["count"] = len(granularity_ranking)
     payload["channels"]["code"]["top"] = list(code_ranking[:8])
     payload["channels"]["docs"]["top"] = list(docs_ranking[:8])
     payload["channels"]["memory"]["top"] = list(memory_ranking[:8])
+    payload["channels"]["history"]["top"] = list(history_ranking[:8])
+    payload["channels"]["history"]["commit_count"] = int(
+        history_payload.get("commit_count", 0) or 0
+    )
+    payload["channels"]["history"]["reason"] = str(
+        history_payload.get("reason") or ""
+    )
+    payload["channels"]["history"]["error"] = history_payload.get("error")
+    if isinstance(history_payload.get("top_commits"), list):
+        payload["channels"]["history"]["commits"] = list(
+            history_payload.get("top_commits", [])[:6]
+        )
     payload["channels"]["granularity"]["top"] = list(granularity_ranking[:8])
 
-    if not docs_ranking and not memory_ranking and not granularity_ranking:
+    if (
+        not docs_ranking
+        and not memory_ranking
+        and not history_ranking
+        and not granularity_ranking
+    ):
         payload["reason"] = "no_aux_rankings"
         return candidates, payload
 
     try:
         fused_raw = fuse_rrf(
-            [code_ranking, docs_ranking, memory_ranking, granularity_ranking],
+            [
+                code_ranking,
+                docs_ranking,
+                memory_ranking,
+                history_ranking,
+                granularity_ranking,
+            ],
             rrf_k=rrf_k_effective,
         )
         fused = normalize_rrf_scores(fused_raw)
@@ -262,6 +402,7 @@ def apply_multi_channel_rrf_fusion(
     code_pos = {path: rank for rank, path in enumerate(code_ranking, start=1)}
     docs_pos = {path: rank for rank, path in enumerate(docs_ranking, start=1)}
     memory_pos = {path: rank for rank, path in enumerate(memory_ranking, start=1)}
+    history_pos = {path: rank for rank, path in enumerate(history_ranking, start=1)}
     granularity_pos = {
         path: rank for rank, path in enumerate(granularity_ranking, start=1)
     }
@@ -307,6 +448,7 @@ def apply_multi_channel_rrf_fusion(
         code_rank = int(code_pos.get(path, 0) or 0)
         docs_rank = int(docs_pos.get(path, 0) or 0)
         memory_rank = int(memory_pos.get(path, 0) or 0)
+        history_rank = int(history_pos.get(path, 0) or 0)
         fused_top.append(
             {
                 "path": str(path),
@@ -315,6 +457,7 @@ def apply_multi_channel_rrf_fusion(
                     "code": code_rank,
                     "docs": docs_rank,
                     "memory": memory_rank,
+                    "history": history_rank,
                     "granularity": int(granularity_pos.get(path, 0) or 0),
                 },
                 "contrib": {
@@ -328,6 +471,11 @@ def apply_multi_channel_rrf_fusion(
                         round(1.0 / (rrf_k_effective + memory_rank), 8)
                     )
                     if memory_rank > 0
+                    else 0.0,
+                    "history": float(
+                        round(1.0 / (rrf_k_effective + history_rank), 8)
+                    )
+                    if history_rank > 0
                     else 0.0,
                     "granularity": float(
                         round(
@@ -532,11 +680,21 @@ def refine_candidate_pool(
             "code": int(multi_channel_rrf_code_cap),
             "docs": int(multi_channel_rrf_docs_cap),
             "memory": int(multi_channel_rrf_memory_cap),
+            "history": int(multi_channel_rrf_memory_cap),
         },
         "channels": {
             "code": {"count": 0, "cap": 0, "top": []},
             "docs": {"count": 0, "cap": 0, "top": []},
             "memory": {"count": 0, "cap": 0, "top": []},
+            "history": {
+                "count": 0,
+                "cap": 0,
+                "top": [],
+                "commit_count": 0,
+                "reason": "disabled",
+                "error": None,
+            },
+            "granularity": {"count": 0, "cap": 0, "top": []},
         },
         "fused": {"scored_count": 0, "pool_size": 0, "top": []},
         "warning": None,
@@ -545,6 +703,7 @@ def refine_candidate_pool(
     if bool(multi_channel_rrf_enabled) and refined_candidates:
         refined_candidates, multi_channel_fusion_payload = (
             deps.apply_multi_channel_rrf_fusion(
+                root=root,
                 candidates=refined_candidates,
                 files_map=files_map,
                 docs_payload=docs_payload,

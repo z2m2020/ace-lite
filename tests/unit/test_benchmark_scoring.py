@@ -7,6 +7,7 @@ from ace_lite.benchmark.scoring import (
     build_agent_loop_control_plane_summary,
     build_chunk_cache_contract_summary,
     build_comparison_lane_summary,
+    build_context_refine_summary,
     build_deep_symbol_summary,
     build_feedback_loop_summary,
     build_learning_router_rollout_summary,
@@ -3398,6 +3399,48 @@ def test_build_wave1_context_governance_summary_aggregates_case_presence() -> No
     assert summary["history_hit_count_mean"] == 2.0
     assert summary["session_next_action_count_mean"] == 1.5
     assert summary["session_risk_count_mean"] == 0.5
+
+
+def test_build_context_refine_summary_aggregates_stage_presence() -> None:
+    summary = build_context_refine_summary(
+        [
+            {
+                "plan": {
+                    "context_refine": {
+                        "focused_files": ["src/a.py"],
+                        "decision_counts": {
+                            "keep": 1,
+                            "downrank": 1,
+                            "drop": 0,
+                            "need_more_read": 2,
+                        },
+                        "candidate_review": {"status": "watch"},
+                    }
+                }
+            },
+            {
+                "plan": {
+                    "context_refine": {
+                        "focused_files": ["src/b.py", "src/c.py"],
+                        "decision_counts": {
+                            "keep": 2,
+                            "downrank": 0,
+                            "drop": 1,
+                            "need_more_read": 0,
+                        },
+                        "candidate_review": {"status": "thin_context"},
+                    }
+                }
+            },
+        ]
+    )
+
+    assert summary["case_count"] == 2
+    assert summary["present_case_count"] == 2
+    assert summary["watch_case_count"] == 1
+    assert summary["thin_context_case_count"] == 1
+    assert summary["keep_count_mean"] == 1.5
+    assert summary["focused_file_count_mean"] == 1.5
 
 
 def test_build_learning_router_rollout_summary_classifies_guarded_rollout_readiness() -> None:

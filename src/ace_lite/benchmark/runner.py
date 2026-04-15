@@ -35,6 +35,7 @@ from ace_lite.benchmark.scoring import (
     build_retrieval_default_strategy_summary,
     build_retrieval_frontier_gate_summary,
     build_slo_budget_summary,
+    build_context_refine_summary,
     build_source_plan_card_summary,
     build_source_plan_failure_signal_summary,
     build_source_plan_validation_feedback_summary,
@@ -589,6 +590,7 @@ class BenchmarkRunner:
             "feedback_observability_summary": build_feedback_observability_summary(
                 case_results
             ),
+            "context_refine_summary": build_context_refine_summary(case_results),
             "workload_taxonomy_summary": build_workload_taxonomy_summary(case_results),
             "ltm_explainability_summary": build_ltm_explainability_summary(
                 case_results

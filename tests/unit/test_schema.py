@@ -37,6 +37,8 @@ def _valid_payload() -> dict[str, Any]:
             "repomap",
             "augment",
             "skills",
+            "history_channel",
+            "context_refine",
             "source_plan",
             "validation",
         ],
@@ -59,9 +61,9 @@ def _valid_payload() -> dict[str, Any]:
                 }
             }
         },
-        "validation": {
-            "enabled": False,
-            "reason": "disabled",
+            "validation": {
+                "enabled": False,
+                "reason": "disabled",
             "sandbox": {
                 "enabled": False,
                 "sandbox_root": "",
@@ -191,6 +193,8 @@ def _build_source_plan_payload_with_internal_sidecars() -> dict[str, Any]:
             "repomap",
             "augment",
             "skills",
+            "history_channel",
+            "context_refine",
             "source_plan",
         ],
         chunk_top_k=4,

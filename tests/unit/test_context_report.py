@@ -189,6 +189,7 @@ def test_minimal_source_plan_payload(minimal_plan_payload):
     assert summary["stage_count"] == 6
     assert summary["degraded_reason_count"] == 1
     assert summary["has_validation_payload"] is False
+    assert summary["context_refine_decision_count"] == 0
 
     # Core nodes
     core_nodes = payload["core_nodes"]
@@ -345,6 +346,12 @@ def test_context_report_surfaces_wave1_report_only_sections() -> None:
                 "next_actions": ["Run tests"],
                 "risks": ["validation_blockers_present"],
             },
+            "handoff_payload": {
+                "goal": "q",
+                "focus_paths": ["src/a.py"],
+                "next_tasks": ["Run tests"],
+                "unresolved": ["validation_failed"],
+            },
         },
     }
 
@@ -358,10 +365,91 @@ def test_context_report_surfaces_wave1_report_only_sections() -> None:
     assert result["candidate_review"]["status"] == "watch"
     assert result["validation_findings"]["blocker_count"] == 1
     assert result["session_end_report"]["next_actions"] == ["Run tests"]
+    assert result["handoff_payload"]["next_tasks"] == ["Run tests"]
     assert "## History Hits" in markdown
     assert "## Candidate Review" in markdown
     assert "## Validation Findings" in markdown
     assert "## Session End Report" in markdown
+    assert "## Handoff Payload" in markdown
+
+
+def test_context_report_surfaces_history_channel_section() -> None:
+    payload = {
+        "query": "q",
+        "repo": "r",
+        "root": "x",
+        "history_channel": {
+            "reason": "matched",
+            "focused_files": ["src/a.py"],
+            "commit_count": 2,
+            "hit_count": 1,
+            "history_hits": {
+                "hits": [{"hash": "abc123", "subject": "recent fix"}],
+            },
+            "recommendations": ["Review the recent matching commits first."],
+        },
+        "source_plan": {
+            "candidate_chunks": [
+                {
+                    "path": "src/a.py",
+                    "qualified_name": "f",
+                    "score": 1.0,
+                    "evidence_confidence": "EXTRACTED",
+                }
+            ],
+            "candidate_files": [{"path": "src/a.py", "score": 0.9}],
+            "validation_tests": [],
+        },
+    }
+
+    result = build_context_report_payload(payload)
+    markdown = render_context_report_markdown(result)
+
+    assert result["summary"]["history_channel_hit_count"] == 1
+    assert result["history_channel"]["hit_count"] == 1
+    assert "## History Channel" in markdown
+    assert "focused_files=1" in markdown
+
+
+def test_context_report_surfaces_context_refine_section() -> None:
+    payload = {
+        "query": "q",
+        "repo": "r",
+        "root": "x",
+        "context_refine": {
+            "focused_files": ["src/a.py"],
+            "decision_counts": {
+                "keep": 1,
+                "downrank": 1,
+                "drop": 0,
+                "need_more_read": 2,
+            },
+            "candidate_review": {
+                "status": "watch",
+                "recommendations": ["Open keep candidates first."],
+            },
+        },
+        "source_plan": {
+            "candidate_chunks": [
+                {
+                    "path": "src/a.py",
+                    "qualified_name": "f",
+                    "score": 1.0,
+                    "evidence_confidence": "EXTRACTED",
+                }
+            ],
+            "candidate_files": [{"path": "src/a.py", "score": 0.9}],
+            "validation_tests": [],
+        },
+    }
+
+    result = build_context_report_payload(payload)
+    markdown = render_context_report_markdown(result)
+
+    assert result["summary"]["context_refine_decision_count"] == 4
+    assert result["context_refine"]["decision_counts"]["keep"] == 1
+    assert "## Context Refine" in markdown
+    assert "keep=1" in markdown
 
 
 def test_degraded_payload_knowledge_gaps(degraded_plan_payload):

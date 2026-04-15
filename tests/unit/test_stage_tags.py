@@ -92,6 +92,12 @@ def test_index_stage_tags_include_adaptive_router_metadata() -> None:
                 "applied": True,
                 "reason": "ok",
                 "channels": {
+                    "history": {
+                        "count": 1,
+                        "cap": 4,
+                        "top": ["src/app.py"],
+                        "commit_count": 3,
+                    },
                     "granularity": {
                         "count": 2,
                         "cap": 4,
@@ -165,6 +171,9 @@ def test_index_stage_tags_include_adaptive_router_metadata() -> None:
     assert tags["graph_closure_total"] == 0.12
     assert tags["multi_channel_rrf_enabled"] is True
     assert tags["multi_channel_rrf_applied"] is True
+    assert tags["multi_channel_rrf_history_count"] == 1
+    assert tags["multi_channel_rrf_history_commit_count"] == 3
+    assert tags["multi_channel_rrf_history_pool_ratio"] == 0.25
     assert tags["multi_channel_rrf_granularity_count"] == 2
     assert tags["multi_channel_rrf_pool_size"] == 4
     assert tags["multi_channel_rrf_granularity_pool_ratio"] == 0.5

@@ -183,6 +183,11 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             if isinstance(multi_channel_channels.get("granularity"), dict)
             else {}
         )
+        multi_channel_history = (
+            multi_channel_channels.get("history", {})
+            if isinstance(multi_channel_channels.get("history"), dict)
+            else {}
+        )
         multi_channel_fused = (
             multi_channel_fusion.get("fused", {})
             if isinstance(multi_channel_fusion.get("fused"), dict)
@@ -207,6 +212,14 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
         )
         multi_channel_granularity_pool_ratio = (
             float(multi_channel_granularity_count) / float(multi_channel_rrf_pool_size)
+            if multi_channel_rrf_pool_size > 0
+            else 0.0
+        )
+        multi_channel_history_count = max(
+            0, int(multi_channel_history.get("count", 0) or 0)
+        )
+        multi_channel_history_pool_ratio = (
+            float(multi_channel_history_count) / float(multi_channel_rrf_pool_size)
             if multi_channel_rrf_pool_size > 0
             else 0.0
         )
@@ -429,6 +442,13 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "multi_channel_rrf_applied": bool(
                 multi_channel_fusion.get("applied", False)
             ),
+            "multi_channel_rrf_history_count": multi_channel_history_count,
+            "multi_channel_rrf_history_commit_count": int(
+                multi_channel_history.get("commit_count", 0) or 0
+            ),
+            "multi_channel_rrf_history_pool_ratio": float(
+                round(multi_channel_history_pool_ratio, 6)
+            ),
             "multi_channel_rrf_granularity_count": multi_channel_granularity_count,
             "multi_channel_rrf_pool_size": multi_channel_rrf_pool_size,
             "multi_channel_rrf_granularity_pool_ratio": float(
@@ -596,6 +616,66 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "budget_exhausted": bool(output.get("budget_exhausted", False)),
             "skipped_for_budget_count": len(output.get("skipped_for_budget", []))
             if isinstance(output.get("skipped_for_budget"), list)
+            else 0,
+            "policy_name": policy_name,
+            "policy_version": policy_version,
+        }
+
+    if stage_name == "context_refine":
+        decision_counts = (
+            output.get("decision_counts", {})
+            if isinstance(output.get("decision_counts"), dict)
+            else {}
+        )
+        candidate_review = (
+            output.get("candidate_review", {})
+            if isinstance(output.get("candidate_review"), dict)
+            else {}
+        )
+        return {
+            "enabled": bool(output.get("enabled", False)),
+            "reason": str(output.get("reason", "")),
+            "focused_file_count": len(output.get("focused_files", []))
+            if isinstance(output.get("focused_files"), list)
+            else 0,
+            "candidate_file_action_count": len(output.get("candidate_file_actions", []))
+            if isinstance(output.get("candidate_file_actions"), list)
+            else 0,
+            "candidate_chunk_action_count": len(output.get("candidate_chunk_actions", []))
+            if isinstance(output.get("candidate_chunk_actions"), list)
+            else 0,
+            "keep_count": int(decision_counts.get("keep", 0) or 0),
+            "downrank_count": int(decision_counts.get("downrank", 0) or 0),
+            "drop_count": int(decision_counts.get("drop", 0) or 0),
+            "need_more_read_count": int(
+                decision_counts.get("need_more_read", 0) or 0
+            ),
+            "review_status": str(candidate_review.get("status", "")),
+            "watch_item_count": len(candidate_review.get("watch_items", []))
+            if isinstance(candidate_review.get("watch_items"), list)
+            else 0,
+            "policy_name": policy_name,
+            "policy_version": policy_version,
+        }
+
+    if stage_name == "history_channel":
+        history_hits = (
+            output.get("history_hits", {})
+            if isinstance(output.get("history_hits"), dict)
+            else {}
+        )
+        return {
+            "enabled": bool(output.get("enabled", False)),
+            "reason": str(output.get("reason", "")),
+            "focused_file_count": len(output.get("focused_files", []))
+            if isinstance(output.get("focused_files"), list)
+            else 0,
+            "commit_count": int(output.get("commit_count", 0) or 0),
+            "hit_count": int(output.get("hit_count", 0) or 0),
+            "history_commit_count": int(history_hits.get("commit_count", 0) or 0),
+            "history_hit_count": int(history_hits.get("hit_count", 0) or 0),
+            "recommendation_count": len(output.get("recommendations", []))
+            if isinstance(output.get("recommendations"), list)
             else 0,
             "policy_name": policy_name,
             "policy_version": policy_version,

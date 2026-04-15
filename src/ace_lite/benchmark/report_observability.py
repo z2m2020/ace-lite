@@ -997,6 +997,56 @@ def append_wave1_context_governance_summary(
     lines.append("")
 
 
+def append_context_refine_summary(
+    lines: list[str], results: dict[str, Any]
+) -> None:
+    summary = get_summary_mapping(results=results, key="context_refine_summary")
+    if not summary:
+        return
+
+    case_count = int(summary.get("case_count", 0) or 0)
+    lines.append("## Context Refine Summary")
+    lines.append("")
+    lines.append(
+        "- Present cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("present_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("present_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Watch cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("watch_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("watch_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append(
+        "- Thin-context cases: {count}/{total} ({rate:.4f})".format(
+            count=int(summary.get("thin_context_case_count", 0) or 0),
+            total=case_count,
+            rate=float(summary.get("thin_context_case_rate", 0.0) or 0.0),
+        )
+    )
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("| --- | ---: |")
+    for key in (
+        "keep_count_mean",
+        "downrank_count_mean",
+        "drop_count_mean",
+        "need_more_read_count_mean",
+        "focused_file_count_mean",
+    ):
+        lines.append(
+            "| {key} | {value:.4f} |".format(
+                key=key,
+                value=float(summary.get(key, 0.0) or 0.0),
+            )
+        )
+    lines.append("")
+
+
 def append_retrieval_control_plane_gate_summary(
     lines: list[str], results: dict[str, Any]
 ) -> None:
@@ -1191,6 +1241,7 @@ __all__ = [
     "append_ltm_explainability_summary",
     "append_missing_context_risk_summary",
     "append_preference_observability_summary",
+    "append_context_refine_summary",
     "append_retrieval_context_observability_summary",
     "append_retrieval_control_plane_gate_summary",
     "append_retrieval_default_strategy_summary",

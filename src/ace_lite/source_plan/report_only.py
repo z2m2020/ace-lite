@@ -8,6 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from ace_lite.report_signals import (
+    append_unique_signal_text,
+    normalize_signal_path,
+    normalize_signal_paths,
+    normalize_signal_texts,
+)
+
 
 def _dict(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
@@ -35,10 +42,6 @@ def _float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def _normalize_path(value: Any) -> str:
-    return _str(value).strip().replace("\\", "/").lstrip("./")
-
-
 def build_history_hits(
     *,
     vcs_history: dict[str, Any] | None,
@@ -47,15 +50,13 @@ def build_history_hits(
 ) -> dict[str, Any]:
     payload = _dict(vcs_history)
     commits = [item for item in _list(payload.get("commits")) if isinstance(item, dict)]
-    normalized_focus = {
-        _normalize_path(item) for item in focused_files if _normalize_path(item)
-    }
+    normalized_focus = set(normalize_signal_paths(focused_files))
     hits: list[dict[str, Any]] = []
     for item in commits[: max(1, int(limit))]:
         files = [
-            _normalize_path(path)
+            normalize_signal_path(path)
             for path in _list(item.get("files"))
-            if _normalize_path(path)
+            if normalize_signal_path(path)
         ]
         matched_paths = [path for path in files if path in normalized_focus]
         if not matched_paths:
@@ -98,9 +99,7 @@ def build_candidate_review(
     hint_ratio = _float(evidence.get("hint_only_ratio"))
     neighbor_ratio = _float(evidence.get("neighbor_context_ratio"))
     chunk_count = len([item for item in candidate_chunks if isinstance(item, dict)])
-    focus_file_count = len(
-        [_normalize_path(item) for item in focused_files if _normalize_path(item)]
-    )
+    focus_file_count = len(normalize_signal_paths(focused_files))
     issue_count = _int(failure.get("issue_count"))
     probe_issue_count = _int(failure.get("probe_issue_count"))
     has_failure = bool(failure.get("has_failure", False))
@@ -157,10 +156,40 @@ def build_validation_findings(
 ) -> dict[str, Any]:
     result = _dict(validation_result)
     summary = _dict(result.get("summary"))
+    syntax = _dict(result.get("syntax"))
+    type_results = _dict(result.get("type"))
     probes = _dict(result.get("probes"))
     tests = _dict(result.get("tests"))
 
     findings: list[dict[str, Any]] = []
+    focus_paths: list[str] = []
+    seen_focus_paths: set[str] = set()
+    message_samples: list[str] = []
+    seen_messages: set[str] = set()
+
+    def collect_issue(issue: Any) -> None:
+        if not isinstance(issue, dict):
+            return
+        append_unique_signal_text(
+            focus_paths,
+            seen_focus_paths,
+            issue.get("path"),
+            normalizer=normalize_signal_path,
+        )
+        append_unique_signal_text(
+            message_samples,
+            seen_messages,
+            issue.get("message"),
+        )
+
+    for section in (syntax, type_results, tests):
+        for issue in _list(section.get("issues")):
+            collect_issue(issue)
+    for probe in _list(probes.get("results")):
+        if not isinstance(probe, dict):
+            continue
+        for issue in _list(probe.get("issues")):
+            collect_issue(issue)
 
     status = _str(summary.get("status")).strip() or "skipped"
     issue_count = _int(summary.get("issue_count"))
@@ -228,6 +257,43 @@ def build_validation_findings(
         if severity in severity_counts:
             severity_counts[severity] += 1
 
+    recommendations: list[str] = []
+    if severity_counts["blocker"] > 0 and focus_paths:
+        recommendations.append(
+            "Re-run retrieval around blocker-level validation focus paths before widening the patch."
+        )
+    elif severity_counts["warn"] > 0 and focus_paths:
+        recommendations.append(
+            "Review warning-linked validation focus paths before editing unrelated files."
+        )
+    if selected_tests and not executed_tests:
+        recommendations.append(
+            "Execute the selected validation tests before trusting the refreshed shortlist."
+        )
+    elif not selected_tests:
+        recommendations.append(
+            "Add at least one validation test so the next refine loop has a concrete gate."
+        )
+    if probe_issue_count > 0 or probe_status in {"failed", "timeout", "degraded"}:
+        recommendations.append(
+            "Inspect validation probe failures before attempting a broader retrieval retry."
+        )
+    if not recommendations and (focus_paths or message_samples):
+        recommendations.append(
+            "Use the validation-linked focus paths to confirm whether the shortlist needs refinement."
+        )
+
+    query_hint_parts: list[str] = []
+    if focus_paths:
+        query_hint_parts.append(
+            "Focus on validation-linked paths: " + ", ".join(focus_paths[:3])
+        )
+    if message_samples:
+        query_hint_parts.append(message_samples[0])
+    elif recommendations:
+        query_hint_parts.append(recommendations[0])
+    query_hint = ". ".join(part for part in query_hint_parts if part).strip()[:240]
+
     return {
         "schema_version": "validation_findings_v1",
         "status": status,
@@ -238,6 +304,16 @@ def build_validation_findings(
         "warn_count": severity_counts["warn"],
         "blocker_count": severity_counts["blocker"],
         "findings": findings,
+        "focus_paths": normalize_signal_paths(focus_paths, limit=5),
+        "message_samples": normalize_signal_texts(message_samples, limit=3),
+        "recommendations": recommendations[:5],
+        "query_hint": query_hint,
+        "needs_followup": bool(
+            severity_counts["warn"] > 0
+            or severity_counts["blocker"] > 0
+            or (selected_tests and not executed_tests)
+            or focus_paths
+        ),
     }
 
 
@@ -283,42 +359,54 @@ def build_session_end_report(
     if not next_actions:
         next_actions.append("Open the top focus file and inspect the first prioritized chunk.")
 
-    deduped_next_actions: list[str] = []
-    seen_actions: set[str] = set()
-    for item in next_actions:
-        normalized = _str(item).strip()
-        if not normalized or normalized in seen_actions:
-            continue
-        seen_actions.add(normalized)
-        deduped_next_actions.append(normalized)
-
-    deduped_risks: list[str] = []
-    seen_risks: set[str] = set()
-    for item in risks:
-        normalized = _str(item).strip()
-        if not normalized or normalized in seen_risks:
-            continue
-        seen_risks.add(normalized)
-        deduped_risks.append(normalized)
-
     return {
         "schema_version": "session_end_report_v1",
         "goal": _str(query).strip(),
-        "focus_paths": [
-            _normalize_path(item) for item in focused_files if _normalize_path(item)
-        ][:5],
-        "validation_tests": [
-            _str(item).strip() for item in validation_tests if _str(item).strip()
-        ][:5],
-        "next_actions": deduped_next_actions[:5],
-        "risks": deduped_risks[:5],
+        "focus_paths": normalize_signal_paths(focused_files, limit=5),
+        "validation_tests": normalize_signal_texts(validation_tests, limit=5),
+        "next_actions": normalize_signal_texts(next_actions, limit=5),
+        "risks": normalize_signal_texts(risks, limit=5),
         "history_context_present": _int(history.get("hit_count")) > 0,
         "validation_status": _str(findings.get("status")).strip() or "skipped",
     }
 
 
+def build_handoff_payload(
+    *,
+    query: str,
+    candidate_review: dict[str, Any] | None,
+    validation_findings: dict[str, Any] | None,
+    session_end_report: dict[str, Any] | None,
+) -> dict[str, Any]:
+    review = _dict(candidate_review)
+    findings = _dict(validation_findings)
+    session = _dict(session_end_report)
+
+    unresolved: list[str] = []
+    unresolved.extend(
+        normalize_signal_texts(_list(findings.get("message_samples")))
+    )
+    unresolved.extend(
+        normalize_signal_texts(_list(review.get("watch_items")))
+    )
+
+    return {
+        "schema_version": "handoff_payload_v1",
+        "goal": _str(query).strip(),
+        "assumptions": [],
+        "unresolved": normalize_signal_texts(unresolved, limit=5),
+        "next_tasks": normalize_signal_texts(_list(session.get("next_actions")), limit=5),
+        "risks": normalize_signal_texts(_list(session.get("risks")), limit=5),
+        "verify": normalize_signal_texts(_list(session.get("validation_tests")), limit=5),
+        "rollback": ["Use session_end_report_v1 as the compatibility fallback."],
+        "focus_paths": normalize_signal_paths(_list(session.get("focus_paths")), limit=5),
+        "validation_status": _str(session.get("validation_status")).strip() or "skipped",
+    }
+
+
 __all__ = [
     "build_candidate_review",
+    "build_handoff_payload",
     "build_history_hits",
     "build_session_end_report",
     "build_validation_findings",

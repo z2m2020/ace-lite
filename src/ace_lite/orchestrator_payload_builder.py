@@ -168,6 +168,8 @@ def build_orchestrator_plan_payload(
         "repomap": projected["repomap"],
         "augment": projected["augment"],
         "skills": projected["skills"],
+        "history_channel": projected["history_channel"],
+        "context_refine": projected["context_refine"],
         "source_plan": projected["source_plan"],
         "validation": projected["validation"],
         "observability": observability,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ace_lite.source_plan.report_only import (
     build_candidate_review,
+    build_handoff_payload,
     build_history_hits,
     build_session_end_report,
     build_validation_findings,
@@ -87,8 +88,33 @@ def test_build_candidate_review_and_session_end_report_capture_watch_items() -> 
 def test_build_validation_findings_tracks_warn_and_blocker_counts() -> None:
     findings = build_validation_findings(
         validation_result={
+            "syntax": {
+                "issues": [
+                    {
+                        "code": "syntax.error",
+                        "message": "invalid syntax",
+                        "path": "src/app.py",
+                    }
+                ]
+            },
             "summary": {"status": "failed", "issue_count": 2},
-            "probes": {"status": "degraded", "issue_count": 1},
+            "probes": {
+                "status": "degraded",
+                "issue_count": 1,
+                "results": [
+                    {
+                        "name": "compile",
+                        "status": "failed",
+                        "issues": [
+                            {
+                                "code": "compile.failed",
+                                "message": "compile probe failed",
+                                "path": "src/build.py",
+                            }
+                        ],
+                    }
+                ],
+            },
             "tests": {"selected": ["pytest tests/unit/test_a.py"], "executed": []},
         }
     )
@@ -99,3 +125,34 @@ def test_build_validation_findings_tracks_warn_and_blocker_counts() -> None:
     assert findings["blocker_count"] >= 1
     assert findings["selected_test_count"] == 1
     assert findings["executed_test_count"] == 0
+    assert findings["focus_paths"] == ["src/app.py", "src/build.py"]
+    assert "invalid syntax" in findings["query_hint"]
+    assert findings["needs_followup"] is True
+    assert findings["recommendations"]
+
+
+def test_build_handoff_payload_dedupes_signal_lists() -> None:
+    payload = build_handoff_payload(
+        query="stabilize report signals",
+        candidate_review={
+            "watch_items": ["watch_a", "watch_a", "watch_b"],
+        },
+        validation_findings={
+            "message_samples": ["issue one", "issue one", "issue two"],
+        },
+        session_end_report={
+            "next_actions": ["run tests", "run tests", "inspect diff"],
+            "risks": ["risk_a", "risk_a"],
+            "validation_tests": ["pytest tests/unit/test_a.py -q"] * 2,
+            "focus_paths": ["./src/a.py", "src\\a.py", "src/b.py"],
+            "validation_status": "warn",
+        },
+    )
+
+    assert payload["schema_version"] == "handoff_payload_v1"
+    assert payload["unresolved"] == ["issue one", "issue two", "watch_a", "watch_b"]
+    assert payload["next_tasks"] == ["run tests", "inspect diff"]
+    assert payload["risks"] == ["risk_a"]
+    assert payload["verify"] == ["pytest tests/unit/test_a.py -q"]
+    assert payload["focus_paths"] == ["src/a.py", "src/b.py"]
+    assert payload["validation_status"] == "warn"

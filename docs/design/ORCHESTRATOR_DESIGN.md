@@ -2,7 +2,7 @@
 
 ## Deterministic pipeline
 
-`memory -> index -> repomap -> augment -> skills -> source_plan -> validation`
+`memory -> index -> repomap -> augment -> skills -> history_channel -> context_refine -> source_plan -> validation`
 
 ## Runtime construction
 
@@ -26,6 +26,7 @@
 - Optional incremental refresh through git-changed files
 - Normalize targets to canonical relative paths
 - Emit candidate file ranking and cache mode telemetry
+- Multi-channel fusion now includes additive `history` retrieval evidence in addition to `code/docs/memory/granularity`
 
 3. `repomap`
 - Generate focused repository map under a token budget
@@ -43,17 +44,29 @@
 - Select markdown skills by query context
 - Lazy-load only matched sections
 
-6. `source_plan`
+6. `history_channel`
+- Normalize recent git evidence into a stable history payload
+- Preserve additive observability without changing downstream ranking
+
+7. `context_refine`
+- Review candidate files/chunks and emit report-only shortlist actions
+- Preserve additive observability without changing downstream ranking
+
+8. `source_plan`
 - Build deterministic execution plan
 - Emit writeback template contract
+- Emit report-only handoff artifacts (`session_end_report_v1`, `handoff_payload_v1`) for downstream context sync and replay-safe follow-up
+- Reuse a shared report-signal normalization/fallback seam for `history_hits`, `validation_findings`, `session_end_report_v1`, and `handoff_payload_v1`, keeping nested/top-level compatibility rules centralized
 
-7. `validation`
+9. `validation`
 - Run optional validation checks against the source-plan output
 - Emit stable validation result and sandbox payloads for CLI, benchmark, and replay consumers
+- Structured `validation_findings` from `source_plan` may be consumed by the post-source agent loop to synthesize `request_more_context` reruns before falling back to raw validation diagnostics/probes
 
 ## 2026-03-27 baseline guardrails
 
 - `ace_plan_quick` retrieval guardrails are part of the current runtime baseline: docs-sync intent biasing, domain summary, query refinements, risk hints, and `full_build_reason` observability.
+- `ace_plan_quick` also exposes lightweight `history_summary` and candidate-level git-history evidence as part of the current retrieval observability baseline.
 - Memory search guardrails are also baseline behavior across CLI/MCP surfaces: disclaimer, staleness warning, and recency alert.
 - Current orchestrator refactor waves should preserve these guardrails as compatibility expectations unless an explicit replacement path is documented.
 
@@ -98,7 +111,7 @@ When this matrix changes, update the linked release checklist in
 
 Each plan payload is schema-validated (`schema_version = 2.0`) and includes:
 
-- Top-level stage payloads: `memory`, `index`, `repomap`, `augment`, `skills`, `source_plan`, `validation`
+- Top-level stage payloads: `memory`, `index`, `repomap`, `augment`, `skills`, `history_channel`, `context_refine`, `source_plan`, `validation`
 - `conventions` snapshot metadata
 - `observability` runtime metrics and plugin trace
 

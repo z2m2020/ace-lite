@@ -210,6 +210,33 @@ def _validate_skills(output: dict[str, Any]) -> None:
     _require_list(output, "selected", stage=stage)
 
 
+def _validate_context_refine(output: dict[str, Any]) -> None:
+    stage = "context_refine"
+    _require_bool(output, "enabled", stage=stage)
+    _require_str(output, "reason", stage=stage)
+    _require_list(output, "focused_files", stage=stage)
+    _require_list(output, "candidate_file_actions", stage=stage)
+    _require_list(output, "candidate_chunk_actions", stage=stage)
+    _require_dict(output, "decision_counts", stage=stage)
+    _require_dict(output, "candidate_review", stage=stage)
+    _require_str(output, "policy_name", stage=stage)
+    _require_str(output, "policy_version", stage=stage)
+
+
+def _validate_history_channel(output: dict[str, Any]) -> None:
+    stage = "history_channel"
+    _require_str(output, "schema_version", stage=stage)
+    _require_bool(output, "enabled", stage=stage)
+    _require_str(output, "reason", stage=stage)
+    _require_list(output, "focused_files", stage=stage)
+    _require_number(output, "commit_count", stage=stage)
+    _require_number(output, "hit_count", stage=stage)
+    _require_dict(output, "history_hits", stage=stage)
+    _require_list(output, "recommendations", stage=stage)
+    _require_str(output, "policy_name", stage=stage)
+    _require_str(output, "policy_version", stage=stage)
+
+
 def _validate_source_plan(output: dict[str, Any]) -> None:
     stage = "source_plan"
     _reject_report_only_fields(
@@ -311,6 +338,8 @@ STAGE_OUTPUT_VALIDATORS = {
     "repomap": _validate_repomap,
     "augment": _validate_augment,
     "skills": _validate_skills,
+    "history_channel": _validate_history_channel,
+    "context_refine": _validate_context_refine,
     "source_plan": _validate_source_plan,
     "validation": _validate_validation,
 }

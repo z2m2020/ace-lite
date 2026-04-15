@@ -160,6 +160,8 @@ class TestPipelineOrderInvariance:
         "repomap",
         "augment",
         "skills",
+        "history_channel",
+        "context_refine",
         "source_plan",
         "validation",
     )
@@ -168,9 +170,9 @@ class TestPipelineOrderInvariance:
         """PIPELINE_ORDER must match the documented order."""
         assert AceOrchestrator.PIPELINE_ORDER == self.EXPECTED_ORDER
 
-    def test_pipeline_order_length_is_seven(self) -> None:
-        """Pipeline must have exactly 7 stages."""
-        assert len(AceOrchestrator.PIPELINE_ORDER) == 7
+    def test_pipeline_order_length_is_nine(self) -> None:
+        """Pipeline must have exactly 9 stages."""
+        assert len(AceOrchestrator.PIPELINE_ORDER) == 9
 
     def test_pipeline_order_tuple_is_immutable(self) -> None:
         """PIPELINE_ORDER must be a tuple (immutable)."""
@@ -508,7 +510,7 @@ class TestArchitectureDocsSync:
         )
         expected_stage_payloads = (
             "`memory`, `index`, `repomap`, `augment`, `skills`, "
-            "`source_plan`, `validation`"
+            "`history_channel`, `context_refine`, `source_plan`, `validation`"
         )
 
         assert expected_stage_payloads in design
@@ -523,7 +525,7 @@ class TestRefactorBoundaryContracts:
     """Freeze module seams introduced by maintainability refactors."""
 
     def test_design_docs_describe_validation_pipeline(self) -> None:
-        pipeline = "`memory -> index -> repomap -> augment -> skills -> source_plan -> validation`"
+        pipeline = "`memory -> index -> repomap -> augment -> skills -> history_channel -> context_refine -> source_plan -> validation`"
         assert pipeline in _read_repo_text("docs/design/ARCHITECTURE_OVERVIEW.md")
         assert pipeline in _read_repo_text("docs/design/ORCHESTRATOR_DESIGN.md")
 

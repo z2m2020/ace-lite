@@ -636,6 +636,92 @@ def build_wave1_context_governance_summary(
     }
 
 
+def build_context_refine_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {
+            "case_count": 0,
+            "present_case_count": 0,
+            "present_case_rate": 0.0,
+            "watch_case_count": 0,
+            "watch_case_rate": 0.0,
+            "thin_context_case_count": 0,
+            "thin_context_case_rate": 0.0,
+            "keep_count_mean": 0.0,
+            "downrank_count_mean": 0.0,
+            "drop_count_mean": 0.0,
+            "need_more_read_count_mean": 0.0,
+            "focused_file_count_mean": 0.0,
+        }
+
+    present_case_count = 0
+    watch_case_count = 0
+    thin_context_case_count = 0
+    keep_counts: list[float] = []
+    downrank_counts: list[float] = []
+    drop_counts: list[float] = []
+    need_more_read_counts: list[float] = []
+    focused_file_counts: list[float] = []
+
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        plan = item.get("plan")
+        if not isinstance(plan, dict):
+            continue
+        context_refine = plan.get("context_refine")
+        if not isinstance(context_refine, dict) or not context_refine:
+            continue
+        present_case_count += 1
+        decision_counts = (
+            context_refine.get("decision_counts")
+            if isinstance(context_refine.get("decision_counts"), dict)
+            else {}
+        )
+        candidate_review = (
+            context_refine.get("candidate_review")
+            if isinstance(context_refine.get("candidate_review"), dict)
+            else {}
+        )
+        status = str(candidate_review.get("status") or "").strip().lower()
+        if status == "watch":
+            watch_case_count += 1
+        if status == "thin_context":
+            thin_context_case_count += 1
+        keep_counts.append(float(decision_counts.get("keep", 0.0) or 0.0))
+        downrank_counts.append(float(decision_counts.get("downrank", 0.0) or 0.0))
+        drop_counts.append(float(decision_counts.get("drop", 0.0) or 0.0))
+        need_more_read_counts.append(
+            float(decision_counts.get("need_more_read", 0.0) or 0.0)
+        )
+        focused_file_counts.append(
+            float(len(context_refine.get("focused_files", [])))
+            if isinstance(context_refine.get("focused_files"), list)
+            else 0.0
+        )
+
+    return {
+        "case_count": case_count,
+        "present_case_count": present_case_count,
+        "present_case_rate": float(present_case_count) / float(case_count),
+        "watch_case_count": watch_case_count,
+        "watch_case_rate": float(watch_case_count) / float(case_count),
+        "thin_context_case_count": thin_context_case_count,
+        "thin_context_case_rate": float(thin_context_case_count) / float(case_count),
+        "keep_count_mean": mean(keep_counts) if keep_counts else 0.0,
+        "downrank_count_mean": mean(downrank_counts) if downrank_counts else 0.0,
+        "drop_count_mean": mean(drop_counts) if drop_counts else 0.0,
+        "need_more_read_count_mean": (
+            mean(need_more_read_counts) if need_more_read_counts else 0.0
+        ),
+        "focused_file_count_mean": (
+            mean(focused_file_counts) if focused_file_counts else 0.0
+        ),
+    }
+
+
 def build_retrieval_default_strategy_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:

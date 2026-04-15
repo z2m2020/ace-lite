@@ -154,6 +154,12 @@ def _base_inputs() -> dict:
             "reason": "ok",
             "rrf_k": 60,
             "channels": {
+                "history": {
+                    "count": 1,
+                    "cap": 8,
+                    "top": ["src/auth.py"],
+                    "commit_count": 2,
+                },
                 "granularity": {
                     "count": 2,
                     "cap": 8,
@@ -264,6 +270,9 @@ def test_build_index_stage_result_limits_files_and_attaches_why() -> None:
     assert payload["candidate_chunks"][0]["why"].startswith("signals:")
     assert payload["context_budget"]["chunk_budget_used"] == 48
     assert payload["candidate_ranking"]["chunk_semantic_rerank_reason"] == "ok"
+    assert payload["candidate_ranking"]["multi_channel_rrf_history_count"] == 1
+    assert payload["candidate_ranking"]["multi_channel_rrf_history_commit_count"] == 2
+    assert payload["candidate_ranking"]["multi_channel_rrf_history_pool_ratio"] == 0.25
     assert payload["candidate_ranking"]["multi_channel_rrf_granularity_count"] == 2
     assert payload["candidate_ranking"]["multi_channel_rrf_pool_size"] == 4
     assert payload["candidate_ranking"]["multi_channel_rrf_granularity_pool_ratio"] == 0.5
@@ -285,6 +294,9 @@ def test_build_index_stage_result_limits_files_and_attaches_why() -> None:
     assert payload["metadata"]["chunk_cache_contract_fingerprint"] == ""
     assert payload["metadata"]["chunk_cache_contract_file_count"] == 0
     assert payload["metadata"]["chunk_cache_contract_chunk_count"] == 0
+    assert payload["metadata"]["multi_channel_rrf_history_count"] == 1
+    assert payload["metadata"]["multi_channel_rrf_history_commit_count"] == 2
+    assert payload["metadata"]["multi_channel_rrf_history_pool_ratio"] == 0.25
     assert payload["metadata"]["multi_channel_rrf_granularity_count"] == 2
     assert payload["metadata"]["multi_channel_rrf_pool_size"] == 4
     assert payload["metadata"]["multi_channel_rrf_granularity_pool_ratio"] == 0.5
@@ -513,6 +525,12 @@ def test_build_index_stage_result_preserves_payload_contract() -> None:
         "reason": "ok",
         "rrf_k": 60,
         "channels": {
+            "history": {
+                "count": 1,
+                "cap": 8,
+                "top": ["src/auth.py"],
+                "commit_count": 2,
+            },
             "granularity": {
                 "count": 2,
                 "cap": 8,

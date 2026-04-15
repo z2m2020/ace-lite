@@ -12,6 +12,8 @@ EXPECTED_PIPELINE_ORDER = [
     "repomap",
     "augment",
     "skills",
+    "history_channel",
+    "context_refine",
     "source_plan",
     "validation",
 ]

@@ -19,14 +19,14 @@ from ace_lite.plan_payload_view import (
     resolve_candidate_review,
     resolve_candidate_chunks,
     resolve_candidate_files,
+    resolve_context_refine,
     resolve_confidence_summary,
     resolve_evidence_summary,
-    resolve_history_hits,
+    resolve_history_channel,
     resolve_pipeline_stage_names,
     resolve_repomap_payload,
-    resolve_session_end_report,
+    resolve_report_signals,
     resolve_source_plan_payload,
-    resolve_validation_findings,
     resolve_validation_result,
     resolve_validation_tests,
 )
@@ -657,9 +657,13 @@ def _build_summary(
     candidate_files_in_index = resolve_candidate_files(plan_payload, source_plan=source_plan)
     validation_tests = resolve_validation_tests(plan_payload, source_plan=source_plan)
     stages = resolve_pipeline_stage_names(plan_payload, source_plan=source_plan)
-    history_hits = resolve_history_hits(plan_payload, source_plan=source_plan)
-    validation_findings = resolve_validation_findings(plan_payload, source_plan=source_plan)
-    session_end_report = resolve_session_end_report(plan_payload, source_plan=source_plan)
+    history_channel = resolve_history_channel(plan_payload)
+    context_refine = resolve_context_refine(plan_payload)
+    report_signals = resolve_report_signals(plan_payload, source_plan=source_plan)
+    history_hits = _dict(report_signals.get("history_hits", {}))
+    validation_findings = _dict(report_signals.get("validation_findings", {}))
+    session_end_report = _dict(report_signals.get("session_end_report", {}))
+    handoff_payload = _dict(report_signals.get("handoff_payload", {}))
 
     # Count degraded reasons from observability
     degraded_reasons = _collect_degraded_reasons(plan_payload)
@@ -691,9 +695,17 @@ def _build_summary(
         "stage_count": len(stages),
         "degraded_reason_count": degraded_reason_count,
         "has_validation_payload": has_validation_payload,
+        "history_channel_hit_count": len(
+            _list(_dict(history_channel.get("history_hits", {})).get("hits", []))
+        ),
         "history_hit_count": len(_list(history_hits.get("hits", []))),
+        "context_refine_decision_count": sum(
+            _int(_dict(context_refine.get("decision_counts", {})).get(key, 0))
+            for key in ("keep", "downrank", "drop", "need_more_read")
+        ),
         "validation_finding_count": len(_list(validation_findings.get("findings", []))),
         "next_action_count": len(_list(session_end_report.get("next_actions", []))),
+        "handoff_next_task_count": len(_list(handoff_payload.get("next_tasks", []))),
     }
 
 
@@ -741,9 +753,12 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
                 "stage_count": len(resolve_pipeline_stage_names(payload, source_plan=sp)),
                 "degraded_reason_count": 0,
                 "has_validation_payload": False,
+                "history_channel_hit_count": 0,
                 "history_hit_count": 0,
+                "context_refine_decision_count": 0,
                 "validation_finding_count": 0,
                 "next_action_count": 0,
+                "handoff_next_task_count": 0,
             },
             "core_nodes": [],
             "surprising_connections": [],
@@ -762,10 +777,13 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
                     "why": "Plan payload is empty or minimal.",
                 }
             ],
+            "history_channel": {},
             "history_hits": {},
+            "context_refine": {},
             "candidate_review": {},
             "validation_findings": {},
             "session_end_report": {},
+            "handoff_payload": {},
             "inputs": inputs,
             "warnings": ["empty_payload"],
         }
@@ -774,10 +792,14 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
     sp_chunks = resolve_candidate_chunks(payload, source_plan=sp)
     confidence_summary = resolve_confidence_summary(payload, source_plan=sp)
     evidence_summary = resolve_evidence_summary(payload, source_plan=sp)
-    history_hits = resolve_history_hits(payload, source_plan=sp)
+    history_channel = resolve_history_channel(payload)
+    context_refine = resolve_context_refine(payload)
+    report_signals = resolve_report_signals(payload, source_plan=sp)
+    history_hits = _dict(report_signals.get("history_hits", {}))
     candidate_review = resolve_candidate_review(payload, source_plan=sp)
-    validation_findings = resolve_validation_findings(payload, source_plan=sp)
-    session_end_report = resolve_session_end_report(payload, source_plan=sp)
+    validation_findings = _dict(report_signals.get("validation_findings", {}))
+    session_end_report = _dict(report_signals.get("session_end_report", {}))
+    handoff_payload = _dict(report_signals.get("handoff_payload", {}))
 
     if confidence_summary:
         confidence_breakdown = _build_confidence_breakdown_p1(sp_chunks, confidence_summary)
@@ -801,10 +823,13 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
         "core_nodes": core_nodes,
         "surprising_connections": surprising_connections,
         "confidence_breakdown": confidence_breakdown,
+        "history_channel": history_channel,
         "history_hits": history_hits,
+        "context_refine": context_refine,
         "candidate_review": candidate_review,
         "validation_findings": validation_findings,
         "session_end_report": session_end_report,
+        "handoff_payload": handoff_payload,
         "knowledge_gaps": knowledge_gaps,
         "suggested_questions": suggested_questions,
         "inputs": inputs,
@@ -901,7 +926,9 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
             "validation_test_count",
             "stage_count",
             "degraded_reason_count",
+            "history_channel_hit_count",
             "history_hit_count",
+            "context_refine_decision_count",
             "validation_finding_count",
             "next_action_count",
         ):
@@ -911,6 +938,29 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
                 lines.append(f"- **{label}**: {val}")
         has_val = summary.get("has_validation_payload")
         lines.append(f"- **Has validation payload**: {'yes' if has_val else 'no'}")
+        lines.append("")
+
+    history_channel = _dict(p.get("history_channel", {}))
+    if history_channel:
+        history_summary = _dict(history_channel.get("history_hits", {}))
+        lines.append("## History Channel")
+        lines.append(
+            "- **Status**: {status}; focused_files={focus}; commits={commits}; hits={hits}".format(
+                status=_str(history_channel.get("reason", "disabled")) or "disabled",
+                focus=len(_list(history_channel.get("focused_files", []))),
+                commits=_int(history_channel.get("commit_count", 0)),
+                hits=_int(history_channel.get("hit_count", 0)),
+            )
+        )
+        for item in _list(history_summary.get("hits", []))[:5]:
+            lines.append(
+                "- `{hash}` {subject}".format(
+                    hash=_str(item.get("hash", ""))[:12],
+                    subject=_str(item.get("subject", "")),
+                )
+            )
+        for item in _list(history_channel.get("recommendations", []))[:3]:
+            lines.append(f"- recommendation: {_str(item)}")
         lines.append("")
 
     history_hits = _dict(p.get("history_hits", {}))
@@ -939,6 +989,25 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
                             paths=", ".join(_str(path) for path in matched_paths[:3])
                         )
                     )
+        lines.append("")
+
+    context_refine = _dict(p.get("context_refine", {}))
+    if context_refine:
+        lines.append("## Context Refine")
+        decision_counts = _dict(context_refine.get("decision_counts", {}))
+        review = _dict(context_refine.get("candidate_review", {}))
+        lines.append(
+            "- **Status**: {status}; focused_files={focus}; keep={keep}; downrank={downrank}; drop={drop}; need_more_read={need_more_read}".format(
+                status=_str(review.get("status", "")) or "unknown",
+                focus=len(_list(context_refine.get("focused_files", []))),
+                keep=_int(decision_counts.get("keep", 0)),
+                downrank=_int(decision_counts.get("downrank", 0)),
+                drop=_int(decision_counts.get("drop", 0)),
+                need_more_read=_int(decision_counts.get("need_more_read", 0)),
+            )
+        )
+        for item in _list(review.get("recommendations", []))[:3]:
+            lines.append(f"- recommendation: {_str(item)}")
         lines.append("")
 
     # Core Nodes
@@ -1105,6 +1174,30 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
             lines.append(
                 "- **Risks**: {risks}".format(
                     risks=", ".join(_str(item) for item in risks[:5])
+                )
+            )
+        lines.append("")
+
+    handoff_payload = _dict(p.get("handoff_payload", {}))
+    if handoff_payload:
+        lines.append("## Handoff Payload")
+        goal = _str(handoff_payload.get("goal", ""))
+        if goal:
+            lines.append(f"- **Goal**: {goal}")
+        focus_paths = _list(handoff_payload.get("focus_paths", []))
+        if focus_paths:
+            lines.append(
+                "- **Focus paths**: {paths}".format(
+                    paths=", ".join(_str(item) for item in focus_paths[:5])
+                )
+            )
+        for item in _list(handoff_payload.get("next_tasks", []))[:5]:
+            lines.append(f"- next_task: {_str(item)}")
+        unresolved = _list(handoff_payload.get("unresolved", []))
+        if unresolved:
+            lines.append(
+                "- **Unresolved**: {items}".format(
+                    items=", ".join(_str(item) for item in unresolved[:5])
                 )
             )
         lines.append("")

@@ -193,3 +193,32 @@ def test_controller_builds_structured_retrieval_refinement() -> None:
     assert payload["focus_paths"] == ["src/app/auth.py", "src/app/session.py"]
     assert payload["query_hint"] == "focus auth flow and syntax clean"
     assert payload["metadata"] == {"diagnostic_count": 2}
+
+
+def test_controller_synthesizes_action_from_source_plan_validation_findings() -> None:
+    controller = BoundedLoopController(enabled=True, max_iterations=1, max_focus_paths=2)
+
+    selected = controller.select_action(
+        source_plan_stage={
+            "validation_findings": {
+                "needs_followup": True,
+                "status": "failed",
+                "probe_status": "degraded",
+                "warn_count": 1,
+                "blocker_count": 1,
+                "selected_test_count": 1,
+                "executed_test_count": 0,
+                "focus_paths": ["src/app.py", "src/build.py", "src/ignored.py"],
+                "query_hint": "Focus on validation-linked paths: src/app.py. invalid syntax",
+                "recommendations": ["Inspect validation-linked paths first."],
+            }
+        },
+        validation_stage={},
+    )
+
+    assert selected is not None
+    assert selected["action_type"] == "request_more_context"
+    assert selected["reason"] == "source_plan_validation_findings"
+    assert selected["focus_paths"] == ["src/app.py", "src/build.py"]
+    assert selected["metadata"]["source"] == "source_plan.validation_findings"
+    assert selected["metadata"]["blocker_count"] == 1

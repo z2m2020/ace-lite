@@ -25,6 +25,9 @@ from ace_lite.benchmark.summary_quality import (
     build_decision_observability_summary as _build_decision_observability_summary_impl,
 )
 from ace_lite.benchmark.summary_quality import (
+    build_context_refine_summary as _build_context_refine_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     build_evidence_insufficiency_summary as _build_evidence_insufficiency_summary_impl,
 )
 from ace_lite.benchmark.summary_quality import (
@@ -2535,6 +2538,12 @@ def build_wave1_context_governance_summary(
     return _build_wave1_context_governance_summary_impl(case_results)
 
 
+def build_context_refine_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return _build_context_refine_summary_impl(case_results)
+
+
 def build_chunk_cache_contract_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -2618,6 +2627,7 @@ __all__ = [
     "build_retrieval_default_strategy_summary",
     "build_retrieval_frontier_gate_summary",
     "build_slo_budget_summary",
+    "build_context_refine_summary",
     "build_source_plan_card_summary",
     "build_source_plan_failure_signal_summary",
     "build_source_plan_validation_feedback_summary",

@@ -54,6 +54,8 @@ def test_core_pipeline_order_matches_known_stage_descriptors() -> None:
         "repomap",
         "augment",
         "skills",
+        "history_channel",
+        "context_refine",
         "source_plan",
         "validation",
     )
@@ -155,6 +157,22 @@ def test_validate_stage_output_accepts_minimal_valid_payloads() -> None:
             "query_ctx": {},
             "available_count": 0,
             "selected": [],
+        },
+    )
+
+    validate_stage_output(
+        "history_channel",
+        {
+            "schema_version": "history_channel_v1",
+            "enabled": False,
+            "reason": "disabled",
+            "focused_files": [],
+            "commit_count": 0,
+            "hit_count": 0,
+            "history_hits": {},
+            "recommendations": [],
+            "policy_name": "general",
+            "policy_version": "v1",
         },
     )
 

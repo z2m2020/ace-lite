@@ -28,6 +28,7 @@ OPTIONAL_SUMMARY_MAPPING_KEYS = (
     "source_plan_card_summary",
     "source_plan_failure_signal_summary",
     "source_plan_validation_feedback_summary",
+    "context_refine_summary",
     "wave1_context_governance_summary",
     "deep_symbol_summary",
     "native_scip_summary",

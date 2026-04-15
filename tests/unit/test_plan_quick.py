@@ -792,6 +792,57 @@ def test_build_plan_quick_emits_onboarding_view_candidate_details_and_upgrade_gu
     assert result["onboarding_view"]["recommended_read_order"]
 
 
+def test_build_plan_quick_emits_history_summary_and_candidate_history(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _write_file(tmp_path / "src/ace_lite/cli.py", "def main():\n    return 0\n")
+    _write_file(tmp_path / "src/ace_lite/orchestrator.py", "class Orchestrator:\n    pass\n")
+
+    monkeypatch.setattr(
+        "ace_lite.plan_quick.collect_git_commit_history",
+        lambda **kwargs: {
+            "enabled": True,
+            "reason": "ok",
+            "commit_count": 2,
+            "commits": [
+                {
+                    "hash": "abc123",
+                    "committed_at": "2026-04-15T12:00:00+00:00",
+                    "subject": "touch cli and orchestrator",
+                    "files": [
+                        "src/ace_lite/cli.py",
+                        "src/ace_lite/orchestrator.py",
+                    ],
+                },
+                {
+                    "hash": "def456",
+                    "committed_at": "2026-04-14T12:00:00+00:00",
+                    "subject": "touch orchestrator",
+                    "files": ["src/ace_lite/orchestrator.py"],
+                },
+            ],
+            "error": None,
+        },
+    )
+
+    result = build_plan_quick(
+        query="orchestrator cli routing",
+        root=tmp_path,
+        languages="python",
+        top_k_files=2,
+        repomap_top_k=6,
+    )
+
+    assert result["history_summary"]["enabled"] is True
+    assert result["history_summary"]["reason"] == "ok"
+    assert result["history_summary"]["commit_count"] == 2
+    assert result["history_summary"]["top_paths"][0]["path"] == "src/ace_lite/orchestrator.py"
+    details = {item["path"]: item for item in result["candidate_details"]}
+    assert details["src/ace_lite/orchestrator.py"]["history"]["commit_count"] == 2
+    assert details["src/ace_lite/cli.py"]["history"]["commit_count"] == 1
+
+
 def test_build_plan_quick_adds_secondary_doc_mix_risk_hint_for_docs_sync_query(
     tmp_path: Path,
 ) -> None:

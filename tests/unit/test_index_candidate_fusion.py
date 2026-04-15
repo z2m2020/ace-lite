@@ -31,6 +31,7 @@ def test_apply_multi_channel_rrf_fusion_applies_docs_and_memory_rankings() -> No
     }
 
     fused_candidates, payload = apply_multi_channel_rrf_fusion(
+        root=".",
         candidates=candidates,
         files_map=files_map,
         docs_payload=docs_payload,
@@ -70,6 +71,7 @@ def test_apply_multi_channel_rrf_fusion_can_use_granularity_without_docs_or_memo
     }
 
     fused_candidates, payload = apply_multi_channel_rrf_fusion(
+        root=".",
         candidates=candidates,
         files_map=files_map,
         docs_payload={"enabled": False},
@@ -89,3 +91,62 @@ def test_apply_multi_channel_rrf_fusion_can_use_granularity_without_docs_or_memo
     assert payload["channels"]["granularity"]["top"] == ["src/b.py", "src/a.py"]
     assert fused_candidates[0]["score_breakdown"]["rrf_multi_channel"] > 0.0
     assert payload["fused"]["top"][0]["ranks"]["granularity"] > 0
+
+
+def test_apply_multi_channel_rrf_fusion_adds_history_channel(monkeypatch) -> None:
+    candidates = [
+        {"path": "src/a.py", "score": 10.0},
+        {"path": "src/b.py", "score": 9.5},
+        {"path": "src/c.py", "score": 9.0},
+    ]
+    files_map = {
+        "src/a.py": {"path": "src/a.py", "functions": [{"name": "alpha"}]},
+        "src/b.py": {"path": "src/b.py", "functions": [{"name": "beta"}]},
+        "src/c.py": {"path": "src/c.py", "functions": [{"name": "gamma"}]},
+    }
+
+    monkeypatch.setattr(
+        "ace_lite.index_stage.candidate_fusion.collect_git_commit_history",
+        lambda **kwargs: {
+            "enabled": True,
+            "reason": "ok",
+            "commit_count": 2,
+            "commits": [
+                {
+                    "hash": "c2",
+                    "committed_at": "2026-04-15T10:00:00+00:00",
+                    "subject": "touch b and c",
+                    "files": ["src/b.py", "src/c.py"],
+                },
+                {
+                    "hash": "c1",
+                    "committed_at": "2026-04-14T10:00:00+00:00",
+                    "subject": "touch b",
+                    "files": ["src/b.py"],
+                },
+            ],
+            "error": None,
+        },
+    )
+
+    fused_candidates, payload = apply_multi_channel_rrf_fusion(
+        root=".",
+        candidates=candidates,
+        files_map=files_map,
+        docs_payload={"enabled": False},
+        memory_paths=[],
+        top_k_files=2,
+        rrf_k=10,
+        pool_cap=3,
+        code_cap=3,
+        docs_cap=2,
+        memory_cap=2,
+    )
+
+    assert payload["applied"] is True
+    assert payload["channels"]["history"]["count"] == 2
+    assert payload["channels"]["history"]["top"] == ["src/b.py", "src/c.py"]
+    assert payload["channels"]["history"]["commit_count"] == 2
+    assert payload["fused"]["top"][0]["ranks"]["history"] > 0
+    assert payload["fused"]["top"][0]["contrib"]["history"] > 0.0
+    assert fused_candidates[0]["path"] == "src/b.py"

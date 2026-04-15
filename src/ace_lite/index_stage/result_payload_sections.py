@@ -37,6 +37,35 @@ def _build_multi_channel_granularity_observability(
     }
 
 
+def _build_multi_channel_history_observability(
+    multi_channel_fusion_payload: dict[str, Any],
+) -> dict[str, float | int]:
+    channels = (
+        multi_channel_fusion_payload.get("channels", {})
+        if isinstance(multi_channel_fusion_payload.get("channels"), dict)
+        else {}
+    )
+    history = (
+        channels.get("history", {})
+        if isinstance(channels.get("history"), dict)
+        else {}
+    )
+    fused = (
+        multi_channel_fusion_payload.get("fused", {})
+        if isinstance(multi_channel_fusion_payload.get("fused"), dict)
+        else {}
+    )
+    count = max(0, int(history.get("count", 0) or 0))
+    pool_size = max(0, int(fused.get("pool_size", 0) or 0))
+    pool_ratio = float(count) / float(pool_size) if pool_size > 0 else 0.0
+    return {
+        "count": count,
+        "pool_size": pool_size,
+        "pool_ratio": round(pool_ratio, 6),
+        "commit_count": max(0, int(history.get("commit_count", 0) or 0)),
+    }
+
+
 def _resolve_online_bandit_payload(
     *, adaptive_router_payload: dict[str, Any]
 ) -> dict[str, Any]:
@@ -68,6 +97,7 @@ def build_candidate_ranking_payload(
     granularity = _build_multi_channel_granularity_observability(
         multi_channel_fusion_payload
     )
+    history = _build_multi_channel_history_observability(multi_channel_fusion_payload)
     return {
         **selection_observability,
         "embedding_enabled": bool(embeddings_payload.get("enabled", False)),
@@ -98,6 +128,9 @@ def build_candidate_ranking_payload(
         "multi_channel_rrf_k": int(
             multi_channel_fusion_payload.get("rrf_k", 0) or 0
         ),
+        "multi_channel_rrf_history_count": int(history["count"]),
+        "multi_channel_rrf_history_pool_ratio": float(history["pool_ratio"]),
+        "multi_channel_rrf_history_commit_count": int(history["commit_count"]),
         "multi_channel_rrf_granularity_count": int(granularity["count"]),
         "multi_channel_rrf_pool_size": int(granularity["pool_size"]),
         "multi_channel_rrf_granularity_pool_ratio": float(granularity["pool_ratio"]),
@@ -295,6 +328,7 @@ def build_result_metadata(
     granularity = _build_multi_channel_granularity_observability(
         multi_channel_fusion_payload
     )
+    history = _build_multi_channel_history_observability(multi_channel_fusion_payload)
     return {
         "candidate_ranker": str(selection_observability["selected"]),
         "candidate_ranker_requested": str(selection_observability["requested"]),
@@ -314,6 +348,9 @@ def build_result_metadata(
         "multi_channel_rrf_k": int(
             multi_channel_fusion_payload.get("rrf_k", 0) or 0
         ),
+        "multi_channel_rrf_history_count": int(history["count"]),
+        "multi_channel_rrf_history_commit_count": int(history["commit_count"]),
+        "multi_channel_rrf_history_pool_ratio": float(history["pool_ratio"]),
         "multi_channel_rrf_granularity_count": int(granularity["count"]),
         "multi_channel_rrf_pool_size": int(granularity["pool_size"]),
         "multi_channel_rrf_granularity_pool_ratio": float(granularity["pool_ratio"]),

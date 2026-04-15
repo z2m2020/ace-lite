@@ -8,7 +8,7 @@ agents.
 
 The default plan path is:
 
-`memory -> index -> repomap -> augment -> skills -> source_plan -> validation`
+`memory -> index -> repomap -> augment -> skills -> history_channel -> context_refine -> source_plan -> validation`
 
 Key idea: start deterministic (structure plus signals), then expand only where
 needed.
@@ -48,12 +48,32 @@ needed.
 - Markdown skill manifests route queries to small, relevant sections (lazy-load).
 - Skills provide operational playbooks without hardcoding domain logic into the orchestrator.
 
+### History channel
+
+- Formalizes `augment.vcs_history` into a dedicated report-only stage before `context_refine`.
+- Emits stable history-hit summaries and recommendations keyed to current focus paths.
+- Must not directly change candidate ranking; it exists to make recent git evidence reusable and benchmarkable first.
+
+### History-aware retrieval
+
+- The index stage now also exposes git-history evidence as an additive multi-channel fusion arm.
+- `history` sits beside `code`, `docs`, `memory`, and `granularity` as a fail-open retrieval signal; it improves observability first and stays compatible when git history is unavailable.
+- `ace_plan_quick` consumes the same lightweight git history utility directly, so quick candidate details can show `history_summary` and per-path commit evidence without requiring a full orchestrator run.
+
+### Context refine
+
+- Formalizes shortlist review as a dedicated report-only stage before `source_plan`.
+- Emits stable `keep / downrank / drop / need_more_read` actions and recommendations.
+- Must not directly gate candidate ranking; it exists to make review signals observable and benchmarkable first.
+
 ### Source plan
 
 - Emits a stable payload containing:
   - `candidate_files` plus rationale
   - `candidate_chunks` (definition refs/snippets)
   - budgets, fingerprints, and observability fields
+- Source-plan report-only outputs now include both `session_end_report_v1` and the more stable `handoff_payload_v1`, so downstream CLI/MCP/report consumers can share one compact cross-session handoff shape.
+- Report-only `history_hits`, `validation_findings`, `session_end_report_v1`, and `handoff_payload_v1` now share one normalization/fallback seam, reducing duplicated payload handling across builders, accessors, and context reports without changing schema contracts.
 - Candidate chunks can carry internal retrieval-context sidecars during ranking and chunk semantic rerank, but those sidecars are stripped before the final user/model-facing payload is emitted.
 
 ### Validation
@@ -62,6 +82,7 @@ needed.
 - Emits machine-readable validation diagnostics, result summaries, and sandbox metadata.
 - Current validation runs through a temp-tree sandbox path with patch apply, compile/tests probes, and LSP diagnostics collection.
 - Top-level `validation` payload stability is preserved so CLI, benchmark, and replay flows can compare outcomes safely.
+- `validation_findings_v1` now also carries structured refine hints (`focus_paths`, `query_hint`, `recommendations`) so agent-loop reruns can narrow retrieval without inventing a new stage contract.
 
 ## Current execution maturity
 

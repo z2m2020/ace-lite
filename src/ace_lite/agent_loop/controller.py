@@ -243,6 +243,62 @@ class BoundedLoopController:
             ).as_dict(),
         )
 
+    def _synthesize_source_plan_validation_findings_action(
+        self,
+        *,
+        source_plan_stage: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        findings = source_plan_stage.get("validation_findings")
+        if not isinstance(findings, dict) or not findings:
+            return None
+        if not bool(findings.get("needs_followup", False)):
+            return None
+
+        raw_focus_paths = findings.get("focus_paths", [])
+        focus_paths = (
+            [
+                str(item).strip().replace("\\", "/")
+                for item in raw_focus_paths
+                if str(item).strip()
+            ][: self.max_focus_paths]
+            if isinstance(raw_focus_paths, list)
+            else []
+        )
+        query_hint = str(findings.get("query_hint") or "").strip()
+        recommendations = (
+            findings.get("recommendations", [])
+            if isinstance(findings.get("recommendations"), list)
+            else []
+        )
+        if not query_hint:
+            for item in recommendations:
+                text = str(item).strip()
+                if text:
+                    query_hint = text
+                    break
+        if not focus_paths and not query_hint:
+            return None
+
+        metadata = {
+            "source": "source_plan.validation_findings",
+            "status": str(findings.get("status") or "").strip(),
+            "probe_status": str(findings.get("probe_status") or "").strip(),
+            "warn_count": int(findings.get("warn_count", 0) or 0),
+            "blocker_count": int(findings.get("blocker_count", 0) or 0),
+            "selected_test_count": int(findings.get("selected_test_count", 0) or 0),
+            "executed_test_count": int(findings.get("executed_test_count", 0) or 0),
+        }
+        return cast(
+            dict[str, Any],
+            build_agent_loop_action_v1(
+                action_type="request_more_context",
+                reason="source_plan_validation_findings",
+                query_hint=query_hint[: self.query_hint_max_chars],
+                focus_paths=focus_paths,
+                metadata=metadata,
+            ).as_dict(),
+        )
+
     def select_action(
         self,
         *,
@@ -257,6 +313,13 @@ class BoundedLoopController:
             if normalized is not None:
                 self._actions_requested += 1
                 return normalized
+
+        synthesized = self._synthesize_source_plan_validation_findings_action(
+            source_plan_stage=source_plan_stage,
+        )
+        if synthesized is not None:
+            self._actions_requested += 1
+            return synthesized
 
         synthesized = self._synthesize_validation_action(
             validation_stage=validation_stage,

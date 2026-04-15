@@ -25,6 +25,7 @@ from ace_lite.retrieval_shared import (
     load_retrieval_index_snapshot,
     select_initial_candidates,
 )
+from ace_lite.vcs_history import collect_git_commit_history
 
 PLAN_QUICK_STEPS: tuple[str, ...] = (
     "Inspect candidate_files in order.",
@@ -873,13 +874,21 @@ def _build_candidate_details(
     rows: list[PlanQuickScoredRow],
     *,
     query: str = "",
+    history_summary: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     query_flags = _query_flags(query)
+    history_hits = (
+        history_summary.get("path_hits", {})
+        if isinstance(history_summary, dict)
+        and isinstance(history_summary.get("path_hits"), dict)
+        else {}
+    )
     details: list[dict[str, Any]] = []
     for row in rows:
         label_list = list(row.labels)
         if row.role not in label_list:
             label_list.append(row.role)
+        history_hit = history_hits.get(row.path, {}) if row.path else {}
         details.append(
             {
                 "path": row.path,
@@ -890,9 +899,109 @@ def _build_candidate_details(
                 "role": row.role,
                 "why": f"role:{row.role};domain:{row.semantic_domain}",
                 "picked_because": _build_picked_because(row=row, query_flags=query_flags),
+                "history": {
+                    "commit_count": int(history_hit.get("commit_count", 0) or 0),
+                    "latest_committed_at": str(
+                        history_hit.get("latest_committed_at") or ""
+                    ),
+                    "recent_subject": str(history_hit.get("recent_subject") or ""),
+                },
             }
         )
     return details
+
+
+def _build_history_summary(*, root: Path, candidate_paths: list[str]) -> dict[str, Any]:
+    normalized_paths: list[str] = []
+    for raw_path in candidate_paths:
+        path = _normalize_path(raw_path)
+        if path and path not in normalized_paths:
+            normalized_paths.append(path)
+
+    summary: dict[str, Any] = {
+        "enabled": False,
+        "reason": "no_candidate_paths",
+        "path_count": len(normalized_paths),
+        "commit_count": 0,
+        "top_paths": [],
+        "top_commits": [],
+        "path_hits": {},
+        "error": None,
+    }
+    if not normalized_paths:
+        return summary
+
+    payload = collect_git_commit_history(
+        repo_root=root,
+        paths=normalized_paths,
+        limit=max(8, min(24, len(normalized_paths) * 2)),
+    )
+    if not isinstance(payload, dict):
+        summary["enabled"] = True
+        summary["reason"] = "invalid_history_payload"
+        summary["error"] = "invalid_history_payload"
+        return summary
+
+    summary["enabled"] = bool(payload.get("enabled", False))
+    summary["reason"] = str(payload.get("reason") or "unknown")
+    summary["commit_count"] = max(0, int(payload.get("commit_count", 0) or 0))
+    summary["error"] = payload.get("error")
+
+    commits = payload.get("commits", [])
+    if not isinstance(commits, list) or not commits:
+        return summary
+
+    path_hits: dict[str, dict[str, Any]] = {}
+    top_commits: list[dict[str, Any]] = []
+    for commit in commits:
+        if not isinstance(commit, dict):
+            continue
+        matched_files: list[str] = []
+        for raw_path in commit.get("files", []):
+            path = _normalize_path(str(raw_path or ""))
+            if not path or path not in normalized_paths:
+                continue
+            matched_files.append(path)
+            bucket = path_hits.setdefault(
+                path,
+                {
+                    "commit_count": 0,
+                    "latest_committed_at": "",
+                    "recent_subject": "",
+                },
+            )
+            bucket["commit_count"] = int(bucket.get("commit_count", 0) or 0) + 1
+            if not str(bucket.get("latest_committed_at") or "").strip():
+                bucket["latest_committed_at"] = str(commit.get("committed_at") or "")
+                bucket["recent_subject"] = str(commit.get("subject") or "")
+        if matched_files:
+            top_commits.append(
+                {
+                    "hash": str(commit.get("hash") or ""),
+                    "subject": str(commit.get("subject") or ""),
+                    "committed_at": str(commit.get("committed_at") or ""),
+                    "matched_files": matched_files[:6],
+                }
+            )
+
+    summary["path_hits"] = path_hits
+    summary["top_paths"] = [
+        {
+            "path": path,
+            "commit_count": int(item.get("commit_count", 0) or 0),
+            "latest_committed_at": str(item.get("latest_committed_at") or ""),
+            "recent_subject": str(item.get("recent_subject") or ""),
+        }
+        for path, item in sorted(
+            path_hits.items(),
+            key=lambda pair: (
+                -int(pair[1].get("commit_count", 0) or 0),
+                str(pair[0]),
+            ),
+        )[:8]
+    ]
+    summary["top_commits"] = top_commits[:6]
+    return summary
 
 
 def _first_n_by_role(
@@ -1363,7 +1472,15 @@ def build_plan_quick(
         retrieval_policy_profile=retrieval_policy_profile,
         index_cache=dict(cache_info or {}),
     )
-    candidate_details = _build_candidate_details(limited_rows, query=normalized_query)
+    history_summary = _build_history_summary(
+        root=root_path,
+        candidate_paths=candidate_paths,
+    )
+    candidate_details = _build_candidate_details(
+        limited_rows,
+        query=normalized_query,
+        history_summary=history_summary,
+    )
     onboarding_view = _build_onboarding_view(
         query=normalized_query,
         details=candidate_details,
@@ -1413,6 +1530,7 @@ def build_plan_quick(
         else str(ranking_profile or "graph"),
         "query_profile": _query_flags(normalized_query),
         "candidate_domain_summary": candidate_domain_summary,
+        "history_summary": history_summary,
         "candidate_details": candidate_details,
         "onboarding_view": onboarding_view,
         "suggested_query_refinements": _build_suggested_query_refinements(

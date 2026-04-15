@@ -128,7 +128,15 @@ class OrchestratorSourcePlanReplayResult:
 
 PRE_SOURCE_PLAN_LIFECYCLE = OrchestratorLifecycleDescriptor(
     name="pre_source_plan",
-    stage_names=("memory", "index", "repomap", "augment", "skills"),
+    stage_names=(
+        "memory",
+        "index",
+        "repomap",
+        "augment",
+        "skills",
+        "history_channel",
+        "context_refine",
+    ),
 )
 SOURCE_PLAN_LIFECYCLE = OrchestratorLifecycleDescriptor(
     name="source_plan",

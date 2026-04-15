@@ -60,6 +60,8 @@ class PlanResponsePayload(TypedDict, total=False):
     repomap: dict[str, Any]
     augment: dict[str, Any]
     skills: dict[str, Any]
+    history_channel: dict[str, Any]
+    context_refine: dict[str, Any]
     source_plan: dict[str, Any]
     validation: dict[str, Any]
     observability: dict[str, Any]
@@ -119,6 +121,8 @@ class OrchestratorStateProjection(TypedDict):
     repomap: dict[str, Any]
     augment: dict[str, Any]
     skills: dict[str, Any]
+    history_channel: dict[str, Any]
+    context_refine: dict[str, Any]
     source_plan: dict[str, Any]
     validation: dict[str, Any]
     plugin_action_log: list[dict[str, Any]]
@@ -436,6 +440,8 @@ def project_orchestrator_state(
         "repomap": coerce_mapping(state.get("repomap")),
         "augment": coerce_mapping(state.get("augment")),
         "skills": coerce_mapping(state.get("skills")),
+        "history_channel": coerce_mapping(state.get("history_channel")),
+        "context_refine": coerce_mapping(state.get("context_refine")),
         "source_plan": coerce_mapping(state.get("source_plan")),
         "validation": validation,
         "plugin_action_log": coerce_mapping_list(state.get("_plugin_action_log")),

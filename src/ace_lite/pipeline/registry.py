@@ -45,8 +45,10 @@ CORE_STAGE_DESCRIPTORS = (
     _build_stage_descriptor("repomap", order=2),
     _build_stage_descriptor("augment", order=3),
     _build_stage_descriptor("skills", order=4),
-    _build_stage_descriptor("source_plan", order=5),
-    _build_stage_descriptor("validation", order=6),
+    _build_stage_descriptor("history_channel", order=5),
+    _build_stage_descriptor("context_refine", order=6),
+    _build_stage_descriptor("source_plan", order=7),
+    _build_stage_descriptor("validation", order=8),
 )
 CORE_STAGE_DESCRIPTOR_MAP = {
     descriptor.name: descriptor for descriptor in CORE_STAGE_DESCRIPTORS

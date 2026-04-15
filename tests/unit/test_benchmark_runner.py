@@ -935,6 +935,20 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
         "selected_test_count_mean": 0.0,
         "executed_test_count_mean": 0.0,
     }
+    assert results["context_refine_summary"] == {
+        "case_count": 2,
+        "present_case_count": 0,
+        "present_case_rate": 0.0,
+        "watch_case_count": 0,
+        "watch_case_rate": 0.0,
+        "thin_context_case_count": 0,
+        "thin_context_case_rate": 0.0,
+        "keep_count_mean": 0.0,
+        "downrank_count_mean": 0.0,
+        "drop_count_mean": 0.0,
+        "need_more_read_count_mean": 0.0,
+        "focused_file_count_mean": 0.0,
+    }
     assert results["wave1_context_governance_summary"] == {
         "case_count": 2,
         "plan_available_case_count": 2,
