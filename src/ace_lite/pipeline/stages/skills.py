@@ -292,9 +292,10 @@ def run_skills(
         skill_manifest=skill_manifest,
         top_n=max(0, int(top_n)),
     )
-    query_ctx = (
-        routed.get("query_ctx")
-        if isinstance(routed.get("query_ctx"), dict)
+    query_ctx_raw = routed.get("query_ctx")
+    query_ctx: dict[str, Any] = (
+        query_ctx_raw
+        if isinstance(query_ctx_raw, dict)
         else build_query_ctx(
             query=ctx.query,
             module_hint=str(index_stage.get("module_hint", "") or ""),

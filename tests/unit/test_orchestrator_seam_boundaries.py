@@ -35,9 +35,20 @@ class TestOrchestratorSeamBoundaries:
             "precompute_orchestrator_skills_route",
             "load_orchestrator_plugins",
             "apply_post_stage_state_updates",
+            "from ace_lite.orchestrator_type_support import (",
+            "_typed_profile_store",
+            "_typed_optional_preference_capture_store",
         )
         for token in expected_tokens:
             assert token in orchestrator_text
+
+    def test_orchestrator_keeps_type_cast_helpers_in_support_module(self) -> None:
+        orchestrator_text = _read_orchestrator_text()
+
+        assert "def _typed_dict(" not in orchestrator_text
+        assert "def _typed_optional_dict(" not in orchestrator_text
+        assert "def _typed_profile_store(" not in orchestrator_text
+        assert "def _typed_optional_preference_capture_store(" not in orchestrator_text
 
     def test_orchestrator_keeps_stage_state_updates_in_shared_support(self) -> None:
         orchestrator_text = _read_orchestrator_text()

@@ -213,6 +213,19 @@ def _normalize_hotspot_path(value: str) -> str:
     return str(Path(str(value).strip())).replace("\\", "/")
 
 
+def _hotspot_path_to_mypy_target(path: str) -> str:
+    normalized = _normalize_hotspot_path(path)
+    if not normalized.endswith(".py"):
+        return normalized
+    file_path = Path(normalized)
+    parts = file_path.parts
+    if len(parts) < 3 or parts[0] != "src":
+        return normalized
+    package_parts = list(parts[1:])
+    package_parts[-1] = Path(package_parts[-1]).stem
+    return ".".join(package_parts)
+
+
 def _load_hotspot_baseline(*, path: Path) -> dict[str, dict[str, Any]]:
     if not path.exists() or not path.is_file():
         return {}
@@ -749,12 +762,13 @@ def _quality_hotspot_commands(
     )
     if not base_targets:
         return []
-    mypy_targets = list(base_targets)
+    mypy_targets = [_hotspot_path_to_mypy_target(path) for path in base_targets]
     for path in base_targets:
         for companion in MYPY_HOTSPOT_COMPANION_TARGETS.get(path, ()):
             normalized = _normalize_hotspot_path(companion)
-            if normalized and normalized not in mypy_targets:
-                mypy_targets.append(normalized)
+            mypy_target = _hotspot_path_to_mypy_target(normalized)
+            if mypy_target and mypy_target not in mypy_targets:
+                mypy_targets.append(mypy_target)
     return [
         ("ruff_hotspots", [python_exe, "-m", "ruff", "check", *base_targets]),
         ("mypy_hotspots", [python_exe, "-m", "mypy", *mypy_targets]),

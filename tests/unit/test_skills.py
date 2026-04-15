@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import ace_lite.skills as skills_module
 
+import ace_lite.skills as skills_module
+from ace_lite.pipeline.stages import skills as skills_stage
 from ace_lite.pipeline.stages.skills import (
     extract_error_keywords,
     infer_intent,
@@ -14,7 +15,6 @@ from ace_lite.pipeline.stages.skills import (
     route_skills,
     run_skills,
 )
-from ace_lite.pipeline.stages import skills as skills_stage
 from ace_lite.pipeline.types import StageContext
 from ace_lite.skills import (
     build_skill_catalog,

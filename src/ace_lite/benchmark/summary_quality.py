@@ -675,15 +675,13 @@ def build_context_refine_summary(
         if not isinstance(context_refine, dict) or not context_refine:
             continue
         present_case_count += 1
+        decision_counts_raw = context_refine.get("decision_counts")
         decision_counts = (
-            context_refine.get("decision_counts")
-            if isinstance(context_refine.get("decision_counts"), dict)
-            else {}
+            decision_counts_raw if isinstance(decision_counts_raw, dict) else {}
         )
+        candidate_review_raw = context_refine.get("candidate_review")
         candidate_review = (
-            context_refine.get("candidate_review")
-            if isinstance(context_refine.get("candidate_review"), dict)
-            else {}
+            candidate_review_raw if isinstance(candidate_review_raw, dict) else {}
         )
         status = str(candidate_review.get("status") or "").strip().lower()
         if status == "watch":

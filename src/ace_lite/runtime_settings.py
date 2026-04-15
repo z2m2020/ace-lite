@@ -24,6 +24,15 @@ from ace_lite.config_runtime_projection import (
     dump_runtime_boundary_projection,
 )
 from ace_lite.runtime_profiles import RUNTIME_PROFILE_NAMES, get_runtime_profile
+from ace_lite.runtime_settings_projection import (
+    _MISSING,
+    _build_payload_and_provenance,
+    _deep_merge,
+    _extract_path,
+    _FieldSpec,
+    _normalize_mapping,
+    _spec,
+)
 from ace_lite.runtime_settings_store import (
     RUNTIME_SETTINGS_SCHEMA_VERSION,
     build_runtime_settings_fingerprint,
@@ -63,17 +72,9 @@ from ace_lite.scoring_config import (
     SCIP_BASE_WEIGHT,
 )
 
-_MISSING = object()
 _DEFAULT_LANGUAGE_PROFILE = (
     "python,typescript,javascript,go,solidity,rust,java,c,cpp,c_sharp,ruby,php,markdown"
 )
-
-
-@dataclass(frozen=True)
-class _FieldSpec:
-    output_path: tuple[str, ...]
-    default: Any
-    candidate_paths: tuple[tuple[str, ...], ...]
 
 
 @dataclass(frozen=True)
@@ -94,10 +95,6 @@ class RuntimeSettingsSnapshot:
         }
 
 
-def _spec(output_path: tuple[str, ...], default: Any, *candidate_paths: tuple[str, ...]) -> _FieldSpec:
-    return _FieldSpec(output_path=output_path, default=default, candidate_paths=tuple(candidate_paths))
-
-
 def _read_config_file(path: Path | None) -> dict[str, Any]:
     if path is None or not path.exists() or not path.is_file():
         return {}
@@ -106,72 +103,6 @@ def _read_config_file(path: Path | None) -> dict[str, Any]:
     except (OSError, yaml.YAMLError):
         return {}
     return payload if isinstance(payload, dict) else {}
-
-
-def _deep_merge(target: dict[str, Any], source: Mapping[str, Any]) -> None:
-    for key, value in source.items():
-        normalized_key = str(key)
-        if isinstance(value, Mapping) and isinstance(target.get(normalized_key), dict):
-            _deep_merge(target[normalized_key], value)
-        elif isinstance(value, Mapping):
-            child: dict[str, Any] = {}
-            _deep_merge(child, value)
-            target[normalized_key] = child
-        else:
-            target[normalized_key] = value
-
-
-def _normalize_mapping(value: Mapping[str, Any] | None) -> dict[str, Any]:
-    if not isinstance(value, Mapping):
-        return {}
-    payload: dict[str, Any] = {}
-    _deep_merge(payload, value)
-    return payload
-
-
-def _extract_path(payload: Mapping[str, Any], path: tuple[str, ...]) -> Any:
-    current: Any = payload
-    for key in path:
-        if not isinstance(current, Mapping) or key not in current:
-            return _MISSING
-        current = current[key]
-    return current
-
-
-def _set_nested(target: dict[str, Any], path: tuple[str, ...], value: Any) -> None:
-    current = target
-    for key in path[:-1]:
-        child = current.get(key)
-        if not isinstance(child, dict):
-            child = {}
-            current[key] = child
-        current = child
-    current[path[-1]] = value
-
-
-def _build_payload_and_provenance(
-    *,
-    specs: tuple[_FieldSpec, ...],
-    layers: list[tuple[str, dict[str, Any]]],
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    payload: dict[str, Any] = {}
-    provenance: dict[str, Any] = {}
-    for spec in specs:
-        source = "default"
-        value = spec.default
-        for label, layer in layers:
-            for candidate_path in spec.candidate_paths:
-                candidate = _extract_path(layer, candidate_path)
-                if candidate is _MISSING:
-                    continue
-                value = candidate
-                source = label
-                break
-            if source != "default":
-                break
-        _set_nested(payload, spec.output_path, value)
-        _set_nested(provenance, spec.output_path, source)
-    return payload, provenance
 
 
 def _layer_paths(*, root: str | Path, cwd: str | Path | None, filename: str) -> tuple[Path, Path, Path | None]:

@@ -503,6 +503,27 @@ def test_quality_commands_include_skills_lint_before_mypy(tmp_path: Path) -> Non
     assert names.index("skills_lint") < names.index("mypy")
 
 
+def test_hotspot_mypy_commands_use_module_targets() -> None:
+    module = _load_script("run_quality_gate.py")
+
+    commands = module._quality_hotspot_commands(
+        python_exe=sys.executable,
+        hotspot_paths=["src/ace_lite/orchestrator.py"],
+    )
+
+    assert commands[0][0] == "ruff_hotspots"
+    assert commands[0][1][-1] == "src/ace_lite/orchestrator.py"
+    assert commands[1][0] == "mypy_hotspots"
+    assert commands[1][1][3:] == [
+        "ace_lite.orchestrator",
+        "ace_lite.orchestrator_runtime_support_types",
+        "ace_lite.orchestrator_runtime_finalization",
+        "ace_lite.orchestrator_runtime_support",
+        "ace_lite.cli_app.orchestrator_factory_support",
+        "ace_lite.cli_app.orchestrator_factory",
+    ]
+
+
 def test_main_accepts_hotspot_path_arguments(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -574,6 +595,15 @@ def test_main_accepts_hotspot_path_arguments(
     assert hotspot_checks[0]["command"][-2:] == [
         "src/ace_lite/orchestrator.py",
         "src/ace_lite/plan_quick.py",
+    ]
+    assert hotspot_checks[1]["command"][3:] == [
+        "ace_lite.orchestrator",
+        "ace_lite.plan_quick",
+        "ace_lite.orchestrator_runtime_support_types",
+        "ace_lite.orchestrator_runtime_finalization",
+        "ace_lite.orchestrator_runtime_support",
+        "ace_lite.cli_app.orchestrator_factory_support",
+        "ace_lite.cli_app.orchestrator_factory",
     ]
     hotspot_paths = [item["path"] for item in summary["hotspot_summary"]["hotspots"]]
     assert hotspot_paths[:2] == [

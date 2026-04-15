@@ -5,7 +5,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
-from typing import Any, cast
+from typing import Any
 
 from ace_lite.exceptions import StageContractError
 from ace_lite.memory import (
@@ -55,6 +55,19 @@ from ace_lite.orchestrator_stage_runtime_support import (
     run_orchestrator_validation_stage,
 )
 from ace_lite.orchestrator_stage_state import apply_post_stage_state_updates
+from ace_lite.orchestrator_type_support import (
+    _typed_dict,
+    _typed_int,
+    _typed_list_str,
+    _typed_namespace_result,
+    _typed_optional_dict,
+    _typed_optional_preference_capture_store,
+    _typed_path,
+    _typed_plugin_load_result,
+    _typed_profile_store,
+    _typed_replay_load_result,
+    _typed_str,
+)
 from ace_lite.pipeline.hooks import HookBus
 from ace_lite.pipeline.registry import (
     CORE_PIPELINE_ORDER,
@@ -89,44 +102,6 @@ from ace_lite.token_estimator import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _typed_dict(value: Any) -> dict[str, Any]:
-    return cast(dict[str, Any], value)
-
-
-def _typed_optional_dict(value: Any) -> dict[str, Any] | None:
-    return cast(dict[str, Any] | None, value)
-
-
-def _typed_path(value: Any) -> Path:
-    return cast(Path, value)
-
-
-def _typed_str(value: Any) -> str:
-    return cast(str, value)
-
-
-def _typed_int(value: Any) -> int:
-    return cast(int, value)
-
-
-def _typed_list_str(value: Any) -> list[str]:
-    return cast(list[str], value)
-
-
-def _typed_plugin_load_result(value: Any) -> tuple[HookBus, list[str]]:
-    return cast(tuple[HookBus, list[str]], value)
-
-
-def _typed_namespace_result(value: Any) -> tuple[str | None, str, str]:
-    return cast(tuple[str | None, str, str], value)
-
-
-def _typed_replay_load_result(
-    value: Any,
-) -> tuple[dict[str, Any] | None, dict[str, Any]]:
-    return cast(tuple[dict[str, Any] | None, dict[str, Any]], value)
 
 
 class AceOrchestrator:
@@ -267,10 +242,10 @@ class AceOrchestrator:
             filters=filters,
         )
         validated_request_payload = validate_plan_request(
-            cast(dict[str, Any], request_payload)
+            _typed_dict(request_payload)
         )
         request = PlanRequestAdapter(
-            cast(dict[str, Any], validated_request_payload)
+            _typed_dict(validated_request_payload)
         )
         query = request.query
         repo = request.repo
@@ -694,7 +669,9 @@ class AceOrchestrator:
         )
 
     def _resolve_profile_store(self, *, root: str) -> ProfileStore:
-        return cast(ProfileStore, self._memory_context_service.resolve_profile_store(root=root))
+        return _typed_profile_store(
+            self._memory_context_service.resolve_profile_store(root=root)
+        )
 
     def _resolve_capture_notes_path(self, *, root: str) -> Path:
         return _typed_path(self._memory_context_service.resolve_capture_notes_path(root=root))
@@ -704,8 +681,7 @@ class AceOrchestrator:
         *,
         root: str,
     ) -> DurablePreferenceCaptureStore | None:
-        return cast(
-            DurablePreferenceCaptureStore | None,
+        return _typed_optional_preference_capture_store(
             self._memory_context_service.resolve_validation_preference_capture_store(
                 root=root,
             ),
