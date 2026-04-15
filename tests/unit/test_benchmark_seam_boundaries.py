@@ -44,6 +44,40 @@ class TestBenchmarkSeamBoundaries:
         for token in forbidden_local_impl_tokens:
             assert token not in observability_text
 
+    def test_report_observability_uses_routing_seam(self) -> None:
+        observability_text = _read_repo_text(
+            "src/ace_lite/benchmark/report_observability.py"
+        )
+
+        expected_tokens = (
+            "from ace_lite.benchmark.report_observability_routing import (",
+            "append_adaptive_router_observability_summary as _append_adaptive_router_observability_summary_impl",
+            "append_context_refine_summary as _append_context_refine_summary_impl",
+            "append_retrieval_context_observability_summary as _append_retrieval_context_observability_summary_impl",
+            "append_retrieval_default_strategy_summary as _append_retrieval_default_strategy_summary_impl",
+            "return _append_retrieval_context_observability_summary_impl(lines, results)",
+            "return _append_retrieval_default_strategy_summary_impl(lines, results)",
+            "return _append_adaptive_router_observability_summary_impl(lines, results)",
+            "return _append_context_refine_summary_impl(lines, results)",
+        )
+        for token in expected_tokens:
+            assert token in observability_text
+
+        forbidden_local_impl_tokens = (
+            'summary_raw = results.get("retrieval_context_observability_summary")',
+            'summary_raw = results.get("retrieval_default_strategy_summary")',
+            'summary_raw = results.get("adaptive_router_observability_summary")',
+            'summary = get_summary_mapping(results=results, key="context_refine_summary")',
+            'weights_raw = summary.get("graph_lookup_weight_means")',
+            'shadow_source_counts_raw = summary.get("shadow_source_counts")',
+            'lines.append("## Retrieval Context Observability Summary")',
+            'lines.append("## Retrieval Default Strategy Summary")',
+            'lines.append("## Adaptive Router Observability")',
+            'lines.append("## Context Refine Summary")',
+        )
+        for token in forbidden_local_impl_tokens:
+            assert token not in observability_text
+
     def test_benchmark_report_uses_report_observability_seam(self) -> None:
         report_text = _read_repo_text("src/ace_lite/benchmark/report.py")
 
