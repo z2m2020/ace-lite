@@ -11,15 +11,19 @@ from collections.abc import Mapping
 from typing import Any
 
 __all__ = [
+    "resolve_candidate_review",
     "coerce_payload",
     "resolve_candidate_chunks",
     "resolve_candidate_files",
     "resolve_confidence_summary",
     "resolve_evidence_summary",
+    "resolve_history_hits",
     "resolve_pipeline_stage_names",
     "resolve_repomap_payload",
+    "resolve_session_end_report",
     "resolve_source_plan_payload",
     "resolve_subgraph_payload",
+    "resolve_validation_findings",
     "resolve_validation_result",
     "resolve_validation_tests",
 ]
@@ -74,6 +78,46 @@ def resolve_validation_tests(
     payload = coerce_payload(plan_payload)
     sp = _dict(source_plan) if isinstance(source_plan, Mapping) else resolve_source_plan_payload(payload)
     return _list(sp.get("validation_tests", [])) or _list(payload.get("validation_tests", []))
+
+
+def resolve_history_hits(
+    plan_payload: Mapping[str, Any] | Any,
+    *,
+    source_plan: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = coerce_payload(plan_payload)
+    sp = _dict(source_plan) if isinstance(source_plan, Mapping) else resolve_source_plan_payload(payload)
+    return _dict(sp.get("history_hits", {})) or _dict(payload.get("history_hits", {}))
+
+
+def resolve_candidate_review(
+    plan_payload: Mapping[str, Any] | Any,
+    *,
+    source_plan: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = coerce_payload(plan_payload)
+    sp = _dict(source_plan) if isinstance(source_plan, Mapping) else resolve_source_plan_payload(payload)
+    return _dict(sp.get("candidate_review", {})) or _dict(payload.get("candidate_review", {}))
+
+
+def resolve_validation_findings(
+    plan_payload: Mapping[str, Any] | Any,
+    *,
+    source_plan: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = coerce_payload(plan_payload)
+    sp = _dict(source_plan) if isinstance(source_plan, Mapping) else resolve_source_plan_payload(payload)
+    return _dict(sp.get("validation_findings", {})) or _dict(payload.get("validation_findings", {}))
+
+
+def resolve_session_end_report(
+    plan_payload: Mapping[str, Any] | Any,
+    *,
+    source_plan: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = coerce_payload(plan_payload)
+    sp = _dict(source_plan) if isinstance(source_plan, Mapping) else resolve_source_plan_payload(payload)
+    return _dict(sp.get("session_end_report", {})) or _dict(payload.get("session_end_report", {}))
 
 
 def resolve_evidence_summary(

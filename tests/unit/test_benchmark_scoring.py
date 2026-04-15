@@ -20,6 +20,7 @@ from ace_lite.benchmark.scoring import (
     build_validation_branch_gate_summary,
     build_validation_branch_summary,
     build_validation_probe_summary,
+    build_wave1_context_governance_summary,
     compare_metrics,
     detect_regression,
     evaluate_case_result,
@@ -3357,6 +3358,46 @@ def test_build_source_plan_failure_signal_summary_rounds_core_metrics() -> None:
         "source_plan_origin_ratio": 0.0,
         "validate_step_origin_ratio": 0.0,
     }
+
+
+def test_build_wave1_context_governance_summary_aggregates_case_presence() -> None:
+    summary = build_wave1_context_governance_summary(
+        [
+            {
+                "plan": {
+                    "source_plan": {
+                        "history_hits": {"hits": [{"hash": "a"}, {"hash": "b"}]},
+                        "candidate_review": {"status": "watch"},
+                        "validation_findings": {"warn_count": 1, "blocker_count": 1},
+                        "session_end_report": {
+                            "next_actions": ["run tests", "inspect diff"],
+                            "risks": ["validation_blockers_present"],
+                        },
+                    }
+                }
+            },
+            {
+                "plan": {
+                    "source_plan": {
+                        "history_hits": {"hits": []},
+                        "candidate_review": {"status": "ok"},
+                        "validation_findings": {"warn_count": 0, "blocker_count": 0},
+                        "session_end_report": {"next_actions": ["inspect"], "risks": []},
+                    }
+                }
+            },
+        ]
+    )
+
+    assert summary["case_count"] == 2
+    assert summary["plan_available_case_count"] == 2
+    assert summary["history_hits_case_count"] == 1
+    assert summary["candidate_review_watch_case_count"] == 1
+    assert summary["validation_blocker_case_count"] == 1
+    assert summary["session_end_report_case_count"] == 2
+    assert summary["history_hit_count_mean"] == 2.0
+    assert summary["session_next_action_count_mean"] == 1.5
+    assert summary["session_risk_count_mean"] == 0.5
 
 
 def test_build_learning_router_rollout_summary_classifies_guarded_rollout_readiness() -> None:

@@ -296,6 +296,74 @@ def test_nested_source_plan_payload_uses_source_plan_for_questions_and_summary()
     assert any(q["type"] == "clarification" for q in result["suggested_questions"])
 
 
+def test_context_report_surfaces_wave1_report_only_sections() -> None:
+    payload = {
+        "query": "q",
+        "repo": "r",
+        "root": "x",
+        "source_plan": {
+            "candidate_chunks": [
+                {
+                    "path": "src/a.py",
+                    "qualified_name": "f",
+                    "score": 1.0,
+                    "evidence_confidence": "EXTRACTED",
+                }
+            ],
+            "candidate_files": [{"path": "src/a.py", "score": 0.9}],
+            "validation_tests": ["pytest tests/test_a.py"],
+            "history_hits": {
+                "reason": "ok",
+                "commit_count": 2,
+                "hits": [{"hash": "abc123", "subject": "recent fix"}],
+            },
+            "candidate_review": {
+                "status": "watch",
+                "focus_file_count": 1,
+                "candidate_chunk_count": 1,
+                "validation_test_count": 1,
+                "watch_items": ["hint_heavy_shortlist"],
+                "recommendations": ["Review the top direct chunk first."],
+            },
+            "validation_findings": {
+                "status": "failed",
+                "info_count": 0,
+                "warn_count": 1,
+                "blocker_count": 1,
+                "findings": [
+                    {
+                        "severity": "blocker",
+                        "code": "validation_failed",
+                        "message": "Validation failed.",
+                    }
+                ],
+            },
+            "session_end_report": {
+                "goal": "q",
+                "focus_paths": ["src/a.py"],
+                "validation_tests": ["pytest tests/test_a.py"],
+                "next_actions": ["Run tests"],
+                "risks": ["validation_blockers_present"],
+            },
+        },
+    }
+
+    result = build_context_report_payload(payload)
+    markdown = render_context_report_markdown(result)
+
+    assert result["summary"]["history_hit_count"] == 1
+    assert result["summary"]["validation_finding_count"] == 1
+    assert result["summary"]["next_action_count"] == 1
+    assert result["history_hits"]["hits"][0]["hash"] == "abc123"
+    assert result["candidate_review"]["status"] == "watch"
+    assert result["validation_findings"]["blocker_count"] == 1
+    assert result["session_end_report"]["next_actions"] == ["Run tests"]
+    assert "## History Hits" in markdown
+    assert "## Candidate Review" in markdown
+    assert "## Validation Findings" in markdown
+    assert "## Session End Report" in markdown
+
+
 def test_degraded_payload_knowledge_gaps(degraded_plan_payload):
     payload = build_context_report_payload(degraded_plan_payload)
 

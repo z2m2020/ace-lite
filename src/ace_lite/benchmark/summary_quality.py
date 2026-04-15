@@ -487,6 +487,155 @@ def build_retrieval_context_observability_summary(
     }
 
 
+def build_wave1_context_governance_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_count = len(case_results)
+    if case_count <= 0:
+        return {
+            "case_count": 0,
+            "plan_available_case_count": 0,
+            "plan_available_case_rate": 0.0,
+            "history_hits_case_count": 0,
+            "history_hits_case_rate": 0.0,
+            "candidate_review_case_count": 0,
+            "candidate_review_case_rate": 0.0,
+            "candidate_review_watch_case_count": 0,
+            "candidate_review_watch_case_rate": 0.0,
+            "validation_findings_case_count": 0,
+            "validation_findings_case_rate": 0.0,
+            "validation_blocker_case_count": 0,
+            "validation_blocker_case_rate": 0.0,
+            "session_end_report_case_count": 0,
+            "session_end_report_case_rate": 0.0,
+            "history_hit_count_mean": 0.0,
+            "validation_warn_count_mean": 0.0,
+            "validation_blocker_count_mean": 0.0,
+            "session_next_action_count_mean": 0.0,
+            "session_risk_count_mean": 0.0,
+        }
+
+    plan_available_case_count = 0
+    history_hits_case_count = 0
+    candidate_review_case_count = 0
+    candidate_review_watch_case_count = 0
+    validation_findings_case_count = 0
+    validation_blocker_case_count = 0
+    session_end_report_case_count = 0
+    history_hit_counts: list[float] = []
+    validation_warn_counts: list[float] = []
+    validation_blocker_counts: list[float] = []
+    session_next_action_counts: list[float] = []
+    session_risk_counts: list[float] = []
+
+    for item in case_results:
+        if not isinstance(item, dict):
+            continue
+        plan = item.get("plan")
+        if not isinstance(plan, dict):
+            continue
+        source_plan = plan.get("source_plan")
+        if not isinstance(source_plan, dict):
+            continue
+        plan_available_case_count += 1
+
+        history_hits = source_plan.get("history_hits")
+        if isinstance(history_hits, dict) and history_hits:
+            hits = history_hits.get("hits")
+            hit_rows = hits if isinstance(hits, list) else []
+            if hit_rows:
+                history_hits_case_count += 1
+                history_hit_counts.append(float(len(hit_rows)))
+
+        candidate_review = source_plan.get("candidate_review")
+        if isinstance(candidate_review, dict) and candidate_review:
+            candidate_review_case_count += 1
+            status = str(candidate_review.get("status") or "").strip().lower()
+            if status and status != "ok":
+                candidate_review_watch_case_count += 1
+
+        validation_findings = source_plan.get("validation_findings")
+        if isinstance(validation_findings, dict) and validation_findings:
+            validation_findings_case_count += 1
+            warn_count = float(validation_findings.get("warn_count", 0.0) or 0.0)
+            blocker_count = float(
+                validation_findings.get("blocker_count", 0.0) or 0.0
+            )
+            validation_warn_counts.append(warn_count)
+            validation_blocker_counts.append(blocker_count)
+            if blocker_count > 0.0:
+                validation_blocker_case_count += 1
+
+        session_end_report = source_plan.get("session_end_report")
+        if isinstance(session_end_report, dict) and session_end_report:
+            session_end_report_case_count += 1
+            next_actions = session_end_report.get("next_actions")
+            risks = session_end_report.get("risks")
+            next_action_rows = next_actions if isinstance(next_actions, list) else []
+            risk_rows = risks if isinstance(risks, list) else []
+            session_next_action_counts.append(float(len(next_action_rows)))
+            session_risk_counts.append(float(len(risk_rows)))
+
+    return {
+        "case_count": case_count,
+        "plan_available_case_count": plan_available_case_count,
+        "plan_available_case_rate": (
+            float(plan_available_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
+        "history_hits_case_count": history_hits_case_count,
+        "history_hits_case_rate": (
+            float(history_hits_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
+        "candidate_review_case_count": candidate_review_case_count,
+        "candidate_review_case_rate": (
+            float(candidate_review_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
+        "candidate_review_watch_case_count": candidate_review_watch_case_count,
+        "candidate_review_watch_case_rate": (
+            float(candidate_review_watch_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
+        "validation_findings_case_count": validation_findings_case_count,
+        "validation_findings_case_rate": (
+            float(validation_findings_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
+        "validation_blocker_case_count": validation_blocker_case_count,
+        "validation_blocker_case_rate": (
+            float(validation_blocker_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
+        "session_end_report_case_count": session_end_report_case_count,
+        "session_end_report_case_rate": (
+            float(session_end_report_case_count) / float(case_count)
+            if case_count > 0
+            else 0.0
+        ),
+        "history_hit_count_mean": mean(history_hit_counts) if history_hit_counts else 0.0,
+        "validation_warn_count_mean": (
+            mean(validation_warn_counts) if validation_warn_counts else 0.0
+        ),
+        "validation_blocker_count_mean": (
+            mean(validation_blocker_counts) if validation_blocker_counts else 0.0
+        ),
+        "session_next_action_count_mean": (
+            mean(session_next_action_counts) if session_next_action_counts else 0.0
+        ),
+        "session_risk_count_mean": (
+            mean(session_risk_counts) if session_risk_counts else 0.0
+        ),
+    }
+
+
 def build_retrieval_default_strategy_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -1478,6 +1627,7 @@ __all__ = [
     "build_retrieval_default_strategy_summary",
     "build_slo_budget_summary",
     "build_stage_latency_summary",
+    "build_wave1_context_governance_summary",
     "is_risk_upgrade_case",
     "summarize_missing_context_risk_case",
 ]

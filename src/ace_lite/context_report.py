@@ -16,13 +16,17 @@ from typing import Any, cast
 
 from ace_lite.plan_payload_view import (
     coerce_payload,
+    resolve_candidate_review,
     resolve_candidate_chunks,
     resolve_candidate_files,
     resolve_confidence_summary,
     resolve_evidence_summary,
+    resolve_history_hits,
     resolve_pipeline_stage_names,
     resolve_repomap_payload,
+    resolve_session_end_report,
     resolve_source_plan_payload,
+    resolve_validation_findings,
     resolve_validation_result,
     resolve_validation_tests,
 )
@@ -653,6 +657,9 @@ def _build_summary(
     candidate_files_in_index = resolve_candidate_files(plan_payload, source_plan=source_plan)
     validation_tests = resolve_validation_tests(plan_payload, source_plan=source_plan)
     stages = resolve_pipeline_stage_names(plan_payload, source_plan=source_plan)
+    history_hits = resolve_history_hits(plan_payload, source_plan=source_plan)
+    validation_findings = resolve_validation_findings(plan_payload, source_plan=source_plan)
+    session_end_report = resolve_session_end_report(plan_payload, source_plan=source_plan)
 
     # Count degraded reasons from observability
     degraded_reasons = _collect_degraded_reasons(plan_payload)
@@ -684,6 +691,9 @@ def _build_summary(
         "stage_count": len(stages),
         "degraded_reason_count": degraded_reason_count,
         "has_validation_payload": has_validation_payload,
+        "history_hit_count": len(_list(history_hits.get("hits", []))),
+        "validation_finding_count": len(_list(validation_findings.get("findings", []))),
+        "next_action_count": len(_list(session_end_report.get("next_actions", []))),
     }
 
 
@@ -731,6 +741,9 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
                 "stage_count": len(resolve_pipeline_stage_names(payload, source_plan=sp)),
                 "degraded_reason_count": 0,
                 "has_validation_payload": False,
+                "history_hit_count": 0,
+                "validation_finding_count": 0,
+                "next_action_count": 0,
             },
             "core_nodes": [],
             "surprising_connections": [],
@@ -749,6 +762,10 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
                     "why": "Plan payload is empty or minimal.",
                 }
             ],
+            "history_hits": {},
+            "candidate_review": {},
+            "validation_findings": {},
+            "session_end_report": {},
             "inputs": inputs,
             "warnings": ["empty_payload"],
         }
@@ -757,6 +774,10 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
     sp_chunks = resolve_candidate_chunks(payload, source_plan=sp)
     confidence_summary = resolve_confidence_summary(payload, source_plan=sp)
     evidence_summary = resolve_evidence_summary(payload, source_plan=sp)
+    history_hits = resolve_history_hits(payload, source_plan=sp)
+    candidate_review = resolve_candidate_review(payload, source_plan=sp)
+    validation_findings = resolve_validation_findings(payload, source_plan=sp)
+    session_end_report = resolve_session_end_report(payload, source_plan=sp)
 
     if confidence_summary:
         confidence_breakdown = _build_confidence_breakdown_p1(sp_chunks, confidence_summary)
@@ -780,6 +801,10 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
         "core_nodes": core_nodes,
         "surprising_connections": surprising_connections,
         "confidence_breakdown": confidence_breakdown,
+        "history_hits": history_hits,
+        "candidate_review": candidate_review,
+        "validation_findings": validation_findings,
+        "session_end_report": session_end_report,
         "knowledge_gaps": knowledge_gaps,
         "suggested_questions": suggested_questions,
         "inputs": inputs,
@@ -876,6 +901,9 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
             "validation_test_count",
             "stage_count",
             "degraded_reason_count",
+            "history_hit_count",
+            "validation_finding_count",
+            "next_action_count",
         ):
             val = summary.get(key)
             if val is not None:
@@ -883,6 +911,34 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
                 lines.append(f"- **{label}**: {val}")
         has_val = summary.get("has_validation_payload")
         lines.append(f"- **Has validation payload**: {'yes' if has_val else 'no'}")
+        lines.append("")
+
+    history_hits = _dict(p.get("history_hits", {}))
+    if history_hits:
+        lines.append("## History Hits")
+        hits = _list(history_hits.get("hits", []))
+        lines.append(
+            "- **Status**: {status}; hits={hits}; commits={commits}".format(
+                status=_str(history_hits.get("reason", "disabled")) or "disabled",
+                hits=len(hits),
+                commits=_int(history_hits.get("commit_count", 0)),
+            )
+        )
+        if hits:
+            for item in hits[:5]:
+                lines.append(
+                    "- `{hash}` {subject}".format(
+                        hash=_str(item.get("hash", ""))[:12],
+                        subject=_str(item.get("subject", "")),
+                    )
+                )
+                matched_paths = _list(item.get("matched_paths", []))
+                if matched_paths:
+                    lines.append(
+                        "  - matched_paths: {paths}".format(
+                            paths=", ".join(_str(path) for path in matched_paths[:3])
+                        )
+                    )
         lines.append("")
 
     # Core Nodes
@@ -905,6 +961,28 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
             lines.append(f"  - reason: {reason}")
         if len(core_nodes) > 10:
             lines.append(f"  ... *and {len(core_nodes) - 10} more*")
+        lines.append("")
+
+    candidate_review = _dict(p.get("candidate_review", {}))
+    if candidate_review:
+        lines.append("## Candidate Review")
+        lines.append(
+            "- **Status**: {status}; focus_files={focus}; chunks={chunks}; validation_tests={tests}".format(
+                status=_str(candidate_review.get("status", "")) or "unknown",
+                focus=_int(candidate_review.get("focus_file_count", 0)),
+                chunks=_int(candidate_review.get("candidate_chunk_count", 0)),
+                tests=_int(candidate_review.get("validation_test_count", 0)),
+            )
+        )
+        watch_items = _list(candidate_review.get("watch_items", []))
+        if watch_items:
+            lines.append(
+                "- **Watch items**: {items}".format(
+                    items=", ".join(_str(item) for item in watch_items)
+                )
+            )
+        for item in _list(candidate_review.get("recommendations", []))[:3]:
+            lines.append(f"- recommendation: {_str(item)}")
         lines.append("")
 
     # Surprising Connections
@@ -941,6 +1019,29 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
         lines.append(f"- **UNKNOWN**: {unknown}/{total}")
         lines.append("")
 
+    validation_findings = _dict(p.get("validation_findings", {}))
+    if validation_findings:
+        lines.append("## Validation Findings")
+        lines.append(
+            "- **Status**: {status}; info={info}; warn={warn}; blocker={blocker}".format(
+                status=_str(validation_findings.get("status", "")) or "unknown",
+                info=_int(validation_findings.get("info_count", 0)),
+                warn=_int(validation_findings.get("warn_count", 0)),
+                blocker=_int(validation_findings.get("blocker_count", 0)),
+            )
+        )
+        for item in _list(validation_findings.get("findings", []))[:5]:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                "- `{severity}` {code}: {message}".format(
+                    severity=_str(item.get("severity", "")).upper() or "INFO",
+                    code=_str(item.get("code", "")),
+                    message=_str(item.get("message", "")),
+                )
+            )
+        lines.append("")
+
     # Knowledge Gaps
     gaps = _list(p.get("knowledge_gaps", []))
     lines.append("## Knowledge Gaps")
@@ -975,6 +1076,37 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
         lines.append("## Warnings")
         for w in warnings:
             lines.append(f"- warning: {w}")
+        lines.append("")
+
+    session_end_report = _dict(p.get("session_end_report", {}))
+    if session_end_report:
+        lines.append("## Session End Report")
+        goal = _str(session_end_report.get("goal", ""))
+        if goal:
+            lines.append(f"- **Goal**: {goal}")
+        focus_paths = _list(session_end_report.get("focus_paths", []))
+        if focus_paths:
+            lines.append(
+                "- **Focus paths**: {paths}".format(
+                    paths=", ".join(_str(item) for item in focus_paths[:5])
+                )
+            )
+        validation_tests = _list(session_end_report.get("validation_tests", []))
+        if validation_tests:
+            lines.append(
+                "- **Validation tests**: {tests}".format(
+                    tests=", ".join(_str(item) for item in validation_tests[:3])
+                )
+            )
+        for item in _list(session_end_report.get("next_actions", []))[:5]:
+            lines.append(f"- next_action: {_str(item)}")
+        risks = _list(session_end_report.get("risks", []))
+        if risks:
+            lines.append(
+                "- **Risks**: {risks}".format(
+                    risks=", ".join(_str(item) for item in risks[:5])
+                )
+            )
         lines.append("")
 
     # Footer

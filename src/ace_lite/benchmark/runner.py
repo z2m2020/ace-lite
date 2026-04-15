@@ -43,6 +43,7 @@ from ace_lite.benchmark.scoring import (
     build_validation_branch_summary,
     build_validation_probe_summary,
     build_workload_taxonomy_summary,
+    build_wave1_context_governance_summary,
     compare_metrics,
     detect_regression,
     evaluate_case_result,
@@ -663,6 +664,9 @@ class BenchmarkRunner:
         )
         output["source_plan_validation_feedback_summary"] = (
             build_source_plan_validation_feedback_summary(metrics=metrics)
+        )
+        output["wave1_context_governance_summary"] = (
+            build_wave1_context_governance_summary(case_results)
         )
 
         return output

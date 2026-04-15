@@ -52,6 +52,9 @@ from ace_lite.benchmark.summary_quality import (
     build_stage_latency_summary as _build_stage_latency_summary_impl,
 )
 from ace_lite.benchmark.summary_quality import (
+    build_wave1_context_governance_summary as _build_wave1_context_governance_summary_impl,
+)
+from ace_lite.benchmark.summary_quality import (
     is_risk_upgrade_case as _is_risk_upgrade_case_impl,
 )
 from ace_lite.benchmark.summary_quality import (
@@ -2526,6 +2529,12 @@ def build_slo_budget_summary(case_results: list[dict[str, Any]]) -> dict[str, An
     return _build_slo_budget_summary_impl(case_results)
 
 
+def build_wave1_context_governance_summary(
+    case_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return _build_wave1_context_governance_summary_impl(case_results)
+
+
 def build_chunk_cache_contract_summary(
     case_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -2613,6 +2622,7 @@ __all__ = [
     "build_source_plan_failure_signal_summary",
     "build_source_plan_validation_feedback_summary",
     "build_stage_latency_summary",
+    "build_wave1_context_governance_summary",
     "build_validation_branch_gate_summary",
     "build_validation_branch_summary",
     "build_validation_probe_summary",
