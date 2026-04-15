@@ -78,6 +78,38 @@ class TestBenchmarkSeamBoundaries:
         for token in forbidden_local_impl_tokens:
             assert token not in observability_text
 
+    def test_report_observability_uses_governance_seam(self) -> None:
+        observability_text = _read_repo_text(
+            "src/ace_lite/benchmark/report_observability.py"
+        )
+
+        expected_tokens = (
+            "from ace_lite.benchmark.report_observability_governance import (",
+            "append_decision_observability_summary as _append_decision_observability_summary_impl",
+            "append_retrieval_control_plane_gate_summary as _append_retrieval_control_plane_gate_summary_impl",
+            "append_wave1_context_governance_summary as _append_wave1_context_governance_summary_impl",
+            "append_workload_taxonomy_summary as _append_workload_taxonomy_summary_impl",
+            "return _append_wave1_context_governance_summary_impl(lines, results)",
+            "return _append_retrieval_control_plane_gate_summary_impl(lines, results)",
+            "return _append_decision_observability_summary_impl(lines, results)",
+            "return _append_workload_taxonomy_summary_impl(lines, results)",
+        )
+        for token in expected_tokens:
+            assert token in observability_text
+
+        forbidden_local_impl_tokens = (
+            'summary = get_summary_mapping(results=results, key="wave1_context_governance_summary")',
+            'summary_raw = results.get("retrieval_control_plane_gate_summary")',
+            'summary_raw = results.get("decision_observability_summary")',
+            'summary = get_summary_mapping(results=results, key="workload_taxonomy_summary")',
+            'lines.append("## Wave 1 Context Governance Summary")',
+            'lines.append("## Retrieval Control Plane Gate Summary")',
+            'lines.append("## Decision Observability Summary")',
+            'lines.append("## Workload Taxonomy Summary")',
+        )
+        for token in forbidden_local_impl_tokens:
+            assert token not in observability_text
+
     def test_benchmark_report_uses_report_observability_seam(self) -> None:
         report_text = _read_repo_text("src/ace_lite/benchmark/report.py")
 
