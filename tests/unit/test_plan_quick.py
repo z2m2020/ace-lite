@@ -800,7 +800,7 @@ def test_build_plan_quick_emits_history_summary_and_candidate_history(
     _write_file(tmp_path / "src/ace_lite/orchestrator.py", "class Orchestrator:\n    pass\n")
 
     monkeypatch.setattr(
-        "ace_lite.plan_quick.collect_git_commit_history",
+        "ace_lite.plan_quick_ranking.collect_git_commit_history",
         lambda **kwargs: {
             "enabled": True,
             "reason": "ok",

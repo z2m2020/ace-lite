@@ -1,7 +1,8 @@
 """Report-only source-plan summary helpers for Wave 1 context governance.
 
 These helpers derive additive audit payloads from already-computed stage output.
-They must not change candidate ranking, gating, or downstream execution.
+They must not change candidate ranking, gating, or downstream execution,
+except that explicitly advisory follow-up hints may request more context.
 """
 
 from __future__ import annotations
@@ -296,6 +297,8 @@ def build_validation_findings(
 
     return {
         "schema_version": "validation_findings_v1",
+        "governance_mode": "advisory_report_only",
+        "allowed_actions": ["request_more_context"],
         "status": status,
         "probe_status": probe_status,
         "selected_test_count": len(selected_tests),

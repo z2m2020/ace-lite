@@ -328,6 +328,109 @@ def test_hotspot_baseline_matches_current_targets() -> None:
     hotspots = payload.get("hotspots")
     assert isinstance(hotspots, list)
     assert [item.get("path") for item in hotspots if isinstance(item, dict)] == module.HOTSPOT_TARGETS
+    keyed = {
+        item["path"]: item
+        for item in hotspots
+        if isinstance(item, dict) and isinstance(item.get("path"), str)
+    }
+    for target in (
+        "src/ace_lite/orchestrator.py",
+        "src/ace_lite/plan_quick.py",
+        "src/ace_lite/benchmark/report.py",
+        "src/ace_lite/context_report.py",
+    ):
+        row = keyed[target]
+        assert isinstance(row.get("coverage_percent"), (int, float))
+        assert isinstance(row.get("complexity_score"), int)
+        assert isinstance(row.get("complexity_ceiling"), int)
+        assert int(row["complexity_ceiling"]) >= int(row["complexity_score"])
+
+
+def test_run_quality_gate_can_refresh_hotspot_baseline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script("run_quality_gate.py")
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(json.dumps({"findings": []}), encoding="utf-8")
+    hotspot_baseline_path = tmp_path / "hotspot-baseline.json"
+    output_dir = tmp_path / "out"
+    coverage_path = output_dir / "coverage.json"
+    coverage_path.parent.mkdir(parents=True, exist_ok=True)
+    coverage_path.write_text(
+        json.dumps(
+            {
+                "files": {
+                    "src/ace_lite/orchestrator.py": {
+                        "summary": {
+                            "covered_lines": 10,
+                            "missing_lines": 2,
+                            "num_statements": 12,
+                            "percent_covered": 83.33,
+                        }
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    hotspot_path = tmp_path / "src" / "ace_lite" / "orchestrator.py"
+    hotspot_path.parent.mkdir(parents=True, exist_ok=True)
+    hotspot_path.write_text(
+        (
+            "def plan(flag: bool) -> int:\n"
+            "    if flag:\n"
+            "        return 1\n"
+            "    return 0\n"
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_run_command(*, name: str, command: list[str], cwd: Path):
+        _ = (command, cwd)
+        if name == "pip_audit":
+            return module.CommandResult(
+                name=name,
+                command=["pip-audit"],
+                returncode=0,
+                stdout=json.dumps({"dependencies": []}),
+                stderr="",
+                elapsed_ms=7.0,
+            )
+        return module.CommandResult(
+            name=name,
+            command=[name],
+            returncode=0,
+            stdout="ok",
+            stderr="",
+            elapsed_ms=5.0,
+        )
+
+    monkeypatch.setattr(module, "_run_command", fake_run_command)
+
+    summary = module.run_quality_gate(
+        root=tmp_path,
+        output_dir=output_dir,
+        baseline_path=baseline_path,
+        hotspot_baseline_path=hotspot_baseline_path,
+        fail_on_new_vulns=True,
+        python_exe=sys.executable,
+        hotspot_paths=["src/ace_lite/orchestrator.py"],
+        refresh_hotspot_baseline=True,
+    )
+
+    assert summary["passed"] is True
+    payload = json.loads(hotspot_baseline_path.read_text(encoding="utf-8"))
+    assert payload["mode"] == "report_only"
+    assert payload["hotspots"] == [
+        {
+            "path": "src/ace_lite/orchestrator.py",
+            "coverage_percent": pytest.approx(83.33),
+            "complexity_score": 2,
+            "complexity_ceiling": 4,
+        }
+    ]
 
 
 def test_run_quality_gate_reports_hotspot_checks_without_failing_gate(

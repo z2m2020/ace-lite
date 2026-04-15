@@ -1185,7 +1185,7 @@ def test_build_results_summary_preserves_retrieval_control_plane_gate_summary() 
                 "risk_upgrade_precision_gain_threshold": 0.0,
                 "risk_upgrade_precision_gain_passed": True,
                 "latency_p95_ms": 640.0,
-                "latency_p95_ms_threshold": 850.0,
+                "latency_p95_ms_threshold": 650.0,
                 "latency_p95_ms_passed": True,
                 "gate_passed": True,
             },
@@ -2802,7 +2802,7 @@ def test_build_report_markdown_includes_retrieval_control_plane_gate_summary() -
                 "risk_upgrade_precision_gain_threshold": 0.0,
                 "risk_upgrade_precision_gain_passed": True,
                 "latency_p95_ms": 640.0,
-                "latency_p95_ms_threshold": 850.0,
+                "latency_p95_ms_threshold": 650.0,
                 "latency_p95_ms_passed": True,
                 "gate_passed": True,
             },
@@ -2819,7 +2819,7 @@ def test_build_report_markdown_includes_retrieval_control_plane_gate_summary() -
         in report
     )
     assert "- Risk-upgrade precision gain: 0.1200 (threshold >= 0.0000, pass)" in report
-    assert "- Latency p95 ms: 640.00 (threshold <= 850.00, pass)" in report
+    assert "- Latency p95 ms: 640.00 (threshold <= 650.00, pass)" in report
 
 
 def test_build_report_markdown_includes_agent_loop_control_plane_summary() -> None:
@@ -2881,7 +2881,7 @@ def test_build_report_markdown_includes_retrieval_control_plane_gate_failure_sta
                 "risk_upgrade_precision_gain_threshold": 0.0,
                 "risk_upgrade_precision_gain_passed": False,
                 "latency_p95_ms": 880.0,
-                "latency_p95_ms_threshold": 850.0,
+                "latency_p95_ms_threshold": 650.0,
                 "latency_p95_ms_passed": False,
                 "gate_passed": False,
             },
@@ -2896,7 +2896,7 @@ def test_build_report_markdown_includes_retrieval_control_plane_gate_failure_sta
         in report
     )
     assert "- Risk-upgrade precision gain: -0.0300 (threshold >= 0.0000, fail)" in report
-    assert "- Latency p95 ms: 880.00 (threshold <= 850.00, fail)" in report
+    assert "- Latency p95 ms: 880.00 (threshold <= 650.00, fail)" in report
     assert (
         "- Failed checks: benchmark_regression_detected, adaptive_router_shadow_coverage"
         in report

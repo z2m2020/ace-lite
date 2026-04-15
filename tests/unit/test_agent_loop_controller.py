@@ -201,6 +201,8 @@ def test_controller_synthesizes_action_from_source_plan_validation_findings() ->
     selected = controller.select_action(
         source_plan_stage={
             "validation_findings": {
+                "schema_version": "validation_findings_v1",
+                "governance_mode": "advisory_report_only",
                 "needs_followup": True,
                 "status": "failed",
                 "probe_status": "degraded",
@@ -221,4 +223,7 @@ def test_controller_synthesizes_action_from_source_plan_validation_findings() ->
     assert selected["reason"] == "source_plan_validation_findings"
     assert selected["focus_paths"] == ["src/app.py", "src/build.py"]
     assert selected["metadata"]["source"] == "source_plan.validation_findings"
+    assert selected["metadata"]["schema_version"] == "validation_findings_v1"
+    assert selected["metadata"]["governance_mode"] == "advisory_report_only"
+    assert selected["metadata"]["allowed_effect"] == "request_more_context_only"
     assert selected["metadata"]["blocker_count"] == 1

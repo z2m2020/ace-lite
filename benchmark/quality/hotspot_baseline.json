@@ -4,51 +4,57 @@
   "hotspots": [
     {
       "path": "src/ace_lite/orchestrator.py",
-      "coverage_percent": null,
-      "complexity_score": null,
-      "complexity_ceiling": null
+      "coverage_percent": 87.7,
+      "complexity_score": 14,
+      "complexity_ceiling": 16
     },
     {
       "path": "src/ace_lite/orchestrator_contracts.py",
       "coverage_percent": null,
-      "complexity_score": null,
-      "complexity_ceiling": null
+      "complexity_score": 42,
+      "complexity_ceiling": 47
     },
     {
       "path": "src/ace_lite/runtime_settings.py",
       "coverage_percent": null,
-      "complexity_score": null,
-      "complexity_ceiling": null
+      "complexity_score": 105,
+      "complexity_ceiling": 116
     },
     {
       "path": "src/ace_lite/plan_quick.py",
-      "coverage_percent": null,
-      "complexity_score": null,
-      "complexity_ceiling": null
+      "coverage_percent": 90.65,
+      "complexity_score": 315,
+      "complexity_ceiling": 347
     },
     {
       "path": "src/ace_lite/plan_quick_strategies.py",
       "coverage_percent": null,
-      "complexity_score": null,
-      "complexity_ceiling": null
+      "complexity_score": 84,
+      "complexity_ceiling": 93
     },
     {
       "path": "src/ace_lite/benchmark/report.py",
-      "coverage_percent": null,
-      "complexity_score": null,
-      "complexity_ceiling": null
+      "coverage_percent": 96.88,
+      "complexity_score": 633,
+      "complexity_ceiling": 697
+    },
+    {
+      "path": "src/ace_lite/context_report.py",
+      "coverage_percent": 93.85,
+      "complexity_score": 228,
+      "complexity_ceiling": 251
     },
     {
       "path": "src/ace_lite/benchmark/report_observability.py",
       "coverage_percent": null,
-      "complexity_score": null,
-      "complexity_ceiling": null
+      "complexity_score": 349,
+      "complexity_ceiling": 384
     },
     {
       "path": "src/ace_lite/benchmark/summaries.py",
-      "coverage_percent": null,
-      "complexity_score": null,
-      "complexity_ceiling": null
+      "coverage_percent": 99.23,
+      "complexity_score": 637,
+      "complexity_ceiling": 701
     }
   ]
 }

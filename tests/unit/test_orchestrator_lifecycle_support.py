@@ -27,6 +27,8 @@ def test_orchestrator_lifecycle_descriptors_expose_stable_order_and_lookup() -> 
         "repomap",
         "augment",
         "skills",
+        "history_channel",
+        "context_refine",
     )
     assert SOURCE_PLAN_LIFECYCLE.uses_plan_replay is True
     assert POST_SOURCE_PLAN_LIFECYCLE.runs_agent_loop is True

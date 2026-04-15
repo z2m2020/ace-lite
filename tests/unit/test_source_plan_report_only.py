@@ -120,6 +120,8 @@ def test_build_validation_findings_tracks_warn_and_blocker_counts() -> None:
     )
 
     assert findings["schema_version"] == "validation_findings_v1"
+    assert findings["governance_mode"] == "advisory_report_only"
+    assert findings["allowed_actions"] == ["request_more_context"]
     assert findings["status"] == "failed"
     assert findings["warn_count"] >= 1
     assert findings["blocker_count"] >= 1

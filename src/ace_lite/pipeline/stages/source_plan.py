@@ -450,6 +450,8 @@ def run_source_plan(
             failure_signal_summary=failure_signal_summary,
             validation_tests=validation_tests,
         )
+    # validation_findings stays report-only/advisory: it may request more context later,
+    # but must never mutate ranking, chunk selection, or gate outcomes here.
     validation_findings = build_validation_findings(validation_result=validation_result)
     session_end_report = build_session_end_report(
         query=ctx.query,

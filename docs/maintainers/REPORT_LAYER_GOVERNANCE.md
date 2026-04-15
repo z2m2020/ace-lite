@@ -2,7 +2,7 @@
 
 **Status**: Phase 1 - Advisory
 **Owner**: Maintainers
-**Last Updated**: 2026-04-12
+**Last Updated**: 2026-04-15
 
 ---
 
@@ -20,7 +20,7 @@ This document defines the clear boundary between **primary execution surfaces** 
 |---|---|---|
 | `source_plan` payload | Pipeline output | Contains `candidate_files`, `candidate_chunks`, budgets, fingerprints |
 | `validation` payload | Post-plan stage | Contains test results, diagnostics, sandbox metadata |
-| `memory` signals | Memory provider | Provides hints, preferences, recent issues - treated as signals, not truth |
+| `memory` signals | Memory provider | Provides hints, preferences, recent issues; treated as signals, not truth |
 
 **Rule**: These artifacts may be used as inputs to downstream stages or CLI/MCP consumers.
 
@@ -31,10 +31,11 @@ This document defines the clear boundary between **primary execution surfaces** 
 | `ContextReport` | `src/ace_lite/context_report.py` | Human-readable summary of plan payload (candidates, warnings, confidence breakdown) |
 | `retrieval_graph_view` | `src/ace_lite/mcp_server/service.py` | Machine-readable subgraph of candidate relationships |
 | `skill catalog` | `src/ace_lite/skills.py` (`build_skill_catalog`) | Human-readable index of available skills |
+| `validation_findings_v1` | `src/ace_lite/source_plan/report_only.py` (`build_validation_findings`) | Additive validation follow-up hints; may only request more context |
 
-**Rule**: These artifacts MUST NOT be used as primary routing or gating signals.
+**Rule**: These artifacts MUST NOT be used as primary routing, ranking, chunk selection, or gating signals.
 
-### Layer 3: Project沉淀 Surface (documentation context)
+### Layer 3: Project Context Surface (documentation context)
 
 | Artifact | Location | Purpose |
 |---|---|---|
@@ -73,6 +74,15 @@ graph_view = load_retrieval_graph()
 primary_candidates = graph_view.filter(query)
 ```
 
+### Pattern F4: validation_findings_v1 as Ranking or Gate
+
+```python
+# WRONG - Do not do this
+if validation_findings["blocker_count"] > 0:
+    candidate_chunks = []
+    gate_passed = False
+```
+
 ---
 
 ## Allowed Patterns
@@ -100,6 +110,18 @@ catalog = build_skill_catalog(manifest)
 click.echo(catalog)
 ```
 
+### Pattern A4: validation_findings_v1 as Advisory Follow-Up
+
+```python
+# CORRECT - Synthesize a request for more context only
+action = build_agent_loop_action_v1(
+    action_type="request_more_context",
+    reason="source_plan_validation_findings",
+    query_hint=query_hint,
+    focus_paths=focus_paths,
+)
+```
+
 ---
 
 ## ContextReport Specific Rules
@@ -121,6 +143,15 @@ From `docs/maintainers/CONTEXT_REPORT_CONTRACT.md`:
 
 ---
 
+## validation_findings_v1 Specific Rules
+
+- `validation_findings_v1` is a Layer 2 additive artifact, not a Layer 1 execution payload
+- The only allowed execution-side consumption is synthesizing `agent_loop` advisory action `request_more_context`
+- It MUST NOT change source-plan ranking, chunk packing, pass/fail gates, or branch promotion decisions
+- When promoted into `agent_loop`, metadata should preserve `schema_version=validation_findings_v1` and `governance_mode=advisory_report_only`
+
+---
+
 ## Relationship to GitNexus/Rowboat Borrowing
 
 These rules emerged from borrowing studies:
@@ -138,6 +169,7 @@ These rules emerged from borrowing studies:
 
 - `pytest -q tests/unit/test_context_report.py` validates ContextReport contract
 - `pytest -q tests/unit/test_skills.py` validates skill catalog behavior
+- `pytest -q tests/unit/test_report_layer_governance_boundaries.py` validates report-only/advisory boundaries
 - Any PR adding Layer 2 artifacts as execution gates requires maintainer approval
 
 ---

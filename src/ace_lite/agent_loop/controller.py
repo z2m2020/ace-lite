@@ -251,7 +251,20 @@ class BoundedLoopController:
         findings = source_plan_stage.get("validation_findings")
         if not isinstance(findings, dict) or not findings:
             return None
+        if str(findings.get("schema_version") or "").strip() != "validation_findings_v1":
+            return None
+        if str(findings.get("governance_mode") or "").strip() != "advisory_report_only":
+            return None
         if not bool(findings.get("needs_followup", False)):
+            return None
+        blocker_count = int(findings.get("blocker_count", 0) or 0)
+        status = str(findings.get("status") or "").strip().lower()
+        probe_status = str(findings.get("probe_status") or "").strip().lower()
+        has_blocking_signal = blocker_count > 0 or status in {
+            "failed",
+            "degraded",
+        } or probe_status in {"failed", "degraded"}
+        if not has_blocking_signal:
             return None
 
         raw_focus_paths = findings.get("focus_paths", [])
@@ -281,6 +294,9 @@ class BoundedLoopController:
 
         metadata = {
             "source": "source_plan.validation_findings",
+            "schema_version": "validation_findings_v1",
+            "governance_mode": "advisory_report_only",
+            "allowed_effect": "request_more_context_only",
             "status": str(findings.get("status") or "").strip(),
             "probe_status": str(findings.get("probe_status") or "").strip(),
             "warn_count": int(findings.get("warn_count", 0) or 0),
@@ -314,15 +330,15 @@ class BoundedLoopController:
                 self._actions_requested += 1
                 return normalized
 
-        synthesized = self._synthesize_source_plan_validation_findings_action(
-            source_plan_stage=source_plan_stage,
+        synthesized = self._synthesize_validation_action(
+            validation_stage=validation_stage,
         )
         if synthesized is not None:
             self._actions_requested += 1
             return synthesized
 
-        synthesized = self._synthesize_validation_action(
-            validation_stage=validation_stage,
+        synthesized = self._synthesize_source_plan_validation_findings_action(
+            source_plan_stage=source_plan_stage,
         )
         if synthesized is not None:
             self._actions_requested += 1

@@ -196,7 +196,7 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
     "risk_upgrade_precision_gain_threshold": 0.0,
     "risk_upgrade_precision_gain_passed": true,
     "latency_p95_ms": 640.0,
-    "latency_p95_ms_threshold": 850.0,
+    "latency_p95_ms_threshold": 650.0,
     "latency_p95_ms_passed": true,
     "gate_passed": true
   },
@@ -326,7 +326,7 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
         "risk_upgrade_precision_gain_threshold": 0.0,
         "risk_upgrade_precision_gain_passed": True,
         "latency_p95_ms": 640.0,
-        "latency_p95_ms_threshold": 850.0,
+        "latency_p95_ms_threshold": 650.0,
         "latency_p95_ms_passed": True,
         "gate_passed": True,
     }

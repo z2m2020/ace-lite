@@ -52,7 +52,8 @@ class TestOrchestratorSeamBoundaries:
         method_block = _extract_method_block("_run_memory")
 
         assert "runtime = build_orchestrator_memory_runtime(" in method_block
-        assert "return self._memory_context_service.attach_memory_stage_payloads(" in method_block
+        assert "return _typed_dict(" in method_block
+        assert "self._memory_context_service.attach_memory_stage_payloads(" in method_block
         assert "normalize_temporal_input(" not in method_block
         assert "ctx.state.get(" not in method_block
         assert "build_profile_payload(" not in method_block
@@ -63,7 +64,8 @@ class TestOrchestratorSeamBoundaries:
         method_block = _extract_method_block("_run_augment")
 
         assert "def _resolve_augment_candidates(" not in orchestrator_text
-        assert "return run_orchestrator_augment_stage(" in method_block
+        assert "return _typed_dict(" in method_block
+        assert "run_orchestrator_augment_stage(" in method_block
         assert "config=self._config" in method_block
         assert "lsp_broker=self._lsp_broker" in method_block
         assert "build_orchestrator_augment_runtime(" not in method_block
@@ -76,8 +78,10 @@ class TestOrchestratorSeamBoundaries:
         run_skills_block = _extract_method_block("_run_skills")
         precompute_block = _extract_method_block("_precompute_skills_route")
 
-        assert "return run_orchestrator_skills_stage(" in run_skills_block
-        assert "return precompute_orchestrator_skills_route(" in precompute_block
+        assert "return _typed_dict(" in run_skills_block
+        assert "run_orchestrator_skills_stage(" in run_skills_block
+        assert "return _typed_dict(" in precompute_block
+        assert "precompute_orchestrator_skills_route(" in precompute_block
         assert "build_orchestrator_skills_runtime(" not in run_skills_block
         assert "build_orchestrator_skills_runtime(" not in precompute_block
         assert "return run_skills(" not in run_skills_block
@@ -89,7 +93,8 @@ class TestOrchestratorSeamBoundaries:
     def test_repomap_stage_uses_stage_runtime_support_shell(self) -> None:
         method_block = _extract_method_block("_run_repomap")
 
-        assert "return run_orchestrator_repomap_stage(" in method_block
+        assert "return _typed_dict(" in method_block
+        assert "run_orchestrator_repomap_stage(" in method_block
         assert "config=self._config" in method_block
         assert "tokenizer_model=self._tokenizer_model" in method_block
         assert "return run_repomap(" not in method_block
@@ -97,7 +102,8 @@ class TestOrchestratorSeamBoundaries:
     def test_index_stage_uses_stage_runtime_support_shell(self) -> None:
         method_block = _extract_method_block("_run_index")
 
-        assert "return run_orchestrator_index_stage(" in method_block
+        assert "return _typed_dict(" in method_block
+        assert "run_orchestrator_index_stage(" in method_block
         assert "config=self._config" in method_block
         assert "tokenizer_model=self._tokenizer_model" in method_block
         assert "cochange_neighbor_cap=self._COCHANGE_NEIGHBOR_CAP" in method_block
@@ -109,7 +115,8 @@ class TestOrchestratorSeamBoundaries:
     def test_validation_stage_uses_support_runtime_for_state_normalization(self) -> None:
         method_block = _extract_method_block("_run_validation")
 
-        assert "return run_orchestrator_validation_stage(" in method_block
+        assert "return _typed_dict(" in method_block
+        assert "run_orchestrator_validation_stage(" in method_block
         assert "config=self._config" in method_block
         assert "lsp_broker=self._lsp_broker" in method_block
         assert "resolve_validation_preference_capture_store_fn=(" in method_block
@@ -122,7 +129,8 @@ class TestOrchestratorSeamBoundaries:
     def test_plugin_loading_keeps_enabled_gate_in_plugin_support(self) -> None:
         method_block = _extract_method_block("_load_plugins")
 
-        assert "return load_orchestrator_plugins(" in method_block
+        assert "return _typed_plugin_load_result(" in method_block
+        assert "load_orchestrator_plugins(" in method_block
         assert "plugins_enabled=bool(self._config.plugins.enabled)" in method_block
         assert "if not self._config.plugins.enabled" not in method_block
         assert "return HookBus(), []" not in method_block

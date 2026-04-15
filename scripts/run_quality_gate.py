@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import math
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -24,11 +25,22 @@ HOTSPOT_TARGETS = [
     "src/ace_lite/plan_quick.py",
     "src/ace_lite/plan_quick_strategies.py",
     "src/ace_lite/benchmark/report.py",
+    "src/ace_lite/context_report.py",
     "src/ace_lite/benchmark/report_observability.py",
     "src/ace_lite/benchmark/summaries.py",
 ]
 
 HOTSPOT_CHECK_NAMES = ("ruff_hotspots", "mypy_hotspots")
+
+MYPY_HOTSPOT_COMPANION_TARGETS = {
+    "src/ace_lite/orchestrator.py": (
+        "src/ace_lite/orchestrator_runtime_support_types.py",
+        "src/ace_lite/orchestrator_runtime_finalization.py",
+        "src/ace_lite/orchestrator_runtime_support.py",
+        "src/ace_lite/cli_app/orchestrator_factory_support.py",
+        "src/ace_lite/cli_app/orchestrator_factory.py",
+    ),
+}
 
 
 @dataclass(slots=True)
@@ -344,6 +356,60 @@ def _compute_python_complexity(*, path: Path) -> dict[str, Any]:
         "score": int(max(1, visitor.score)),
         "function_count": int(visitor.function_count),
         "error": None,
+    }
+
+
+def _default_complexity_ceiling(*, score: int | None) -> int | None:
+    if not isinstance(score, int):
+        return None
+    return int(score + max(2, math.ceil(score * 0.1)))
+
+
+def _build_hotspot_baseline_payload(
+    *,
+    root: Path,
+    coverage_json_path: Path,
+    hotspot_paths: list[str] | None = None,
+) -> dict[str, Any]:
+    coverage_payload = _load_coverage_payload(path=coverage_json_path)
+    requested_paths = hotspot_paths if isinstance(hotspot_paths, list) else HOTSPOT_TARGETS
+    ordered_paths = [
+        _normalize_hotspot_path(item)
+        for item in requested_paths
+        if _normalize_hotspot_path(item)
+    ]
+    hotspots: list[dict[str, Any]] = []
+    for hotspot_path in ordered_paths:
+        target_path = (root / hotspot_path).resolve()
+        coverage_entry = _resolve_coverage_entry(
+            root=root,
+            coverage_payload=coverage_payload,
+            hotspot_path=hotspot_path,
+        )
+        coverage_summary = (
+            coverage_entry.get("summary", {})
+            if isinstance(coverage_entry.get("summary"), dict)
+            else {}
+        )
+        coverage_percent = coverage_summary.get("percent_covered")
+        complexity = _compute_python_complexity(path=target_path)
+        complexity_score = (
+            int(complexity["score"]) if isinstance(complexity.get("score"), int) else None
+        )
+        hotspots.append(
+            {
+                "path": hotspot_path,
+                "coverage_percent": float(coverage_percent)
+                if isinstance(coverage_percent, (int, float))
+                else None,
+                "complexity_score": complexity_score,
+                "complexity_ceiling": _default_complexity_ceiling(score=complexity_score),
+            }
+        )
+    return {
+        "mode": "report_only",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "hotspots": hotspots,
     }
 
 
@@ -676,16 +742,22 @@ def _quality_hotspot_commands(
     python_exe: str,
     hotspot_paths: list[str] | None = None,
 ) -> list[tuple[str, list[str]]]:
-    targets = tuple(
+    base_targets = tuple(
         _normalize_hotspot_path(path)
         for path in (hotspot_paths if isinstance(hotspot_paths, list) else HOTSPOT_TARGETS)
         if _normalize_hotspot_path(path)
     )
-    if not targets:
+    if not base_targets:
         return []
+    mypy_targets = list(base_targets)
+    for path in base_targets:
+        for companion in MYPY_HOTSPOT_COMPANION_TARGETS.get(path, ()):
+            normalized = _normalize_hotspot_path(companion)
+            if normalized and normalized not in mypy_targets:
+                mypy_targets.append(normalized)
     return [
-        ("ruff_hotspots", [python_exe, "-m", "ruff", "check", *targets]),
-        ("mypy_hotspots", [python_exe, "-m", "mypy", *targets]),
+        ("ruff_hotspots", [python_exe, "-m", "ruff", "check", *base_targets]),
+        ("mypy_hotspots", [python_exe, "-m", "mypy", *mypy_targets]),
     ]
 
 
@@ -701,6 +773,7 @@ def run_quality_gate(
     capture_friction: bool = False,
     include_hotspot_checks: bool = True,
     hotspot_paths: list[str] | None = None,
+    refresh_hotspot_baseline: bool = False,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     coverage_json_path = output_dir / "coverage.json"
@@ -876,6 +949,21 @@ def run_quality_gate(
                 }
             )
 
+    if refresh_hotspot_baseline:
+        resolved_hotspot_baseline.parent.mkdir(parents=True, exist_ok=True)
+        resolved_hotspot_baseline.write_text(
+            json.dumps(
+                _build_hotspot_baseline_payload(
+                    root=root,
+                    coverage_json_path=coverage_json_path,
+                    hotspot_paths=hotspot_paths,
+                ),
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
     summary = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "root": str(root),
@@ -942,6 +1030,11 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--refresh-hotspot-baseline",
+        action="store_true",
+        help="Rewrite hotspot baseline metadata from the current coverage/complexity snapshot.",
+    )
+    parser.add_argument(
         "--fail-on-new-vulns",
         action="store_true",
         help="Fail when pip-audit reports vulnerabilities not present in baseline.",
@@ -989,6 +1082,7 @@ def main() -> int:
         capture_friction=bool(args.capture_friction),
         include_hotspot_checks=bool(args.include_hotspot_checks),
         hotspot_paths=list(args.hotspot_paths) if isinstance(args.hotspot_paths, list) else None,
+        refresh_hotspot_baseline=bool(args.refresh_hotspot_baseline),
     )
 
     summary_path = output_dir / "summary.json"

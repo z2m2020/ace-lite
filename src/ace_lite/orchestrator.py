@@ -91,6 +91,44 @@ from ace_lite.token_estimator import (
 logger = logging.getLogger(__name__)
 
 
+def _typed_dict(value: Any) -> dict[str, Any]:
+    return cast(dict[str, Any], value)
+
+
+def _typed_optional_dict(value: Any) -> dict[str, Any] | None:
+    return cast(dict[str, Any] | None, value)
+
+
+def _typed_path(value: Any) -> Path:
+    return cast(Path, value)
+
+
+def _typed_str(value: Any) -> str:
+    return cast(str, value)
+
+
+def _typed_int(value: Any) -> int:
+    return cast(int, value)
+
+
+def _typed_list_str(value: Any) -> list[str]:
+    return cast(list[str], value)
+
+
+def _typed_plugin_load_result(value: Any) -> tuple[HookBus, list[str]]:
+    return cast(tuple[HookBus, list[str]], value)
+
+
+def _typed_namespace_result(value: Any) -> tuple[str | None, str, str]:
+    return cast(tuple[str | None, str, str], value)
+
+
+def _typed_replay_load_result(
+    value: Any,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    return cast(tuple[dict[str, Any] | None, dict[str, Any]], value)
+
+
 class AceOrchestrator:
     PIPELINE_ORDER = CORE_PIPELINE_ORDER
     CANDIDATE_RANKERS = ("heuristic", "bm25_lite", "hybrid_re2", "rrf_hybrid")
@@ -206,7 +244,7 @@ class AceOrchestrator:
                 "errors": [],
                 "results": [],
             }
-        return self._runtime_manager.shutdown()
+        return _typed_dict(self._runtime_manager.shutdown())
 
     def plan(
         self,
@@ -293,8 +331,7 @@ class AceOrchestrator:
             contract_error=contract_error,
             replay_cache_info=replay_cache_info,
         )
-        payload = finalization_result.payload
-        return payload
+        return _typed_dict(finalization_result.payload)
 
     def _build_registry(self) -> StageRegistry:
         registry = StageRegistry()
@@ -356,7 +393,7 @@ class AceOrchestrator:
 
     @staticmethod
     def _context_state(*, ctx: StageContext) -> dict[str, Any]:
-        return ctx.state
+        return _typed_dict(ctx.state)
 
     @classmethod
     def _get_stage_state(cls, *, ctx: StageContext, stage_name: str) -> dict[str, Any]:
@@ -427,19 +464,23 @@ class AceOrchestrator:
         self._last_learning_router_rollout_decision = dict(
             payload_view.learning_router_rollout_decision
         )
-        return payload
+        return _typed_dict(payload)
 
     def _default_validation_payload(self) -> dict[str, Any]:
-        return build_default_validation_payload(
-            policy_version=str(self._config.retrieval.policy_version)
+        return _typed_dict(
+            build_default_validation_payload(
+                policy_version=str(self._config.retrieval.policy_version)
+            )
         )
 
     def _extract_source_plan_validation_feedback_summary(
         self,
         source_plan_stage: Any,
     ) -> dict[str, Any]:
-        return self._source_plan_replay_service.extract_source_plan_validation_feedback_summary(
-            source_plan_stage
+        return _typed_dict(
+            self._source_plan_replay_service.extract_source_plan_validation_feedback_summary(
+                source_plan_stage
+            )
         )
 
     def _capture_long_term_stage_observation(
@@ -449,27 +490,35 @@ class AceOrchestrator:
         ctx: StageContext,
         stage_payload: dict[str, Any],
     ) -> dict[str, Any] | None:
-        return self._memory_context_service.capture_long_term_stage_observation(
-            stage_name=stage_name,
-            ctx=ctx,
-            stage_payload=stage_payload,
+        return _typed_optional_dict(
+            self._memory_context_service.capture_long_term_stage_observation(
+                stage_name=stage_name,
+                ctx=ctx,
+                stage_payload=stage_payload,
+            )
         )
 
     def _resolve_plan_replay_cache_path(self, *, root: str) -> Path:
-        return self._source_plan_replay_service.resolve_plan_replay_cache_path(
-            root=root
+        return _typed_path(
+            self._source_plan_replay_service.resolve_plan_replay_cache_path(
+                root=root
+            )
         )
 
     def _extract_source_plan_failure_signal_summary(
         self,
         source_plan_stage: Any,
     ) -> dict[str, Any]:
-        return self._source_plan_replay_service.extract_source_plan_failure_signal_summary(
-            source_plan_stage
+        return _typed_dict(
+            self._source_plan_replay_service.extract_source_plan_failure_signal_summary(
+                source_plan_stage
+            )
         )
 
     def _default_plan_replay_cache_info(self, *, root: str) -> dict[str, Any]:
-        return self._source_plan_replay_service.default_plan_replay_cache_info(root=root)
+        return _typed_dict(
+            self._source_plan_replay_service.default_plan_replay_cache_info(root=root)
+        )
 
     def _load_replayed_source_plan(
         self,
@@ -478,10 +527,12 @@ class AceOrchestrator:
         replay_cache_path: Path,
         replay_cache_key: str,
     ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
-        return self._source_plan_replay_service.load_replayed_source_plan(
-            root=root,
-            replay_cache_path=replay_cache_path,
-            replay_cache_key=replay_cache_key,
+        return _typed_replay_load_result(
+            self._source_plan_replay_service.load_replayed_source_plan(
+                root=root,
+                replay_cache_path=replay_cache_path,
+                replay_cache_key=replay_cache_key,
+            )
         )
 
     def _store_source_plan_replay(
@@ -494,13 +545,15 @@ class AceOrchestrator:
         source_plan_stage: Any,
         replay_cache_info: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._source_plan_replay_service.store_source_plan_replay(
-            query=query,
-            repo=repo,
-            replay_cache_path=replay_cache_path,
-            replay_cache_key=replay_cache_key,
-            source_plan_stage=source_plan_stage,
-            replay_cache_info=replay_cache_info,
+        return _typed_dict(
+            self._source_plan_replay_service.store_source_plan_replay(
+                query=query,
+                repo=repo,
+                replay_cache_path=replay_cache_path,
+                replay_cache_key=replay_cache_key,
+                source_plan_stage=source_plan_stage,
+                replay_cache_info=replay_cache_info,
+            )
         )
 
     def _build_plan_replay_key(
@@ -518,36 +571,44 @@ class AceOrchestrator:
         augment_stage: Any,
         skills_stage: Any,
     ) -> str:
-        return self._source_plan_replay_service.build_plan_replay_key(
-            query=query,
-            repo=repo,
-            root=root,
-            temporal_input=temporal_input,
-            plugins_loaded=plugins_loaded,
-            conventions_hashes=conventions_hashes,
-            memory_stage=memory_stage,
-            index_stage=index_stage,
-            repomap_stage=repomap_stage,
-            augment_stage=augment_stage,
-            skills_stage=skills_stage,
+        return _typed_str(
+            self._source_plan_replay_service.build_plan_replay_key(
+                query=query,
+                repo=repo,
+                root=root,
+                temporal_input=temporal_input,
+                plugins_loaded=plugins_loaded,
+                conventions_hashes=conventions_hashes,
+                memory_stage=memory_stage,
+                index_stage=index_stage,
+                repomap_stage=repomap_stage,
+                augment_stage=augment_stage,
+                skills_stage=skills_stage,
+            )
         )
 
     @staticmethod
     def _build_memory_replay_fingerprint(*, memory_payload: dict[str, Any]) -> str:
-        return SourcePlanReplayService.build_memory_replay_fingerprint(
-            memory_payload=memory_payload
+        return _typed_str(
+            SourcePlanReplayService.build_memory_replay_fingerprint(
+                memory_payload=memory_payload
+            )
         )
 
     @staticmethod
     def _build_index_replay_fingerprint(*, index_payload: dict[str, Any]) -> str:
-        return SourcePlanReplayService.build_index_replay_fingerprint(
-            index_payload=index_payload
+        return _typed_str(
+            SourcePlanReplayService.build_index_replay_fingerprint(
+                index_payload=index_payload
+            )
         )
 
     @staticmethod
     def _build_repomap_replay_fingerprint(*, repomap_payload: dict[str, Any]) -> str:
-        return SourcePlanReplayService.build_repomap_replay_fingerprint(
-            repomap_payload=repomap_payload
+        return _typed_str(
+            SourcePlanReplayService.build_repomap_replay_fingerprint(
+                repomap_payload=repomap_payload
+            )
         )
 
     @staticmethod
@@ -557,29 +618,37 @@ class AceOrchestrator:
         index_payload: dict[str, Any],
         repomap_payload: dict[str, Any],
     ) -> str:
-        return SourcePlanReplayService.build_repo_inputs_replay_fingerprint(
-            root=root,
-            index_payload=index_payload,
-            repomap_payload=repomap_payload,
+        return _typed_str(
+            SourcePlanReplayService.build_repo_inputs_replay_fingerprint(
+                root=root,
+                index_payload=index_payload,
+                repomap_payload=repomap_payload,
+            )
         )
 
     @staticmethod
     def _build_augment_replay_fingerprint(*, augment_payload: dict[str, Any]) -> str:
-        return SourcePlanReplayService.build_augment_replay_fingerprint(
-            augment_payload=augment_payload
+        return _typed_str(
+            SourcePlanReplayService.build_augment_replay_fingerprint(
+                augment_payload=augment_payload
+            )
         )
 
     @staticmethod
     def _build_skills_replay_fingerprint(*, skills_payload: dict[str, Any]) -> str:
-        return SourcePlanReplayService.build_skills_replay_fingerprint(
-            skills_payload=skills_payload
+        return _typed_str(
+            SourcePlanReplayService.build_skills_replay_fingerprint(
+                skills_payload=skills_payload
+            )
         )
 
     def _load_plugins(self, *, root: str) -> tuple[HookBus, list[str]]:
-        return load_orchestrator_plugins(
-            plugins_enabled=bool(self._config.plugins.enabled),
-            plugin_loader=self._plugin_loader,
-            root=root,
+        return _typed_plugin_load_result(
+            load_orchestrator_plugins(
+                plugins_enabled=bool(self._config.plugins.enabled),
+                plugin_loader=self._plugin_loader,
+                root=root,
+            )
         )
 
     @staticmethod
@@ -590,21 +659,25 @@ class AceOrchestrator:
         replay_cache_info: dict[str, Any] | None,
         trace_export: dict[str, Any],
     ) -> list[str]:
-        return RuntimeObservabilityService.collect_durable_stats_reasons(
-            stage_metrics=stage_metrics,
-            contract_error=contract_error,
-            replay_cache_info=replay_cache_info,
-            trace_export=trace_export,
+        return _typed_list_str(
+            RuntimeObservabilityService.collect_durable_stats_reasons(
+                stage_metrics=stage_metrics,
+                contract_error=contract_error,
+                replay_cache_info=replay_cache_info,
+                trace_export=trace_export,
+            )
         )
 
     def _estimate_tokens(self, text: str) -> int:
-        return estimate_tokens(text, model=self._tokenizer_model)
+        return _typed_int(estimate_tokens(text, model=self._tokenizer_model))
 
     @staticmethod
     def _normalize_namespace_component(*, value: str, fallback: str) -> str:
-        return MemoryContextService.normalize_namespace_component(
-            value=value,
-            fallback=fallback,
+        return _typed_str(
+            MemoryContextService.normalize_namespace_component(
+                value=value,
+                fallback=fallback,
+            )
         )
 
     def _resolve_memory_namespace(
@@ -613,26 +686,29 @@ class AceOrchestrator:
         repo: str,
         root: str,
     ) -> tuple[str | None, str, str]:
-        return self._memory_context_service.resolve_memory_namespace(
-            repo=repo,
-            root=root,
+        return _typed_namespace_result(
+            self._memory_context_service.resolve_memory_namespace(
+                repo=repo,
+                root=root,
+            )
         )
 
     def _resolve_profile_store(self, *, root: str) -> ProfileStore:
-        return self._memory_context_service.resolve_profile_store(
-            root=root,
-        )
+        return cast(ProfileStore, self._memory_context_service.resolve_profile_store(root=root))
 
     def _resolve_capture_notes_path(self, *, root: str) -> Path:
-        return self._memory_context_service.resolve_capture_notes_path(root=root)
+        return _typed_path(self._memory_context_service.resolve_capture_notes_path(root=root))
 
     def _resolve_validation_preference_capture_store(
         self,
         *,
         root: str,
     ) -> DurablePreferenceCaptureStore | None:
-        return self._memory_context_service.resolve_validation_preference_capture_store(
-            root=root,
+        return cast(
+            DurablePreferenceCaptureStore | None,
+            self._memory_context_service.resolve_validation_preference_capture_store(
+                root=root,
+            ),
         )
 
     def _capture_memory_signal(
@@ -644,12 +720,14 @@ class AceOrchestrator:
         namespace: str | None,
         matched_keywords: list[str],
     ) -> dict[str, Any]:
-        return self._memory_context_service.capture_memory_signal(
-            query=query,
-            repo=repo,
-            root=root,
-            namespace=namespace,
-            matched_keywords=matched_keywords,
+        return _typed_dict(
+            self._memory_context_service.capture_memory_signal(
+                query=query,
+                repo=repo,
+                root=root,
+                namespace=namespace,
+                matched_keywords=matched_keywords,
+            )
         )
 
     def _run_memory(self, *, ctx: StageContext) -> dict[str, Any]:
@@ -704,86 +782,102 @@ class AceOrchestrator:
                 self._config.memory.postprocess.diversity_similarity_threshold
             ),
         )
-        return self._memory_context_service.attach_memory_stage_payloads(
-            payload=payload,
-            query=query,
-            repo=repo,
-            root=root,
-            namespace=runtime.container_tag,
-            matched_keywords=list(runtime.extraction.matched_keywords),
-            triggered=bool(runtime.extraction.triggered),
-            reason=runtime.extraction.reason,
-            query_length=runtime.extraction.query_length,
-            tokenizer_model=self._tokenizer_model,
+        return _typed_dict(
+            self._memory_context_service.attach_memory_stage_payloads(
+                payload=payload,
+                query=query,
+                repo=repo,
+                root=root,
+                namespace=runtime.container_tag,
+                matched_keywords=list(runtime.extraction.matched_keywords),
+                triggered=bool(runtime.extraction.triggered),
+                reason=runtime.extraction.reason,
+                query_length=runtime.extraction.query_length,
+                tokenizer_model=self._tokenizer_model,
+            )
         )
 
     def _run_index(self, *, ctx: StageContext) -> dict[str, Any]:
-        return run_orchestrator_index_stage(
-            ctx=ctx,
-            config=self._config,
-            tokenizer_model=self._tokenizer_model,
-            cochange_neighbor_cap=self._COCHANGE_NEIGHBOR_CAP,
-            cochange_min_neighbor_score=self._COCHANGE_MIN_NEIGHBOR_SCORE,
-            cochange_max_boost=self._COCHANGE_MAX_BOOST,
+        return _typed_dict(
+            run_orchestrator_index_stage(
+                ctx=ctx,
+                config=self._config,
+                tokenizer_model=self._tokenizer_model,
+                cochange_neighbor_cap=self._COCHANGE_NEIGHBOR_CAP,
+                cochange_min_neighbor_score=self._COCHANGE_MIN_NEIGHBOR_SCORE,
+                cochange_max_boost=self._COCHANGE_MAX_BOOST,
+            )
         )
 
     def _run_repomap(self, *, ctx: StageContext) -> dict[str, Any]:
-        return run_orchestrator_repomap_stage(
-            ctx=ctx,
-            config=self._config,
-            tokenizer_model=self._tokenizer_model,
+        return _typed_dict(
+            run_orchestrator_repomap_stage(
+                ctx=ctx,
+                config=self._config,
+                tokenizer_model=self._tokenizer_model,
+            )
         )
 
     def _run_augment(self, *, ctx: StageContext) -> dict[str, Any]:
-        return run_orchestrator_augment_stage(
-            ctx=ctx,
-            config=self._config,
-            lsp_broker=self._lsp_broker,
+        return _typed_dict(
+            run_orchestrator_augment_stage(
+                ctx=ctx,
+                config=self._config,
+                lsp_broker=self._lsp_broker,
+            )
         )
 
     def _run_skills(self, *, ctx: StageContext) -> dict[str, Any]:
-        return run_orchestrator_skills_stage(
-            ctx=ctx,
-            config=self._config,
-            skill_manifest=self._skill_manifest,
+        return _typed_dict(
+            run_orchestrator_skills_stage(
+                ctx=ctx,
+                config=self._config,
+                skill_manifest=self._skill_manifest,
+            )
         )
 
     def _precompute_skills_route(self, *, ctx: StageContext) -> dict[str, Any]:
-        return precompute_orchestrator_skills_route(
-            ctx=ctx,
-            config=self._config,
-            skill_manifest=self._skill_manifest,
+        return _typed_dict(
+            precompute_orchestrator_skills_route(
+                ctx=ctx,
+                config=self._config,
+                skill_manifest=self._skill_manifest,
+            )
         )
 
     def _run_context_refine(self, *, ctx: StageContext) -> dict[str, Any]:
-        return run_context_refine(ctx=ctx)
+        return _typed_dict(run_context_refine(ctx=ctx))
 
     def _run_history_channel(self, *, ctx: StageContext) -> dict[str, Any]:
-        return run_history_channel(ctx=ctx)
+        return _typed_dict(run_history_channel(ctx=ctx))
 
     def _run_source_plan(self, *, ctx: StageContext) -> dict[str, Any]:
         runtime = build_orchestrator_source_plan_runtime(
             config=self._config,
             pipeline_order=tuple(self.PIPELINE_ORDER),
         )
-        return run_source_plan(
-            ctx=ctx,
-            pipeline_order=runtime.pipeline_order,
-            chunk_top_k=runtime.chunk_top_k,
-            chunk_per_file_limit=runtime.chunk_per_file_limit,
-            chunk_token_budget=runtime.chunk_token_budget,
-            chunk_disclosure=runtime.chunk_disclosure,
-            policy_version=runtime.policy_version,
+        return _typed_dict(
+            run_source_plan(
+                ctx=ctx,
+                pipeline_order=runtime.pipeline_order,
+                chunk_top_k=runtime.chunk_top_k,
+                chunk_per_file_limit=runtime.chunk_per_file_limit,
+                chunk_token_budget=runtime.chunk_token_budget,
+                chunk_disclosure=runtime.chunk_disclosure,
+                policy_version=runtime.policy_version,
+            )
         )
 
     def _run_validation(self, *, ctx: StageContext) -> dict[str, Any]:
-        return run_orchestrator_validation_stage(
-            ctx=ctx,
-            config=self._config,
-            lsp_broker=self._lsp_broker,
-            resolve_validation_preference_capture_store_fn=(
-                self._resolve_validation_preference_capture_store
-            ),
+        return _typed_dict(
+            run_orchestrator_validation_stage(
+                ctx=ctx,
+                config=self._config,
+                lsp_broker=self._lsp_broker,
+                resolve_validation_preference_capture_store_fn=(
+                    self._resolve_validation_preference_capture_store
+                ),
+            )
         )
 
     @staticmethod

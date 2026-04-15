@@ -843,7 +843,7 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
         "risk_upgrade_precision_gain_threshold": 0.0,
         "risk_upgrade_precision_gain_passed": True,
         "latency_p95_ms": 30.0,
-        "latency_p95_ms_threshold": 850.0,
+        "latency_p95_ms_threshold": 650.0,
         "latency_p95_ms_passed": True,
         "gate_passed": False,
     }
@@ -1104,7 +1104,7 @@ def test_benchmark_runner_preserves_failed_retrieval_control_plane_gate_summary(
         "risk_upgrade_precision_gain_threshold": 0.0,
         "risk_upgrade_precision_gain_passed": True,
         "latency_p95_ms": 30.0,
-        "latency_p95_ms_threshold": 850.0,
+        "latency_p95_ms_threshold": 650.0,
         "latency_p95_ms_passed": True,
         "gate_passed": False,
     }

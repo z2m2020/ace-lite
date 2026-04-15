@@ -184,6 +184,8 @@ def test_orchestrator_pipeline_and_injected_client(tmp_path: Path, fake_skill_ma
         "repomap",
         "augment",
         "skills",
+        "history_channel",
+        "context_refine",
         "source_plan",
         "validation",
     ]
@@ -203,7 +205,7 @@ def test_orchestrator_pipeline_and_injected_client(tmp_path: Path, fake_skill_ma
     assert payload["validation"]["enabled"] is False
     assert payload["validation"]["reason"] == "disabled"
     assert isinstance(payload["observability"]["stage_metrics"], list)
-    assert len(payload["observability"]["stage_metrics"]) == 7
+    assert len(payload["observability"]["stage_metrics"]) == 9
     assert payload["source_plan"]["failure_signal_summary"]["status"] == "skipped"
     assert (
         payload["observability"]["source_plan_failure_signal_summary"]["status"]
@@ -710,7 +712,7 @@ def test_orchestrator_plan_replay_cache_hits_on_second_run(
     assert first["repomap"] == second["repomap"]
     assert first["skills"]["selected"] == second["skills"]["selected"]
     assert first["skills"]["routing_source"] == second["skills"]["routing_source"]
-    assert len(second["observability"]["stage_metrics"]) == 7
+    assert len(second["observability"]["stage_metrics"]) == 9
     assert second["observability"]["stage_metrics"][-1]["stage"] == "validation"
 
 
@@ -1442,6 +1444,8 @@ def test_cli_plan_outputs_json(tmp_path: Path, fake_skill_manifest: list[dict[st
         "repomap",
         "augment",
         "skills",
+        "history_channel",
+        "context_refine",
         "source_plan",
         "validation",
     ]

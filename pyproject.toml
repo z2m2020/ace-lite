@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ace-lite-engine"
-version = "0.3.79"
+version = "0.3.80"
 description = "Local-first Active Context Engine for AI coding"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -62,6 +62,7 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
+  "ace_lite.orchestrator",
   "ace_lite.orchestrator_runtime_support_types",
   "ace_lite.orchestrator_runtime_finalization",
   "ace_lite.orchestrator_runtime_support",

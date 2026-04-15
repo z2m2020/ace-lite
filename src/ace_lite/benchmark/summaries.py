@@ -22,10 +22,10 @@ from ace_lite.benchmark.summary_quality import (
     build_comparison_lane_summary as _build_comparison_lane_summary_impl,
 )
 from ace_lite.benchmark.summary_quality import (
-    build_decision_observability_summary as _build_decision_observability_summary_impl,
+    build_context_refine_summary as _build_context_refine_summary_impl,
 )
 from ace_lite.benchmark.summary_quality import (
-    build_context_refine_summary as _build_context_refine_summary_impl,
+    build_decision_observability_summary as _build_decision_observability_summary_impl,
 )
 from ace_lite.benchmark.summary_quality import (
     build_evidence_insufficiency_summary as _build_evidence_insufficiency_summary_impl,
@@ -75,6 +75,8 @@ from ace_lite.benchmark.summary_router import (
 from ace_lite.benchmark.summary_router import (
     build_learning_router_rollout_summary as _build_learning_router_rollout_summary_impl,
 )
+
+RETRIEVAL_CONTROL_PLANE_LATENCY_P95_THRESHOLD_MS = 650.0
 
 
 def aggregate_metrics(case_results: list[dict[str, Any]]) -> dict[str, float]:
@@ -1608,7 +1610,7 @@ def build_retrieval_control_plane_gate_summary(
 
     shadow_coverage_threshold = 0.8
     risk_upgrade_precision_gain_threshold = 0.0
-    latency_p95_ms_threshold = 850.0
+    latency_p95_ms_threshold = RETRIEVAL_CONTROL_PLANE_LATENCY_P95_THRESHOLD_MS
 
     benchmark_regression_passed = (
         regression_evaluated and not benchmark_regression_detected
@@ -2611,6 +2613,7 @@ __all__ = [
     "build_agent_loop_control_plane_summary",
     "build_chunk_cache_contract_summary",
     "build_chunk_stage_miss_summary",
+    "build_context_refine_summary",
     "build_decision_observability_summary",
     "build_deep_symbol_summary",
     "build_evidence_insufficiency_summary",
@@ -2627,15 +2630,14 @@ __all__ = [
     "build_retrieval_default_strategy_summary",
     "build_retrieval_frontier_gate_summary",
     "build_slo_budget_summary",
-    "build_context_refine_summary",
     "build_source_plan_card_summary",
     "build_source_plan_failure_signal_summary",
     "build_source_plan_validation_feedback_summary",
     "build_stage_latency_summary",
-    "build_wave1_context_governance_summary",
     "build_validation_branch_gate_summary",
     "build_validation_branch_summary",
     "build_validation_probe_summary",
+    "build_wave1_context_governance_summary",
     "build_workload_taxonomy_summary",
     "compare_metrics",
 ]

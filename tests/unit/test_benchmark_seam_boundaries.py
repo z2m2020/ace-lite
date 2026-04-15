@@ -15,6 +15,7 @@ class TestBenchmarkSeamBoundaries:
 
         expected_tokens = (
             "from ace_lite.benchmark.report_observability import (",
+            "from ace_lite.benchmark.report_sections import (",
             "append_adaptive_router_observability_summary",
             "append_decision_observability_summary",
             "append_evidence_insufficiency_summary",
@@ -26,7 +27,10 @@ class TestBenchmarkSeamBoundaries:
             "append_retrieval_control_plane_gate_summary",
             "append_retrieval_context_observability_summary",
             "append_retrieval_default_strategy_summary",
+            "append_retrieval_frontier_gate_summary",
             "append_reward_log_summary",
+            "append_validation_branch_gate_summary",
+            "append_validation_branch_summary",
             "format_decision_event",
         )
         for token in expected_tokens:
@@ -41,9 +45,12 @@ class TestBenchmarkSeamBoundaries:
             "def _append_retrieval_control_plane_gate_summary(",
             "def _append_retrieval_context_observability_summary(",
             "def _append_retrieval_default_strategy_summary(",
+            "def _append_retrieval_frontier_gate_summary(",
             "def _append_reward_log_summary(",
             "def _append_adaptive_router_observability_summary(",
             "def _append_decision_observability_summary(",
+            "def _append_validation_branch_gate_summary(",
+            "def _append_validation_branch_summary(",
         )
         for token in forbidden_local_helpers:
             assert token not in report_text

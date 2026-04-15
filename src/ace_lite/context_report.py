@@ -14,13 +14,28 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
+from ace_lite.context_report_sections import (
+    append_candidate_review_section,
+    append_confidence_breakdown_section,
+    append_context_refine_section,
+    append_core_nodes_section,
+    append_handoff_payload_section,
+    append_history_channel_section,
+    append_history_hits_section,
+    append_knowledge_gaps_section,
+    append_session_end_report_section,
+    append_suggested_questions_section,
+    append_surprising_connections_section,
+    append_validation_findings_section,
+    append_warnings_section,
+)
 from ace_lite.plan_payload_view import (
     coerce_payload,
-    resolve_candidate_review,
     resolve_candidate_chunks,
     resolve_candidate_files,
-    resolve_context_refine,
+    resolve_candidate_review,
     resolve_confidence_summary,
+    resolve_context_refine,
     resolve_evidence_summary,
     resolve_history_channel,
     resolve_pipeline_stage_names,
@@ -940,267 +955,19 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
         lines.append(f"- **Has validation payload**: {'yes' if has_val else 'no'}")
         lines.append("")
 
-    history_channel = _dict(p.get("history_channel", {}))
-    if history_channel:
-        history_summary = _dict(history_channel.get("history_hits", {}))
-        lines.append("## History Channel")
-        lines.append(
-            "- **Status**: {status}; focused_files={focus}; commits={commits}; hits={hits}".format(
-                status=_str(history_channel.get("reason", "disabled")) or "disabled",
-                focus=len(_list(history_channel.get("focused_files", []))),
-                commits=_int(history_channel.get("commit_count", 0)),
-                hits=_int(history_channel.get("hit_count", 0)),
-            )
-        )
-        for item in _list(history_summary.get("hits", []))[:5]:
-            lines.append(
-                "- `{hash}` {subject}".format(
-                    hash=_str(item.get("hash", ""))[:12],
-                    subject=_str(item.get("subject", "")),
-                )
-            )
-        for item in _list(history_channel.get("recommendations", []))[:3]:
-            lines.append(f"- recommendation: {_str(item)}")
-        lines.append("")
-
-    history_hits = _dict(p.get("history_hits", {}))
-    if history_hits:
-        lines.append("## History Hits")
-        hits = _list(history_hits.get("hits", []))
-        lines.append(
-            "- **Status**: {status}; hits={hits}; commits={commits}".format(
-                status=_str(history_hits.get("reason", "disabled")) or "disabled",
-                hits=len(hits),
-                commits=_int(history_hits.get("commit_count", 0)),
-            )
-        )
-        if hits:
-            for item in hits[:5]:
-                lines.append(
-                    "- `{hash}` {subject}".format(
-                        hash=_str(item.get("hash", ""))[:12],
-                        subject=_str(item.get("subject", "")),
-                    )
-                )
-                matched_paths = _list(item.get("matched_paths", []))
-                if matched_paths:
-                    lines.append(
-                        "  - matched_paths: {paths}".format(
-                            paths=", ".join(_str(path) for path in matched_paths[:3])
-                        )
-                    )
-        lines.append("")
-
-    context_refine = _dict(p.get("context_refine", {}))
-    if context_refine:
-        lines.append("## Context Refine")
-        decision_counts = _dict(context_refine.get("decision_counts", {}))
-        review = _dict(context_refine.get("candidate_review", {}))
-        lines.append(
-            "- **Status**: {status}; focused_files={focus}; keep={keep}; downrank={downrank}; drop={drop}; need_more_read={need_more_read}".format(
-                status=_str(review.get("status", "")) or "unknown",
-                focus=len(_list(context_refine.get("focused_files", []))),
-                keep=_int(decision_counts.get("keep", 0)),
-                downrank=_int(decision_counts.get("downrank", 0)),
-                drop=_int(decision_counts.get("drop", 0)),
-                need_more_read=_int(decision_counts.get("need_more_read", 0)),
-            )
-        )
-        for item in _list(review.get("recommendations", []))[:3]:
-            lines.append(f"- recommendation: {_str(item)}")
-        lines.append("")
-
-    # Core Nodes
-    core_nodes = _list(p.get("core_nodes", []))
-    if core_nodes:
-        lines.append("## Core Nodes")
-        lines.append(f"*Total: {len(core_nodes)}*")
-        lines.append("")
-        for node in core_nodes[:10]:
-            score = _float(node.get("score", 0.0))
-            source = _str(node.get("source", ""))
-            reason = _str(node.get("reason", ""))
-            conf = _str(node.get("evidence_confidence", ""))
-            conf_str = f" [`{conf}`]" if conf else ""
-            lines.append(
-                f"- **{_str(node.get('label', ''))}** "
-                f"(score={score:.2f}, source={source}){conf_str}"
-            )
-            lines.append(f"  - path: `{_str(node.get('path', ''))}`")
-            lines.append(f"  - reason: {reason}")
-        if len(core_nodes) > 10:
-            lines.append(f"  ... *and {len(core_nodes) - 10} more*")
-        lines.append("")
-
-    candidate_review = _dict(p.get("candidate_review", {}))
-    if candidate_review:
-        lines.append("## Candidate Review")
-        lines.append(
-            "- **Status**: {status}; focus_files={focus}; chunks={chunks}; validation_tests={tests}".format(
-                status=_str(candidate_review.get("status", "")) or "unknown",
-                focus=_int(candidate_review.get("focus_file_count", 0)),
-                chunks=_int(candidate_review.get("candidate_chunk_count", 0)),
-                tests=_int(candidate_review.get("validation_test_count", 0)),
-            )
-        )
-        watch_items = _list(candidate_review.get("watch_items", []))
-        if watch_items:
-            lines.append(
-                "- **Watch items**: {items}".format(
-                    items=", ".join(_str(item) for item in watch_items)
-                )
-            )
-        for item in _list(candidate_review.get("recommendations", []))[:3]:
-            lines.append(f"- recommendation: {_str(item)}")
-        lines.append("")
-
-    # Surprising Connections
-    surprising = _list(p.get("surprising_connections", []))
-    lines.append("## Surprising Connections")
-    if surprising:
-        lines.append(f"*Total: {len(surprising)}*")
-        lines.append("")
-        for conn in surprising[:8]:
-            boost = ", ".join(_list(conn.get("boost_sources", [])))
-            lines.append(
-                f"- **{_str(conn.get('label', _str(conn.get('path', ''))))}** "
-                f"(boost: {boost or 'cross_directory'})"
-            )
-            related = _str(conn.get("related_path", ""))
-            if related:
-                lines.append(f"  - related: `{related}`")
-    else:
-        lines.append("*No surprising connections detected.*")
-    lines.append("")
-
-    # Confidence Breakdown
-    breakdown = _dict(p.get("confidence_breakdown", {}))
-    if breakdown:
-        lines.append("## Confidence Breakdown")
-        total = _int(breakdown.get("total_count", 0))
-        extracted = _int(breakdown.get("extracted_count", 0))
-        inferred = _int(breakdown.get("inferred_count", 0))
-        ambiguous = _int(breakdown.get("ambiguous_count", 0))
-        unknown = _int(breakdown.get("unknown_count", 0))
-        lines.append(f"- **EXTRACTED** (direct evidence): {extracted}/{total}")
-        lines.append(f"- **INFERRED** (neighbor/hint): {inferred}/{total}")
-        lines.append(f"- **AMBIGUOUS** (weak evidence): {ambiguous}/{total}")
-        lines.append(f"- **UNKNOWN**: {unknown}/{total}")
-        lines.append("")
-
-    validation_findings = _dict(p.get("validation_findings", {}))
-    if validation_findings:
-        lines.append("## Validation Findings")
-        lines.append(
-            "- **Status**: {status}; info={info}; warn={warn}; blocker={blocker}".format(
-                status=_str(validation_findings.get("status", "")) or "unknown",
-                info=_int(validation_findings.get("info_count", 0)),
-                warn=_int(validation_findings.get("warn_count", 0)),
-                blocker=_int(validation_findings.get("blocker_count", 0)),
-            )
-        )
-        for item in _list(validation_findings.get("findings", []))[:5]:
-            if not isinstance(item, dict):
-                continue
-            lines.append(
-                "- `{severity}` {code}: {message}".format(
-                    severity=_str(item.get("severity", "")).upper() or "INFO",
-                    code=_str(item.get("code", "")),
-                    message=_str(item.get("message", "")),
-                )
-            )
-        lines.append("")
-
-    # Knowledge Gaps
-    gaps = _list(p.get("knowledge_gaps", []))
-    lines.append("## Knowledge Gaps")
-    if gaps:
-        for gap in gaps:
-            severity = _str(gap.get("severity", "medium"))
-            code = _str(gap.get("code", ""))
-            message = _str(gap.get("message", ""))
-            lines.append(f"- `[{severity.upper()}]` **{code}**: {message}")
-    else:
-        lines.append("*No knowledge gaps identified.*")
-    lines.append("")
-
-    # Suggested Questions
-    questions = _list(p.get("suggested_questions", []))
-    lines.append("## Suggested Questions")
-    if questions:
-        for q in questions:
-            qtype = _str(q.get("type", ""))
-            question = _str(q.get("question", ""))
-            why = _str(q.get("why", ""))
-            lines.append(f"- **{qtype}**: {question}")
-            if why:
-                lines.append(f"  - *{why}*")
-    else:
-        lines.append("*No questions generated.*")
-    lines.append("")
-
-    # Warnings
-    warnings = _list(p.get("warnings", []))
-    if warnings:
-        lines.append("## Warnings")
-        for w in warnings:
-            lines.append(f"- warning: {w}")
-        lines.append("")
-
-    session_end_report = _dict(p.get("session_end_report", {}))
-    if session_end_report:
-        lines.append("## Session End Report")
-        goal = _str(session_end_report.get("goal", ""))
-        if goal:
-            lines.append(f"- **Goal**: {goal}")
-        focus_paths = _list(session_end_report.get("focus_paths", []))
-        if focus_paths:
-            lines.append(
-                "- **Focus paths**: {paths}".format(
-                    paths=", ".join(_str(item) for item in focus_paths[:5])
-                )
-            )
-        validation_tests = _list(session_end_report.get("validation_tests", []))
-        if validation_tests:
-            lines.append(
-                "- **Validation tests**: {tests}".format(
-                    tests=", ".join(_str(item) for item in validation_tests[:3])
-                )
-            )
-        for item in _list(session_end_report.get("next_actions", []))[:5]:
-            lines.append(f"- next_action: {_str(item)}")
-        risks = _list(session_end_report.get("risks", []))
-        if risks:
-            lines.append(
-                "- **Risks**: {risks}".format(
-                    risks=", ".join(_str(item) for item in risks[:5])
-                )
-            )
-        lines.append("")
-
-    handoff_payload = _dict(p.get("handoff_payload", {}))
-    if handoff_payload:
-        lines.append("## Handoff Payload")
-        goal = _str(handoff_payload.get("goal", ""))
-        if goal:
-            lines.append(f"- **Goal**: {goal}")
-        focus_paths = _list(handoff_payload.get("focus_paths", []))
-        if focus_paths:
-            lines.append(
-                "- **Focus paths**: {paths}".format(
-                    paths=", ".join(_str(item) for item in focus_paths[:5])
-                )
-            )
-        for item in _list(handoff_payload.get("next_tasks", []))[:5]:
-            lines.append(f"- next_task: {_str(item)}")
-        unresolved = _list(handoff_payload.get("unresolved", []))
-        if unresolved:
-            lines.append(
-                "- **Unresolved**: {items}".format(
-                    items=", ".join(_str(item) for item in unresolved[:5])
-                )
-            )
-        lines.append("")
+    append_history_channel_section(lines, p)
+    append_history_hits_section(lines, p)
+    append_context_refine_section(lines, p)
+    append_core_nodes_section(lines, p)
+    append_candidate_review_section(lines, p)
+    append_surprising_connections_section(lines, p)
+    append_confidence_breakdown_section(lines, p)
+    append_validation_findings_section(lines, p)
+    append_knowledge_gaps_section(lines, p)
+    append_suggested_questions_section(lines, p)
+    append_warnings_section(lines, p)
+    append_session_end_report_section(lines, p)
+    append_handoff_payload_section(lines, p)
 
     # Footer
     query = _str(p.get("query", ""))

@@ -489,7 +489,7 @@ def _render_markdown(*, payload: dict[str, Any], thresholds: dict[str, float]) -
         f"- Run count: {int(payload.get('run_count', 0) or 0)}",
         f"- Passed count: {int(payload.get('passed_count', 0) or 0)}",
         f"- Failure rate: {_safe_float(payload.get('failure_rate'), 1.0):.4f}",
-        f"- Classification: {str(payload.get('classification', 'no_data') or 'no_data')}",
+        f"- Classification: {payload.get('classification', 'no_data') or 'no_data'!s}",
         f"- Passed: {bool(payload.get('passed', False))}",
         f"- Q2 gate failed count: {int(payload.get('q2_gate_failed_count', 0) or 0)}",
         f"- Q3 gate failed count: {int(payload.get('q3_gate_failed_count', 0) or 0)}",
@@ -826,7 +826,7 @@ def main() -> int:
     parser.add_argument("--min-task-success-rate", type=float, default=0.90)
     parser.add_argument("--min-precision-at-k", type=float, default=0.40)
     parser.add_argument("--max-noise-rate", type=float, default=0.60)
-    parser.add_argument("--max-latency-p95-ms", type=float, default=700.0)
+    parser.add_argument("--max-latency-p95-ms", type=float, default=650.0)
     parser.add_argument("--min-validation-test-count", type=float, default=5.0)
     parser.add_argument("--max-evidence-insufficient-rate", type=float, default=0.0)
     parser.add_argument("--max-missing-validation-rate", type=float, default=0.0)
@@ -865,13 +865,11 @@ def main() -> int:
         )
         iterations.append(result)
         print(
-            "[validation-rich-stability] run={run_id:02d} passed={passed} regressed={regressed} returncode={returncode} elapsed={elapsed:.3f}s".format(
-                run_id=run_id,
-                passed=bool(result.benchmark_passed),
-                regressed=bool(result.regressed),
-                returncode=int(result.returncode),
-                elapsed=float(result.elapsed_seconds),
-            )
+            f"[validation-rich-stability] run={run_id:02d} "
+            f"passed={bool(result.benchmark_passed)} "
+            f"regressed={bool(result.regressed)} "
+            f"returncode={int(result.returncode)} "
+            f"elapsed={float(result.elapsed_seconds):.3f}s"
         )
 
     summary = evaluate_stability(

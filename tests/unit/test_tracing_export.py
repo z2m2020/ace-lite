@@ -107,9 +107,9 @@ def test_orchestrator_trace_export_writes_jsonl(tmp_path: Path, fake_skill_manif
     assert Path(str(trace_info.get("path"))).exists()
 
     rows = _load_jsonl(trace_path)
-    assert len(rows) == 8
+    assert len(rows) == 10
     stage_rows = [row for row in rows if row.get("kind") == "stage"]
-    assert len(stage_rows) == 7
+    assert len(stage_rows) == 9
     assert stage_rows[0]["stage"] == "memory"
     assert stage_rows[-1]["stage"] == "validation"
     index_rows = [row for row in stage_rows if row.get("stage") == "index"]

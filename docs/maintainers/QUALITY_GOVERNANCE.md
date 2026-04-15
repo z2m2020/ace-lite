@@ -38,7 +38,7 @@ assembly shell and move report-only summary sections into support modules such
 as `src/ace_lite/benchmark/report_observability.py` rather than growing the
 shell again.
 
-As of `0.3.79`, shared summary-view helpers under
+As of `0.3.80`, shared summary-view helpers under
 `src/ace_lite/benchmark/report_summary.py` also own the repeated dict-unwrapping
 logic for report-only summary sections. Keep future report-stack cleanup flowing
 through those read-only helpers instead of duplicating new `summary_raw if

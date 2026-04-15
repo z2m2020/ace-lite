@@ -248,7 +248,7 @@ def test_metrics_collector_main_writes_validation_rich_section(
             "risk_upgrade_precision_gain_threshold": 0.0,
             "risk_upgrade_precision_gain_passed": True,
             "latency_p95_ms": 620.0,
-            "latency_p95_ms_threshold": 850.0,
+            "latency_p95_ms_threshold": 650.0,
             "latency_p95_ms_passed": True,
             "gate_passed": True,
         },

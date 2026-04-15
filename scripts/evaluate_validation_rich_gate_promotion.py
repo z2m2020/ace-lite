@@ -427,10 +427,8 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
     lines.extend(["", "## Latest Metrics", "", "| Metric | Value |", "| --- | ---: |"])
     for metric_name in METRIC_NAMES:
         lines.append(
-            "| {metric} | {value:.4f} |".format(
-                metric=metric_name,
-                value=_safe_float(latest_metrics.get(metric_name), 0.0),
-            )
+            f"| {metric_name} | "
+            f"{_safe_float(latest_metrics.get(metric_name), 0.0):.4f} |"
         )
     lines.extend(["", "## Reasons", ""])
     if reasons:
@@ -454,7 +452,7 @@ def main() -> int:
     parser.add_argument("--min-task-success-rate", type=float, default=0.90)
     parser.add_argument("--min-precision-at-k", type=float, default=0.40)
     parser.add_argument("--max-noise-rate", type=float, default=0.60)
-    parser.add_argument("--max-latency-p95-ms", type=float, default=700.0)
+    parser.add_argument("--max-latency-p95-ms", type=float, default=650.0)
     parser.add_argument("--min-validation-test-count", type=float, default=5.0)
     parser.add_argument("--max-evidence-insufficient-rate", type=float, default=0.0)
     parser.add_argument("--max-missing-validation-rate", type=float, default=0.0)
