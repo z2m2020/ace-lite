@@ -31,6 +31,10 @@ Use the channel that matches how you run ACE-Lite:
 - `pipx` install: `pipx upgrade ace-lite-engine`
 - `uv tool` install: `uv tool upgrade ace-lite-engine`
 
+The `pip` / `pipx` / `uv tool` upgrade paths only see versions that have already
+been published to PyPI. Internal source-checkout updates do not require a PyPI
+release.
+
 `ace-lite self-update --check` prints the resolved plan first, including the
 detected install mode and recommended command.
 

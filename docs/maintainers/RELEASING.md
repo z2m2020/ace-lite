@@ -38,6 +38,41 @@ python scripts/run_quality_gate.py --root . --output-dir artifacts/quality/lates
 - move `CHANGELOG.md` `[Unreleased]` entries into a dated version section
 - record which benchmark and freeze artifact directories will be treated as the release evidence set
 
+### 2.1 Python package publish flow
+
+ACE-Lite now carries a dedicated GitHub Actions workflow at
+`.github/workflows/publish-pypi.yml`.
+
+Recommended setup:
+
+- Use **PyPI Trusted Publisher** for the `ace-lite-engine` project rather than long-lived API tokens.
+- Register the GitHub repository and workflow file with both:
+  - PyPI production project: `ace-lite-engine`
+  - TestPyPI project: `ace-lite-engine`
+- Keep the workflow environments named exactly:
+  - `pypi`
+  - `testpypi`
+
+Recommended release flow:
+
+1. Land the release commit on `main` with the bumped `pyproject.toml` version and updated `CHANGELOG.md`.
+2. Create and push a tag that matches the package version exactly, for example `v0.3.83`.
+3. Let `publish-pypi.yml` build `sdist` + `wheel`, run `twine check`, and publish to PyPI.
+4. After the publish succeeds, verify the install path you expect users to run:
+   - `pip install -U ace-lite-engine`
+   - `pipx upgrade ace-lite-engine`
+   - `uv tool upgrade ace-lite-engine`
+
+Recommended dry run:
+
+- Use `workflow_dispatch` on `publish-pypi.yml` to publish the current tree to **TestPyPI** before the first real release or when changing packaging metadata.
+
+Important guardrails:
+
+- The tag-triggered publish job refuses to run if `refs/tags/vX.Y.Z` does not match `pyproject.toml` `version`.
+- `workflow_dispatch` publishes only to TestPyPI; production PyPI is intentionally tag-driven.
+- Do not treat a local editable reinstall as proof that package publishing works; only `python -m build`, `twine check`, and the publish workflow validate the distributable artifacts.
+
 Recommended artifact convention:
 
 - benchmark matrix: `artifacts/benchmark/matrix/<window>/<YYYY-MM-DD>`
