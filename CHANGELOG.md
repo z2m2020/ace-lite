@@ -8,6 +8,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.86] - 2026-04-16
+
+### Changed
+
+- Hardened GitHub Actions test collection by making the repository root importable in `tests/conftest.py` and running CI tests via `python -m pytest -q`.
+- Added a documented manual PyPI fallback flow, including the Windows `twine --disable-progress-bar` workaround for local GBK terminal encoding failures.
+- Translated `.agents/workflows/report-issue.md` into English and ignored the local `.venv-linux-ci/` workspace directory.
+
 ## [0.3.85] - 2026-04-16
 
 ### Changed

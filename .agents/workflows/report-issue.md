@@ -1,12 +1,12 @@
-# 问题反馈工作流
+# Issue Reporting Workflow
 
-## 目标
+## Goal
 
-提供一条低摩擦、可重复执行的路径，把运行时痛点沉淀为结构化 issue 资产。
+Provide a low-friction, repeatable path for turning runtime pain points into structured issue assets.
 
-## 快速路径
+## Fast Path
 
-1. 先记录业务侧 issue report：
+1. First record the business-facing issue report:
 
 ```
 ace-lite feedback report-issue \
@@ -16,7 +16,7 @@ ace-lite feedback report-issue \
   --actual-behavior "<observed behavior>"
 ```
 
-2. 如果这是工具链或运行时缺陷，再镜像到 developer issue：
+2. If this is a tooling or runtime defect, mirror it into a developer issue:
 
 ```
 ace-lite feedback report-dev-issue \
@@ -25,7 +25,7 @@ ace-lite feedback report-dev-issue \
   --repo "<repo>"
 ```
 
-3. 当 fix 或缓解措施可用时，记录并关联 fix：
+3. When a fix or mitigation is available, record it and link the fix:
 
 ```
 ace-lite feedback report-dev-fix \
@@ -38,7 +38,7 @@ ace-lite feedback apply-dev-fix \
   --fix-id "<dev fix id>"
 ```
 
-4. 最后用 dev fix 反向关闭关联 issue report：
+4. Finally, use the dev fix to close the linked issue report:
 
 ```
 ace-lite feedback resolve-issue-from-dev-fix \
@@ -46,7 +46,7 @@ ace-lite feedback resolve-issue-from-dev-fix \
   --fix-id "<dev fix id>"
 ```
 
-## 建议模板字段
+## Suggested Template Fields
 
 - `title`
 - `query`

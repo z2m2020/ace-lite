@@ -75,6 +75,41 @@ Important guardrails:
 - `workflow_dispatch` publishes only to TestPyPI; production PyPI is intentionally tag-driven.
 - Do not treat a local editable reinstall as proof that package publishing works; only `python -m build`, `twine check`, and the publish workflow validate the distributable artifacts.
 
+### 2.2 Manual PyPI fallback
+
+If GitHub Actions publishing is blocked by Trusted Publisher or environment
+misconfiguration, you can still publish the exact tagged tree manually.
+
+Recommended fallback flow:
+
+1. build from a clean tag/archive rather than the current working tree so local
+   uncommitted files are never bundled into the release
+2. run:
+
+```powershell
+python -m build
+python -m twine check dist/*
+```
+
+3. upload with a short-lived PyPI token:
+
+```powershell
+$env:TWINE_USERNAME="__token__"
+$env:TWINE_PASSWORD="pypi-..."
+python -m twine upload --non-interactive dist/*
+```
+
+Windows note:
+
+- on Windows PowerShell, prefer `python -m twine upload --non-interactive --disable-progress-bar dist/*`
+- reason: some local terminals still use `gbk` and `twine`/`rich` progress rendering can fail with a Unicode encode error near the end of an otherwise valid upload
+- if you must keep the progress bar enabled, set `PYTHONUTF8=1` first, but `--disable-progress-bar` is the safer default
+
+After a manual publish succeeds, verify both:
+
+- the project page for the exact version, for example `https://pypi.org/project/ace-lite-engine/0.3.85/`
+- the JSON API, for example `https://pypi.org/pypi/ace-lite-engine/json`
+
 Recommended artifact convention:
 
 - benchmark matrix: `artifacts/benchmark/matrix/<window>/<YYYY-MM-DD>`

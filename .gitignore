@@ -42,3 +42,4 @@ docs/code-review/
 /bun.lock
 /package.json
 /.qoder/
+/.venv-linux-ci/
