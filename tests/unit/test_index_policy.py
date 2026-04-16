@@ -93,6 +93,19 @@ def test_resolve_retrieval_policy_selects_doc_intent_for_doc_sync_queries() -> N
     assert payload["docs_enabled"] is True
 
 
+def test_resolve_retrieval_policy_keeps_general_for_code_queries_with_weak_doc_terms() -> None:
+    payload = resolve_retrieval_policy(
+        query="shutdown config redis yaml auto phase fallback refresh status controller",
+        retrieval_policy="auto",
+        policy_version="v1",
+        cochange_enabled=True,
+        embedding_enabled=True,
+    )
+
+    assert payload["name"] == "general"
+    assert payload["docs_enabled"] is False
+
+
 def test_resolve_retrieval_policy_selects_doc_intent_for_lowercase_requirement_ids() -> None:
     payload = resolve_retrieval_policy(
         query="explain expl-01 trace contract behavior",
@@ -136,9 +149,7 @@ def test_resolve_shadow_router_arm_uses_model_mapping(tmp_path) -> None:
         json.dumps(
             {
                 "arm_set": "retrieval_policy_shadow",
-                "policy_arms": {
-                    "feature": {"arm_id": "feature_graph", "confidence": 0.91}
-                },
+                "policy_arms": {"feature": {"arm_id": "feature_graph", "confidence": 0.91}},
             }
         ),
         encoding="utf-8",

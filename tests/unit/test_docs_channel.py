@@ -50,7 +50,9 @@ The function `refresh_session` validates retry backoff behavior.
     assert isinstance(first["repo_glossary_sample"], list)
     assert first["repo_glossary_cache_hit"] is False
     assert first["repo_glossary_cache_layer"] == "none"
-    assert str(first["repo_glossary_cache_path"]).endswith("context-map/docs_repo_glossary_cache.json")
+    assert str(first["repo_glossary_cache_path"]).endswith(
+        "context-map/docs_repo_glossary_cache.json"
+    )
     assert first["section_count"] >= 1
     assert first["evidence"]
     first_evidence = first["evidence"][0]
@@ -74,10 +76,7 @@ The function `refresh_session` validates retry backoff behavior.
     assert any(item["value"] == "auth" for item in explainability["top_matched_terms"])
     assert any(item["value"] == "retry" for item in explainability["top_matched_terms"])
     assert any(note.startswith("backend:") for note in explainability["selection_notes"])
-    assert any(
-        note == "hinted_path:src/core/auth.py"
-        for note in explainability["selection_notes"]
-    )
+    assert any(note == "hinted_path:src/core/auth.py" for note in explainability["selection_notes"])
     assert second["cache_hit"] is True
     assert second["cache_layer"] == "memory"
     assert second["cache_store_written"] is False
@@ -133,6 +132,30 @@ def test_collect_docs_signals_handles_missing_docs(tmp_path: Path) -> None:
     assert payload["explainability"]["reason"] == "no_docs_sections"
     assert payload["explainability"]["backend"] == "none"
     assert "reason:no_docs_sections" in payload["explainability"]["selection_notes"]
+
+
+def test_collect_docs_signals_skips_non_utf8_docs_fail_open(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "ARCHITECTURE.md").write_text(
+        "# Auth Architecture\nretry mechanism in src/core/auth.py\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "docs" / "坏文件.md").write_bytes(b"\xef\xbb\xbf\xffbad")
+
+    payload = collect_docs_signals(
+        root=tmp_path,
+        query="retry mechanism",
+        terms=["retry", "mechanism"],
+        enabled=True,
+        intent_weight=1.0,
+    )
+
+    assert payload["enabled"] is True
+    assert payload["section_count"] >= 1
+    assert payload["evidence"]
+    assert all(
+        str(item.get("path") or "") != "docs/\u574f\u6587\u4ef6.md" for item in payload["evidence"]
+    )
 
 
 def test_collect_docs_signals_can_hit_disk_cache_after_memory_reset(tmp_path: Path) -> None:

@@ -1364,6 +1364,86 @@ def test_mcp_service_plan_timeout_returns_structured_fallback(tmp_path: Path, mo
     assert isinstance(result.get("recommendations"), list)
 
 
+def test_mcp_service_plan_summary_counts_index_candidate_files_when_source_plan_empty(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _write_sample_repo(tmp_path)
+    service = _make_service(tmp_path)
+
+    def _fake_run_plan(**kwargs):
+        return {
+            "index": {
+                "candidate_files": [
+                    {"path": "src/sample.py", "score": 9.0},
+                    {"path": "tests/test_sample.py", "score": 3.0},
+                ]
+            },
+            "source_plan": {"steps": [], "candidate_files": []},
+            "observability": {"total_ms": 1.0},
+        }
+
+    monkeypatch.setattr(mcp_service_module, "run_plan", _fake_run_plan)
+
+    result = service.plan(
+        query="candidate count fallback",
+        repo="demo-repo",
+        root=str(tmp_path),
+        skills_dir=str(tmp_path / "skills"),
+        memory_primary="none",
+        memory_secondary="none",
+        include_full_payload=False,
+    )
+
+    assert result["ok"] is True
+    assert result["candidate_files"] == 2
+
+
+def test_mcp_service_plan_timeout_include_full_payload_exposes_fallback_plan(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _write_sample_repo(tmp_path)
+    service = _make_service(tmp_path)
+
+    def _slow_run_plan_payload(*args, **kwargs):
+        time.sleep(1.2)
+        return {"source_plan": {"steps": []}, "observability": {"total_ms": 0}}
+
+    def _fake_plan_quick(**kwargs):
+        return {
+            "ok": True,
+            "candidate_files": ["src/sample.py", "tests/test_sample.py"],
+            "steps": ["Inspect candidate files."],
+        }
+
+    monkeypatch.setattr(service, "_run_plan_payload", _slow_run_plan_payload)
+    monkeypatch.setattr(service, "plan_quick", _fake_plan_quick)
+
+    result = service.plan(
+        query="timeout case",
+        repo="demo-repo",
+        root=str(tmp_path),
+        skills_dir=str(tmp_path / "skills"),
+        include_full_payload=True,
+        timeout_seconds=1.0,
+    )
+
+    assert result["ok"] is False
+    assert result["timed_out"] is True
+    assert result["plan"]["index"]["candidate_files"][0]["path"] == "src/sample.py"
+    graph_payload = handle_retrieval_graph_view_request(
+        plan_payload=result["plan"],
+        limit=10,
+        max_hops=1,
+        repo="demo-repo",
+        root=str(tmp_path),
+        query="timeout case",
+    )
+    assert graph_payload["ok"] is True
+    assert {node["id"] for node in graph_payload["nodes"]} >= {"src/sample.py"}
+
+
 def test_mcp_service_plan_defaults_plugins_disabled(tmp_path: Path, monkeypatch) -> None:
     _write_sample_repo(tmp_path)
     service = _make_service(tmp_path)

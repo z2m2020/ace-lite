@@ -8,6 +8,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.88] - 2026-04-16
+
+### Added
+
+- Added `cross-agent-repo-validation-and-feedback-loop`, a reusable skill that captures the real-repository validation workflow from `ace_health` and concrete query evidence through issue/fix capture, reruns, and feedback writeback.
+
+### Changed
+
+- Tightened retrieval routing and reranking for real-repository validation by recognizing stronger code intent, demoting ACE-Lite-generated feedback artifacts in general repo queries, and suppressing doc-focused refinements for obvious code lookups.
+- Added repo-boundary filtering for local notes search and corrected MCP plan summaries so top-level `candidate_files` counts reflect actual indexed candidates instead of misleading empty `source_plan` payloads.
+- Expanded regression coverage across retrieval-policy routing, plan-quick ranking, local notes isolation, MCP summary behavior, and skill-routing boundaries for the new real-world validation loop.
+
 ## [0.3.87] - 2026-04-16
 
 ### Changed

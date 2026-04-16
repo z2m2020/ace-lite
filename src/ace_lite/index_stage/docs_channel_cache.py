@@ -52,7 +52,7 @@ def load_sections(
     for path in docs_paths:
         try:
             text = path.read_text(encoding="utf-8")
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             continue
         rel_path = path.relative_to(root).as_posix()
         sections.extend(
@@ -258,9 +258,7 @@ def store_sections_to_disk_cache(
         "max_files": int(max_files),
         "max_section_chars": int(max_section_chars),
         "sections": [
-            serialize_section_for_cache(item)
-            for item in sections
-            if isinstance(item, dict)
+            serialize_section_for_cache(item) for item in sections if isinstance(item, dict)
         ],
     }
     try:

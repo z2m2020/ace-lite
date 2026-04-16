@@ -40,6 +40,7 @@ from ace_lite.index_stage import (  # noqa: F401
     postprocess_candidates,
     refine_candidate_pool,
     rerank_cross_encoder_with_time_budget,
+    rerank_embeddings_with_time_budget,
     rerank_rows_cross_encoder_with_time_budget,
     rerank_rows_embeddings_with_time_budget,
     resolve_benchmark_candidate_filters,
@@ -113,9 +114,8 @@ _INDEX_CANDIDATE_CACHE_CONTENT_VERSION = "index-candidates-v1"
 _disabled_docs_payload = build_disabled_docs_payload
 _disabled_worktree_prior = build_disabled_worktree_prior
 _rerank_cross_encoder_with_time_budget = rerank_cross_encoder_with_time_budget
-_rerank_rows_cross_encoder_with_time_budget = (
-    rerank_rows_cross_encoder_with_time_budget
-)
+_rerank_embeddings_with_time_budget = rerank_embeddings_with_time_budget
+_rerank_rows_cross_encoder_with_time_budget = rerank_rows_cross_encoder_with_time_budget
 _rerank_rows_embeddings_with_time_budget = rerank_rows_embeddings_with_time_budget
 
 
@@ -183,7 +183,7 @@ class IndexRetrievalConfig:
     multi_channel_rrf_docs_cap: int
     multi_channel_rrf_memory_cap: int
 
- 
+
 @dataclass(frozen=True, slots=True)
 class IndexChunkGuardConfig:
     """Chunk-guard controls for the index stage."""

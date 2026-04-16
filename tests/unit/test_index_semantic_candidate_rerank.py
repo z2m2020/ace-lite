@@ -89,10 +89,7 @@ def test_apply_semantic_candidate_rerank_applies_adaptive_budget_to_embedding_pa
             similarity_max=0.84,
         )
 
-    candidates = [
-        {"path": f"src/file_{index}.py", "score": float(index)}
-        for index in range(10)
-    ]
+    candidates = [{"path": f"src/file_{index}.py", "score": float(index)} for index in range(10)]
     result = apply_semantic_candidate_rerank(
         root=".",
         query="rank candidates",
@@ -127,7 +124,7 @@ def test_apply_semantic_candidate_rerank_applies_adaptive_budget_to_embedding_pa
     assert result.embeddings_payload["time_budget_ms"] == 75
     assert result.embeddings_payload["rerank_pool_effective"] == 10
     assert result.embeddings_payload["runtime_provider"] == "hash"
-    assert result.embeddings_payload["semantic_rerank_applied"] is False
+    assert result.embeddings_payload["semantic_rerank_applied"] is True
 
 
 def test_apply_semantic_candidate_rerank_marks_cross_encoder_timeout_fail_open() -> None:
@@ -164,3 +161,40 @@ def test_apply_semantic_candidate_rerank_marks_cross_encoder_timeout_fail_open()
     assert result.embeddings_payload["semantic_rerank_applied"] is False
     assert "time_budget_exceeded" in result.embeddings_payload["warning"]
     assert result.semantic_cross_encoder_provider is not None
+
+
+def test_apply_semantic_candidate_rerank_marks_embedding_timeout_fail_open() -> None:
+    def _timeout_embeddings_with_budget(**kwargs: Any) -> tuple[list[dict[str, Any]], _FakeStats]:
+        raise TimeoutError("embedding_time_budget_exceeded:75ms")
+
+    result = apply_semantic_candidate_rerank(
+        root=".",
+        query="rank retrieval candidates",
+        files_map={"src/app.py": {"path": "src/app.py"}},
+        candidates=[{"path": "src/app.py", "score": 1.0}],
+        terms=["rank", "retrieval", "candidates"],
+        index_hash="idx",
+        embedding_index_path="context-map/embeddings/index.json",
+        embedding_enabled=True,
+        embedding_provider="hash",
+        embedding_model="hash-v1",
+        embedding_dimension=16,
+        embedding_rerank_pool=24,
+        embedding_lexical_weight=0.7,
+        embedding_semantic_weight=0.3,
+        embedding_min_similarity=0.0,
+        embedding_fail_open=True,
+        policy={"embedding_enabled": True, "semantic_rerank_time_budget_ms": 75},
+        mark_timing=lambda name, started: None,
+        resolve_embedding_runtime_config=_resolve_runtime,
+        build_embedding_stats=_build_embedding_stats,
+        rerank_cross_encoder_with_time_budget=lambda **kwargs: ([], _FakeStats()),
+        rerank_embeddings_with_time_budget_fn=_timeout_embeddings_with_budget,
+    )
+
+    assert result.candidates == [{"path": "src/app.py", "score": 1.0}]
+    assert result.embeddings_payload["fallback"] is True
+    assert result.embeddings_payload["time_budget_exceeded"] is True
+    assert result.embeddings_payload["semantic_rerank_applied"] is False
+    assert "time_budget_exceeded" in result.embeddings_payload["warning"]
+    assert result.semantic_embedding_provider_impl is not None

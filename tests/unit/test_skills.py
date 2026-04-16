@@ -1296,6 +1296,10 @@ def test_cross_agent_intake_routes_config_surface_queries() -> None:
             "\u4fee\u590d\u8d85\u65f6\u56de\u5f52\u5e76\u5148\u68c0\u67e5 install drift \u548c doctor-mcp",
             "cross-agent-bugfix-and-regression",
         ),
+        (
+            "Validate ace-lite on a real repo, capture actual usage miss, file issue report, rerun the same queries, and record dev fix evidence",
+            "cross-agent-repo-validation-and-feedback-loop",
+        ),
     ],
 )
 def test_skill_routing_boundary_matrix_top1(query: str, expected_top1: str) -> None:
@@ -1322,6 +1326,10 @@ def test_skill_routing_boundary_matrix_top1(query: str, expected_top1: str) -> N
         (
             "Before coding, scope validation constraints and prompt boundary changes",
             ["cross-agent-intake-and-scope", "ace-dev"],
+        ),
+        (
+            "Validate ace-lite on a real repo, capture actual usage miss, rerun the same queries, and record developer feedback",
+            ["cross-agent-repo-validation-and-feedback-loop", "ace-dev"],
         ),
     ],
 )

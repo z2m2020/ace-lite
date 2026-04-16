@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ace_lite.pipeline.stages.skills import infer_intent
+from ace_lite.plan_quick_strategies_shared import QueryFlags
 
 # Requirement ID patterns: EXPL-01, REQ-01, TASK-01, etc.
 _REQ_ID_PATTERN = re.compile(r"\b([A-Z]{2,})-(\d+)\b", re.IGNORECASE)
@@ -496,6 +497,7 @@ def resolve_retrieval_policy(
         selected = configured
     else:
         lowered = str(query or "").lower()
+        query_flags = QueryFlags.from_query(query)
         inferred_intent = infer_intent(query)
         is_definition_lookup = any(
             token in lowered for token in ("where", "defined", "implemented", "located")
@@ -568,7 +570,7 @@ def resolve_retrieval_policy(
                 "超时",
             )
         )
-        doc_markers = any(
+        strong_doc_markers = any(
             _text_contains_marker(lowered, token)
             for token in (
                 "how ",
@@ -599,31 +601,20 @@ def resolve_retrieval_policy(
                 "readme",
                 "planning",
                 "progress",
-                "status",
                 "report",
                 "roadmap",
                 "runbook",
-                "latest",
-                "sync",
-                "update",
                 "requirements",
                 "milestone",
-                "phase",
-                "state",
                 "explainability",
                 "contract",
                 "文档",
                 "说明",
-                "同步",
-                "更新",
-                "最新",
-                "状态",
                 "进展",
                 "报告",
                 "路线图",
                 "需求",
                 "里程碑",
-                "阶段",
                 "可解释性",
                 "合同",
                 "契约",
@@ -631,15 +622,17 @@ def resolve_retrieval_policy(
         )
         where_lookup = lowered.strip().startswith("where ")
         where_lookup = where_lookup or lowered.strip().startswith(("在哪", "在哪里"))
-        # Check for requirement ID patterns (e.g., EXPL-01, REQ-01)
-        has_req_id = bool(_REQ_ID_PATTERN.search(query))
-        if (doc_markers or has_req_id) and not is_definition_lookup and not has_bugfix_markers:
+        has_req_id = bool(query_flags.has_req_id)
+        if (
+            (strong_doc_markers or query_flags.doc_sync or has_req_id)
+            and not query_flags.code_intent
+            and not is_definition_lookup
+            and not has_bugfix_markers
+        ):
             selected = "doc_intent"
         elif (is_definition_lookup or where_lookup) and not has_bugfix_markers:
             selected = "general"
-        elif has_bugfix_markers or (
-            inferred_intent == "troubleshoot" and not is_definition_lookup
-        ):
+        elif has_bugfix_markers or (inferred_intent == "troubleshoot" and not is_definition_lookup):
             selected = "bugfix_test"
         elif any(
             token in lowered

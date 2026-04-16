@@ -53,6 +53,41 @@ def test_score_plan_quick_rows_tiebreaks_by_path() -> None:
     assert [row.path for row in scored] == ["a.py", "b.py"]
 
 
+def test_score_plan_quick_rows_demotes_ace_lite_feedback_docs_for_repo_queries() -> None:
+    rows = [
+        {
+            "path": "docs/ace_lite_repo_validation_feedback_2026-04-16.md",
+            "module": "docs.feedback",
+            "language": "markdown",
+            "score": 9.0,
+        },
+        {
+            "path": "internal/app/api/shutdown/allowlist.py",
+            "module": "internal.app.api.shutdown.allowlist",
+            "language": "python",
+            "score": 7.5,
+        },
+        {
+            "path": "internal/app/api/shutdown/controller.py",
+            "module": "internal.app.api.shutdown.controller",
+            "language": "python",
+            "score": 7.0,
+        },
+    ]
+
+    scored = score_plan_quick_rows(
+        query="airdrop settings preview claim linked wallet shutdown D15 allowlist",
+        rows=rows,
+        lexical_boost_per_hit=0.0,
+    )
+
+    assert [row.path for row in scored[:2]] == [
+        "internal/app/api/shutdown/allowlist.py",
+        "internal/app/api/shutdown/controller.py",
+    ]
+    assert scored[-1].path == "docs/ace_lite_repo_validation_feedback_2026-04-16.md"
+
+
 def test_score_plan_quick_rows_uses_strategy_registries(monkeypatch) -> None:
     calls: dict[str, int] = {"intent": 0, "domain": 0, "doc_boost": 0, "latest_boost": 0}
 
@@ -63,6 +98,7 @@ def test_score_plan_quick_rows_uses_strategy_registries(monkeypatch) -> None:
 
             class Flags:
                 doc_sync = True
+                code_intent = False
                 latest_sensitive = True
                 onboarding = False
                 has_req_id = False
@@ -749,6 +785,44 @@ def test_build_plan_quick_adds_query_profile_risk_hints_and_full_build_reason(
     assert isinstance(result["risk_hints"], list)
     assert any(item["code"] == "index_cold_start" for item in result["risk_hints"])
     assert result["index_cache"]["full_build_reason"] == "cache_missing"
+
+
+def test_build_plan_quick_keeps_code_queries_out_of_doc_intent_and_feedback_docs(
+    tmp_path: Path,
+) -> None:
+    _write_file(
+        tmp_path / "internal/app/api/shutdown/config.go",
+        "package shutdown\n\nfunc LoadConfig() bool {\n\treturn true\n}\n",
+    )
+    _write_file(
+        tmp_path / "internal/app/api/shutdown/controller.go",
+        "package shutdown\n\nfunc HandleShutdown() bool {\n\treturn true\n}\n",
+    )
+    _write_file(
+        tmp_path / "internal/app/api/shutdown/phase.go",
+        'package shutdown\n\nfunc AutoPhase() string {\n\treturn "refresh"\n}\n',
+    )
+    _write_file(
+        tmp_path / "docs/ace_lite_repo_validation_feedback_2026-04-16.md",
+        "# Repo validation feedback\nshutdown config controller phase refresh\n",
+    )
+
+    result = build_plan_quick(
+        query="shutdown config.go controller.go phase.go auto_phase refresh",
+        root=tmp_path,
+        languages="go,markdown",
+        top_k_files=5,
+        repomap_top_k=16,
+    )
+
+    assert result["retrieval_policy_profile"] == "general"
+    assert result["query_profile"]["code_intent"] is True
+    assert result["query_profile"]["doc_sync"] is False
+    assert result["suggested_query_refinements"] == []
+    assert all(path.endswith(".go") for path in result["candidate_files"][:3])
+    assert (
+        "docs/ace_lite_repo_validation_feedback_2026-04-16.md" not in result["candidate_files"][:3]
+    )
 
 
 def test_build_plan_quick_emits_onboarding_view_candidate_details_and_upgrade_guidance(

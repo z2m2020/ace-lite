@@ -89,9 +89,7 @@ def test_hybrid_memory_provider_rrf_merges_results() -> None:
     semantic = _StubProvider(
         channel="mcp",
         compact_rows=[
-            MemoryRecordCompact(
-                handle="a", preview="alpha", source="mcp", est_tokens=1
-            ),
+            MemoryRecordCompact(handle="a", preview="alpha", source="mcp", est_tokens=1),
             MemoryRecordCompact(handle="b", preview="beta", source="mcp", est_tokens=1),
         ],
         full_rows=[
@@ -102,12 +100,8 @@ def test_hybrid_memory_provider_rrf_merges_results() -> None:
     keyword = _StubProvider(
         channel="rest",
         compact_rows=[
-            MemoryRecordCompact(
-                handle="b", preview="beta", source="rest", est_tokens=1
-            ),
-            MemoryRecordCompact(
-                handle="c", preview="charlie", source="rest", est_tokens=1
-            ),
+            MemoryRecordCompact(handle="b", preview="beta", source="rest", est_tokens=1),
+            MemoryRecordCompact(handle="c", preview="charlie", source="rest", est_tokens=1),
         ],
         full_rows=[
             MemoryRecord(text="beta", handle="b", source="rest"),
@@ -115,9 +109,7 @@ def test_hybrid_memory_provider_rrf_merges_results() -> None:
         ],
     )
 
-    provider = HybridMemoryProvider(
-        semantic=semantic, keyword=keyword, rrf_k=60, limit=5
-    )
+    provider = HybridMemoryProvider(semantic=semantic, keyword=keyword, rrf_k=60, limit=5)
     rows = provider.search_compact("q")
 
     assert [row.handle for row in rows] == ["b", "a", "c"]
@@ -519,6 +511,43 @@ def test_local_notes_provider_namespace_filter_and_prefer_local_order(
     assert provider.last_notes_stats["namespace_filtered_count"] == 1
 
 
+def test_local_notes_provider_filters_cross_repo_notes_by_notes_path_boundary(
+    tmp_path: Path,
+) -> None:
+    upstream = _StubProvider(channel="mcp", compact_rows=[], full_rows=[])
+    notes_path = tmp_path / "tabiapp-backend" / "context-map" / "memory_notes.jsonl"
+    _write_notes(
+        notes_path,
+        [
+            {
+                "text": "shutdown allowlist preview flow",
+                "repo": "tabiapp-backend",
+                "namespace": "tabiapp-backend",
+                "captured_at": "2026-02-13T01:00:00+00:00",
+            },
+            {
+                "text": "shutdown allowlist preview flow",
+                "repo": "ace-lite",
+                "namespace": "ace-lite",
+                "captured_at": "2026-02-13T02:00:00+00:00",
+            },
+        ],
+    )
+    provider = LocalNotesProvider(
+        upstream,
+        notes_path=notes_path,
+        default_limit=4,
+        mode="local_only",
+    )
+
+    rows = provider.search_compact("shutdown allowlist")
+
+    assert len(rows) == 1
+    assert rows[0].source == "local_notes"
+    assert rows[0].metadata.get("repo") == "tabiapp-backend"
+    assert provider.last_notes_stats["repo_boundary_filtered_count"] == 1
+
+
 def test_local_notes_provider_local_only_skips_upstream_fetch(tmp_path: Path) -> None:
     upstream = _StubProvider(
         channel="mcp",
@@ -530,9 +559,7 @@ def test_local_notes_provider_local_only_skips_upstream_fetch(tmp_path: Path) ->
                 source="mcp",
             )
         ],
-        full_rows=[
-            MemoryRecord(text="upstream memory", handle="upstream-1", source="mcp")
-        ],
+        full_rows=[MemoryRecord(text="upstream memory", handle="upstream-1", source="mcp")],
     )
     notes_path = tmp_path / "context-map" / "memory_notes.jsonl"
     _write_notes(
@@ -595,7 +622,9 @@ def test_local_notes_provider_prunes_expired_notes(tmp_path: Path) -> None:
     assert len(rows) == 1
     assert rows[0].preview == "fresh memory note"
     assert provider.last_notes_stats["expired_count"] == 1
-    persisted = [line for line in notes_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    persisted = [
+        line for line in notes_path.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
     assert len(persisted) == 1
 
 

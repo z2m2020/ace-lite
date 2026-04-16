@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 from collections.abc import Sequence
 from datetime import datetime, timezone
@@ -42,6 +43,18 @@ def _overlap_ratio(*, query_tokens: set[str], field_tokens: set[str]) -> float:
     if hits <= 0:
         return 0.0
     return float(hits) / float(max(1, len(query_tokens)))
+
+
+def _normalize_repo_token(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").strip().lower())
+
+
+def _namespace_repo_hint(value: str | None) -> str | None:
+    normalized = str(value or "").strip().lower()
+    if not normalized or not re.fullmatch(r"[a-z0-9._-]+", normalized):
+        return None
+    repo_hint = _normalize_repo_token(normalized)
+    return repo_hint or None
 
 
 def append_capture_note(
@@ -142,6 +155,7 @@ class LocalNotesProvider:
             "matched_count": 0,
             "selected_count": 0,
             "namespace_filtered_count": 0,
+            "repo_boundary_filtered_count": 0,
             "expired_count": 0,
             "cache_hit": False,
             "upstream_selected_count": 0,
@@ -190,10 +204,7 @@ class LocalNotesProvider:
                 "last_container_tag_fallback",
                 None,
             )
-            if (
-                isinstance(upstream_namespace_fallback, str)
-                and upstream_namespace_fallback.strip()
-            ):
+            if isinstance(upstream_namespace_fallback, str) and upstream_namespace_fallback.strip():
                 self.last_container_tag_fallback = upstream_namespace_fallback.strip()
 
         if self._mode == "local_only":
@@ -235,9 +246,7 @@ class LocalNotesProvider:
         return merged
 
     def fetch(self, handles: Sequence[str]) -> list[MemoryRecord]:
-        resolved_handles = [
-            str(handle).strip() for handle in handles if str(handle).strip()
-        ]
+        resolved_handles = [str(handle).strip() for handle in handles if str(handle).strip()]
         if not resolved_handles:
             return []
 
@@ -289,12 +298,21 @@ class LocalNotesProvider:
 
         matched: list[tuple[float, float, str, MemoryRecordCompact, MemoryRecord]] = []
         namespace_filtered = 0
+        repo_boundary_filtered = 0
+        repo_boundary_blob = _normalize_repo_token(str(self._notes_path))
 
         for row in rows:
             namespace = str(row.get("namespace") or "").strip() or None
             if container_tag and namespace != container_tag:
                 namespace_filtered += 1
                 continue
+            if not container_tag:
+                repo_hint = _normalize_repo_token(str(row.get("repo") or ""))
+                if not repo_hint:
+                    repo_hint = _namespace_repo_hint(namespace)
+                if repo_hint and repo_boundary_blob and repo_hint not in repo_boundary_blob:
+                    repo_boundary_filtered += 1
+                    continue
 
             text = str(row.get("text") or row.get("query") or "").strip()
             if not text:
@@ -315,7 +333,9 @@ class LocalNotesProvider:
             score = 0.0
             score += 1.0 * _overlap_ratio(query_tokens=query_tokens, field_tokens=text_tokens)
             score += 1.2 * _overlap_ratio(query_tokens=query_tokens, field_tokens=keyword_tokens)
-            score += 0.8 * _overlap_ratio(query_tokens=query_tokens, field_tokens=query_field_tokens)
+            score += 0.8 * _overlap_ratio(
+                query_tokens=query_tokens, field_tokens=query_field_tokens
+            )
 
             if score <= 0.0:
                 continue
@@ -363,6 +383,7 @@ class LocalNotesProvider:
             "matched_count": len(matched),
             "selected_count": len(selected),
             "namespace_filtered_count": namespace_filtered,
+            "repo_boundary_filtered_count": repo_boundary_filtered,
             "expired_count": expired_count,
             "cache_hit": cache_hit,
         }

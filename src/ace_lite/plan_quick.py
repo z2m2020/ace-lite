@@ -209,6 +209,7 @@ def _query_flags(query: str) -> dict[str, Any]:
     flags = IntentStrategyRegistry.get_instance().detect_intent(query)
     return {
         "doc_sync": flags.doc_sync,
+        "code_intent": flags.code_intent,
         "latest_sensitive": flags.latest_sensitive,
         "onboarding": flags.onboarding,
         "has_req_id": flags.has_req_id,
@@ -277,6 +278,7 @@ def _query_flags_as_registry_flags(query_flags: dict[str, Any]) -> QueryFlags:
         req_ids = ()
     return QueryFlags(
         doc_sync=bool(query_flags.get("doc_sync", False)),
+        code_intent=bool(query_flags.get("code_intent", False)),
         latest_sensitive=bool(query_flags.get("latest_sensitive", False)),
         onboarding=bool(query_flags.get("onboarding", False)),
         has_req_id=bool(query_flags.get("has_req_id", False)),
@@ -325,7 +327,7 @@ def _build_plan_quick_risk_hints(
     hints: list[dict[str, Any]] = []
     top_rows = rows[:5]
     visible_rows = rows[:8]
-    if bool(query_flags.get("doc_sync", False)):
+    if bool(query_flags.get("doc_sync", False)) and not bool(query_flags.get("code_intent", False)):
         top_domains = {
             _classify_path_domain(item.path) for item in top_rows if str(item.path or "").strip()
         }
@@ -377,9 +379,7 @@ def _build_plan_quick_risk_hints(
             )
     if str(index_cache.get("mode") or "").strip() == "full_build":
         full_build_reason = str(
-            index_cache.get("full_build_reason")
-            or index_cache.get("reason")
-            or "cache_missing"
+            index_cache.get("full_build_reason") or index_cache.get("reason") or "cache_missing"
         )
         # ASF-8921: Improved cold-start messaging
         if full_build_reason == "cache_missing":
@@ -525,6 +525,8 @@ def _build_suggested_query_refinements(
     rows: list[PlanQuickScoredRow],
 ) -> list[dict[str, Any]]:
     query_flags = _query_flags(query)
+    if bool(query_flags.get("code_intent", False)):
+        return []
     # Also enable refinements for requirement ID queries
     is_req_query = bool(query_flags.get("has_req_id", False)) or any(
         marker in str(query or "").lower()
@@ -658,6 +660,48 @@ def _normalize_path(path: str) -> str:
     return str(path or "").strip().replace("\\", "/").lower()
 
 
+def _is_ace_lite_feedback_doc(*, path: str, language: str, semantic_domain: str) -> bool:
+    normalized_path = _normalize_path(path)
+    if semantic_domain not in {"docs", "planning", "reports", "reference", "markdown"}:
+        return False
+    if not _is_markdown_doc(path=path, language=language):
+        return False
+    if not any(marker in normalized_path for marker in ("ace-lite", "ace_lite")):
+        return False
+    return any(
+        marker in normalized_path
+        for marker in (
+            "feedback",
+            "assessment",
+            "validation",
+            "mcp_assessment",
+            "repo_validation",
+        )
+    )
+
+
+def _self_feedback_doc_penalty(
+    *, query: str, path: str, language: str, semantic_domain: str
+) -> float:
+    normalized_query = str(query or "").strip().lower()
+    if any(
+        marker in normalized_query
+        for marker in (
+            "ace-lite",
+            "ace_lite",
+            "ace lite",
+            "mcp",
+            "feedback",
+            "assessment",
+            "validation",
+        )
+    ):
+        return 0.0
+    if not _is_ace_lite_feedback_doc(path=path, language=language, semantic_domain=semantic_domain):
+        return 0.0
+    return -8.0
+
+
 def _infer_candidate_labels(
     *,
     path: str,
@@ -785,6 +829,12 @@ def score_plan_quick_rows(
             language=language,
             query_flags=query_flags,
             newest_dated_doc=newest_dated_doc,
+        )
+        intent_boost += _self_feedback_doc_penalty(
+            query=normalized_query,
+            path=path,
+            language=language,
+            semantic_domain=semantic_domain,
         )
         fused_score = base_score + lexical_boost + intent_boost + recency_boost
         scored.append(

@@ -44,42 +44,50 @@ class NormalizationUtils:
         return normalized in frozenset({"markdown", "md"})
 
 
-QUERY_DOC_SYNC_MARKERS: tuple[str, ...] = (
+QUERY_DOC_SYNC_PRIMARY_MARKERS: tuple[str, ...] = (
     "doc",
     "docs",
     "markdown",
     "readme",
     "planning",
-    "plan",
     "progress",
-    "status",
     "report",
     "roadmap",
     "runbook",
-    "sync",
-    "update",
-    "latest",
     "requirements",
     "milestone",
-    "phase",
-    "state",
     "explainability",
     "contract",
     "文档",
     "说明",
-    "同步",
-    "更新",
-    "最新",
-    "状态",
     "进展",
     "报告",
     "路线图",
     "需求",
     "里程碑",
-    "阶段",
     "可解释性",
     "合同",
     "契约",
+)
+
+QUERY_DOC_SYNC_SECONDARY_MARKERS: tuple[str, ...] = (
+    "plan",
+    "status",
+    "sync",
+    "update",
+    "latest",
+    "phase",
+    "state",
+    "同步",
+    "更新",
+    "最新",
+    "状态",
+    "阶段",
+)
+
+QUERY_DOC_SYNC_MARKERS: tuple[str, ...] = (
+    *QUERY_DOC_SYNC_PRIMARY_MARKERS,
+    *QUERY_DOC_SYNC_SECONDARY_MARKERS,
 )
 
 QUERY_LATEST_MARKERS: tuple[str, ...] = (
@@ -117,6 +125,67 @@ QUERY_ONBOARDING_MARKERS: tuple[str, ...] = (
     "导览",
     "代码地图",
     "架构概览",
+)
+
+QUERY_CODE_INTENT_MARKERS: tuple[str, ...] = (
+    ".go",
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".java",
+    ".rb",
+    ".php",
+    ".rs",
+    ".sql",
+    ".yaml",
+    ".yml",
+    "src/",
+    "internal/",
+    "pkg/",
+    "cmd/",
+    "api/",
+    "handler",
+    "controller",
+    "middleware",
+    "router",
+    "logic",
+    "service",
+    "model",
+    "repository",
+    "config.go",
+    "controller.go",
+    "phase.go",
+    "代码",
+    "源码",
+    "文件",
+    "函数",
+    "方法",
+    "类",
+    "模块",
+    "路径",
+    "目录",
+    "接口",
+)
+
+_QUERY_CODE_INTENT_WORDS: frozenset[str] = frozenset(
+    {
+        "config",
+        "controller",
+        "handler",
+        "middleware",
+        "router",
+        "logic",
+        "service",
+        "model",
+        "repository",
+        "schema",
+        "migration",
+        "yaml",
+        "redis",
+        "sql",
+    }
 )
 
 DOC_PRIMARY_NAME_MARKERS: tuple[str, ...] = (
@@ -188,6 +257,7 @@ class QueryFlags:
     """Structured representation of query intent flags."""
 
     doc_sync: bool = False
+    code_intent: bool = False
     latest_sensitive: bool = False
     onboarding: bool = False
     has_req_id: bool = False
@@ -197,8 +267,19 @@ class QueryFlags:
     def from_query(cls, query: str) -> QueryFlags:
         """Detect flags from a query string."""
         lowered = str(query or "").strip().lower()
+        query_tokens = {
+            token.strip() for token in re.split(r"[^a-z0-9_./-]+", lowered) if token.strip()
+        }
+        code_intent = any(marker in lowered for marker in QUERY_CODE_INTENT_MARKERS) or (
+            len(query_tokens.intersection(_QUERY_CODE_INTENT_WORDS)) >= 2
+        )
+        doc_sync = any(marker in lowered for marker in QUERY_DOC_SYNC_PRIMARY_MARKERS) or (
+            not code_intent
+            and any(marker in lowered for marker in QUERY_DOC_SYNC_SECONDARY_MARKERS)
+        )
         return cls(
-            doc_sync=any(marker in lowered for marker in QUERY_DOC_SYNC_MARKERS),
+            doc_sync=doc_sync,
+            code_intent=code_intent,
             latest_sensitive=any(marker in lowered for marker in QUERY_LATEST_MARKERS),
             onboarding=any(marker in lowered for marker in QUERY_ONBOARDING_MARKERS),
             has_req_id=bool(_extract_req_ids(query)),
@@ -211,7 +292,10 @@ __all__ = [
     "DOC_PREFERRED_PREFIXES",
     "DOC_PRIMARY_NAME_MARKERS",
     "DOC_SECONDARY_NAME_MARKERS",
+    "QUERY_CODE_INTENT_MARKERS",
     "QUERY_DOC_SYNC_MARKERS",
+    "QUERY_DOC_SYNC_PRIMARY_MARKERS",
+    "QUERY_DOC_SYNC_SECONDARY_MARKERS",
     "QUERY_LATEST_MARKERS",
     "QUERY_ONBOARDING_MARKERS",
     "_LATEST_DOC_DOMAINS",

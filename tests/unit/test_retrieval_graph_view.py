@@ -6,6 +6,7 @@ import re
 
 import pytest
 
+from ace_lite.plan_timeout import build_plan_timeout_fallback_payload
 from ace_lite.retrieval_graph_view import (
     RETRIEVAL_GRAPH_VIEW_SCHEMA_VERSION,
     build_retrieval_graph_view,
@@ -148,6 +149,29 @@ def test_ok_false_when_no_candidates():
         }
     )
     assert result["ok"] is False
+
+
+def test_timeout_fallback_payload_still_builds_graph_from_index_candidates():
+    plan = build_plan_timeout_fallback_payload(
+        query="timeout demo",
+        repo="demo",
+        root="/tmp/demo",
+        candidate_file_paths=["src/sample.py", "tests/test_sample.py"],
+        steps=["Inspect candidate files."],
+        timeout_seconds=25.0,
+        elapsed_ms=25001.0,
+        fallback_mode="plan_quick",
+        debug_dump_path=None,
+    )
+
+    result = build_retrieval_graph_view(plan)
+
+    assert result["ok"] is True
+    assert {node["id"] for node in result["nodes"]} >= {
+        "src/sample.py",
+        "tests/test_sample.py",
+    }
+    assert "empty_payload: no candidate files or chunks available" not in result["warnings"]
 
 
 def test_nodes_are_sorted_by_score():

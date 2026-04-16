@@ -12,9 +12,27 @@ from ace_lite.plan_application import (
 )
 from ace_lite.plan_timeout import (
     PLAN_TIMEOUT_RECOMMENDATIONS,
+    build_plan_timeout_fallback_payload,
     is_plan_timeout_debug_enabled,
     resolve_plan_timeout_seconds,
 )
+
+
+def _count_plan_candidate_files(plan_payload: dict[str, Any]) -> int:
+    index_payload = plan_payload.get("index", {})
+    if isinstance(index_payload, dict):
+        index_candidates = index_payload.get("candidate_files", [])
+        if isinstance(index_candidates, list) and index_candidates:
+            return len(index_candidates)
+    source_plan_payload = plan_payload.get("source_plan", {})
+    if isinstance(source_plan_payload, dict):
+        source_candidates = source_plan_payload.get("candidate_files", [])
+        if isinstance(source_candidates, list):
+            return len(source_candidates)
+    top_level_candidates = plan_payload.get("candidate_files", [])
+    if isinstance(top_level_candidates, list):
+        return len(top_level_candidates)
+    return 0
 
 
 def handle_plan_quick_request(
@@ -96,9 +114,7 @@ def handle_plan_request(
     resolved_repo = str(repo or default_repo).strip() or default_repo
     config_pack_result = load_config_pack(path=config_pack_path)
     config_pack_meta = config_pack_result.to_dict()
-    config_pack_overrides = (
-        dict(config_pack_result.overrides) if config_pack_result.enabled else {}
-    )
+    config_pack_overrides = dict(config_pack_result.overrides) if config_pack_result.enabled else {}
     timeout_resolution = resolve_plan_timeout_seconds(
         timeout_seconds=timeout_seconds,
         default_timeout_seconds=default_timeout_seconds,
@@ -146,7 +162,7 @@ def handle_plan_request(
     )
 
     if execution.timed_out:
-        return {
+        summary = {
             "ok": False,
             "query": normalized_query,
             "repo": resolved_repo,
@@ -165,6 +181,23 @@ def handle_plan_request(
             "debug_dump_path": execution.outcome.debug_dump_path,
             "recommendations": list(PLAN_TIMEOUT_RECOMMENDATIONS),
         }
+        if include_full_payload:
+            fallback_payload = build_plan_timeout_fallback_payload(
+                query=normalized_query,
+                repo=resolved_repo,
+                root=str(root_path),
+                candidate_file_paths=execution.fallback.candidate_file_paths,
+                steps=execution.fallback.steps,
+                timeout_seconds=resolved_timeout,
+                elapsed_ms=float(max(0.0, execution.outcome.elapsed_ms)),
+                fallback_mode=execution.fallback.fallback_mode,
+                debug_dump_path=execution.outcome.debug_dump_path,
+                policy_name=str(retrieval_policy or "general"),
+                recommendations=list(PLAN_TIMEOUT_RECOMMENDATIONS),
+            )
+            summary.update(build_plan_contract_summary_from_payload(fallback_payload))
+            summary["plan"] = fallback_payload
+        return summary
 
     plan_payload = sanitize_external_plan_payload(execution.payload)
     summary = {
@@ -178,11 +211,7 @@ def handle_plan_request(
             if isinstance(plan_payload.get("source_plan"), dict)
             else []
         ),
-        "candidate_files": len(
-            plan_payload.get("source_plan", {}).get("candidate_files", [])
-            if isinstance(plan_payload.get("source_plan"), dict)
-            else []
-        ),
+        "candidate_files": _count_plan_candidate_files(plan_payload),
         "total_ms": float(
             plan_payload.get("observability", {}).get("total_ms", 0.0)
             if isinstance(plan_payload.get("observability"), dict)

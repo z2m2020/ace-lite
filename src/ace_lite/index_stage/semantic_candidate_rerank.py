@@ -22,6 +22,7 @@ from ace_lite.embeddings import (
     rerank_candidates_with_cross_encoder,
     rerank_candidates_with_embeddings,
 )
+from ace_lite.index_stage.rerank_timeouts import rerank_embeddings_with_time_budget
 
 _EMBEDDING_PROVIDERS = frozenset({"hash", "bge_m3", "ollama", "sentence_transformers"})
 _CROSS_ENCODER_PROVIDERS = frozenset({"hash_cross", "hash_colbert", "bge_reranker"})
@@ -59,8 +60,15 @@ def apply_semantic_candidate_rerank(
     build_embedding_stats: Callable[..., dict[str, Any]],
     rerank_cross_encoder_with_time_budget: Callable[..., tuple[list[dict[str, Any]], Any]],
     perf_counter_fn: Callable[[], float] = perf_counter,
-    rerank_embeddings_fn: Callable[..., tuple[list[dict[str, Any]], Any]] = rerank_candidates_with_embeddings,
-    rerank_cross_encoder_fn: Callable[..., tuple[list[dict[str, Any]], Any]] = rerank_candidates_with_cross_encoder,
+    rerank_embeddings_fn: Callable[
+        ..., tuple[list[dict[str, Any]], Any]
+    ] = rerank_candidates_with_embeddings,
+    rerank_cross_encoder_fn: Callable[
+        ..., tuple[list[dict[str, Any]], Any]
+    ] = rerank_candidates_with_cross_encoder,
+    rerank_embeddings_with_time_budget_fn: Callable[..., tuple[list[dict[str, Any]], Any]] = (
+        rerank_embeddings_with_time_budget
+    ),
 ) -> SemanticCandidateRerankResult:
     _ = root
     embedding_runtime = resolve_embedding_runtime_config(
@@ -77,9 +85,7 @@ def apply_semantic_candidate_rerank(
         if str(item).strip()
     )
     normalization_notes = tuple(
-        str(item)
-        for item in getattr(embedding_runtime, "notes", ())
-        if str(item).strip()
+        str(item) for item in getattr(embedding_runtime, "notes", ()) if str(item).strip()
     )
 
     semantic_rerank_base_budget_ms = max(
@@ -91,9 +97,7 @@ def apply_semantic_candidate_rerank(
     if candidates:
         semantic_rerank_pool = min(semantic_rerank_pool, len(candidates))
 
-    adaptive_semantic_budget_applied = bool(
-        policy.get("semantic_rerank_adaptive", True)
-    )
+    adaptive_semantic_budget_applied = bool(policy.get("semantic_rerank_adaptive", True))
     if adaptive_semantic_budget_applied:
         pool_cap = max(
             1,
@@ -211,19 +215,39 @@ def apply_semantic_candidate_rerank(
                 )
             semantic_embedding_provider_impl = embedding_provider_impl
             try:
-                candidates, embedding_stats = rerank_embeddings_fn(
-                    candidates=candidates,
-                    files_map=files_map,
-                    query=query,
-                    provider=embedding_provider_impl,
-                    index_path=embedding_index_path,
-                    index_hash=index_hash,
-                    rerank_pool=max(1, int(semantic_rerank_pool)),
-                    lexical_weight=float(embedding_lexical_weight),
-                    semantic_weight=float(embedding_semantic_weight),
-                    min_similarity=float(embedding_min_similarity),
-                )
+                if semantic_rerank_budget_ms > 0:
+                    candidates, embedding_stats = rerank_embeddings_with_time_budget_fn(
+                        candidates=candidates,
+                        files_map=files_map,
+                        query=query,
+                        provider=embedding_provider_impl,
+                        index_path=embedding_index_path,
+                        index_hash=index_hash,
+                        rerank_pool=max(1, int(semantic_rerank_pool)),
+                        lexical_weight=float(embedding_lexical_weight),
+                        semantic_weight=float(embedding_semantic_weight),
+                        min_similarity=float(embedding_min_similarity),
+                        time_budget_ms=semantic_rerank_budget_ms,
+                        rerank_fn=rerank_embeddings_fn,
+                    )
+                else:
+                    candidates, embedding_stats = rerank_embeddings_fn(
+                        candidates=candidates,
+                        files_map=files_map,
+                        query=query,
+                        provider=embedding_provider_impl,
+                        index_path=embedding_index_path,
+                        index_hash=index_hash,
+                        rerank_pool=max(1, int(semantic_rerank_pool)),
+                        lexical_weight=float(embedding_lexical_weight),
+                        semantic_weight=float(embedding_semantic_weight),
+                        min_similarity=float(embedding_min_similarity),
+                    )
                 embeddings_payload = embedding_stats.to_dict()
+                embeddings_payload["semantic_rerank_applied"] = bool(
+                    int(getattr(embedding_stats, "reranked_count", 0) or 0) > 0
+                )
+                embeddings_payload["time_budget_exceeded"] = False
             except Exception as exc:
                 if not bool(embedding_fail_open):
                     raise
@@ -239,6 +263,8 @@ def apply_semantic_candidate_rerank(
                     fallback=True,
                     warning=str(exc)[:240],
                 )
+                embeddings_payload["semantic_rerank_applied"] = False
+                embeddings_payload["time_budget_exceeded"] = "time_budget_exceeded" in str(exc)
         elif provider_name in _CROSS_ENCODER_PROVIDERS:
             cross_encoder_provider: CrossEncoderProvider
             if provider_name == "hash_cross":
@@ -301,9 +327,7 @@ def apply_semantic_candidate_rerank(
                     warning=str(exc)[:240],
                 )
                 embeddings_payload["semantic_rerank_applied"] = False
-                embeddings_payload["time_budget_exceeded"] = "time_budget_exceeded" in str(
-                    exc
-                )
+                embeddings_payload["time_budget_exceeded"] = "time_budget_exceeded" in str(exc)
     mark_timing("embeddings", timing_started)
 
     embeddings_payload.setdefault("time_budget_ms", semantic_rerank_budget_ms)

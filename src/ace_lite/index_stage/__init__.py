@@ -100,6 +100,10 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         "ace_lite.index_stage.rerank_timeouts",
         "rerank_cross_encoder_with_time_budget",
     ),
+    "rerank_embeddings_with_time_budget": (
+        "ace_lite.index_stage.rerank_timeouts",
+        "rerank_embeddings_with_time_budget",
+    ),
     "rerank_rows_cross_encoder_with_time_budget": (
         "ace_lite.index_stage.rerank_timeouts",
         "rerank_rows_cross_encoder_with_time_budget",

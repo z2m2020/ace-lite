@@ -27,7 +27,9 @@ class TestNormalizationUtils:
 
     def test_normalize_path_basic(self):
         """Test basic path normalization."""
-        assert NormalizationUtils.normalize_path("C:\\Users\\Test\\file.py") == "c:/users/test/file.py"
+        assert (
+            NormalizationUtils.normalize_path("C:\\Users\\Test\\file.py") == "c:/users/test/file.py"
+        )
         assert NormalizationUtils.normalize_path("/path/to/file.py") == "/path/to/file.py"
         assert NormalizationUtils.normalize_path(None) == ""
         assert NormalizationUtils.normalize_path("  /path/to/file.py  ") == "/path/to/file.py"
@@ -109,6 +111,14 @@ class TestQueryFlags:
         assert flags.latest_sensitive is False
         assert flags.has_req_id is False
         assert flags.req_ids == ()
+
+    def test_from_query_code_intent_suppresses_weak_doc_sync_markers(self):
+        """Weak doc markers should not override obvious code intent."""
+        flags = QueryFlags.from_query(
+            "shutdown config.go controller.go phase.go auto_phase refresh"
+        )
+        assert flags.code_intent is True
+        assert flags.doc_sync is False
 
 
 class TestDomainStrategyRegistry:
