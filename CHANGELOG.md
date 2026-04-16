@@ -8,6 +8,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.89] - 2026-04-16
+
+### Changed
+
+- Narrowed local notes repo-boundary filtering so temporary or generic `context-map/memory_notes.jsonl` paths no longer suppress same-repo notes by accident.
+- Added regression coverage for generic notes paths and temp-root layouts while preserving explicit cross-repo filtering when the notes path carries a real repo boundary signal.
+
 ## [0.3.88] - 2026-04-16
 
 ### Added
