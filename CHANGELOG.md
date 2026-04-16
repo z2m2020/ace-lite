@@ -8,6 +8,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.87] - 2026-04-16
+
+### Changed
+
+- Hardened cross-platform source-plan path handling so default handoff artifact and notes paths are emitted as stable POSIX repo-relative paths on every OS, with regression coverage that now fails locally before Linux CI can drift.
+- Improved CI diagnostics by capturing `pytest` output to `pytest.log` and uploading it as an artifact on failures.
+- Strengthened the tag-driven PyPI/TestPyPI publish workflow with release concurrency guards, publish metadata summaries, and post-publish JSON API visibility verification for the expected package version.
+
 ## [0.3.86] - 2026-04-16
 
 ### Changed
