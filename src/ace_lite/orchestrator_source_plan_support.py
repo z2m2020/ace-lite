@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 
@@ -15,6 +15,12 @@ class OrchestratorSourcePlanRuntime:
     policy_version: str
     handoff_artifact_dir: str
     handoff_notes_path: str
+
+
+def _repo_relative_posix_path(*parts: str) -> str:
+    """Return a stable repo-relative path string regardless of local OS."""
+
+    return PurePosixPath(*parts).as_posix()
 
 
 def build_orchestrator_source_plan_runtime(
@@ -31,9 +37,10 @@ def build_orchestrator_source_plan_runtime(
         chunk_token_budget=int(chunking.token_budget),
         chunk_disclosure=str(chunking.disclosure),
         policy_version=str(retrieval.policy_version),
-        handoff_artifact_dir=str(Path("artifacts") / "handoffs" / "latest"),
+        handoff_artifact_dir=_repo_relative_posix_path("artifacts", "handoffs", "latest"),
         handoff_notes_path=str(
-            config.memory.capture.notes_path or "context-map/memory_notes.jsonl"
+            config.memory.capture.notes_path
+            or _repo_relative_posix_path("context-map", "memory_notes.jsonl")
         ),
     )
 

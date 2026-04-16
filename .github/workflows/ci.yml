@@ -34,7 +34,16 @@ jobs:
           pip install -e .[dev]
 
       - name: Run tests
-        run: python -m pytest -q
+        run: |
+          set -o pipefail
+          python -m pytest -q 2>&1 | tee pytest.log
+
+      - name: Upload pytest log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-log
+          path: pytest.log
 
   docs-validate:
     if: github.event.action != 'labeled'

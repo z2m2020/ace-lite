@@ -6,18 +6,22 @@
 
 Local-first, MCP-native Active Context Engine for AI coding.
 
+ACE-Lite ships both a CLI (`ace-lite`) and an MCP server entrypoint (`ace-lite-mcp`) so the same retrieval and planning stack can be used from terminals, CI, and MCP-compatible agent hosts.
+
 ACE-Lite avoids "dump the whole repository into the model" workflows. Instead, it runs a deterministic pipeline to distill structure, retrieve candidates with hybrid rankers, and produce a **source plan** (steps + constraints + selected files/chunks) you can execute and review.
 
 If you want full-repo packing with minimal setup, consider tools like Repomix. ACE-Lite is optimized for **top-k relevant context** with **benchmarkable retrieval quality**.
 
 ## Core capabilities
 
-- **Deterministic pipeline**: `memory -> index -> repomap -> augment -> skills -> source_plan`
+- **Deterministic pipeline**: `memory -> index -> repomap -> augment -> skills -> history_channel -> context_refine -> source_plan -> validation`
 - **Hybrid retrieval defaults**: multiple rankers + fusion (lexical / semantic / graph / worktree / feedback), with fail-open behavior
 - **Multi-language indexing** (tree-sitter): Python / TypeScript+TSX / JavaScript / Go / Solidity / Rust / Java / C / C++ / C# / Ruby / PHP
 - **Skill lazy-loading**: route Markdown skills by query intent, load section-level content only
 - **Dual-channel memory**: MCP primary with REST fallback
 - **RepoMap generation**: token-budgeted repository map (`json` + `md`)
+- **Validation-aware planning**: source plans can carry validation tests, patch artifacts, and evidence checks
+- **Workspace planning**: multi-repo routing, workspace summaries, and evidence-gated workspace plans
 - **Plugin hooks**: `before/after` stage hooks via in-process and MCP runtime
 - **Benchmark automation**: quality scoring, baseline comparison, and regression gates
 - **Layered config**: `home -> repo -> cwd -> CLI`
@@ -65,6 +69,11 @@ python -m venv .venv
 pip install -e .[dev]
 ```
 
+Requirements:
+
+- Python 3.10+
+- For source checkouts, rerun `ace-lite self-update` or `python -m pip install -e .[dev]` after pulling changes so console entrypoints and package metadata stay in sync
+
 ## Quickstart
 
 See `docs/README.md` and `docs/guides/GETTING_STARTED.md` for the fastest path.
@@ -74,6 +83,12 @@ One-command demo (after install):
 ```bash
 ace-lite demo
 ```
+
+Top-level CLI areas currently exposed by the codebase:
+
+- `plan`, `plan-quick`, `index`, `repomap`
+- `benchmark`, `workspace`, `runtime`, `doctor`
+- `memory`, `profile`, `feedback`, `skills`, `self-update`
 
 Build index:
 
@@ -96,6 +111,7 @@ ace-lite repomap build --root . --ranking-profile graph --output-json context-ma
 Run planner:
 
 ```bash
+ace-lite plan-quick --query "trace how benchmark thresholds are applied" --root . --top-k 8
 ace-lite plan --query "trace how benchmark thresholds are applied" --repo ace-lite-engine --root . --skills-dir skills
 ```
 
@@ -115,11 +131,28 @@ ace-lite memory wipe --namespace repo:ace-lite
 Service-mode runtime utilities:
 
 ```bash
+# Inspect resolved runtime settings and cache / MCP health
+ace-lite runtime settings show --root .
+ace-lite runtime doctor --root .
+ace-lite runtime doctor-mcp --root . --probe-endpoints
+
+# Generate or apply Codex MCP registration from current repo settings
+ace-lite runtime setup-codex-mcp --root . --skills-dir skills --dry-run
+
 # Watch layered config changes and validate reloads
 ace-lite runtime watch-config --root . --max-polls 10 --poll-interval-seconds 1
 
 # Run heartbeat + cron scheduler from `.ace-lite.yml` runtime section
 ace-lite runtime run-scheduler --root . --max-ticks 5 --tick-interval-seconds 60 --simulate-clock
+```
+
+Workspace planning and validation:
+
+```bash
+ace-lite workspace validate --manifest path/to/workspace.yaml
+ace-lite workspace summarize --manifest path/to/workspace.yaml
+ace-lite workspace plan --manifest path/to/workspace.yaml --query "where is auth token validation implemented"
+ace-lite workspace benchmark --manifest path/to/workspace.yaml --cases-json benchmark/workspace/cases/baseline_cases.json
 ```
 
 Run benchmark with regression gate:
@@ -128,6 +161,14 @@ Run benchmark with regression gate:
 ace-lite benchmark run --cases benchmark/cases/default.yaml --repo ace-lite-engine --root . --warmup-runs 1 --output artifacts/benchmark/latest --baseline artifacts/benchmark/baseline.json --benchmark-threshold-profile strict --dependency-recall-floor 0.8 --chunk-hit-tolerance 0.02 --chunk-budget-growth-factor 1.15 --validation-test-growth-factor 1.5 --fail-on-regression
 ace-lite benchmark run --cases benchmark/cases/default.yaml --repo ace-lite-engine --root . --warmup-runs 1 --no-include-plans --no-include-case-details --output artifacts/benchmark/ci-fast
 ace-lite benchmark report --input artifacts/benchmark/latest/results.json
+ace-lite benchmark diff --a artifacts/benchmark/latest/results.json --b artifacts/benchmark/baseline.json
+ace-lite benchmark tune-report --input artifacts/benchmark/latest/results.json --output artifacts/benchmark/tune-report/latest
+```
+
+MCP server entrypoint:
+
+```bash
+ace-lite-mcp --transport stdio --root . --skills-dir skills
 ```
 
 PowerShell helpers:
@@ -165,6 +206,8 @@ python scripts/run_release_freeze_regression.py --matrix-config benchmark/matrix
 - `skills/` Markdown skill manifests and sections
 - `benchmark/` cases, matrix config, scoring contracts
 - `scripts/` smoke/benchmark helper scripts
+- `integrations/` MCP and host integration assets
+- `plugins/` plugin examples and runtime extensions
 - `docs/` architecture and operational docs
 
 ## Index filtering (`.aceignore`)
@@ -201,10 +244,15 @@ pkg/contract/
 
 - Start here: `docs/README.md`
 - Getting started: `docs/guides/GETTING_STARTED.md`
+- Command cheatsheet: `docs/guides/CHEATSHEET.md`
+- Plan quick guide: `docs/guides/PLAN_QUICK.md`
 - MCP setup: `docs/guides/MCP_SETUP.md`
+- Runtime guide: `docs/guides/RUNTIME.md`
+- Workspace guide: `docs/guides/WORKSPACE.md`
 - Architecture overview: `docs/design/ARCHITECTURE_OVERVIEW.md`
 - Maintainer docs: `docs/maintainers/README.md`
 - Reference docs: `docs/reference/ACEIGNORE_COOKBOOK.md`
+- Upgrade guide: `docs/reference/UPGRADE_GUIDE.md`
 
 ## Known limitations
 
