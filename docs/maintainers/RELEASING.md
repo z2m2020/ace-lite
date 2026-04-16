@@ -49,9 +49,11 @@ Recommended setup:
 - Register the GitHub repository and workflow file with both:
   - PyPI production project: `ace-lite-engine`
   - TestPyPI project: `ace-lite-engine`
-- Keep the workflow environments named exactly:
-  - `pypi`
-  - `testpypi`
+- GitHub `environment` protection is optional.
+  If you later add workflow environments such as `pypi` or `testpypi`, the
+  Trusted Publisher entry on PyPI/TestPyPI must include the exact same
+  environment claim or the publish job will fail with an invalid-publisher
+  style error.
 
 Recommended release flow:
 
