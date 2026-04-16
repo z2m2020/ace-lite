@@ -185,7 +185,8 @@ class BoundedLoopController:
             )
             probe_results = (
                 probe_payload.get("results", [])
-                if isinstance(probe_payload, dict) and isinstance(probe_payload.get("results"), list)
+                if isinstance(probe_payload, dict)
+                and isinstance(probe_payload.get("results"), list)
                 else []
             )
             failed_probe_names: list[str] = []
@@ -235,9 +236,9 @@ class BoundedLoopController:
             build_agent_loop_action_v1(
                 action_type="request_more_context",
                 reason=reason,
-                query_hint=". ".join(
-                    part for part in hint_parts if part
-                )[: self.query_hint_max_chars],
+                query_hint=". ".join(part for part in hint_parts if part)[
+                    : self.query_hint_max_chars
+                ],
                 focus_paths=focus_paths,
                 metadata=metadata,
             ).as_dict(),
@@ -260,29 +261,46 @@ class BoundedLoopController:
         blocker_count = int(findings.get("blocker_count", 0) or 0)
         status = str(findings.get("status") or "").strip().lower()
         probe_status = str(findings.get("probe_status") or "").strip().lower()
-        has_blocking_signal = blocker_count > 0 or status in {
-            "failed",
-            "degraded",
-        } or probe_status in {"failed", "degraded"}
+        has_blocking_signal = (
+            blocker_count > 0
+            or status
+            in {
+                "failed",
+                "degraded",
+            }
+            or probe_status in {"failed", "degraded"}
+        )
         if not has_blocking_signal:
             return None
 
         raw_focus_paths = findings.get("focus_paths", [])
         focus_paths = (
-            [
-                str(item).strip().replace("\\", "/")
-                for item in raw_focus_paths
-                if str(item).strip()
-            ][: self.max_focus_paths]
+            [str(item).strip().replace("\\", "/") for item in raw_focus_paths if str(item).strip()][
+                : self.max_focus_paths
+            ]
             if isinstance(raw_focus_paths, list)
             else []
         )
         query_hint = str(findings.get("query_hint") or "").strip()
+        refine_hints = (
+            findings.get("refine_hints", [])
+            if isinstance(findings.get("refine_hints"), list)
+            else []
+        )
         recommendations = (
             findings.get("recommendations", [])
             if isinstance(findings.get("recommendations"), list)
             else []
         )
+        effective_refine_hints = [item for item in refine_hints if str(item).strip()] or [
+            item for item in recommendations if str(item).strip()
+        ]
+        if not query_hint:
+            for item in effective_refine_hints:
+                text = str(item).strip()
+                if text:
+                    query_hint = text
+                    break
         if not query_hint:
             for item in recommendations:
                 text = str(item).strip()
@@ -297,6 +315,11 @@ class BoundedLoopController:
             "schema_version": "validation_findings_v1",
             "governance_mode": "advisory_report_only",
             "allowed_effect": "request_more_context_only",
+            "request_more_context_reason": str(
+                findings.get("request_more_context_reason") or "source_plan_validation_findings"
+            ).strip(),
+            "refine_hint_count": len(effective_refine_hints),
+            "focus_path_count": len(focus_paths),
             "status": str(findings.get("status") or "").strip(),
             "probe_status": str(findings.get("probe_status") or "").strip(),
             "warn_count": int(findings.get("warn_count", 0) or 0),
@@ -360,9 +383,7 @@ class BoundedLoopController:
         parts = [str(base_query or "").strip()]
         query_hint = str(normalized.get("query_hint") or "").strip()
         if query_hint:
-            parts.append(
-                f"Focus refinement: {query_hint[: self.query_hint_max_chars]}"
-            )
+            parts.append(f"Focus refinement: {query_hint[: self.query_hint_max_chars]}")
         focus_paths = normalized.get("focus_paths", [])
         if isinstance(focus_paths, list) and focus_paths:
             parts.append(
@@ -384,11 +405,7 @@ class BoundedLoopController:
             return {}
         focus_paths = normalized.get("focus_paths", [])
         normalized_focus_paths = (
-            [
-                str(item).strip().replace("\\", "/")
-                for item in focus_paths
-                if str(item).strip()
-            ]
+            [str(item).strip().replace("\\", "/") for item in focus_paths if str(item).strip()]
             if isinstance(focus_paths, list)
             else []
         )
@@ -483,13 +500,9 @@ class BoundedLoopController:
             AgentLoopIterationRecord(
                 index=len(self._iterations) + 1,
                 action=normalized,
-                rerun_policy=(
-                    dict(rerun_policy) if isinstance(rerun_policy, dict) else {}
-                ),
+                rerun_policy=(dict(rerun_policy) if isinstance(rerun_policy, dict) else {}),
                 retrieval_refinement=(
-                    dict(retrieval_refinement)
-                    if isinstance(retrieval_refinement, dict)
-                    else {}
+                    dict(retrieval_refinement) if isinstance(retrieval_refinement, dict) else {}
                 ),
                 query=str(query or ""),
                 rerun_stages=tuple(str(item) for item in rerun_stages),
@@ -510,9 +523,7 @@ class BoundedLoopController:
         last_action: dict[str, Any] | None = None,
         final_query: str = "",
     ) -> dict[str, Any]:
-        normalized_stop_reason = (
-            str(stop_reason or "").strip().lower() or "completed"
-        )
+        normalized_stop_reason = str(stop_reason or "").strip().lower() or "completed"
         if normalized_stop_reason not in AGENT_LOOP_STOP_REASONS:
             normalized_stop_reason = "completed"
         branch_candidates = [
@@ -547,9 +558,7 @@ class BoundedLoopController:
             if not action_type:
                 continue
             action_type_counts[action_type] = action_type_counts.get(action_type, 0) + 1
-        last_rerun_policy = (
-            dict(self._iterations[-1].rerun_policy) if self._iterations else {}
-        )
+        last_rerun_policy = dict(self._iterations[-1].rerun_policy) if self._iterations else {}
         return AgentLoopSummaryV1(
             enabled=self.enabled,
             attempted=self.iteration_count > 0,

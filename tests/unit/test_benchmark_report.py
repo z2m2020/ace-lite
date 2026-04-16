@@ -740,10 +740,22 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "Seed count means: worktree=1.00; subgraph=2.00; seed_candidates=3.00" in report
     assert "Cache hit ratios: cache=0.5000; precompute=1.0000" in report
     assert "Normalization ratios: log1p=1.0000; linear=0.0000" in report
-    assert "Weight means: scip=0.30; xref=0.20; query_xref=0.20; symbol=0.10; import=0.10; coverage=0.10" in report
-    assert "Guard summary: guarded=0.5000; candidate_count_mean=6.00; max_candidates_mean=4.00; min_terms_mean=1.00; max_terms_mean=5.00" in report
-    assert "Signal maxima mean: inbound=4.00; xref=3.00; query=2.00; symbol=1.00; import=1.00; coverage=0.67" in report
-    assert "Guard reason ratios: candidate_count=0.5000; query_terms_too_few=0.2500; query_terms_too_many=0.0000" in report
+    assert (
+        "Weight means: scip=0.30; xref=0.20; query_xref=0.20; symbol=0.10; import=0.10; coverage=0.10"
+        in report
+    )
+    assert (
+        "Guard summary: guarded=0.5000; candidate_count_mean=6.00; max_candidates_mean=4.00; min_terms_mean=1.00; max_terms_mean=5.00"
+        in report
+    )
+    assert (
+        "Signal maxima mean: inbound=4.00; xref=3.00; query=2.00; symbol=1.00; import=1.00; coverage=0.67"
+        in report
+    )
+    assert (
+        "Guard reason ratios: candidate_count=0.5000; query_terms_too_few=0.2500; query_terms_too_many=0.0000"
+        in report
+    )
     assert "## Deep Symbol Summary" in report
     assert "## Chunk Stage Miss Summary" in report
     assert "## Decision Observability Summary" in report
@@ -768,7 +780,10 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "comparison_lane: stale_majority" in report
     assert "retrieval_surface: deep_symbol" in report
     assert "deep_symbol_case: 1.0000" in report
-    assert "| stale_majority | 1 | 0.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.3333 | 1.0000 | 1.0000 | 2.0000 |" in report
+    assert (
+        "| stale_majority | 1 | 0.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.3333 | 1.0000 | 1.0000 | 2.0000 |"
+        in report
+    )
     assert "task_success_failed_checks: validation_tests" in report
     assert "evidence_insufficiency_reason: missing_validation" in report
     assert "evidence_insufficiency_signals: missing_validation_tests, noisy_hit" in report
@@ -794,9 +809,17 @@ def test_build_report_markdown_includes_baseline_and_regression() -> None:
     assert "| helpful | 1 | 1.0000 | 1 | 1.0000 |" in report
     assert "| selected | 1 | 1.0000 | 1 | 1.0000 |" in report
     assert "chunk_stage_miss: source_plan_pack_miss" in report
-    assert "decision_event: index | retry | candidate_postprocess | reason=low_candidate_count | outcome=applied" in report
-    assert "decision_event: skills | skip | skills_hydration | reason=token_budget_exhausted" in report
-    assert "slo_downgrade_signals: parallel_docs_timeout, embedding_time_budget_exceeded, chunk_semantic_fallback" in report
+    assert (
+        "decision_event: index | retry | candidate_postprocess | reason=low_candidate_count | outcome=applied"
+        in report
+    )
+    assert (
+        "decision_event: skills | skip | skills_hydration | reason=token_budget_exhausted" in report
+    )
+    assert (
+        "slo_downgrade_signals: parallel_docs_timeout, embedding_time_budget_exceeded, chunk_semantic_fallback"
+        in report
+    )
     assert "parallel_docs_timeout_ratio" in report
     assert "skills_token_budget_used_mean" in report
     assert "skills_budget_exhausted_ratio" in report
@@ -1051,15 +1074,18 @@ def test_write_results_emits_summary_sidecar(tmp_path: Path) -> None:
     assert summary["comparison_lane_summary"]["lane_count"] == 1
     assert summary["comparison_lane_summary"]["lanes"][0]["comparison_lane"] == "stale_majority"
     assert summary["evidence_insufficiency_summary"]["evidence_insufficient_count"] == 1
-    assert summary["chunk_stage_miss_summary"]["labels"] == {
-        "candidate_chunks_miss": 1
-    }
+    assert summary["chunk_stage_miss_summary"]["labels"] == {"candidate_chunks_miss": 1}
     assert summary["decision_observability_summary"]["decision_event_count"] == 1
     assert summary["ltm_explainability_summary"]["selected_count_mean"] == 2.0
     assert summary["ltm_explainability_summary"]["plan_constraint_case_count"] == 1
     assert summary["ltm_explainability_summary"]["feedback_signal_observed_case_count"] == 1
-    assert summary["ltm_explainability_summary"]["feedback_signals"][0]["feedback_signal"] == "helpful"
-    assert summary["ltm_explainability_summary"]["attribution_scopes"][0]["attribution_scope"] == "selected"
+    assert (
+        summary["ltm_explainability_summary"]["feedback_signals"][0]["feedback_signal"] == "helpful"
+    )
+    assert (
+        summary["ltm_explainability_summary"]["attribution_scopes"][0]["attribution_scope"]
+        == "selected"
+    )
 
 
 def test_build_results_summary_defaults_missing_fields() -> None:
@@ -1087,9 +1113,7 @@ def test_build_results_summary_preserves_adaptive_router_arm_summary() -> None:
                 "shadow": {
                     "arm_count": 1,
                     "observed_case_count": 2,
-                    "arms": [
-                        {"arm_id": "feature_graph", "case_count": 2, "case_rate": 1.0}
-                    ],
+                    "arms": [{"arm_id": "feature_graph", "case_count": 2, "case_rate": 1.0}],
                 },
             },
         }
@@ -1162,7 +1186,9 @@ def test_build_results_summary_preserves_adaptive_router_observability_summary()
 
     assert summary["adaptive_router_observability_summary"]["agreement_rate"] == 0.5
     assert summary["adaptive_router_observability_summary"]["shadow_coverage_rate"] == 1.0
-    assert summary["adaptive_router_observability_summary"]["executed_arms"][0]["arm_id"] == "feature"
+    assert (
+        summary["adaptive_router_observability_summary"]["executed_arms"][0]["arm_id"] == "feature"
+    )
     assert summary["adaptive_router_observability_summary"]["shadow_source_counts"] == {
         "fallback": 1,
         "model": 1,
@@ -1193,12 +1219,7 @@ def test_build_results_summary_preserves_retrieval_control_plane_gate_summary() 
     )
 
     assert summary["retrieval_control_plane_gate_summary"]["gate_passed"] is True
-    assert (
-        summary["retrieval_control_plane_gate_summary"][
-            "adaptive_router_shadow_coverage"
-        ]
-        == 0.9
-    )
+    assert summary["retrieval_control_plane_gate_summary"]["adaptive_router_shadow_coverage"] == 0.9
 
 
 def test_build_results_summary_preserves_retrieval_frontier_gate_summary() -> None:
@@ -1225,9 +1246,7 @@ def test_build_results_summary_preserves_retrieval_frontier_gate_summary() -> No
     )
 
     assert summary["retrieval_frontier_gate_summary"]["gate_passed"] is False
-    assert summary["retrieval_frontier_gate_summary"]["failed_checks"] == [
-        "precision_at_k"
-    ]
+    assert summary["retrieval_frontier_gate_summary"]["failed_checks"] == ["precision_at_k"]
 
 
 def test_build_results_summary_preserves_repomap_seed_summary() -> None:
@@ -1439,6 +1458,8 @@ def test_build_results_summary_preserves_wave1_context_governance_summary() -> N
                 "plan_available_case_rate": 1.0,
                 "history_hits_case_count": 1,
                 "history_hits_case_rate": 0.5,
+                "history_path_count_mean": 1.0,
+                "history_matched_path_count_mean": 1.5,
                 "candidate_review_case_count": 2,
                 "candidate_review_case_rate": 1.0,
                 "candidate_review_watch_case_count": 1,
@@ -1464,6 +1485,8 @@ def test_build_results_summary_preserves_wave1_context_governance_summary() -> N
         "plan_available_case_rate": 1.0,
         "history_hits_case_count": 1,
         "history_hits_case_rate": 0.5,
+        "history_path_count_mean": 1.0,
+        "history_matched_path_count_mean": 1.5,
         "candidate_review_case_count": 2,
         "candidate_review_case_rate": 1.0,
         "candidate_review_watch_case_count": 1,
@@ -1811,13 +1834,19 @@ def test_build_report_markdown_includes_graph_context_source_summary() -> None:
     )
 
     assert "## Graph Context Source Summary" in report
-    assert "Source loaded ratio: 1.0000; projection fallback ratio: 1.0000; edge count mean: 5.00" in report
+    assert (
+        "Source loaded ratio: 1.0000; projection fallback ratio: 1.0000; edge count mean: 5.00"
+        in report
+    )
     assert "Inbound signal chunk count mean / coverage ratio: 2.00 / 1.0000" in report
     assert "Centrality signal chunk count mean / coverage ratio: 2.00 / 1.0000" in report
     assert "Pagerank signal chunk count mean / coverage ratio: 1.00 / 0.5000" in report
     assert "graph_source_provider_loaded: 1.0000" in report
     assert "graph_source_edge_count: 5.0000" in report
-    assert "graph_context_source: provider_loaded=True, projection_fallback=True, edge_count=5, inbound_signal_chunk_count=2, inbound_signal_coverage_ratio=1.0000, centrality_signal_chunk_count=2, centrality_signal_coverage_ratio=1.0000, pagerank_signal_chunk_count=1, pagerank_signal_coverage_ratio=0.5000" in report
+    assert (
+        "graph_context_source: provider_loaded=True, projection_fallback=True, edge_count=5, inbound_signal_chunk_count=2, inbound_signal_coverage_ratio=1.0000, centrality_signal_chunk_count=2, centrality_signal_coverage_ratio=1.0000, pagerank_signal_chunk_count=1, pagerank_signal_coverage_ratio=0.5000"
+        in report
+    )
 
 
 def test_build_report_markdown_prefers_top_level_validation_branch_summary() -> None:
@@ -1928,7 +1957,10 @@ def test_build_report_markdown_includes_source_plan_validation_feedback_summary(
 
     assert "## Source Plan Validation Feedback Summary" in report
     assert "Present ratio: 1.0000; issue count mean: 2.0000; failure rate: 1.0000" in report
-    assert "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000" in report
+    assert (
+        "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000"
+        in report
+    )
     assert "Selected test count mean: 1.0000; executed test count mean: 1.0000" in report
 
 
@@ -1962,7 +1994,10 @@ def test_build_report_markdown_prefers_top_level_source_plan_validation_feedback
 
     assert "## Source Plan Validation Feedback Summary" in report
     assert "Present ratio: 1.0000; issue count mean: 2.0000; failure rate: 1.0000" in report
-    assert "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000" in report
+    assert (
+        "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000"
+        in report
+    )
     assert "Selected test count mean: 1.0000; executed test count mean: 1.0000" in report
 
 
@@ -1979,6 +2014,8 @@ def test_build_report_markdown_includes_wave1_context_governance_summary() -> No
                 "plan_available_case_rate": 1.0,
                 "history_hits_case_count": 1,
                 "history_hits_case_rate": 0.5,
+                "history_path_count_mean": 1.0,
+                "history_matched_path_count_mean": 1.5,
                 "candidate_review_case_count": 2,
                 "candidate_review_case_rate": 1.0,
                 "candidate_review_watch_case_count": 1,
@@ -2062,9 +2099,15 @@ def test_build_report_markdown_includes_source_plan_failure_signal_summary() -> 
 
     assert "## Source Plan Failure Signal Summary" in report
     assert "Present ratio: 1.0000; issue count mean: 2.0000; failure rate: 1.0000" in report
-    assert "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000" in report
+    assert (
+        "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000"
+        in report
+    )
     assert "Selected test count mean: 1.0000; executed test count mean: 1.0000" in report
-    assert "Origin ratios: replay_cache=1.0000; observability=0.0000; source_plan=0.0000; validate_step=0.0000" in report
+    assert (
+        "Origin ratios: replay_cache=1.0000; observability=0.0000; source_plan=0.0000; validate_step=0.0000"
+        in report
+    )
 
 
 def test_build_report_markdown_prefers_top_level_source_plan_failure_signal_summary() -> None:
@@ -2105,9 +2148,15 @@ def test_build_report_markdown_prefers_top_level_source_plan_failure_signal_summ
 
     assert "## Source Plan Failure Signal Summary" in report
     assert "Present ratio: 1.0000; issue count mean: 2.0000; failure rate: 1.0000" in report
-    assert "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000" in report
+    assert (
+        "Probe issue count mean: 1.0000; probe executed count mean: 1.0000; probe failure rate: 1.0000"
+        in report
+    )
     assert "Selected test count mean: 1.0000; executed test count mean: 1.0000" in report
-    assert "Origin ratios: replay_cache=1.0000; observability=0.0000; source_plan=0.0000; validate_step=0.0000" in report
+    assert (
+        "Origin ratios: replay_cache=1.0000; observability=0.0000; source_plan=0.0000; validate_step=0.0000"
+        in report
+    )
 
 
 def test_build_report_markdown_includes_learning_router_rollout_summary() -> None:
@@ -2142,13 +2191,12 @@ def test_build_report_markdown_includes_learning_router_rollout_summary() -> Non
     assert "Shadow mode: 2/4 (0.5000); shadow-ready: 2/4 (0.5000)" in report
     assert "Source-plan cards present: 3/4 (0.7500); failure-signal blocked: 1/4 (0.2500)" in report
     assert "Guarded-rollout eligible: 1/4 (0.2500)" in report
-    assert (
-        "Reason counts: adaptive_router_disabled=1, eligible_pending_guarded_rollout=1"
-        in report
-    )
+    assert "Reason counts: adaptive_router_disabled=1, eligible_pending_guarded_rollout=1" in report
 
 
-def test_build_report_markdown_prefers_frontier_gate_summary_for_deep_symbol_and_native_scip() -> None:
+def test_build_report_markdown_prefers_frontier_gate_summary_for_deep_symbol_and_native_scip() -> (
+    None
+):
     report = build_report_markdown(
         {
             "repo": "demo",
@@ -2596,7 +2644,10 @@ def test_build_report_markdown_includes_adaptive_router_observability_summary() 
     assert "- Agreement: 1/2 (0.5000)" in report
     assert "- Shadow sources: fallback=1, model=1" in report
     assert "### Executed Arms" in report
-    assert "- feature: cases=2 rate=1.0000 task_success=0.0000 mrr=0.0000 fallback_cases=0 downgrade_cases=0" in report
+    assert (
+        "- feature: cases=2 rate=1.0000 task_success=0.0000 mrr=0.0000 fallback_cases=0 downgrade_cases=0"
+        in report
+    )
     assert "### Shadow Arms" in report
 
 
@@ -2732,13 +2783,31 @@ def test_build_report_markdown_includes_retrieval_default_strategy_summary() -> 
     )
 
     assert "## Retrieval Default Strategy Summary" in report
-    assert "- Retrieval-context cases: 2/2 (1.0000); parent-symbol: 2/2 (1.0000); reference-hint: 1/2 (0.5000)" in report
-    assert "- Semantic rerank default: configured=2/2 (1.0000); enabled=2/2 (1.0000); applied=1/2 (0.5000); mode=cross_encoder; provider=hash_colbert" in report
+    assert (
+        "- Retrieval-context cases: 2/2 (1.0000); parent-symbol: 2/2 (1.0000); reference-hint: 1/2 (0.5000)"
+        in report
+    )
+    assert (
+        "- Semantic rerank default: configured=2/2 (1.0000); enabled=2/2 (1.0000); applied=1/2 (0.5000); mode=cross_encoder; provider=hash_colbert"
+        in report
+    )
     assert "- Semantic rerank providers: hash_colbert=1, hash_cross=1" in report
-    assert "- Graph lookup default: enabled=2/2 (1.0000); guarded=1/2 (0.5000); normalization=log1p" in report
-    assert "- Graph lookup guard means: pool=4.0000; max_candidates=4.0000; min_query_terms=1.0000; max_query_terms=5.0000" in report
-    assert "- Topological shield default: enabled=2/2 (1.0000); report_only=2/2 (1.0000); mode=report_only" in report
-    assert "- Topological shield attenuation means: max=0.6000; shared_parent=0.2000; adjacency=0.5000" in report
+    assert (
+        "- Graph lookup default: enabled=2/2 (1.0000); guarded=1/2 (0.5000); normalization=log1p"
+        in report
+    )
+    assert (
+        "- Graph lookup guard means: pool=4.0000; max_candidates=4.0000; min_query_terms=1.0000; max_query_terms=5.0000"
+        in report
+    )
+    assert (
+        "- Topological shield default: enabled=2/2 (1.0000); report_only=2/2 (1.0000); mode=report_only"
+        in report
+    )
+    assert (
+        "- Topological shield attenuation means: max=0.6000; shared_parent=0.2000; adjacency=0.5000"
+        in report
+    )
 
 
 def test_build_report_markdown_includes_missing_context_risk_summary() -> None:
@@ -2814,10 +2883,7 @@ def test_build_report_markdown_includes_retrieval_control_plane_gate_summary() -
     assert "- Regression evaluated: yes" in report
     assert "- Benchmark regression detected: no" in report
     assert "- Benchmark regression gate: pass" in report
-    assert (
-        "- Adaptive router shadow coverage: 0.9000 (threshold >= 0.8000, pass)"
-        in report
-    )
+    assert "- Adaptive router shadow coverage: 0.9000 (threshold >= 0.8000, pass)" in report
     assert "- Risk-upgrade precision gain: 0.1200 (threshold >= 0.0000, pass)" in report
     assert "- Latency p95 ms: 640.00 (threshold <= 650.00, pass)" in report
 
@@ -2891,15 +2957,11 @@ def test_build_report_markdown_includes_retrieval_control_plane_gate_failure_sta
     assert "- Gate passed: no" in report
     assert "- Benchmark regression detected: yes" in report
     assert "- Benchmark regression gate: fail" in report
-    assert (
-        "- Adaptive router shadow coverage: 0.7400 (threshold >= 0.8000, fail)"
-        in report
-    )
+    assert "- Adaptive router shadow coverage: 0.7400 (threshold >= 0.8000, fail)" in report
     assert "- Risk-upgrade precision gain: -0.0300 (threshold >= 0.0000, fail)" in report
     assert "- Latency p95 ms: 880.00 (threshold <= 650.00, fail)" in report
     assert (
-        "- Failed checks: benchmark_regression_detected, adaptive_router_shadow_coverage"
-        in report
+        "- Failed checks: benchmark_regression_detected, adaptive_router_shadow_coverage" in report
     )
 
 
@@ -3339,7 +3401,9 @@ def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> N
     assert "Runtime memory events: 1" in report
     assert "Developer issues: 1 open=1 fixes=1 resolution_rate=1.0000" in report
     assert "Memory stage latency avg: 5.00 ms" in report
-    assert "LTM signal coverage: feedback_cases=1/2 (0.5000); attribution_cases=1/2 (0.5000)" in report
+    assert (
+        "LTM signal coverage: feedback_cases=1/2 (0.5000); attribution_cases=1/2 (0.5000)" in report
+    )
     assert "Benchmark LTM latency overhead: 3.50 ms" in report
     assert "Benchmark/runtime alignment gap: 1.50 ms" in report
     assert "Benchmark/runtime ratio: 0.7000" in report
@@ -3349,7 +3413,10 @@ def test_build_report_markdown_includes_runtime_stats_preference_snapshot() -> N
     assert "### Next Cycle Input" in report
     assert "Primary stream: memory" in report
     assert "| memory_fallback | memory | memory | 3 | 1 | 1 |" in report
-    assert "Memory focus: reasons=1 runtime_events=1 open_issues=1 fixes=1 resolution_rate=1.0000" in report
+    assert (
+        "Memory focus: reasons=1 runtime_events=1 open_issues=1 fixes=1 resolution_rate=1.0000"
+        in report
+    )
     assert "### Preference Snapshot" in report
     assert "- Preference observed cases: 2/2 (1.0000)" in report
     assert "- Preference profile-selected mean: 1.5000" in report

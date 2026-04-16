@@ -123,6 +123,11 @@ def _base_row_kwargs() -> dict[str, object]:
         "skills_hydration_latency_ms": 2.4,
         "skills_metadata_only_routing": True,
         "skills_precomputed_route": True,
+        "skills_manifest_metadata_only_selected_count": 1,
+        "skills_manifest_body_scan_selected_count": 1,
+        "skills_selected_matched_count_mean": 2.0,
+        "skills_selected_signal_count_mean": 1.5,
+        "skills_selected_priority_mean": 3.0,
         "candidate_rows_materialized_count": 4,
         "candidate_chunks_materialized_count": 2,
         "source_plan_candidate_chunks_materialized_count": 1,
@@ -353,6 +358,11 @@ def test_build_case_evaluation_row_contract() -> None:
     assert row["source_plan_validation_feedback_selected_test_count"] == 1.0
     assert row["source_plan_validation_feedback_executed_test_count"] == 1.0
     assert row["skills_budget_exhausted"] == 1.0
+    assert row["skills_manifest_metadata_only_selected_count"] == 1.0
+    assert row["skills_manifest_body_scan_selected_count"] == 1.0
+    assert row["skills_selected_matched_count_mean"] == 2.0
+    assert row["skills_selected_signal_count_mean"] == 1.5
+    assert row["skills_selected_priority_mean"] == 3.0
     assert row["candidate_rows_materialized_count"] == 4.0
     assert row["candidate_chunks_materialized_count"] == 2.0
     assert row["source_plan_candidate_chunks_materialized_count"] == 1.0
@@ -524,9 +534,12 @@ def test_build_case_evaluation_row_contract() -> None:
         "stop_reason": "completed",
         "replay_safe": True,
         "last_policy_id": "source_plan_refresh",
+        "last_action_reason": "",
         "request_more_context_count": 1,
         "request_source_plan_retry_count": 1,
         "request_validation_retry_count": 0,
+        "validation_findings_refine_applied": False,
+        "validation_findings_refine_focus_path_count": 0,
     }
     assert row["feedback_loop"] == {
         "feedback_surface": "issue_report_export_cli",

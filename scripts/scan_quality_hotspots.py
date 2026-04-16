@@ -18,7 +18,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-
+from typing import Any, ClassVar
 
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
@@ -66,18 +66,18 @@ class HotspotScanner:
     """Scanner for quality hotspots."""
 
     # Source directories to scan
-    SOURCE_DIRS = [
+    SOURCE_DIRS: ClassVar[list[Path]] = [
         PROJECT_ROOT / "src" / "ace_lite",
     ]
 
     # Test directories to scan
-    TEST_DIRS = [
+    TEST_DIRS: ClassVar[list[Path]] = [
         PROJECT_ROOT / "tests" / "unit",
         PROJECT_ROOT / "tests" / "integration",
     ]
 
     # Exclude patterns
-    EXCLUDE_PATTERNS = [
+    EXCLUDE_PATTERNS: ClassVar[list[str]] = [
         "__pycache__",
         ".pyc",
         ".pyo",
@@ -86,17 +86,17 @@ class HotspotScanner:
     ]
 
     # Scan patterns for each metric
-    SCAN_PATTERNS = {
+    SCAN_PATTERNS: ClassVar[dict[str, dict[str, Any]]] = {
         "M-ARCH-01": {
             "name": "dict_fallback_sites",
             "description": "裸 dict/ctx.state/.get() 防御代码位置",
             "patterns": [
                 # Bare dict with Any
-                (r'dict\s*\<\s*str\s*,\s*Any\s*\>', "bare_dict_any"),
+                (r"dict\s*\<\s*str\s*,\s*Any\s*\>", "bare_dict_any"),
                 # ctx.state access
-                (r'ctx\.state\s*\[', "ctx_state_access"),
+                (r"ctx\.state\s*\[", "ctx_state_access"),
                 # ctx.state.get()
-                (r'ctx\.state\.get\(', "ctx_state_get"),
+                (r"ctx\.state\.get\(", "ctx_state_get"),
                 # .get() chains
                 (r'\.get\(\s*["\'][^"\']+["\']\s*\)\s*\.get\(', "nested_get_chain"),
             ],
@@ -106,8 +106,8 @@ class HotspotScanner:
             "name": "cache_deepcopy_count",
             "description": "copy.deepcopy 调用次数",
             "patterns": [
-                (r'copy\.deepcopy\(', "deepcopy_call"),
-                (r'from\s+copy\s+import\s+deepcopy', "deepcopy_import"),
+                (r"copy\.deepcopy\(", "deepcopy_call"),
+                (r"from\s+copy\s+import\s+deepcopy", "deepcopy_import"),
             ],
             "include_files": [
                 "cache",
@@ -119,15 +119,15 @@ class HotspotScanner:
             "description": "宽泛 except Exception 站点",
             "patterns": [
                 # except Exception:
-                (r'except\s+Exception\s*:', "broad_exception"),
+                (r"except\s+Exception\s*:", "broad_exception"),
                 # except Exception as e:
-                (r'except\s+Exception\s+as\s+\w+\s*:', "broad_exception_named"),
+                (r"except\s+Exception\s+as\s+\w+\s*:", "broad_exception_named"),
                 # except:
-                (r'except\s*:\s*(?:  # noqa)', "bare_except"),
+                (r"except\s*:\s*(?:  # noqa)", "bare_except"),
             ],
             "exclude_patterns": [
-                r'except\s+\(.*Exception.*\)',  # Tupled exceptions are OK
-                r'except\s+.*Error\s*:',  # Specific errors are OK
+                r"except\s+\(.*Exception.*\)",  # Tupled exceptions are OK
+                r"except\s+.*Error\s*:",  # Specific errors are OK
             ],
         },
         "M-PLAN-01": {
@@ -135,13 +135,13 @@ class HotspotScanner:
             "description": "marker/boost/domain 规则聚类",
             "patterns": [
                 # Marker definitions
-                (r'_MARKER[S]?\s*=\s*\[', "marker_definition"),
+                (r"_MARKER[S]?\s*=\s*\[", "marker_definition"),
                 # Boost/Penalty patterns
-                (r'_?(boost|penalty)\w*\s*[=:]', "boost_penalty"),
+                (r"_?(boost|penalty)\w*\s*[=:]", "boost_penalty"),
                 # Domain patterns
-                (r'_?(domain|path_match)\w*\s*[=:]', "domain_pattern"),
+                (r"_?(domain|path_match)\w*\s*[=:]", "domain_pattern"),
                 # Intent patterns
-                (r'_?(intent|strategy)\w*\s*[=:]', "intent_strategy"),
+                (r"_?(intent|strategy)\w*\s*[=:]", "intent_strategy"),
             ],
             "include_files": [
                 "plan_quick",
@@ -159,7 +159,9 @@ class HotspotScanner:
             self.root / "tests" / "integration",
         ]
 
-    def _should_scan_file(self, file_path: Path, include_files: list, exclude_patterns: list) -> bool:
+    def _should_scan_file(
+        self, file_path: Path, include_files: list, exclude_patterns: list
+    ) -> bool:
         """Check if file should be scanned."""
         # Check exclusions
         path_str = str(file_path)
@@ -198,10 +200,7 @@ class HotspotScanner:
 
     def _should_exclude_line(self, line: str, exclude_patterns: list) -> bool:
         """Check if line should be excluded based on exclusion patterns."""
-        for pattern in exclude_patterns:
-            if re.search(pattern, line):
-                return True
-        return False
+        return any(re.search(pattern, line) for pattern in exclude_patterns)
 
     def scan_metric(self, metric_id: str, include_tests: bool = False) -> ScanResults:
         """Scan for a specific metric."""
@@ -328,8 +327,6 @@ def main() -> int:
     scanner = HotspotScanner()
 
     metric_ids = args.filters if args.filters else None
-    include_tests = not args.no_tests
-
     report = build_hotspots_report(scanner, metric_ids=metric_ids)
 
     if args.summary:

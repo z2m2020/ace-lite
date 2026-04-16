@@ -28,11 +28,27 @@ FORBIDDEN_TEXT_MARKERS = (
     "artifacts\\benchmark\\",
 )
 REPORT_ONLY_VALIDATION_FINDINGS = (
-    REPO_ROOT / "src" / "ace_lite" / "source_plan" / "report_only.py"
+    REPO_ROOT / "src" / "ace_lite" / "source_plan" / "report_only_review.py"
 )
 AGENT_LOOP_CONTROLLER = REPO_ROOT / "src" / "ace_lite" / "agent_loop" / "controller.py"
 GOVERNANCE_DOC = REPO_ROOT / "docs" / "maintainers" / "REPORT_LAYER_GOVERNANCE.md"
 CONTEXT_REPORT = REPO_ROOT / "src" / "ace_lite" / "context_report.py"
+SOURCE_PLAN_STAGE = REPO_ROOT / "src" / "ace_lite" / "pipeline" / "stages" / "source_plan.py"
+REPORT_LAYER_MODULES = (
+    REPO_ROOT / "src" / "ace_lite" / "context_report.py",
+    REPO_ROOT / "src" / "ace_lite" / "context_report_sections.py",
+    REPO_ROOT / "src" / "ace_lite" / "retrieval_graph_view.py",
+    REPO_ROOT / "src" / "ace_lite" / "source_plan" / "report_only.py",
+    REPO_ROOT / "src" / "ace_lite" / "benchmark" / "report.py",
+    REPO_ROOT / "src" / "ace_lite" / "benchmark" / "report_summary.py",
+    REPO_ROOT / "src" / "ace_lite" / "benchmark" / "report_observability.py",
+    REPO_ROOT / "src" / "ace_lite" / "benchmark" / "report_observability_governance.py",
+    REPO_ROOT / "src" / "ace_lite" / "benchmark" / "report_observability_routing.py",
+)
+FORBIDDEN_EXECUTION_IMPORT_PREFIXES = (
+    "ace_lite.orchestrator",
+    "ace_lite.pipeline.stages",
+)
 
 
 def _parse_module(path: Path) -> ast.AST:
@@ -73,6 +89,23 @@ def test_validation_findings_contract_stays_advisory_only() -> None:
     assert '"allowed_actions": ["request_more_context"]' in text
 
 
+def test_report_layer_modules_do_not_import_layer1_execution_modules() -> None:
+    violations: list[str] = []
+    for path in REPORT_LAYER_MODULES:
+        tree = _parse_module(path)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith(FORBIDDEN_EXECUTION_IMPORT_PREFIXES):
+                        violations.append(f"{path.name}: import {alias.name}")
+            elif isinstance(node, ast.ImportFrom):
+                module = str(node.module or "")
+                if module.startswith(FORBIDDEN_EXECUTION_IMPORT_PREFIXES):
+                    violations.append(f"{path.name}: from {module} import ...")
+
+    assert violations == []
+
+
 def test_agent_loop_consumes_validation_findings_only_as_request_more_context() -> None:
     text = AGENT_LOOP_CONTROLLER.read_text(encoding="utf-8-sig")
 
@@ -90,6 +123,7 @@ def test_governance_doc_records_validation_findings_boundary() -> None:
     assert "advisory_report_only" in text
     assert "request_more_context" in text
     assert "MUST NOT change source-plan ranking" in text
+    assert "Layer 2 and Layer 3 modules MUST NOT import Layer 1 execution modules" in text
 
 
 def test_context_report_uses_sections_seam_and_stays_layer2() -> None:
@@ -127,6 +161,27 @@ def test_context_report_uses_sections_seam_and_stays_layer2() -> None:
         "## Handoff Payload",
         "request_more_context",
         "allowed_effect",
+    )
+    for marker in forbidden_markers:
+        assert marker not in text
+
+
+def test_source_plan_consumes_context_refine_only_through_candidate_review() -> None:
+    text = SOURCE_PLAN_STAGE.read_text(encoding="utf-8-sig")
+
+    assert "from ace_lite.source_plan.context_refine_support import (" in text
+    assert "resolve_source_plan_candidate_review" in text
+    assert 'context_refine_state=ctx.state.get("context_refine")' in text
+
+    forbidden_markers = (
+        'context_refine_stage = _coerce_mapping(ctx.state.get("context_refine"))',
+        'candidate_review = _coerce_mapping(context_refine_stage.get("candidate_review"))',
+        'context_refine_stage.get("decision_counts")',
+        'context_refine_stage.get("candidate_file_actions")',
+        'context_refine_stage.get("candidate_chunk_actions")',
+        'context_refine_stage.get("focused_files")',
+        'context_refine_stage.get("policy_name")',
+        'context_refine_stage.get("policy_version")',
     )
     for marker in forbidden_markers:
         assert marker not in text

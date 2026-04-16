@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ace_lite.repomap.stage_support import extract_seed_candidate_paths
+
 
 def normalize_repomap_path(value: str) -> str:
     path = str(value or "").strip().replace("\\", "/")
@@ -156,14 +158,19 @@ def prepare_repomap_seed_runtime(
             if normalize_path(str(item or ""))
         }
     )
-    seed_paths_for_cache: list[str] = []
-    for item in seed_candidates[: max(1, int(repomap_top_k) * 2)]:
-        if not isinstance(item, dict):
-            continue
-        path = normalize_path(str(item.get("path") or ""))
-        if not path or path in seed_paths_for_cache:
-            continue
-        seed_paths_for_cache.append(path)
+    normalized_seed_candidates = [
+        {
+            **item,
+            "path": normalize_path(str(item.get("path") or "")),
+        }
+        for item in seed_candidates
+        if isinstance(item, dict)
+    ]
+    seed_paths_for_cache = extract_seed_candidate_paths(
+        files=index_files,
+        seed_candidates=normalized_seed_candidates,
+        top_k=max(1, int(repomap_top_k) * 2),
+    )
     return RepomapSeedRuntime(
         seed_candidates=seed_candidates,
         seed_paths_for_cache=seed_paths_for_cache,
@@ -209,12 +216,8 @@ def prepare_repomap_stage_cache_runtime(
             "\n".join(sample_paths).encode("utf-8", "ignore")
         ).hexdigest()
 
-    cache_ttl_seconds = max(
-        0, int(policy.get("repomap_cache_ttl_seconds", 1800) or 1800)
-    )
-    precompute_ttl_seconds = max(
-        0, int(policy.get("repomap_precompute_ttl_seconds", 7200) or 7200)
-    )
+    cache_ttl_seconds = max(0, int(policy.get("repomap_cache_ttl_seconds", 1800) or 1800))
+    precompute_ttl_seconds = max(0, int(policy.get("repomap_precompute_ttl_seconds", 7200) or 7200))
     cache_required_meta = {
         "policy_version": str(policy_version),
         "ranking_profile": str(effective_ranking_profile),
@@ -328,9 +331,7 @@ def build_repomap_stage_payload_from_cache_runtime(
                 payload=precomputed_payload,
                 meta={
                     **cache_runtime.precompute_required_meta,
-                    "ttl_seconds": int(
-                        cache_runtime.precompute_meta.get("ttl_seconds") or 0
-                    ),
+                    "ttl_seconds": int(cache_runtime.precompute_meta.get("ttl_seconds") or 0),
                     "policy_name": "repomap_precompute",
                     "trust_class": "exact",
                 },

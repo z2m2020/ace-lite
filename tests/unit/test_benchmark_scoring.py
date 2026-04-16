@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from ace_lite.benchmark.case_evaluation_payloads import count_unique_paths, safe_ratio
 from ace_lite.benchmark.report_metrics import ALL_METRIC_ORDER, COMPARABLE_METRIC_ORDER
@@ -93,34 +93,34 @@ def test_evaluate_case_result_and_aggregate() -> None:
                 "docs_section_count": 2,
                 "docs_injected_count": 1,
             },
-                "docs": {"enabled": True, "section_count": 2},
-                "candidate_ranking": {
-                    "multi_channel_rrf_enabled": True,
-                    "multi_channel_rrf_applied": True,
-                    "multi_channel_rrf_granularity_count": 2,
-                    "multi_channel_rrf_pool_size": 5,
-                    "multi_channel_rrf_granularity_pool_ratio": 0.4,
-                },
-                "scip": {
-                    "enabled": True,
-                    "loaded": True,
-                    "provider": "scip",
-                    "document_count": 5,
-                    "definition_occurrence_count": 7,
-                    "reference_occurrence_count": 11,
-                    "symbol_definition_count": 3,
-                },
-                "embeddings": {
-                    "enabled": True,
-                    "runtime_provider": "hash_colbert",
-                    "cache_hit": True,
-                    "similarity_mean": 0.42,
-                    "similarity_max": 0.88,
-                    "rerank_pool": 4,
-                    "reranked_count": 2,
-                    "fallback": False,
-                    "semantic_rerank_applied": True,
-                },
+            "docs": {"enabled": True, "section_count": 2},
+            "candidate_ranking": {
+                "multi_channel_rrf_enabled": True,
+                "multi_channel_rrf_applied": True,
+                "multi_channel_rrf_granularity_count": 2,
+                "multi_channel_rrf_pool_size": 5,
+                "multi_channel_rrf_granularity_pool_ratio": 0.4,
+            },
+            "scip": {
+                "enabled": True,
+                "loaded": True,
+                "provider": "scip",
+                "document_count": 5,
+                "definition_occurrence_count": 7,
+                "reference_occurrence_count": 11,
+                "symbol_definition_count": 3,
+            },
+            "embeddings": {
+                "enabled": True,
+                "runtime_provider": "hash_colbert",
+                "cache_hit": True,
+                "similarity_mean": 0.42,
+                "similarity_max": 0.88,
+                "rerank_pool": 4,
+                "reranked_count": 2,
+                "fallback": False,
+                "semantic_rerank_applied": True,
+            },
         },
         "skills": {
             "selected": [{"name": "skill-a"}],
@@ -190,7 +190,7 @@ def test_evaluate_case_result_and_aggregate() -> None:
             "precompute": {"hit": False},
             "dependency_recall": {
                 "hit_rate": 1.0,
-            }
+            },
         },
         "observability": {
             "plan_replay_cache": {
@@ -224,7 +224,7 @@ def test_evaluate_case_result_and_aggregate() -> None:
                         "validation_probe_issue_count": 1,
                     },
                 },
-            ]
+            ],
         },
     }
 
@@ -872,9 +872,7 @@ def test_evaluate_case_result_and_aggregate_preserves_extended_metric_contract()
     assert metrics["source_plan_validation_feedback_issue_count_mean"] == 2.0
     assert metrics["source_plan_validation_feedback_failure_rate"] == 1.0
     assert metrics["source_plan_validation_feedback_probe_issue_count_mean"] == 1.0
-    assert (
-        metrics["source_plan_validation_feedback_probe_executed_count_mean"] == 1.0
-    )
+    assert metrics["source_plan_validation_feedback_probe_executed_count_mean"] == 1.0
     assert metrics["source_plan_validation_feedback_probe_failure_rate"] == 1.0
     assert metrics["source_plan_validation_feedback_selected_test_count_mean"] == 1.0
     assert metrics["source_plan_validation_feedback_executed_test_count_mean"] == 1.0
@@ -1452,7 +1450,10 @@ def test_evaluate_case_result_tracks_chunk_guard_expectation_hits() -> None:
     payload = {
         "index": {
             "candidate_files": [
-                {"path": "src/ace_lite/index_stage/chunk_guard.py", "module": "ace_lite.index_stage.chunk_guard"},
+                {
+                    "path": "src/ace_lite/index_stage/chunk_guard.py",
+                    "module": "ace_lite.index_stage.chunk_guard",
+                },
             ],
             "candidate_chunks": [
                 {
@@ -1690,9 +1691,7 @@ def test_evaluate_case_result_classifies_chunk_stage_miss() -> None:
     for expected_label, payload in scenarios:
         row = evaluate_case_result(case=base_case, plan_payload=payload, latency_ms=6.0)
         assert row["chunk_stage_miss_applicable"] == 1.0
-        assert row["chunk_stage_miss_classified"] == (
-            1.0 if expected_label else 0.0
-        )
+        assert row["chunk_stage_miss_classified"] == (1.0 if expected_label else 0.0)
         assert row["chunk_stage_miss"] == expected_label
         assert row["chunk_stage_miss_details"]["oracle_file_path"] == "src/worker.py"
 
@@ -1737,7 +1736,12 @@ def test_compare_metrics_and_detect_regression() -> None:
 
     regression = detect_regression(current=current, baseline=baseline, dependency_recall_floor=0.8)
     assert regression["regressed"] is True
-    assert set(regression["failed_checks"]) == {"precision_at_k", "noise_rate", "latency_p95_ms", "dependency_recall"}
+    assert set(regression["failed_checks"]) == {
+        "precision_at_k",
+        "noise_rate",
+        "latency_p95_ms",
+        "dependency_recall",
+    }
     assert len(regression["failed_thresholds"]) == 4
 
 
@@ -1769,7 +1773,6 @@ def test_resolve_regression_thresholds_with_profile_and_overrides() -> None:
     assert thresholds["dev_feedback_resolution_tolerance"] == 0.05
     assert thresholds["dev_issue_to_fix_tolerance"] == 0.05
     assert thresholds["embedding_similarity_tolerance"] == 0.02
-
 
 
 def test_aggregate_metrics_reports_latency_median() -> None:
@@ -1826,7 +1829,10 @@ def test_evaluate_case_result_negative_control_can_expose_retrieval_task_gap() -
     payload = {
         "index": {
             "candidate_files": [
-                {"path": "docs/maintainers/BENCHMARKING.md", "module": "docs.maintainers.benchmarking"},
+                {
+                    "path": "docs/maintainers/BENCHMARKING.md",
+                    "module": "docs.maintainers.benchmarking",
+                },
             ],
         },
         "source_plan": {"validation_tests": []},
@@ -2120,6 +2126,7 @@ def test_evaluate_case_result_falls_back_to_index_chunks_when_source_plan_missin
     assert row["chunk_budget_used"] == 20.0
     assert row["chunks_per_file_mean"] == 2.0
 
+
 def test_evaluate_case_result_can_omit_case_details() -> None:
     case = {
         "case_id": "c2",
@@ -2133,7 +2140,11 @@ def test_evaluate_case_result_can_omit_case_details() -> None:
                 {"path": "src/auth.py", "module": "src.auth"},
             ],
             "candidate_chunks": [
-                {"path": "src/auth.py", "qualified_name": "validate_token", "signature": "def validate_token"},
+                {
+                    "path": "src/auth.py",
+                    "qualified_name": "validate_token",
+                    "signature": "def validate_token",
+                },
             ],
         },
         "repomap": {"dependency_recall": {"hit_rate": 1.0}},
@@ -2155,6 +2166,7 @@ def test_evaluate_case_result_can_omit_case_details() -> None:
     assert "relevant_candidate_paths" not in row
     assert "noise_candidate_paths" not in row
     assert "candidate_matches" not in row
+
 
 def test_detect_regression_for_validation_test_growth() -> None:
     baseline = {
@@ -2585,14 +2597,17 @@ def test_evaluate_case_result_reports_year2_normalized_kpis() -> None:
 def test_case_evaluation_payload_helpers_guard_zero_denominators() -> None:
     assert safe_ratio(5, 0) == 0.0
     assert safe_ratio(-2, 4) == 0.0
-    assert count_unique_paths(
-        [
-            {"path": "src/auth.py"},
-            {"path": "src/auth.py"},
-            {"path": "src/token.py"},
-            {"path": ""},
-        ]
-    ) == 2
+    assert (
+        count_unique_paths(
+            [
+                {"path": "src/auth.py"},
+                {"path": "src/auth.py"},
+                {"path": "src/token.py"},
+                {"path": ""},
+            ]
+        )
+        == 2
+    )
 
 
 def test_evaluate_case_result_reports_chunk_contract_fallback_kpis() -> None:
@@ -3006,9 +3021,7 @@ def test_evaluate_case_result_reports_validation_branch_kpis() -> None:
                     {
                         "branch_id": "candidate-2",
                         "patch_scope_lines": 1,
-                        "artifact_refs": [
-                            "validation.rejected_patch_artifacts[0].patch_artifact"
-                        ],
+                        "artifact_refs": ["validation.rejected_patch_artifacts[0].patch_artifact"],
                         "validation_branch_score": {
                             "passed": False,
                             "regressed": True,
@@ -3367,7 +3380,13 @@ def test_build_wave1_context_governance_summary_aggregates_case_presence() -> No
             {
                 "plan": {
                     "source_plan": {
-                        "history_hits": {"hits": [{"hash": "a"}, {"hash": "b"}]},
+                        "history_hits": {
+                            "path_count": 1,
+                            "hits": [
+                                {"hash": "a", "matched_path_count": 1},
+                                {"hash": "b", "matched_path_count": 1},
+                            ],
+                        },
                         "candidate_review": {"status": "watch"},
                         "validation_findings": {"warn_count": 1, "blocker_count": 1},
                         "session_end_report": {
@@ -3380,7 +3399,7 @@ def test_build_wave1_context_governance_summary_aggregates_case_presence() -> No
             {
                 "plan": {
                     "source_plan": {
-                        "history_hits": {"hits": []},
+                        "history_hits": {"path_count": 1, "hits": []},
                         "candidate_review": {"status": "ok"},
                         "validation_findings": {"warn_count": 0, "blocker_count": 0},
                         "session_end_report": {"next_actions": ["inspect"], "risks": []},
@@ -3397,6 +3416,8 @@ def test_build_wave1_context_governance_summary_aggregates_case_presence() -> No
     assert summary["validation_blocker_case_count"] == 1
     assert summary["session_end_report_case_count"] == 2
     assert summary["history_hit_count_mean"] == 2.0
+    assert summary["history_path_count_mean"] == 1.0
+    assert summary["history_matched_path_count_mean"] == 2.0
     assert summary["session_next_action_count_mean"] == 1.5
     assert summary["session_risk_count_mean"] == 0.5
 

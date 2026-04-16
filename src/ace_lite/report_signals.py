@@ -10,9 +10,23 @@ payload builders and consumers:
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Literal, TypeAlias
 
-DEFAULT_REPORT_SIGNAL_KEYS = (
+ReportSignalKey: TypeAlias = Literal[
+    "history_hits",
+    "candidate_review",
+    "validation_findings",
+    "session_end_report",
+    "handoff_payload",
+]
+DefaultReportSignalKey: TypeAlias = Literal[
+    "history_hits",
+    "validation_findings",
+    "session_end_report",
+    "handoff_payload",
+]
+
+DEFAULT_REPORT_SIGNAL_KEYS: tuple[DefaultReportSignalKey, ...] = (
     "history_hits",
     "validation_findings",
     "session_end_report",
@@ -21,6 +35,8 @@ DEFAULT_REPORT_SIGNAL_KEYS = (
 
 __all__ = [
     "DEFAULT_REPORT_SIGNAL_KEYS",
+    "DefaultReportSignalKey",
+    "ReportSignalKey",
     "append_unique_signal_text",
     "coerce_payload",
     "normalize_signal_path",
@@ -99,12 +115,16 @@ def resolve_source_plan_payload(plan_payload: Mapping[str, Any] | Any) -> dict[s
 
 def resolve_report_signal(
     plan_payload: Mapping[str, Any] | Any,
-    key: str,
+    key: ReportSignalKey,
     *,
     source_plan: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = coerce_payload(plan_payload)
-    sp = _dict(source_plan) if isinstance(source_plan, Mapping) else resolve_source_plan_payload(payload)
+    sp = (
+        _dict(source_plan)
+        if isinstance(source_plan, Mapping)
+        else resolve_source_plan_payload(payload)
+    )
     return _dict(sp.get(key, {})) or _dict(payload.get(key, {}))
 
 
@@ -112,9 +132,6 @@ def resolve_report_signals(
     plan_payload: Mapping[str, Any] | Any,
     *,
     source_plan: Mapping[str, Any] | None = None,
-    keys: Sequence[str] = DEFAULT_REPORT_SIGNAL_KEYS,
+    keys: Sequence[ReportSignalKey] = DEFAULT_REPORT_SIGNAL_KEYS,
 ) -> dict[str, dict[str, Any]]:
-    return {
-        key: resolve_report_signal(plan_payload, key, source_plan=source_plan)
-        for key in keys
-    }
+    return {key: resolve_report_signal(plan_payload, key, source_plan=source_plan) for key in keys}

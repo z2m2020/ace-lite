@@ -8,31 +8,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ace_lite.benchmark.report_script_support import (
+    collect_recent_git_diff_paths_with_runner,
+    load_report_json,
+    resolve_report_path,
+)
+from ace_lite.benchmark.report_script_support import (
+    safe_float as _safe_float,
+)
+
 STAGE_NAMES = ("memory", "index", "repomap", "augment", "skills", "source_plan", "total")
-
-
-def _resolve_path(*, root: Path, value: str) -> Path:
-    candidate = Path(str(value).strip())
-    if candidate.is_absolute():
-        return candidate
-    return (root / candidate).resolve()
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    if not path.exists() or not path.is_file():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def _safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except Exception:
-        return float(default)
 
 
 def _parse_generated_at(value: Any) -> datetime:
@@ -64,22 +49,6 @@ def _iter_report_paths(*, history_root: Path, latest_report: Path | None, limit:
     return paths
 
 
-def _collect_suspect_files(*, root: Path, limit: int = 20) -> list[str]:
-    command = ["git", "diff", "--name-only", "HEAD~1", "HEAD"]
-    completed = subprocess.run(
-        command,
-        cwd=str(root),
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if completed.returncode != 0:
-        return []
-    rows = [line.strip().replace("\\", "/") for line in str(completed.stdout or "").splitlines()]
-    filtered = [line for line in rows if line]
-    return filtered[: max(0, int(limit))]
-
-
 def _extract_stage_p95_map(summary: dict[str, Any]) -> dict[str, float]:
     extracted: dict[str, float] = {}
     for stage in STAGE_NAMES:
@@ -107,9 +76,7 @@ def _extract_bucket_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "workload_bucket": str(item.get("workload_bucket", "") or ""),
                 "repo_count": int(item.get("repo_count", 0) or 0),
                 "repo_names": [
-                    str(value)
-                    for value in item.get("repo_names", [])
-                    if str(value).strip()
+                    str(value) for value in item.get("repo_names", []) if str(value).strip()
                 ]
                 if isinstance(item.get("repo_names"), list)
                 else [],
@@ -129,9 +96,7 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         stage_latency_summary_raw if isinstance(stage_latency_summary_raw, dict) else {}
     )
     slo_budget_summary_raw = payload.get("slo_budget_summary")
-    slo_budget_summary = (
-        slo_budget_summary_raw if isinstance(slo_budget_summary_raw, dict) else {}
-    )
+    slo_budget_summary = slo_budget_summary_raw if isinstance(slo_budget_summary_raw, dict) else {}
     signals_raw = slo_budget_summary.get("signals")
     signals = signals_raw if isinstance(signals_raw, dict) else {}
     adaptive_signal_raw = signals.get("embedding_adaptive_budget_ratio")
@@ -171,7 +136,9 @@ def _build_delta(*, latest: dict[str, Any], previous: dict[str, Any]) -> dict[st
     }
 
 
-def _build_bucket_deltas(*, latest: dict[str, Any], previous: dict[str, Any]) -> list[dict[str, Any]]:
+def _build_bucket_deltas(
+    *, latest: dict[str, Any], previous: dict[str, Any]
+) -> list[dict[str, Any]]:
     latest_rows_raw = latest.get("workload_buckets")
     latest_rows = latest_rows_raw if isinstance(latest_rows_raw, list) else []
     previous_rows_raw = previous.get("workload_buckets")
@@ -271,9 +238,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 "",
                 f"- Previous path: `{previous.get('path', '')}`",
                 "- Previous coverage: stage_latency_summary={stage}, slo_budget_summary={slo}".format(
-                    stage="yes"
-                    if bool(previous.get("has_stage_latency_summary", False))
-                    else "no",
+                    stage="yes" if bool(previous.get("has_stage_latency_summary", False)) else "no",
                     slo="yes" if bool(previous.get("has_slo_budget_summary", False)) else "no",
                 ),
             ]
@@ -353,7 +318,9 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
 
     lines.append("## History")
     lines.append("")
-    lines.append("| Generated | Repo Count | Total P95 | Index P95 | Repomap P95 | Downgrade Rate | Adaptive Budget |")
+    lines.append(
+        "| Generated | Repo Count | Total P95 | Index P95 | Repomap P95 | Downgrade Rate | Adaptive Budget |"
+    )
     lines.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: |")
     for row in rows:
         if not isinstance(row, dict):
@@ -403,13 +370,13 @@ def main() -> int:
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parents[1]
-    history_root = _resolve_path(root=project_root, value=str(args.history_root))
+    history_root = resolve_report_path(root=project_root, value=str(args.history_root))
     latest_report = (
-        _resolve_path(root=project_root, value=str(args.latest_report))
+        resolve_report_path(root=project_root, value=str(args.latest_report))
         if str(args.latest_report).strip()
         else None
     )
-    output_dir = _resolve_path(root=project_root, value=str(args.output_dir))
+    output_dir = resolve_report_path(root=project_root, value=str(args.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     report_paths = _iter_report_paths(
@@ -423,13 +390,16 @@ def main() -> int:
 
     rows: list[dict[str, Any]] = []
     for path in report_paths:
-        payload = _load_json(path)
+        payload = load_report_json(path)
         if not payload:
             continue
         rows.append(_extract_row(path=path, payload=payload))
 
     if not rows:
-        print("[latency-slo-trend] failed to load any latency_slo_summary.json artifacts", file=sys.stderr)
+        print(
+            "[latency-slo-trend] failed to load any latency_slo_summary.json artifacts",
+            file=sys.stderr,
+        )
         return 2
 
     rows.sort(
@@ -442,10 +412,11 @@ def main() -> int:
     latest = rows[-1]
     previous = rows[-2] if len(rows) > 1 else {}
     delta = _build_delta(latest=latest, previous=previous) if previous else {}
-    bucket_deltas = (
-        _build_bucket_deltas(latest=latest, previous=previous) if previous else []
+    bucket_deltas = _build_bucket_deltas(latest=latest, previous=previous) if previous else []
+    suspect_files = collect_recent_git_diff_paths_with_runner(
+        root=project_root,
+        subprocess_module=subprocess,
     )
-    suspect_files = _collect_suspect_files(root=project_root)
 
     report_payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),

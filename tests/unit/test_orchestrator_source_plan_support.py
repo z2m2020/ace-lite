@@ -16,6 +16,9 @@ def test_build_orchestrator_source_plan_runtime_extracts_chunking_contract() -> 
             disclosure="refs",
         ),
         retrieval=SimpleNamespace(policy_version="2026-04"),
+        memory=SimpleNamespace(
+            capture=SimpleNamespace(notes_path="context-map/custom_notes.jsonl"),
+        ),
     )
 
     runtime = build_orchestrator_source_plan_runtime(
@@ -36,3 +39,5 @@ def test_build_orchestrator_source_plan_runtime_extracts_chunking_contract() -> 
     assert runtime.chunk_token_budget == 1200
     assert runtime.chunk_disclosure == "refs"
     assert runtime.policy_version == "2026-04"
+    assert runtime.handoff_artifact_dir == "artifacts\\handoffs\\latest"
+    assert runtime.handoff_notes_path == "context-map/custom_notes.jsonl"

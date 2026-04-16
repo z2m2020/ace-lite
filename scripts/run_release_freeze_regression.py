@@ -14,7 +14,11 @@ import yaml
 
 from ace_lite.release_freeze import (
     StepResult,
+)
+from ace_lite.release_freeze import (
     load_yaml_config as _load_yaml_config,
+)
+from ace_lite.release_freeze import (
     run_step as _run_step,
 )
 
@@ -81,24 +85,16 @@ def _load_matrix_summary(*, summary_path: Path) -> dict[str, Any]:
         retrieval_metrics_repos.append(
             {
                 "name": name,
-                "precision_at_k": max(
-                    0.0, float(metrics.get("precision_at_k", 0.0) or 0.0)
-                ),
+                "precision_at_k": max(0.0, float(metrics.get("precision_at_k", 0.0) or 0.0)),
                 "noise_rate": max(0.0, float(metrics.get("noise_rate", 0.0) or 0.0)),
-                "latency_p95_ms": max(
-                    0.0, float(metrics.get("latency_p95_ms", 0.0) or 0.0)
-                ),
-                "chunk_hit_at_k": max(
-                    0.0, float(metrics.get("chunk_hit_at_k", 0.0) or 0.0)
-                ),
+                "latency_p95_ms": max(0.0, float(metrics.get("latency_p95_ms", 0.0) or 0.0)),
+                "chunk_hit_at_k": max(0.0, float(metrics.get("chunk_hit_at_k", 0.0) or 0.0)),
             }
         )
         memory_metrics_repos.append(
             {
                 "name": name,
-                "notes_hit_ratio": max(
-                    0.0, float(metrics.get("notes_hit_ratio", 0.0) or 0.0)
-                ),
+                "notes_hit_ratio": max(0.0, float(metrics.get("notes_hit_ratio", 0.0) or 0.0)),
                 "profile_selected_mean": max(
                     0.0, float(metrics.get("profile_selected_mean", 0.0) or 0.0)
                 ),
@@ -158,9 +154,7 @@ def _load_matrix_summary(*, summary_path: Path) -> dict[str, Any]:
 
     retrieval_policy_summary_raw = payload.get("retrieval_policy_summary")
     retrieval_policy_summary_source = (
-        retrieval_policy_summary_raw
-        if isinstance(retrieval_policy_summary_raw, list)
-        else []
+        retrieval_policy_summary_raw if isinstance(retrieval_policy_summary_raw, list) else []
     )
     retrieval_policy_summary: list[dict[str, Any]] = []
     for item in retrieval_policy_summary_source:
@@ -187,9 +181,7 @@ def _load_matrix_summary(*, summary_path: Path) -> dict[str, Any]:
                         or 0.0
                     ),
                 ),
-                "task_success_mean": max(
-                    0.0, float(item.get("task_success_mean", 0.0) or 0.0)
-                ),
+                "task_success_mean": max(0.0, float(item.get("task_success_mean", 0.0) or 0.0)),
                 "positive_task_success_mean": max(
                     0.0,
                     float(item.get("positive_task_success_mean", 0.0) or 0.0),
@@ -198,15 +190,9 @@ def _load_matrix_summary(*, summary_path: Path) -> dict[str, Any]:
                     0.0,
                     float(item.get("retrieval_task_gap_rate_mean", 0.0) or 0.0),
                 ),
-                "precision_at_k_mean": max(
-                    0.0, float(item.get("precision_at_k_mean", 0.0) or 0.0)
-                ),
-                "noise_rate_mean": max(
-                    0.0, float(item.get("noise_rate_mean", 0.0) or 0.0)
-                ),
-                "latency_p95_ms_mean": max(
-                    0.0, float(item.get("latency_p95_ms_mean", 0.0) or 0.0)
-                ),
+                "precision_at_k_mean": max(0.0, float(item.get("precision_at_k_mean", 0.0) or 0.0)),
+                "noise_rate_mean": max(0.0, float(item.get("noise_rate_mean", 0.0) or 0.0)),
+                "latency_p95_ms_mean": max(0.0, float(item.get("latency_p95_ms_mean", 0.0) or 0.0)),
                 "repomap_latency_p95_ms_mean": max(
                     0.0,
                     float(item.get("repomap_latency_p95_ms_mean", 0.0) or 0.0),
@@ -262,9 +248,7 @@ def _load_matrix_summary(*, summary_path: Path) -> dict[str, Any]:
         stage_latency_summary_raw if isinstance(stage_latency_summary_raw, dict) else {}
     )
     slo_budget_summary_raw = payload.get("slo_budget_summary")
-    slo_budget_summary = (
-        slo_budget_summary_raw if isinstance(slo_budget_summary_raw, dict) else {}
-    )
+    slo_budget_summary = slo_budget_summary_raw if isinstance(slo_budget_summary_raw, dict) else {}
     decision_observability_summary_raw = payload.get("decision_observability_summary")
     decision_observability_summary = (
         decision_observability_summary_raw
@@ -275,9 +259,7 @@ def _load_matrix_summary(*, summary_path: Path) -> dict[str, Any]:
     return {
         "path": str(summary_path),
         "passed": bool(payload.get("passed", False)),
-        "benchmark_regression_detected": bool(
-            payload.get("benchmark_regression_detected", False)
-        ),
+        "benchmark_regression_detected": bool(payload.get("benchmark_regression_detected", False)),
         "repo_count": int(payload.get("repo_count", len(repos)) or 0),
         "threshold_failed_repos": threshold_failed_repos,
         "regressed_repos": regressed_repos,
@@ -293,10 +275,7 @@ def _load_matrix_summary(*, summary_path: Path) -> dict[str, Any]:
                 / max(1, len(latency_metrics_repos))
             ),
             "repomap_latency_p95_ms": (
-                sum(
-                    item.get("repomap_latency_p95_ms", 0.0)
-                    for item in latency_metrics_repos
-                )
+                sum(item.get("repomap_latency_p95_ms", 0.0) for item in latency_metrics_repos)
                 / max(1, len(latency_metrics_repos))
             ),
         },
@@ -326,64 +305,41 @@ def _load_matrix_summary(*, summary_path: Path) -> dict[str, Any]:
                 / max(1, len(memory_metrics_repos))
             ),
             "profile_selected_mean": (
-                sum(
-                    item.get("profile_selected_mean", 0.0)
-                    for item in memory_metrics_repos
-                )
+                sum(item.get("profile_selected_mean", 0.0) for item in memory_metrics_repos)
                 / max(1, len(memory_metrics_repos))
             ),
             "capture_trigger_ratio": (
-                sum(
-                    item.get("capture_trigger_ratio", 0.0)
-                    for item in memory_metrics_repos
-                )
+                sum(item.get("capture_trigger_ratio", 0.0) for item in memory_metrics_repos)
                 / max(1, len(memory_metrics_repos))
             ),
         },
         "embedding_metrics_repos": embedding_metrics_repos,
         "embedding_metrics_mean": {
             "embedding_similarity_mean": (
-                sum(
-                    item.get("embedding_similarity_mean", 0.0)
-                    for item in embedding_metrics_repos
-                )
+                sum(item.get("embedding_similarity_mean", 0.0) for item in embedding_metrics_repos)
                 / max(1, len(embedding_metrics_repos))
             ),
             "embedding_rerank_ratio": (
-                sum(
-                    item.get("embedding_rerank_ratio", 0.0)
-                    for item in embedding_metrics_repos
-                )
+                sum(item.get("embedding_rerank_ratio", 0.0) for item in embedding_metrics_repos)
                 / max(1, len(embedding_metrics_repos))
             ),
             "embedding_cache_hit_ratio": (
-                sum(
-                    item.get("embedding_cache_hit_ratio", 0.0)
-                    for item in embedding_metrics_repos
-                )
+                sum(item.get("embedding_cache_hit_ratio", 0.0) for item in embedding_metrics_repos)
                 / max(1, len(embedding_metrics_repos))
             ),
             "embedding_fallback_ratio": (
-                sum(
-                    item.get("embedding_fallback_ratio", 0.0)
-                    for item in embedding_metrics_repos
-                )
+                sum(item.get("embedding_fallback_ratio", 0.0) for item in embedding_metrics_repos)
                 / max(1, len(embedding_metrics_repos))
             ),
             "embedding_enabled_ratio": (
-                sum(
-                    item.get("embedding_enabled_ratio", 0.0)
-                    for item in embedding_metrics_repos
-                )
+                sum(item.get("embedding_enabled_ratio", 0.0) for item in embedding_metrics_repos)
                 / max(1, len(embedding_metrics_repos))
             ),
         },
         "retrieval_policy_summary": retrieval_policy_summary,
         "plugin_policy_summary": {
             "totals": plugin_totals,
-            "mode_distribution": {
-                key: mode_distribution[key] for key in sorted(mode_distribution)
-            },
+            "mode_distribution": {key: mode_distribution[key] for key in sorted(mode_distribution)},
             "repos": plugin_repos,
         },
         "decision_observability_summary": decision_observability_summary,
@@ -411,7 +367,9 @@ def _load_e2e_success_summary(*, summary_path: Path) -> dict[str, Any]:
         "passed_count": max(0, int(payload.get("passed_count", 0) or 0)),
         "failed_count": max(0, int(payload.get("failed_count", 0) or 0)),
         "task_success_rate": max(0.0, float(payload.get("task_success_rate", 0.0) or 0.0)),
-        "failed_cases": payload.get("failed_cases") if isinstance(payload.get("failed_cases"), list) else [],
+        "failed_cases": payload.get("failed_cases")
+        if isinstance(payload.get("failed_cases"), list)
+        else [],
     }
 
 
@@ -451,21 +409,25 @@ def _resolve_plugin_gate_config(
     freeze_raw = config.get("freeze")
     freeze = freeze_raw if isinstance(freeze_raw, dict) else {}
 
-    profiles_raw = freeze.get("plugin_policy_gate_profiles", config.get("plugin_policy_gate_profiles"))
+    profiles_raw = freeze.get(
+        "plugin_policy_gate_profiles", config.get("plugin_policy_gate_profiles")
+    )
     profiles = profiles_raw if isinstance(profiles_raw, dict) else {}
 
     if not selected_profile:
-        default_profile = str(
-            freeze.get("plugin_policy_gate_default_profile", "")
-            or config.get("plugin_policy_gate_default_profile", "")
-        ).strip().lower()
+        default_profile = (
+            str(
+                freeze.get("plugin_policy_gate_default_profile", "")
+                or config.get("plugin_policy_gate_default_profile", "")
+            )
+            .strip()
+            .lower()
+        )
         selected_profile = default_profile
 
     selected_profile_payload_raw = profiles.get(selected_profile)
     selected_profile_payload = (
-        selected_profile_payload_raw
-        if isinstance(selected_profile_payload_raw, dict)
-        else {}
+        selected_profile_payload_raw if isinstance(selected_profile_payload_raw, dict) else {}
     )
 
     resolved = {
@@ -584,9 +546,7 @@ def _resolve_memory_gate_config(*, matrix_config_path: Path) -> dict[str, Any]:
     memory_gate = memory_gate_raw if isinstance(memory_gate_raw, dict) else {}
 
     thresholds = {
-        "min_notes_hit_ratio": _coerce_metric_floor(
-            memory_gate.get("min_notes_hit_ratio", -1.0)
-        ),
+        "min_notes_hit_ratio": _coerce_metric_floor(memory_gate.get("min_notes_hit_ratio", -1.0)),
         "min_profile_selected_mean": _coerce_metric_floor(
             memory_gate.get("min_profile_selected_mean", -1.0)
         ),
@@ -710,9 +670,7 @@ def _resolve_policy_guard_config(*, matrix_config_path: Path) -> dict[str, Any]:
         "max_retrieval_task_gap_rate_mean": _coerce_metric_floor(
             policy_guard.get("max_retrieval_task_gap_rate_mean", -1.0)
         ),
-        "max_noise_rate_mean": _coerce_metric_floor(
-            policy_guard.get("max_noise_rate_mean", -1.0)
-        ),
+        "max_noise_rate_mean": _coerce_metric_floor(policy_guard.get("max_noise_rate_mean", -1.0)),
         "max_latency_p95_ms_mean": _coerce_metric_floor(
             policy_guard.get("max_latency_p95_ms_mean", -1.0)
         ),
@@ -735,9 +693,7 @@ def _resolve_policy_guard_config(*, matrix_config_path: Path) -> dict[str, Any]:
         source = "config_mode"
     else:
         enabled = (
-            bool(configured_enabled)
-            if isinstance(configured_enabled, bool)
-            else thresholds_enabled
+            bool(configured_enabled) if isinstance(configured_enabled, bool) else thresholds_enabled
         )
         report_only = False
         enforced = enabled
@@ -775,18 +731,12 @@ def _resolve_runtime_gate_config(
     runtime_gate = runtime_gate_raw if isinstance(runtime_gate_raw, dict) else {}
 
     configured_enabled = runtime_gate.get("enabled")
-    enabled_from_config = (
-        bool(configured_enabled)
-        if isinstance(configured_enabled, bool)
-        else True
-    )
+    enabled_from_config = bool(configured_enabled) if isinstance(configured_enabled, bool) else True
 
     if cli_enabled is None:
         return {
             "enabled": enabled_from_config,
-            "source": "config"
-            if isinstance(configured_enabled, bool)
-            else "default",
+            "source": "config" if isinstance(configured_enabled, bool) else "default",
         }
 
     return {
@@ -857,13 +807,12 @@ def _resolve_tabiv3_gate_config(*, matrix_config_path: Path) -> dict[str, Any]:
     gate = gate_raw if isinstance(gate_raw, dict) else {}
 
     enabled = bool(gate.get("enabled", False))
-    matrix_config = str(
-        gate.get("matrix_config", "benchmark/matrix/tabiv3.yaml")
-    ).strip() or "benchmark/matrix/tabiv3.yaml"
+    matrix_config = (
+        str(gate.get("matrix_config", "benchmark/matrix/tabiv3.yaml")).strip()
+        or "benchmark/matrix/tabiv3.yaml"
+    )
     thresholds = {
-        "latency_p95_ms_max": max(
-            0.0, float(gate.get("latency_p95_ms_max", 170.0) or 170.0)
-        ),
+        "latency_p95_ms_max": max(0.0, float(gate.get("latency_p95_ms_max", 170.0) or 170.0)),
         "repomap_latency_p95_ms_max": max(
             0.0,
             float(gate.get("repomap_latency_p95_ms_max", 110.0) or 110.0),
@@ -897,9 +846,7 @@ def _evaluate_tabiv3_gate(
             _evaluate_metric_thresholds(
                 metrics={
                     "latency_p95_ms": float(item.get("latency_p95_ms", 0.0) or 0.0),
-                    "repomap_latency_p95_ms": float(
-                        item.get("repomap_latency_p95_ms", 0.0) or 0.0
-                    ),
+                    "repomap_latency_p95_ms": float(item.get("repomap_latency_p95_ms", 0.0) or 0.0),
                 },
                 thresholds={
                     "latency_p95_ms_max": float(latency_p95_ms_max),
@@ -926,17 +873,13 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
 
     metrics_raw = payload.get("metrics")
     metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
-    retrieval_control_plane_gate_summary_raw = payload.get(
-        "retrieval_control_plane_gate_summary"
-    )
+    retrieval_control_plane_gate_summary_raw = payload.get("retrieval_control_plane_gate_summary")
     retrieval_control_plane_gate_summary = (
         retrieval_control_plane_gate_summary_raw
         if isinstance(retrieval_control_plane_gate_summary_raw, dict)
         else {}
     )
-    retrieval_frontier_gate_summary_raw = payload.get(
-        "retrieval_frontier_gate_summary"
-    )
+    retrieval_frontier_gate_summary_raw = payload.get("retrieval_frontier_gate_summary")
     retrieval_frontier_gate_summary = (
         retrieval_frontier_gate_summary_raw
         if isinstance(retrieval_frontier_gate_summary_raw, dict)
@@ -952,29 +895,21 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
     )
     validation_probe_summary_raw = payload.get("validation_probe_summary")
     validation_probe_summary = (
-        validation_probe_summary_raw
-        if isinstance(validation_probe_summary_raw, dict)
-        else {}
+        validation_probe_summary_raw if isinstance(validation_probe_summary_raw, dict) else {}
     )
-    source_plan_feedback_summary_raw = payload.get(
-        "source_plan_validation_feedback_summary"
-    )
+    source_plan_feedback_summary_raw = payload.get("source_plan_validation_feedback_summary")
     source_plan_feedback_summary = (
         source_plan_feedback_summary_raw
         if isinstance(source_plan_feedback_summary_raw, dict)
         else {}
     )
-    source_plan_failure_signal_summary_raw = payload.get(
-        "source_plan_failure_signal_summary"
-    )
+    source_plan_failure_signal_summary_raw = payload.get("source_plan_failure_signal_summary")
     source_plan_failure_signal_summary = (
         source_plan_failure_signal_summary_raw
         if isinstance(source_plan_failure_signal_summary_raw, dict)
         else {}
     )
-    retrieval_default_strategy_summary_raw = payload.get(
-        "retrieval_default_strategy_summary"
-    )
+    retrieval_default_strategy_summary_raw = payload.get("retrieval_default_strategy_summary")
     retrieval_default_strategy_summary = (
         retrieval_default_strategy_summary_raw
         if isinstance(retrieval_default_strategy_summary_raw, dict)
@@ -991,46 +926,44 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
             else []
         ),
         "metrics": {
-            key: float(value or 0.0)
-            for key, value in metrics.items()
-            if isinstance(key, str)
+            key: float(value or 0.0) for key, value in metrics.items() if isinstance(key, str)
         },
     }
     gate_summary = {
-            str(key): (
-                bool(value)
-                if isinstance(value, bool)
+        str(key): (
+            bool(value)
+            if isinstance(value, bool)
+            else (
+                float(value)
+                if isinstance(value, (int, float))
                 else (
-                    float(value)
-                    if isinstance(value, (int, float))
-                    else (
-                        [str(item) for item in value if str(item).strip()]
-                        if isinstance(value, list)
-                        else value
-                    )
+                    [str(item) for item in value if str(item).strip()]
+                    if isinstance(value, list)
+                    else value
                 )
             )
-            for key, value in retrieval_control_plane_gate_summary.items()
-            if isinstance(key, str)
+        )
+        for key, value in retrieval_control_plane_gate_summary.items()
+        if isinstance(key, str)
     }
     if gate_summary:
         summary["retrieval_control_plane_gate_summary"] = gate_summary
     frontier_gate_summary = {
-            str(key): (
-                bool(value)
-                if isinstance(value, bool)
+        str(key): (
+            bool(value)
+            if isinstance(value, bool)
+            else (
+                float(value)
+                if isinstance(value, (int, float))
                 else (
-                    float(value)
-                    if isinstance(value, (int, float))
-                    else (
-                        [str(item) for item in value if str(item).strip()]
-                        if isinstance(value, list)
-                        else value
-                    )
+                    [str(item) for item in value if str(item).strip()]
+                    if isinstance(value, list)
+                    else value
                 )
             )
-            for key, value in retrieval_frontier_gate_summary.items()
-            if isinstance(key, str)
+        )
+        for key, value in retrieval_frontier_gate_summary.items()
+        if isinstance(key, str)
     }
     if frontier_gate_summary:
         summary["retrieval_frontier_gate_summary"] = frontier_gate_summary
@@ -1061,41 +994,29 @@ def _load_benchmark_summary(*, summary_path: Path) -> dict[str, Any]:
         if isinstance(key, str) and isinstance(value, (int, float))
     }
     if source_plan_feedback_snapshot:
-        summary["source_plan_validation_feedback_summary"] = (
-            source_plan_feedback_snapshot
-        )
+        summary["source_plan_validation_feedback_summary"] = source_plan_feedback_snapshot
     source_plan_failure_signal_snapshot = {
         str(key): float(value or 0.0)
         for key, value in source_plan_failure_signal_summary.items()
         if isinstance(key, str) and isinstance(value, (int, float))
     }
     if source_plan_failure_signal_snapshot:
-        summary["source_plan_failure_signal_summary"] = (
-            source_plan_failure_signal_snapshot
-        )
+        summary["source_plan_failure_signal_summary"] = source_plan_failure_signal_snapshot
     retrieval_default_strategy_snapshot = {
         str(key): (
             {
                 str(inner_key): float(inner_value or 0.0)
                 for inner_key, inner_value in value.items()
-                if isinstance(inner_key, str)
-                and isinstance(inner_value, (int, float))
+                if isinstance(inner_key, str) and isinstance(inner_value, (int, float))
             }
             if isinstance(value, dict)
-            else (
-                float(value or 0.0)
-                if isinstance(value, (int, float))
-                else value
-            )
+            else (float(value or 0.0) if isinstance(value, (int, float)) else value)
         )
         for key, value in retrieval_default_strategy_summary.items()
-        if isinstance(key, str)
-        and (isinstance(value, dict) or isinstance(value, (int, float, str)))
+        if isinstance(key, str) and isinstance(value, dict | int | float | str)
     }
     if retrieval_default_strategy_snapshot:
-        summary["retrieval_default_strategy_summary"] = (
-            retrieval_default_strategy_snapshot
-        )
+        summary["retrieval_default_strategy_summary"] = retrieval_default_strategy_snapshot
     return summary
 
 
@@ -1139,7 +1060,10 @@ def _resolve_concept_gate_config(*, matrix_config_path: Path) -> dict[str, Any]:
     return {
         "enabled": enabled,
         "source": "config" if enabled else "disabled",
-        "cases": str(gate.get("cases", "benchmark/cases/p1_concepts.yaml") or "benchmark/cases/p1_concepts.yaml"),
+        "cases": str(
+            gate.get("cases", "benchmark/cases/p1_concepts.yaml")
+            or "benchmark/cases/p1_concepts.yaml"
+        ),
         "repo": str(gate.get("repo", "ace-lite-engine") or "ace-lite-engine"),
         "root": str(gate.get("root", ".") or "."),
         "skills_dir": str(gate.get("skills_dir", "skills") or "skills"),
@@ -1158,9 +1082,7 @@ def _resolve_external_concept_gate_config(*, matrix_config_path: Path) -> dict[s
     config = _load_yaml_config(path=matrix_config_path)
     freeze_raw = config.get("freeze")
     freeze = freeze_raw if isinstance(freeze_raw, dict) else {}
-    gate_raw = freeze.get(
-        "external_concept_gate", config.get("external_concept_gate", {})
-    )
+    gate_raw = freeze.get("external_concept_gate", config.get("external_concept_gate", {}))
     gate = gate_raw if isinstance(gate_raw, dict) else {}
 
     enabled = bool(gate.get("enabled", False))
@@ -1191,10 +1113,13 @@ def _resolve_feature_slices_gate_config(*, matrix_config_path: Path) -> dict[str
     gate = gate_raw if isinstance(gate_raw, dict) else {}
 
     enabled = bool(gate.get("enabled", False))
-    feature_config = str(
-        gate.get("config", "benchmark/matrix/feature_slices.yaml")
+    feature_config = (
+        str(
+            gate.get("config", "benchmark/matrix/feature_slices.yaml")
+            or "benchmark/matrix/feature_slices.yaml"
+        ).strip()
         or "benchmark/matrix/feature_slices.yaml"
-    ).strip() or "benchmark/matrix/feature_slices.yaml"
+    )
     return {
         "enabled": enabled,
         "source": "config" if enabled else "disabled",
@@ -1254,9 +1179,7 @@ def _evaluate_feature_slices_gate(*, summary: dict[str, Any]) -> list[dict[str, 
             continue
         name = str(item.get("name") or "").strip() or "(unknown)"
         item_failures_raw = item.get("failures")
-        item_failures = (
-            item_failures_raw if isinstance(item_failures_raw, list) else []
-        )
+        item_failures = item_failures_raw if isinstance(item_failures_raw, list) else []
         if not item_failures:
             failures.append(
                 {
@@ -1307,9 +1230,8 @@ def _evaluate_concept_gate(
     metrics_raw = benchmark_summary.get("metrics")
     metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
 
-    repo_name = (
-        str(benchmark_summary.get("repo", "") or "").strip()
-        or str(concept_gate_config.get("repo", "ace-lite-engine") or "ace-lite-engine")
+    repo_name = str(benchmark_summary.get("repo", "") or "").strip() or str(
+        concept_gate_config.get("repo", "ace-lite-engine") or "ace-lite-engine"
     )
     failures = _evaluate_metric_thresholds(
         metrics=metrics,
@@ -1335,9 +1257,7 @@ def _evaluate_external_concept_gate(
     thresholds: dict[str, float],
 ) -> tuple[list[dict[str, Any]], dict[str, float]]:
     retrieval_mean_raw = matrix_summary.get("retrieval_metrics_mean")
-    retrieval_mean = (
-        retrieval_mean_raw if isinstance(retrieval_mean_raw, dict) else {}
-    )
+    retrieval_mean = retrieval_mean_raw if isinstance(retrieval_mean_raw, dict) else {}
     metrics = {
         "precision_at_k": float(retrieval_mean.get("precision_at_k", 0.0) or 0.0),
         "noise_rate": float(retrieval_mean.get("noise_rate", 0.0) or 0.0),
@@ -1424,9 +1344,7 @@ def _evaluate_embedding_gate(
     if enabled_ratio_threshold >= 0.0:
         means_raw = matrix_summary.get("embedding_metrics_mean")
         means = means_raw if isinstance(means_raw, dict) else {}
-        actual_enabled_ratio = max(
-            0.0, float(means.get("embedding_enabled_ratio", 0.0) or 0.0)
-        )
+        actual_enabled_ratio = max(0.0, float(means.get("embedding_enabled_ratio", 0.0) or 0.0))
         if actual_enabled_ratio < enabled_ratio_threshold:
             failures.append(
                 {
@@ -1551,9 +1469,7 @@ def _evaluate_retrieval_policy_guard(
         "max_retrieval_task_gap_rate_mean": float(max_retrieval_task_gap_rate_mean),
         "max_noise_rate_mean": float(max_noise_rate_mean),
         "max_latency_p95_ms_mean": float(max_latency_p95_ms_mean),
-        "max_slo_downgrade_case_rate_mean": float(
-            max_slo_downgrade_case_rate_mean
-        ),
+        "max_slo_downgrade_case_rate_mean": float(max_slo_downgrade_case_rate_mean),
     }
     enabled = any(value >= 0.0 for value in thresholds.values())
     if not enabled:
@@ -1672,15 +1588,9 @@ def _resolve_validation_rich_gate_config(*, matrix_config_path: Path) -> dict[st
             "task_success_rate_min": _metric_threshold_from_mapping(
                 thresholds, "task_success_rate_min"
             ),
-            "precision_at_k_min": _metric_threshold_from_mapping(
-                thresholds, "precision_at_k_min"
-            ),
-            "noise_rate_max": _metric_threshold_from_mapping(
-                thresholds, "noise_rate_max"
-            ),
-            "latency_p95_ms_max": _metric_threshold_from_mapping(
-                thresholds, "latency_p95_ms_max"
-            ),
+            "precision_at_k_min": _metric_threshold_from_mapping(thresholds, "precision_at_k_min"),
+            "noise_rate_max": _metric_threshold_from_mapping(thresholds, "noise_rate_max"),
+            "latency_p95_ms_max": _metric_threshold_from_mapping(thresholds, "latency_p95_ms_max"),
             "validation_test_count_min": _metric_threshold_from_mapping(
                 thresholds, "validation_test_count_min"
             ),
@@ -1739,9 +1649,7 @@ def _evaluate_validation_rich_gate(
     return failures
 
 
-def _resolve_decision_observability_gate_config(
-    *, matrix_config_path: Path
-) -> dict[str, Any]:
+def _resolve_decision_observability_gate_config(*, matrix_config_path: Path) -> dict[str, Any]:
     config = _load_yaml_config(path=matrix_config_path)
     freeze_raw = config.get("freeze")
     freeze = freeze_raw if isinstance(freeze_raw, dict) else {}
@@ -1954,9 +1862,7 @@ def _evaluate_decision_observability_gate(
         and case_with_decisions_rate is not None
     ):
         expected_rate = (
-            float(case_with_decisions_count) / float(case_count)
-            if case_count > 0.0
-            else 0.0
+            float(case_with_decisions_count) / float(case_count) if case_count > 0.0 else 0.0
         )
         if not 0.0 <= case_with_decisions_rate <= 1.0:
             failures.append(
@@ -2083,49 +1989,29 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
             lines.append(
                 "- Memory means: notes_hit_ratio={notes:.4f}, profile_selected_mean={profile:.4f}, capture_trigger_ratio={capture:.4f}".format(
                     notes=float(memory_means.get("notes_hit_ratio", 0.0) or 0.0),
-                    profile=float(
-                        memory_means.get("profile_selected_mean", 0.0) or 0.0
-                    ),
-                    capture=float(
-                        memory_means.get("capture_trigger_ratio", 0.0) or 0.0
-                    ),
+                    profile=float(memory_means.get("profile_selected_mean", 0.0) or 0.0),
+                    capture=float(memory_means.get("capture_trigger_ratio", 0.0) or 0.0),
                 )
             )
         embedding_means_raw = matrix.get("embedding_metrics_mean")
-        embedding_means = (
-            embedding_means_raw if isinstance(embedding_means_raw, dict) else {}
-        )
+        embedding_means = embedding_means_raw if isinstance(embedding_means_raw, dict) else {}
         if embedding_means:
             lines.append(
                 "- Embedding means: enabled_ratio={enabled_ratio:.4f}, similarity={similarity:.4f}, rerank_ratio={rerank:.4f}, cache_hit={cache_hit:.4f}, fallback={fallback:.4f}".format(
-                    enabled_ratio=float(
-                        embedding_means.get("embedding_enabled_ratio", 0.0) or 0.0
-                    ),
-                    similarity=float(
-                        embedding_means.get("embedding_similarity_mean", 0.0) or 0.0
-                    ),
-                    rerank=float(
-                        embedding_means.get("embedding_rerank_ratio", 0.0) or 0.0
-                    ),
-                    cache_hit=float(
-                        embedding_means.get("embedding_cache_hit_ratio", 0.0) or 0.0
-                    ),
-                    fallback=float(
-                        embedding_means.get("embedding_fallback_ratio", 0.0) or 0.0
-                    ),
+                    enabled_ratio=float(embedding_means.get("embedding_enabled_ratio", 0.0) or 0.0),
+                    similarity=float(embedding_means.get("embedding_similarity_mean", 0.0) or 0.0),
+                    rerank=float(embedding_means.get("embedding_rerank_ratio", 0.0) or 0.0),
+                    cache_hit=float(embedding_means.get("embedding_cache_hit_ratio", 0.0) or 0.0),
+                    fallback=float(embedding_means.get("embedding_fallback_ratio", 0.0) or 0.0),
                 )
             )
         stage_latency_summary_raw = matrix.get("stage_latency_summary")
         stage_latency_summary = (
-            stage_latency_summary_raw
-            if isinstance(stage_latency_summary_raw, dict)
-            else {}
+            stage_latency_summary_raw if isinstance(stage_latency_summary_raw, dict) else {}
         )
         if stage_latency_summary:
             total_stage_raw = stage_latency_summary.get("total")
-            total_stage = (
-                total_stage_raw if isinstance(total_stage_raw, dict) else {}
-            )
+            total_stage = total_stage_raw if isinstance(total_stage_raw, dict) else {}
             lines.append(
                 "- Stage latency summary: total_mean={mean:.2f}ms, total_p95={p95:.2f}ms, index_p95={index:.2f}ms, repomap_p95={repomap:.2f}ms, source_plan_p95={source_plan:.2f}ms".format(
                     mean=float(total_stage.get("mean_ms", 0.0) or 0.0),
@@ -2149,9 +2035,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     source_plan=float(
                         (
                             stage_latency_summary.get("source_plan", {})
-                            if isinstance(
-                                stage_latency_summary.get("source_plan", {}), dict
-                            )
+                            if isinstance(stage_latency_summary.get("source_plan", {}), dict)
                             else {}
                         ).get("p95_ms", 0.0)
                         or 0.0
@@ -2164,32 +2048,18 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         )
         if slo_budget_summary:
             budget_limits_raw = slo_budget_summary.get("budget_limits_ms")
-            budget_limits = (
-                budget_limits_raw if isinstance(budget_limits_raw, dict) else {}
-            )
+            budget_limits = budget_limits_raw if isinstance(budget_limits_raw, dict) else {}
             signals_raw = slo_budget_summary.get("signals")
             signals = signals_raw if isinstance(signals_raw, dict) else {}
             lines.append(
                 "- SLO budget summary: downgrade_case_rate={rate:.4f}, parallel_budget={parallel:.2f}ms, embedding_budget={embedding:.2f}ms, chunk_semantic_budget={chunk:.2f}ms, xref_budget={xref:.2f}ms".format(
-                    rate=float(
-                        slo_budget_summary.get("downgrade_case_rate", 0.0) or 0.0
-                    ),
-                    parallel=float(
-                        budget_limits.get("parallel_time_budget_ms_mean", 0.0) or 0.0
-                    ),
-                    embedding=float(
-                        budget_limits.get("embedding_time_budget_ms_mean", 0.0)
-                        or 0.0
-                    ),
+                    rate=float(slo_budget_summary.get("downgrade_case_rate", 0.0) or 0.0),
+                    parallel=float(budget_limits.get("parallel_time_budget_ms_mean", 0.0) or 0.0),
+                    embedding=float(budget_limits.get("embedding_time_budget_ms_mean", 0.0) or 0.0),
                     chunk=float(
-                        budget_limits.get(
-                            "chunk_semantic_time_budget_ms_mean", 0.0
-                        )
-                        or 0.0
+                        budget_limits.get("chunk_semantic_time_budget_ms_mean", 0.0) or 0.0
                     ),
-                    xref=float(
-                        budget_limits.get("xref_time_budget_ms_mean", 0.0) or 0.0
-                    ),
+                    xref=float(budget_limits.get("xref_time_budget_ms_mean", 0.0) or 0.0),
                 )
             )
             lines.append(
@@ -2224,9 +2094,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     chunk_fallback=float(
                         (
                             signals.get("chunk_semantic_fallback_ratio", {})
-                            if isinstance(
-                                signals.get("chunk_semantic_fallback_ratio", {}), dict
-                            )
+                            if isinstance(signals.get("chunk_semantic_fallback_ratio", {}), dict)
                             else {}
                         ).get("rate", 0.0)
                         or 0.0
@@ -2234,9 +2102,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     xref=float(
                         (
                             signals.get("xref_budget_exhausted_ratio", {})
-                            if isinstance(
-                                signals.get("xref_budget_exhausted_ratio", {}), dict
-                            )
+                            if isinstance(signals.get("xref_budget_exhausted_ratio", {}), dict)
                             else {}
                         ).get("rate", 0.0)
                         or 0.0
@@ -2245,9 +2111,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
             )
 
         threshold_failed_raw = matrix.get("threshold_failed_repos")
-        threshold_failed = (
-            threshold_failed_raw if isinstance(threshold_failed_raw, list) else []
-        )
+        threshold_failed = threshold_failed_raw if isinstance(threshold_failed_raw, list) else []
         if threshold_failed:
             lines.append("- Threshold failed repos:")
             for item in threshold_failed:
@@ -2292,29 +2156,15 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         policy=str(item.get("retrieval_policy", "auto") or "auto"),
                         repos=max(0, int(item.get("repo_count", 0) or 0)),
                         regressed=max(0, int(item.get("regressed_repo_count", 0) or 0)),
-                        regressed_rate=float(
-                            item.get("regressed_repo_rate", 0.0) or 0.0
-                        ),
+                        regressed_rate=float(item.get("regressed_repo_rate", 0.0) or 0.0),
                         task_success=float(item.get("task_success_mean", 0.0) or 0.0),
-                        positive_task=float(
-                            item.get("positive_task_success_mean", 0.0) or 0.0
-                        ),
-                        gap_rate=float(
-                            item.get("retrieval_task_gap_rate_mean", 0.0) or 0.0
-                        ),
-                        precision=float(
-                            item.get("precision_at_k_mean", 0.0) or 0.0
-                        ),
+                        positive_task=float(item.get("positive_task_success_mean", 0.0) or 0.0),
+                        gap_rate=float(item.get("retrieval_task_gap_rate_mean", 0.0) or 0.0),
+                        precision=float(item.get("precision_at_k_mean", 0.0) or 0.0),
                         noise=float(item.get("noise_rate_mean", 0.0) or 0.0),
-                        latency=float(
-                            item.get("latency_p95_ms_mean", 0.0) or 0.0
-                        ),
-                        repomap=float(
-                            item.get("repomap_latency_p95_ms_mean", 0.0) or 0.0
-                        ),
-                        downgrade=float(
-                            item.get("slo_downgrade_case_rate_mean", 0.0) or 0.0
-                        ),
+                        latency=float(item.get("latency_p95_ms_mean", 0.0) or 0.0),
+                        repomap=float(item.get("repomap_latency_p95_ms_mean", 0.0) or 0.0),
+                        downgrade=float(item.get("slo_downgrade_case_rate_mean", 0.0) or 0.0),
                     )
                 )
         else:
@@ -2342,8 +2192,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
             lines.append(
                 "- Plugin policy modes: {items}".format(
                     items=", ".join(
-                        f"{key!s}={int(value)}"
-                        for key, value in sorted(plugin_mode.items())
+                        f"{key!s}={int(value)}" for key, value in sorted(plugin_mode.items())
                     )
                 )
             )
@@ -2366,26 +2215,18 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         lines.append("")
 
     validation_rich_raw = payload.get("validation_rich_benchmark")
-    validation_rich = (
-        validation_rich_raw if isinstance(validation_rich_raw, dict) else {}
-    )
+    validation_rich = validation_rich_raw if isinstance(validation_rich_raw, dict) else {}
     if bool(validation_rich.get("enabled", False)):
         lines.append("## Validation-Rich Benchmark")
         lines.append("")
-        lines.append(
-            f"- Report only: {bool(validation_rich.get('report_only', True))}"
-        )
+        lines.append(f"- Report only: {bool(validation_rich.get('report_only', True))}")
         summary_path = str(validation_rich.get("summary_path", "") or "").strip()
         if summary_path:
             lines.append(f"- Summary: {summary_path}")
-        previous_summary_path = str(
-            validation_rich.get("previous_summary_path", "") or ""
-        ).strip()
+        previous_summary_path = str(validation_rich.get("previous_summary_path", "") or "").strip()
         if previous_summary_path:
             lines.append(f"- Previous summary: {previous_summary_path}")
-        lines.append(
-            f"- Loaded summary: {bool(validation_rich.get('loaded', False))}"
-        )
+        lines.append(f"- Loaded summary: {bool(validation_rich.get('loaded', False))}")
         if previous_summary_path:
             lines.append(
                 "- Loaded previous summary: {loaded}".format(
@@ -2396,16 +2237,10 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
             repo_name = str(validation_rich.get("repo", "") or "").strip()
             if repo_name:
                 lines.append(f"- Repo: {repo_name}")
-            lines.append(
-                f"- Case count: {int(validation_rich.get('case_count', 0) or 0)}"
-            )
-            lines.append(
-                f"- Regressed: {bool(validation_rich.get('regressed', False))}"
-            )
+            lines.append(f"- Case count: {int(validation_rich.get('case_count', 0) or 0)}")
+            lines.append(f"- Regressed: {bool(validation_rich.get('regressed', False))}")
             failed_checks_raw = validation_rich.get("failed_checks")
-            failed_checks = (
-                failed_checks_raw if isinstance(failed_checks_raw, list) else []
-            )
+            failed_checks = failed_checks_raw if isinstance(failed_checks_raw, list) else []
             lines.append(
                 "- Failed checks: {checks}".format(
                     checks=",".join(str(item) for item in failed_checks)
@@ -2420,16 +2255,10 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     task_success=float(metrics.get("task_success_rate", 0.0) or 0.0),
                     precision=float(metrics.get("precision_at_k", 0.0) or 0.0),
                     noise=float(metrics.get("noise_rate", 0.0) or 0.0),
-                    validation_tests=float(
-                        metrics.get("validation_test_count", 0.0) or 0.0
-                    ),
+                    validation_tests=float(metrics.get("validation_test_count", 0.0) or 0.0),
                     latency=float(metrics.get("latency_p95_ms", 0.0) or 0.0),
-                    insufficient=float(
-                        metrics.get("evidence_insufficient_rate", 0.0) or 0.0
-                    ),
-                    missing_validation=float(
-                        metrics.get("missing_validation_rate", 0.0) or 0.0
-                    ),
+                    insufficient=float(metrics.get("evidence_insufficient_rate", 0.0) or 0.0),
+                    missing_validation=float(metrics.get("missing_validation_rate", 0.0) or 0.0),
                 )
             )
             previous_metrics_raw = validation_rich.get("previous_metrics")
@@ -2439,54 +2268,37 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
             if previous_metrics:
                 lines.append(
                     "- Previous metrics: task_success={task_success:.4f}, precision={precision:.4f}, noise={noise:.4f}, validation_test_count={validation_tests:.4f}, latency_p95_ms={latency:.2f}, evidence_insufficient={insufficient:.4f}, missing_validation={missing_validation:.4f}".format(
-                        task_success=float(
-                            previous_metrics.get("task_success_rate", 0.0) or 0.0
-                        ),
-                        precision=float(
-                            previous_metrics.get("precision_at_k", 0.0) or 0.0
-                        ),
+                        task_success=float(previous_metrics.get("task_success_rate", 0.0) or 0.0),
+                        precision=float(previous_metrics.get("precision_at_k", 0.0) or 0.0),
                         noise=float(previous_metrics.get("noise_rate", 0.0) or 0.0),
                         validation_tests=float(
                             previous_metrics.get("validation_test_count", 0.0) or 0.0
                         ),
-                        latency=float(
-                            previous_metrics.get("latency_p95_ms", 0.0) or 0.0
-                        ),
+                        latency=float(previous_metrics.get("latency_p95_ms", 0.0) or 0.0),
                         insufficient=float(
-                            previous_metrics.get("evidence_insufficient_rate", 0.0)
-                            or 0.0
+                            previous_metrics.get("evidence_insufficient_rate", 0.0) or 0.0
                         ),
                         missing_validation=float(
-                            previous_metrics.get("missing_validation_rate", 0.0)
-                            or 0.0
+                            previous_metrics.get("missing_validation_rate", 0.0) or 0.0
                         ),
                     )
                 )
             gate_summary_raw = validation_rich.get("retrieval_control_plane_gate_summary")
-            gate_summary = (
-                gate_summary_raw if isinstance(gate_summary_raw, dict) else {}
-            )
+            gate_summary = gate_summary_raw if isinstance(gate_summary_raw, dict) else {}
             if gate_summary:
                 gate_failed_checks_raw = gate_summary.get("failed_checks")
                 gate_failed_checks = (
-                    gate_failed_checks_raw
-                    if isinstance(gate_failed_checks_raw, list)
-                    else []
+                    gate_failed_checks_raw if isinstance(gate_failed_checks_raw, list) else []
                 )
                 lines.append(
                     "- Q2 retrieval control plane gate: passed={passed}, regression_evaluated={evaluated}, regression_detected={detected}, shadow_coverage={shadow:.4f}, risk_upgrade_gain={gain:.4f}, latency_p95_ms={latency:.2f}, failed_checks={failed_checks}".format(
                         passed=bool(gate_summary.get("gate_passed", False)),
                         evaluated=bool(gate_summary.get("regression_evaluated", False)),
-                        detected=bool(
-                            gate_summary.get("benchmark_regression_detected", False)
-                        ),
+                        detected=bool(gate_summary.get("benchmark_regression_detected", False)),
                         shadow=float(
-                            gate_summary.get("adaptive_router_shadow_coverage", 0.0)
-                            or 0.0
+                            gate_summary.get("adaptive_router_shadow_coverage", 0.0) or 0.0
                         ),
-                        gain=float(
-                            gate_summary.get("risk_upgrade_precision_gain", 0.0) or 0.0
-                        ),
+                        gain=float(gate_summary.get("risk_upgrade_precision_gain", 0.0) or 0.0),
                         latency=float(gate_summary.get("latency_p95_ms", 0.0) or 0.0),
                         failed_checks=",".join(
                             str(item) for item in gate_failed_checks if str(item).strip()
@@ -2494,18 +2306,12 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         or "(none)",
                     )
                 )
-            frontier_gate_summary_raw = validation_rich.get(
-                "retrieval_frontier_gate_summary"
-            )
+            frontier_gate_summary_raw = validation_rich.get("retrieval_frontier_gate_summary")
             frontier_gate_summary = (
-                frontier_gate_summary_raw
-                if isinstance(frontier_gate_summary_raw, dict)
-                else {}
+                frontier_gate_summary_raw if isinstance(frontier_gate_summary_raw, dict) else {}
             )
             if frontier_gate_summary:
-                frontier_gate_failed_checks_raw = frontier_gate_summary.get(
-                    "failed_checks"
-                )
+                frontier_gate_failed_checks_raw = frontier_gate_summary.get("failed_checks")
                 frontier_gate_failed_checks = (
                     frontier_gate_failed_checks_raw
                     if isinstance(frontier_gate_failed_checks_raw, list)
@@ -2515,35 +2321,20 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     "- Q3 retrieval frontier gate: passed={passed}, deep_symbol_case_recall={recall:.4f}, native_scip_loaded_rate={native_scip:.4f}, precision_at_k={precision:.4f}, noise_rate={noise:.4f}, failed_checks={failed_checks}".format(
                         passed=bool(frontier_gate_summary.get("gate_passed", False)),
                         recall=float(
-                            frontier_gate_summary.get(
-                                "deep_symbol_case_recall", 0.0
-                            )
-                            or 0.0
+                            frontier_gate_summary.get("deep_symbol_case_recall", 0.0) or 0.0
                         ),
                         native_scip=float(
-                            frontier_gate_summary.get(
-                                "native_scip_loaded_rate", 0.0
-                            )
-                            or 0.0
+                            frontier_gate_summary.get("native_scip_loaded_rate", 0.0) or 0.0
                         ),
-                        precision=float(
-                            frontier_gate_summary.get("precision_at_k", 0.0)
-                            or 0.0
-                        ),
-                        noise=float(
-                            frontier_gate_summary.get("noise_rate", 0.0) or 0.0
-                        ),
+                        precision=float(frontier_gate_summary.get("precision_at_k", 0.0) or 0.0),
+                        noise=float(frontier_gate_summary.get("noise_rate", 0.0) or 0.0),
                         failed_checks=",".join(
-                            str(item)
-                            for item in frontier_gate_failed_checks
-                            if str(item).strip()
+                            str(item) for item in frontier_gate_failed_checks if str(item).strip()
                         )
                         or "(none)",
                     )
                 )
-            validation_probe_summary_raw = validation_rich.get(
-                "validation_probe_summary"
-            )
+            validation_probe_summary_raw = validation_rich.get("validation_probe_summary")
             validation_probe_summary = (
                 validation_probe_summary_raw
                 if isinstance(validation_probe_summary_raw, dict)
@@ -2553,22 +2344,16 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 lines.append(
                     "- Q4 validation probe summary: validation_test_count={test_count:.4f}, probe_enabled_ratio={enabled:.4f}, probe_executed_count_mean={executed:.4f}, probe_failure_rate={failure:.4f}".format(
                         test_count=float(
-                            validation_probe_summary.get("validation_test_count", 0.0)
-                            or 0.0
+                            validation_probe_summary.get("validation_test_count", 0.0) or 0.0
                         ),
                         enabled=float(
-                            validation_probe_summary.get("probe_enabled_ratio", 0.0)
-                            or 0.0
+                            validation_probe_summary.get("probe_enabled_ratio", 0.0) or 0.0
                         ),
                         executed=float(
-                            validation_probe_summary.get(
-                                "probe_executed_count_mean", 0.0
-                            )
-                            or 0.0
+                            validation_probe_summary.get("probe_executed_count_mean", 0.0) or 0.0
                         ),
                         failure=float(
-                            validation_probe_summary.get("probe_failure_rate", 0.0)
-                            or 0.0
+                            validation_probe_summary.get("probe_failure_rate", 0.0) or 0.0
                         ),
                     )
                 )
@@ -2576,43 +2361,25 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 "source_plan_validation_feedback_summary"
             )
             source_plan_feedback = (
-                source_plan_feedback_raw
-                if isinstance(source_plan_feedback_raw, dict)
-                else {}
+                source_plan_feedback_raw if isinstance(source_plan_feedback_raw, dict) else {}
             )
             if source_plan_feedback:
                 lines.append(
                     "- Q4 source-plan validation feedback: present_ratio={present:.4f}, failure_rate={failure:.4f}, issue_count_mean={issue:.4f}, probe_issue_count_mean={probe_issue:.4f}, probe_executed_count_mean={probe_executed:.4f}, selected_test_count_mean={selected:.4f}, executed_test_count_mean={executed:.4f}".format(
-                        present=float(
-                            source_plan_feedback.get("present_ratio", 0.0) or 0.0
-                        ),
-                        failure=float(
-                            source_plan_feedback.get("failure_rate", 0.0) or 0.0
-                        ),
-                        issue=float(
-                            source_plan_feedback.get("issue_count_mean", 0.0) or 0.0
-                        ),
+                        present=float(source_plan_feedback.get("present_ratio", 0.0) or 0.0),
+                        failure=float(source_plan_feedback.get("failure_rate", 0.0) or 0.0),
+                        issue=float(source_plan_feedback.get("issue_count_mean", 0.0) or 0.0),
                         probe_issue=float(
-                            source_plan_feedback.get("probe_issue_count_mean", 0.0)
-                            or 0.0
+                            source_plan_feedback.get("probe_issue_count_mean", 0.0) or 0.0
                         ),
                         probe_executed=float(
-                            source_plan_feedback.get(
-                                "probe_executed_count_mean", 0.0
-                            )
-                            or 0.0
+                            source_plan_feedback.get("probe_executed_count_mean", 0.0) or 0.0
                         ),
                         selected=float(
-                            source_plan_feedback.get(
-                                "selected_test_count_mean", 0.0
-                            )
-                            or 0.0
+                            source_plan_feedback.get("selected_test_count_mean", 0.0) or 0.0
                         ),
                         executed=float(
-                            source_plan_feedback.get(
-                                "executed_test_count_mean", 0.0
-                            )
-                            or 0.0
+                            source_plan_feedback.get("executed_test_count_mean", 0.0) or 0.0
                         ),
                     )
                 )
@@ -2628,9 +2395,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 graph_weights_raw = retrieval_default_strategy_summary.get(
                     "graph_lookup_weight_means"
                 )
-                graph_weights = (
-                    graph_weights_raw if isinstance(graph_weights_raw, dict) else {}
-                )
+                graph_weights = graph_weights_raw if isinstance(graph_weights_raw, dict) else {}
                 summary_case_count = max(
                     0,
                     int(retrieval_default_strategy_summary.get("case_count", 0) or 0),
@@ -2749,14 +2514,10 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 "previous_retrieval_control_plane_gate_summary"
             )
             previous_gate_summary = (
-                previous_gate_summary_raw
-                if isinstance(previous_gate_summary_raw, dict)
-                else {}
+                previous_gate_summary_raw if isinstance(previous_gate_summary_raw, dict) else {}
             )
             if previous_gate_summary:
-                previous_gate_failed_checks_raw = previous_gate_summary.get(
-                    "failed_checks"
-                )
+                previous_gate_failed_checks_raw = previous_gate_summary.get("failed_checks")
                 previous_gate_failed_checks = (
                     previous_gate_failed_checks_raw
                     if isinstance(previous_gate_failed_checks_raw, list)
@@ -2765,33 +2526,19 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 lines.append(
                     "- Previous Q2 retrieval control plane gate: passed={passed}, regression_evaluated={evaluated}, regression_detected={detected}, shadow_coverage={shadow:.4f}, risk_upgrade_gain={gain:.4f}, latency_p95_ms={latency:.2f}, failed_checks={failed_checks}".format(
                         passed=bool(previous_gate_summary.get("gate_passed", False)),
-                        evaluated=bool(
-                            previous_gate_summary.get("regression_evaluated", False)
-                        ),
+                        evaluated=bool(previous_gate_summary.get("regression_evaluated", False)),
                         detected=bool(
-                            previous_gate_summary.get(
-                                "benchmark_regression_detected", False
-                            )
+                            previous_gate_summary.get("benchmark_regression_detected", False)
                         ),
                         shadow=float(
-                            previous_gate_summary.get(
-                                "adaptive_router_shadow_coverage", 0.0
-                            )
-                            or 0.0
+                            previous_gate_summary.get("adaptive_router_shadow_coverage", 0.0) or 0.0
                         ),
                         gain=float(
-                            previous_gate_summary.get(
-                                "risk_upgrade_precision_gain", 0.0
-                            )
-                            or 0.0
+                            previous_gate_summary.get("risk_upgrade_precision_gain", 0.0) or 0.0
                         ),
-                        latency=float(
-                            previous_gate_summary.get("latency_p95_ms", 0.0) or 0.0
-                        ),
+                        latency=float(previous_gate_summary.get("latency_p95_ms", 0.0) or 0.0),
                         failed_checks=",".join(
-                            str(item)
-                            for item in previous_gate_failed_checks
-                            if str(item).strip()
+                            str(item) for item in previous_gate_failed_checks if str(item).strip()
                         )
                         or "(none)",
                     )
@@ -2805,8 +2552,8 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 else {}
             )
             if previous_frontier_gate_summary:
-                previous_frontier_failed_checks_raw = (
-                    previous_frontier_gate_summary.get("failed_checks")
+                previous_frontier_failed_checks_raw = previous_frontier_gate_summary.get(
+                    "failed_checks"
                 )
                 previous_frontier_failed_checks = (
                     previous_frontier_failed_checks_raw
@@ -2815,33 +2562,19 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 )
                 lines.append(
                     "- Previous Q3 retrieval frontier gate: passed={passed}, deep_symbol_case_recall={recall:.4f}, native_scip_loaded_rate={native_scip:.4f}, precision_at_k={precision:.4f}, noise_rate={noise:.4f}, failed_checks={failed_checks}".format(
-                        passed=bool(
-                            previous_frontier_gate_summary.get(
-                                "gate_passed", False
-                            )
-                        ),
+                        passed=bool(previous_frontier_gate_summary.get("gate_passed", False)),
                         recall=float(
-                            previous_frontier_gate_summary.get(
-                                "deep_symbol_case_recall", 0.0
-                            )
+                            previous_frontier_gate_summary.get("deep_symbol_case_recall", 0.0)
                             or 0.0
                         ),
                         native_scip=float(
-                            previous_frontier_gate_summary.get(
-                                "native_scip_loaded_rate", 0.0
-                            )
+                            previous_frontier_gate_summary.get("native_scip_loaded_rate", 0.0)
                             or 0.0
                         ),
                         precision=float(
-                            previous_frontier_gate_summary.get(
-                                "precision_at_k", 0.0
-                            )
-                            or 0.0
+                            previous_frontier_gate_summary.get("precision_at_k", 0.0) or 0.0
                         ),
-                        noise=float(
-                            previous_frontier_gate_summary.get("noise_rate", 0.0)
-                            or 0.0
-                        ),
+                        noise=float(previous_frontier_gate_summary.get("noise_rate", 0.0) or 0.0),
                         failed_checks=",".join(
                             str(item)
                             for item in previous_frontier_failed_checks
@@ -2862,28 +2595,18 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 lines.append(
                     "- Previous Q4 validation probe summary: validation_test_count={test_count:.4f}, probe_enabled_ratio={enabled:.4f}, probe_executed_count_mean={executed:.4f}, probe_failure_rate={failure:.4f}".format(
                         test_count=float(
-                            previous_validation_probe_summary.get(
-                                "validation_test_count", 0.0
-                            )
+                            previous_validation_probe_summary.get("validation_test_count", 0.0)
                             or 0.0
                         ),
                         enabled=float(
-                            previous_validation_probe_summary.get(
-                                "probe_enabled_ratio", 0.0
-                            )
-                            or 0.0
+                            previous_validation_probe_summary.get("probe_enabled_ratio", 0.0) or 0.0
                         ),
                         executed=float(
-                            previous_validation_probe_summary.get(
-                                "probe_executed_count_mean", 0.0
-                            )
+                            previous_validation_probe_summary.get("probe_executed_count_mean", 0.0)
                             or 0.0
                         ),
                         failure=float(
-                            previous_validation_probe_summary.get(
-                                "probe_failure_rate", 0.0
-                            )
-                            or 0.0
+                            previous_validation_probe_summary.get("probe_failure_rate", 0.0) or 0.0
                         ),
                     )
                 )
@@ -2899,39 +2622,27 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 lines.append(
                     "- Previous Q4 source-plan validation feedback: present_ratio={present:.4f}, failure_rate={failure:.4f}, issue_count_mean={issue:.4f}, probe_issue_count_mean={probe_issue:.4f}, probe_executed_count_mean={probe_executed:.4f}, selected_test_count_mean={selected:.4f}, executed_test_count_mean={executed:.4f}".format(
                         present=float(
-                            previous_source_plan_feedback.get("present_ratio", 0.0)
-                            or 0.0
+                            previous_source_plan_feedback.get("present_ratio", 0.0) or 0.0
                         ),
                         failure=float(
-                            previous_source_plan_feedback.get("failure_rate", 0.0)
-                            or 0.0
+                            previous_source_plan_feedback.get("failure_rate", 0.0) or 0.0
                         ),
                         issue=float(
-                            previous_source_plan_feedback.get("issue_count_mean", 0.0)
-                            or 0.0
+                            previous_source_plan_feedback.get("issue_count_mean", 0.0) or 0.0
                         ),
                         probe_issue=float(
-                            previous_source_plan_feedback.get(
-                                "probe_issue_count_mean", 0.0
-                            )
-                            or 0.0
+                            previous_source_plan_feedback.get("probe_issue_count_mean", 0.0) or 0.0
                         ),
                         probe_executed=float(
-                            previous_source_plan_feedback.get(
-                                "probe_executed_count_mean", 0.0
-                            )
+                            previous_source_plan_feedback.get("probe_executed_count_mean", 0.0)
                             or 0.0
                         ),
                         selected=float(
-                            previous_source_plan_feedback.get(
-                                "selected_test_count_mean", 0.0
-                            )
+                            previous_source_plan_feedback.get("selected_test_count_mean", 0.0)
                             or 0.0
                         ),
                         executed=float(
-                            previous_source_plan_feedback.get(
-                                "executed_test_count_mean", 0.0
-                            )
+                            previous_source_plan_feedback.get("executed_test_count_mean", 0.0)
                             or 0.0
                         ),
                     )
@@ -2945,10 +2656,8 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 else {}
             )
             if previous_retrieval_default_strategy_summary:
-                previous_graph_weights_raw = (
-                    previous_retrieval_default_strategy_summary.get(
-                        "graph_lookup_weight_means"
-                    )
+                previous_graph_weights_raw = previous_retrieval_default_strategy_summary.get(
+                    "graph_lookup_weight_means"
                 )
                 previous_graph_weights = (
                     previous_graph_weights_raw
@@ -2957,12 +2666,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 )
                 previous_summary_case_count = max(
                     0,
-                    int(
-                        previous_retrieval_default_strategy_summary.get(
-                            "case_count", 0
-                        )
-                        or 0
-                    ),
+                    int(previous_retrieval_default_strategy_summary.get("case_count", 0) or 0),
                 )
                 lines.append(
                     "- Previous Q4 retrieval default strategy: retrieval_context={context_count}/{case_count} ({context_rate:.4f}), graph_lookup_enabled={graph_enabled}/{case_count} ({graph_rate:.4f}), guarded={guarded}/{case_count} ({guarded_rate:.4f}), normalization={normalization}, topological_mode={mode}".format(
@@ -3068,14 +2772,10 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     "- Previous Q4 retrieval default strategy weights: scip={scip:.4f}, xref={xref:.4f}, query_xref={query_xref:.4f}, symbol={symbol:.4f}, import={imports:.4f}, coverage={coverage:.4f}".format(
                         scip=float(previous_graph_weights.get("scip", 0.0) or 0.0),
                         xref=float(previous_graph_weights.get("xref", 0.0) or 0.0),
-                        query_xref=float(
-                            previous_graph_weights.get("query_xref", 0.0) or 0.0
-                        ),
+                        query_xref=float(previous_graph_weights.get("query_xref", 0.0) or 0.0),
                         symbol=float(previous_graph_weights.get("symbol", 0.0) or 0.0),
                         imports=float(previous_graph_weights.get("import", 0.0) or 0.0),
-                        coverage=float(
-                            previous_graph_weights.get("coverage", 0.0) or 0.0
-                        ),
+                        coverage=float(previous_graph_weights.get("coverage", 0.0) or 0.0),
                     )
                 )
             delta_raw = validation_rich.get("delta")
@@ -3112,30 +2812,22 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
     )
     decision_observability_gate_raw = payload.get("decision_observability_gate")
     decision_observability_gate = (
-        decision_observability_gate_raw
-        if isinstance(decision_observability_gate_raw, dict)
-        else {}
+        decision_observability_gate_raw if isinstance(decision_observability_gate_raw, dict) else {}
     )
     if bool(decision_observability_gate.get("enabled", False)):
         lines.append("## Decision Observability Gate")
         lines.append("")
-        lines.append(
-            f"- Passed: {bool(decision_observability_gate.get('passed', True))}"
-        )
+        lines.append(f"- Passed: {bool(decision_observability_gate.get('passed', True))}")
         lines.append(
             "- Mode: {mode}".format(
                 mode=str(decision_observability_gate.get("mode", "disabled") or "disabled")
             )
         )
-        lines.append(
-            f"- Enforced: {bool(decision_observability_gate.get('enforced', False))}"
-        )
+        lines.append(f"- Enforced: {bool(decision_observability_gate.get('enforced', False))}")
         source_name = str(decision_observability_gate.get("source", "") or "").strip()
         if source_name:
             lines.append(f"- Source: {source_name}")
-        summary_path = str(
-            decision_observability_gate.get("summary_path", "") or ""
-        ).strip()
+        summary_path = str(decision_observability_gate.get("summary_path", "") or "").strip()
         if summary_path:
             lines.append(f"- Summary: {summary_path}")
         lines.append(
@@ -3146,14 +2838,12 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         required_scalar_keys = decision_observability_gate.get("required_scalar_keys")
         if isinstance(required_scalar_keys, list) and required_scalar_keys:
             lines.append(
-                "- Required scalar keys: "
-                + ", ".join(str(item) for item in required_scalar_keys)
+                "- Required scalar keys: " + ", ".join(str(item) for item in required_scalar_keys)
             )
         required_mapping_keys = decision_observability_gate.get("required_mapping_keys")
         if isinstance(required_mapping_keys, list) and required_mapping_keys:
             lines.append(
-                "- Required mapping keys: "
-                + ", ".join(str(item) for item in required_mapping_keys)
+                "- Required mapping keys: " + ", ".join(str(item) for item in required_mapping_keys)
             )
         summary_raw = decision_observability_gate.get("summary")
         summary = summary_raw if isinstance(summary_raw, dict) else {}
@@ -3201,12 +2891,8 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         lines.append("## Validation-Rich Gate")
         lines.append("")
         lines.append(f"- Passed: {bool(validation_rich_gate.get('passed', True))}")
-        lines.append(
-            f"- Mode: {str(validation_rich_gate.get('mode', 'disabled') or 'disabled')}"
-        )
-        lines.append(
-            f"- Enforced: {bool(validation_rich_gate.get('enforced', False))}"
-        )
+        lines.append(f"- Mode: {validation_rich_gate.get('mode', 'disabled') or 'disabled'!s}")
+        lines.append(f"- Enforced: {bool(validation_rich_gate.get('enforced', False))}")
         source_name = str(validation_rich_gate.get("source", "") or "").strip()
         if source_name:
             lines.append(f"- Source: {source_name}")
@@ -3221,15 +2907,11 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 precision=float(thresholds.get("precision_at_k_min", -1.0) or -1.0),
                 noise=float(thresholds.get("noise_rate_max", -1.0) or -1.0),
                 latency=float(thresholds.get("latency_p95_ms_max", -1.0) or -1.0),
-                validation_tests=float(
-                    thresholds.get("validation_test_count_min", -1.0) or -1.0
-                ),
+                validation_tests=float(thresholds.get("validation_test_count_min", -1.0) or -1.0),
                 missing_validation=float(
                     thresholds.get("missing_validation_rate_max", -1.0) or -1.0
                 ),
-                insufficient=float(
-                    thresholds.get("evidence_insufficient_rate_max", -1.0) or -1.0
-                ),
+                insufficient=float(thresholds.get("evidence_insufficient_rate_max", -1.0) or -1.0),
             )
         )
         failures_raw = validation_rich_gate.get("failures")
@@ -3274,12 +2956,8 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         thresholds = thresholds_raw if isinstance(thresholds_raw, dict) else {}
         lines.append(
             "- Thresholds: conflicts<={conflicts}, blocked<={blocked}, warn<={warn}".format(
-                conflicts=int(
-                    thresholds.get("max_conflicts", -1)
-                ),
-                blocked=int(
-                    thresholds.get("max_blocked", -1)
-                ),
+                conflicts=int(thresholds.get("max_conflicts", -1)),
+                blocked=int(thresholds.get("max_blocked", -1)),
                 warn=int(thresholds.get("max_warn", -1)),
             )
         )
@@ -3311,12 +2989,8 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         lines.append("## Retrieval Policy Guard")
         lines.append("")
         lines.append(f"- Passed: {bool(retrieval_policy_gate.get('passed', True))}")
-        lines.append(
-            f"- Mode: {str(retrieval_policy_gate.get('mode', 'disabled') or 'disabled')}"
-        )
-        lines.append(
-            f"- Enforced: {bool(retrieval_policy_gate.get('enforced', False))}"
-        )
+        lines.append(f"- Mode: {retrieval_policy_gate.get('mode', 'disabled') or 'disabled'!s}")
+        lines.append(f"- Enforced: {bool(retrieval_policy_gate.get('enforced', False))}")
         source_name = str(retrieval_policy_gate.get("source", "") or "").strip()
         if source_name:
             lines.append(f"- Source: {source_name}")
@@ -3328,18 +3002,12 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 regressed_rate=_metric_threshold_from_mapping(
                     thresholds, "max_regressed_repo_rate"
                 ),
-                task_success=_metric_threshold_from_mapping(
-                    thresholds, "min_task_success_mean"
-                ),
+                task_success=_metric_threshold_from_mapping(thresholds, "min_task_success_mean"),
                 gap_rate=_metric_threshold_from_mapping(
                     thresholds, "max_retrieval_task_gap_rate_mean"
                 ),
-                noise=_metric_threshold_from_mapping(
-                    thresholds, "max_noise_rate_mean"
-                ),
-                latency=_metric_threshold_from_mapping(
-                    thresholds, "max_latency_p95_ms_mean"
-                ),
+                noise=_metric_threshold_from_mapping(thresholds, "max_noise_rate_mean"),
+                latency=_metric_threshold_from_mapping(thresholds, "max_latency_p95_ms_mean"),
                 downgrade=_metric_threshold_from_mapping(
                     thresholds, "max_slo_downgrade_case_rate_mean"
                 ),
@@ -3392,9 +3060,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         lines.append(
             "- Thresholds: latency_p95_ms<={latency:.2f}, repomap_latency_p95_ms<={repomap:.2f}".format(
                 latency=float(thresholds.get("latency_p95_ms_max", 0.0) or 0.0),
-                repomap=float(
-                    thresholds.get("repomap_latency_p95_ms_max", 0.0) or 0.0
-                ),
+                repomap=float(thresholds.get("repomap_latency_p95_ms_max", 0.0) or 0.0),
             )
         )
         failures_raw = tabiv3_gate.get("failures")
@@ -3431,28 +3097,18 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
             lines.append(f"- Cases: {cases_path}")
         lines.append(f"- Case count: {int(concept_gate.get('case_count', 0) or 0)}")
         execution_config_raw = concept_gate.get("execution_config")
-        execution_config = (
-            execution_config_raw if isinstance(execution_config_raw, dict) else {}
-        )
+        execution_config = execution_config_raw if isinstance(execution_config_raw, dict) else {}
         if execution_config:
             lines.append(
                 "- Execution config: top_k_files={top_k_files}, min_candidate_score={min_score}, candidate_ranker={ranker}, retrieval_policy={policy}, chunk_top_k={chunk_top_k}, cochange={cochange}".format(
-                    top_k_files=max(
-                        1, int(execution_config.get("top_k_files", 0) or 0)
-                    ),
+                    top_k_files=max(1, int(execution_config.get("top_k_files", 0) or 0)),
                     min_score=max(
                         0,
                         int(execution_config.get("min_candidate_score", 0) or 0),
                     ),
-                    ranker=str(
-                        execution_config.get("candidate_ranker", "") or "heuristic"
-                    ),
-                    policy=str(
-                        execution_config.get("retrieval_policy", "") or "auto"
-                    ),
-                    chunk_top_k=max(
-                        1, int(execution_config.get("chunk_top_k", 0) or 0)
-                    ),
+                    ranker=str(execution_config.get("candidate_ranker", "") or "heuristic"),
+                    policy=str(execution_config.get("retrieval_policy", "") or "auto"),
+                    chunk_top_k=max(1, int(execution_config.get("chunk_top_k", 0) or 0)),
                     cochange=bool(execution_config.get("cochange", False)),
                 )
             )
@@ -3462,8 +3118,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
             lines.append(
                 "- Thresholds: "
                 + ", ".join(
-                    f"{key}={float(value):.4f}"
-                    for key, value in sorted(thresholds.items())
+                    f"{key}={float(value):.4f}" for key, value in sorted(thresholds.items())
                 )
             )
         metrics_raw = concept_gate.get("metrics")
@@ -3499,9 +3154,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
 
     external_concept_gate_raw = payload.get("external_concept_gate")
     external_concept_gate = (
-        external_concept_gate_raw
-        if isinstance(external_concept_gate_raw, dict)
-        else {}
+        external_concept_gate_raw if isinstance(external_concept_gate_raw, dict) else {}
     )
     if bool(external_concept_gate.get("enabled", False)):
         lines.append("## External Concept Gate")
@@ -3510,22 +3163,17 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         source_name = str(external_concept_gate.get("source", "") or "").strip()
         if source_name:
             lines.append(f"- Source: {source_name}")
-        matrix_config = str(
-            external_concept_gate.get("matrix_config", "") or ""
-        ).strip()
+        matrix_config = str(external_concept_gate.get("matrix_config", "") or "").strip()
         if matrix_config:
             lines.append(f"- Matrix config: {matrix_config}")
-        lines.append(
-            f"- Repo count: {int(external_concept_gate.get('repo_count', 0) or 0)}"
-        )
+        lines.append(f"- Repo count: {int(external_concept_gate.get('repo_count', 0) or 0)}")
         thresholds_raw = external_concept_gate.get("thresholds")
         thresholds = thresholds_raw if isinstance(thresholds_raw, dict) else {}
         if thresholds:
             lines.append(
                 "- Thresholds: "
                 + ", ".join(
-                    f"{key}={float(value):.4f}"
-                    for key, value in sorted(thresholds.items())
+                    f"{key}={float(value):.4f}" for key, value in sorted(thresholds.items())
                 )
             )
         metrics_raw = external_concept_gate.get("metrics")
@@ -3610,7 +3258,6 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         else:
             lines.append("- Failures: (none)")
         lines.append("")
-
 
     e2e_gate_raw = payload.get("e2e_success_gate")
     e2e_gate = e2e_gate_raw if isinstance(e2e_gate_raw, dict) else {}
@@ -3709,12 +3356,8 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         lines.append(
             "- Thresholds: notes_hit_ratio>={notes:.4f}, profile_selected_mean>={profile:.4f}, capture_trigger_ratio>={capture:.4f}".format(
                 notes=float(thresholds.get("min_notes_hit_ratio", -1.0) or -1.0),
-                profile=float(
-                    thresholds.get("min_profile_selected_mean", -1.0) or -1.0
-                ),
-                capture=float(
-                    thresholds.get("min_capture_trigger_ratio", -1.0) or -1.0
-                ),
+                profile=float(thresholds.get("min_profile_selected_mean", -1.0) or -1.0),
+                capture=float(thresholds.get("min_capture_trigger_ratio", -1.0) or -1.0),
             )
         )
         means_raw = memory_gate.get("means")
@@ -3760,21 +3403,11 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         thresholds = thresholds_raw if isinstance(thresholds_raw, dict) else {}
         lines.append(
             "- Thresholds: enabled_ratio>={enabled_ratio:.4f}, similarity>={similarity:.4f}, rerank_ratio>={rerank:.4f}, cache_hit>={cache_hit:.4f}, fallback<={fallback:.4f}".format(
-                enabled_ratio=float(
-                    thresholds.get("min_embedding_enabled_ratio", -1.0) or -1.0
-                ),
-                similarity=float(
-                    thresholds.get("min_embedding_similarity_mean", -1.0) or -1.0
-                ),
-                rerank=float(
-                    thresholds.get("min_embedding_rerank_ratio", -1.0) or -1.0
-                ),
-                cache_hit=float(
-                    thresholds.get("min_embedding_cache_hit_ratio", -1.0) or -1.0
-                ),
-                fallback=float(
-                    thresholds.get("max_embedding_fallback_ratio", -1.0) or -1.0
-                ),
+                enabled_ratio=float(thresholds.get("min_embedding_enabled_ratio", -1.0) or -1.0),
+                similarity=float(thresholds.get("min_embedding_similarity_mean", -1.0) or -1.0),
+                rerank=float(thresholds.get("min_embedding_rerank_ratio", -1.0) or -1.0),
+                cache_hit=float(thresholds.get("min_embedding_cache_hit_ratio", -1.0) or -1.0),
+                fallback=float(thresholds.get("max_embedding_fallback_ratio", -1.0) or -1.0),
             )
         )
         means_raw = embedding_gate.get("means")
@@ -3782,21 +3415,11 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         if means:
             lines.append(
                 "- Means: enabled_ratio={enabled_ratio:.4f}, similarity={similarity:.4f}, rerank_ratio={rerank:.4f}, cache_hit={cache_hit:.4f}, fallback={fallback:.4f}".format(
-                    enabled_ratio=float(
-                        means.get("embedding_enabled_ratio", 0.0) or 0.0
-                    ),
-                    similarity=float(
-                        means.get("embedding_similarity_mean", 0.0) or 0.0
-                    ),
-                    rerank=float(
-                        means.get("embedding_rerank_ratio", 0.0) or 0.0
-                    ),
-                    cache_hit=float(
-                        means.get("embedding_cache_hit_ratio", 0.0) or 0.0
-                    ),
-                    fallback=float(
-                        means.get("embedding_fallback_ratio", 0.0) or 0.0
-                    ),
+                    enabled_ratio=float(means.get("embedding_enabled_ratio", 0.0) or 0.0),
+                    similarity=float(means.get("embedding_similarity_mean", 0.0) or 0.0),
+                    rerank=float(means.get("embedding_rerank_ratio", 0.0) or 0.0),
+                    cache_hit=float(means.get("embedding_cache_hit_ratio", 0.0) or 0.0),
+                    fallback=float(means.get("embedding_fallback_ratio", 0.0) or 0.0),
                 )
             )
         failures_raw = embedding_gate.get("failures")
@@ -3966,13 +3589,9 @@ def main() -> int:
         if validation_rich_summary_arg
         else None
     )
-    validation_rich_previous_summary_arg = str(
-        args.validation_rich_previous_summary or ""
-    ).strip()
+    validation_rich_previous_summary_arg = str(args.validation_rich_previous_summary or "").strip()
     validation_rich_previous_summary_path = (
-        _resolve_matrix_path(
-            root=root, matrix_config=validation_rich_previous_summary_arg
-        )
+        _resolve_matrix_path(root=root, matrix_config=validation_rich_previous_summary_arg)
         if validation_rich_previous_summary_arg
         else None
     )
@@ -4027,7 +3646,8 @@ def main() -> int:
     concept_gate_enabled = bool(concept_gate_config.get("enabled", False))
     concept_gate_retry_count = max(0, int(concept_gate_config.get("retry_count", 0) or 0))
     concept_cases_path = _resolve_matrix_path(
-        root=root, matrix_config=str(concept_gate_config.get("cases", "benchmark/cases/p1_concepts.yaml"))
+        root=root,
+        matrix_config=str(concept_gate_config.get("cases", "benchmark/cases/p1_concepts.yaml")),
     )
     concept_root_path = _resolve_matrix_path(
         root=root, matrix_config=str(concept_gate_config.get("root", "."))
@@ -4038,9 +3658,7 @@ def main() -> int:
     external_concept_gate_config = _resolve_external_concept_gate_config(
         matrix_config_path=matrix_config_path
     )
-    external_concept_gate_enabled = bool(
-        external_concept_gate_config.get("enabled", False)
-    )
+    external_concept_gate_enabled = bool(external_concept_gate_config.get("enabled", False))
     external_concept_matrix_config_path = _resolve_matrix_path(
         root=root,
         matrix_config=str(
@@ -4221,9 +3839,7 @@ def main() -> int:
             )
         )
     if concept_gate_enabled:
-        concept_cochange_enabled = bool(
-            concept_gate_config.get("cochange_enabled", False)
-        )
+        concept_cochange_enabled = bool(concept_gate_config.get("cochange_enabled", False))
         steps_spec.append(
             (
                 "benchmark_concept_gate",
@@ -4271,9 +3887,7 @@ def main() -> int:
         print(f"[freeze] running {name}...")
         result = _run_step(name=name, command=command, cwd=root, logs_dir=logs_dir)
         step_results.append(result)
-        print(
-            f"[freeze] {name} exit={result.returncode} elapsed={result.elapsed_seconds:.3f}s"
-        )
+        print(f"[freeze] {name} exit={result.returncode} elapsed={result.elapsed_seconds:.3f}s")
         if (
             name == "benchmark_matrix_tabiv3"
             and result.returncode == 0
@@ -4291,7 +3905,9 @@ def main() -> int:
             while retry_failures and retry_attempt < tabiv3_gate_retry_count:
                 retry_attempt += 1
                 retry_name = f"{name}_retry_{retry_attempt}"
-                print(f"[freeze] retrying {name} (attempt {retry_attempt}/{tabiv3_gate_retry_count})...")
+                print(
+                    f"[freeze] retrying {name} (attempt {retry_attempt}/{tabiv3_gate_retry_count})..."
+                )
                 retry_result = _run_step(
                     name=retry_name, command=command, cwd=root, logs_dir=logs_dir
                 )
@@ -4353,20 +3969,14 @@ def main() -> int:
     executed_required_steps = [
         step.name for step in step_results if step.name in required_step_lookup
     ]
-    base_passed = all(step.passed for step in step_results) and executed_required_steps == required_step_names
+    base_passed = (
+        all(step.passed for step in step_results) and executed_required_steps == required_step_names
+    )
 
-    matrix_summary = _load_matrix_summary(
-        summary_path=matrix_output / "matrix_summary.json"
-    )
-    tabiv3_summary = _load_matrix_summary(
-        summary_path=tabiv3_output / "matrix_summary.json"
-    )
-    e2e_summary = _load_e2e_success_summary(
-        summary_path=e2e_output / "summary.json"
-    )
-    concept_summary = _load_benchmark_summary(
-        summary_path=concept_output / "summary.json"
-    )
+    matrix_summary = _load_matrix_summary(summary_path=matrix_output / "matrix_summary.json")
+    tabiv3_summary = _load_matrix_summary(summary_path=tabiv3_output / "matrix_summary.json")
+    e2e_summary = _load_e2e_success_summary(summary_path=e2e_output / "summary.json")
+    concept_summary = _load_benchmark_summary(summary_path=concept_output / "summary.json")
     validation_rich_summary = (
         _load_benchmark_summary(summary_path=validation_rich_summary_path)
         if validation_rich_summary_path is not None
@@ -4413,15 +4023,12 @@ def main() -> int:
         if isinstance(validation_rich_gate_thresholds_raw, dict)
         else {}
     )
-    validation_rich_gate_enabled = bool(
-        validation_rich_gate_config.get("enabled", False)
-    )
+    validation_rich_gate_enabled = bool(validation_rich_gate_config.get("enabled", False))
     validation_rich_gate_failures = (
         _evaluate_validation_rich_gate(
             benchmark_summary=validation_rich_summary,
             thresholds={
-                key: float(value)
-                for key, value in validation_rich_gate_thresholds.items()
+                key: float(value) for key, value in validation_rich_gate_thresholds.items()
             },
         )
         if validation_rich_gate_enabled
@@ -4437,10 +4044,7 @@ def main() -> int:
         "summary_path": str(validation_rich_summary_path)
         if validation_rich_summary_path is not None
         else "",
-        "thresholds": {
-            key: float(value)
-            for key, value in validation_rich_gate_thresholds.items()
-        },
+        "thresholds": {key: float(value) for key, value in validation_rich_gate_thresholds.items()},
         "failures": validation_rich_gate_failures,
     }
 
@@ -4488,9 +4092,7 @@ def main() -> int:
     retrieval_policy_guard_config = _resolve_policy_guard_config(
         matrix_config_path=matrix_config_path,
     )
-    retrieval_policy_guard_thresholds_raw = retrieval_policy_guard_config.get(
-        "thresholds"
-    )
+    retrieval_policy_guard_thresholds_raw = retrieval_policy_guard_config.get("thresholds")
     retrieval_policy_guard_thresholds = (
         retrieval_policy_guard_thresholds_raw
         if isinstance(retrieval_policy_guard_thresholds_raw, dict)
@@ -4503,15 +4105,11 @@ def main() -> int:
             "max_slo_downgrade_case_rate_mean": -1.0,
         }
     )
-    retrieval_policy_guard_enabled = bool(
-        retrieval_policy_guard_config.get("enabled", False)
-    )
+    retrieval_policy_guard_enabled = bool(retrieval_policy_guard_config.get("enabled", False))
     retrieval_policy_guard_mode = str(
         retrieval_policy_guard_config.get("mode", "disabled") or "disabled"
     )
-    retrieval_policy_guard_enforced = bool(
-        retrieval_policy_guard_config.get("enforced", False)
-    )
+    retrieval_policy_guard_enforced = bool(retrieval_policy_guard_config.get("enforced", False))
     retrieval_policy_guard_report_only = bool(
         retrieval_policy_guard_config.get("report_only", False)
     )
@@ -4544,9 +4142,7 @@ def main() -> int:
         "mode": retrieval_policy_guard_mode,
         "report_only": retrieval_policy_guard_report_only,
         "enforced": retrieval_policy_guard_enforced,
-        "source": str(
-            retrieval_policy_guard_config.get("source", "") or "disabled"
-        ),
+        "source": str(retrieval_policy_guard_config.get("source", "") or "disabled"),
         "thresholds": {
             "max_regressed_repo_rate": _metric_threshold_from_mapping(
                 retrieval_policy_guard_thresholds,
@@ -4586,9 +4182,7 @@ def main() -> int:
         decision_observability_gate_failures.extend(
             _evaluate_decision_observability_gate(matrix_summary=matrix_summary)
         )
-    decision_observability_summary_raw = matrix_summary.get(
-        "decision_observability_summary"
-    )
+    decision_observability_summary_raw = matrix_summary.get("decision_observability_summary")
     decision_observability_summary = (
         decision_observability_summary_raw
         if isinstance(decision_observability_summary_raw, dict)
@@ -4597,27 +4191,15 @@ def main() -> int:
     decision_observability_gate_payload = {
         "enabled": decision_observability_gate_enabled,
         "passed": len(decision_observability_gate_failures) == 0,
-        "mode": str(
-            decision_observability_gate_config.get("mode", "disabled") or "disabled"
-        ),
-        "report_only": bool(
-            decision_observability_gate_config.get("report_only", False)
-        ),
-        "enforced": bool(
-            decision_observability_gate_config.get("enforced", False)
-        ),
-        "source": str(
-            decision_observability_gate_config.get("source", "") or "disabled"
-        ),
+        "mode": str(decision_observability_gate_config.get("mode", "disabled") or "disabled"),
+        "report_only": bool(decision_observability_gate_config.get("report_only", False)),
+        "enforced": bool(decision_observability_gate_config.get("enforced", False)),
+        "source": str(decision_observability_gate_config.get("source", "") or "disabled"),
         "summary_path": str(matrix_summary.get("path", "") or ""),
         "summary_present": bool(decision_observability_summary),
         "required_scalar_keys": list(_DECISION_OBSERVABILITY_SCALAR_KEYS),
         "required_mapping_keys": list(_DECISION_OBSERVABILITY_MAPPING_KEYS),
-        "summary": (
-            dict(decision_observability_summary)
-            if decision_observability_summary
-            else {}
-        ),
+        "summary": (dict(decision_observability_summary) if decision_observability_summary else {}),
         "failures": decision_observability_gate_failures,
     }
 
@@ -4642,9 +4224,7 @@ def main() -> int:
                 )
             )
     tabiv3_retry_attempts_executed = sum(
-        1
-        for step in step_results
-        if str(step.name).startswith("benchmark_matrix_tabiv3_retry_")
+        1 for step in step_results if str(step.name).startswith("benchmark_matrix_tabiv3_retry_")
     )
     tabiv3_gate_payload = {
         "enabled": tabiv3_gate_enabled,
@@ -4653,9 +4233,7 @@ def main() -> int:
         "matrix_config": str(tabiv3_matrix_config_path),
         "retry_count": int(tabiv3_gate_retry_count),
         "retry_attempts_executed": int(tabiv3_retry_attempts_executed),
-        "repo_count": int(tabiv3_summary.get("repo_count", 0) or 0)
-        if tabiv3_summary
-        else 0,
+        "repo_count": int(tabiv3_summary.get("repo_count", 0) or 0) if tabiv3_summary else 0,
         "matrix_summary_passed": bool(tabiv3_summary.get("passed", False))
         if tabiv3_summary
         else False,
@@ -4668,9 +4246,7 @@ def main() -> int:
 
     concept_gate_thresholds_raw = concept_gate_config.get("thresholds")
     concept_gate_thresholds = (
-        concept_gate_thresholds_raw
-        if isinstance(concept_gate_thresholds_raw, dict)
-        else {}
+        concept_gate_thresholds_raw if isinstance(concept_gate_thresholds_raw, dict) else {}
     )
     concept_gate_metrics = (
         concept_summary.get("metrics", {}) if isinstance(concept_summary, dict) else {}
@@ -4684,9 +4260,7 @@ def main() -> int:
             )
         )
     concept_retry_attempts_executed = sum(
-        1
-        for step in step_results
-        if str(step.name).startswith("benchmark_concept_gate_retry_")
+        1 for step in step_results if str(step.name).startswith("benchmark_concept_gate_retry_")
     )
     concept_gate_payload = {
         "enabled": concept_gate_enabled,
@@ -4700,28 +4274,16 @@ def main() -> int:
             "root": str(concept_root_path),
             "skills_dir": str(concept_skills_dir),
             "top_k_files": int(concept_gate_config.get("top_k_files", 6) or 6),
-            "min_candidate_score": int(
-                concept_gate_config.get("min_candidate_score", 2) or 2
-            ),
-            "candidate_ranker": str(
-                concept_gate_config.get("candidate_ranker", "heuristic")
-            ),
-            "retrieval_policy": str(
-                concept_gate_config.get("retrieval_policy", "auto")
-            ),
+            "min_candidate_score": int(concept_gate_config.get("min_candidate_score", 2) or 2),
+            "candidate_ranker": str(concept_gate_config.get("candidate_ranker", "heuristic")),
+            "retrieval_policy": str(concept_gate_config.get("retrieval_policy", "auto")),
             "chunk_top_k": int(concept_gate_config.get("chunk_top_k", 24) or 24),
             "cochange": bool(concept_gate_config.get("cochange_enabled", False)),
         },
-        "case_count": int(concept_summary.get("case_count", 0) or 0)
-        if concept_summary
-        else 0,
-        "thresholds": {
-            key: float(value) for key, value in concept_gate_thresholds.items()
-        },
+        "case_count": int(concept_summary.get("case_count", 0) or 0) if concept_summary else 0,
+        "thresholds": {key: float(value) for key, value in concept_gate_thresholds.items()},
         "metrics": {
-            key: float(value)
-            for key, value in concept_gate_metrics.items()
-            if isinstance(key, str)
+            key: float(value) for key, value in concept_gate_metrics.items() if isinstance(key, str)
         },
         "failures": concept_gate_failures,
     }
@@ -4751,16 +4313,13 @@ def main() -> int:
             ) = _evaluate_external_concept_gate(
                 matrix_summary=external_concept_summary,
                 thresholds={
-                    key: float(value)
-                    for key, value in external_concept_gate_thresholds.items()
+                    key: float(value) for key, value in external_concept_gate_thresholds.items()
                 },
             )
     external_concept_gate_payload = {
         "enabled": external_concept_gate_enabled,
         "passed": len(external_concept_gate_failures) == 0,
-        "source": str(
-            external_concept_gate_config.get("source", "disabled") or "disabled"
-        ),
+        "source": str(external_concept_gate_config.get("source", "disabled") or "disabled"),
         "matrix_config": str(external_concept_matrix_config_path),
         "repo_count": int(external_concept_summary.get("repo_count", 0) or 0)
         if external_concept_summary
@@ -4769,8 +4328,7 @@ def main() -> int:
         if external_concept_summary
         else False,
         "thresholds": {
-            key: float(value)
-            for key, value in external_concept_gate_thresholds.items()
+            key: float(value) for key, value in external_concept_gate_thresholds.items()
         },
         "metrics": {
             key: float(value)
@@ -4825,9 +4383,7 @@ def main() -> int:
     memory_gate_enabled = bool(memory_gate_config.get("enabled", False))
     memory_gate_failures = _evaluate_memory_gate(
         matrix_summary=matrix_summary,
-        min_notes_hit_ratio=float(
-            memory_gate_thresholds.get("min_notes_hit_ratio", -1.0) or -1.0
-        ),
+        min_notes_hit_ratio=float(memory_gate_thresholds.get("min_notes_hit_ratio", -1.0) or -1.0),
         min_profile_selected_mean=float(
             memory_gate_thresholds.get("min_profile_selected_mean", -1.0) or -1.0
         ),
@@ -4854,12 +4410,8 @@ def main() -> int:
         },
         "means": {
             "notes_hit_ratio": float(memory_means.get("notes_hit_ratio", 0.0) or 0.0),
-            "profile_selected_mean": float(
-                memory_means.get("profile_selected_mean", 0.0) or 0.0
-            ),
-            "capture_trigger_ratio": float(
-                memory_means.get("capture_trigger_ratio", 0.0) or 0.0
-            ),
+            "profile_selected_mean": float(memory_means.get("profile_selected_mean", 0.0) or 0.0),
+            "capture_trigger_ratio": float(memory_means.get("capture_trigger_ratio", 0.0) or 0.0),
         },
         "failures": memory_gate_failures,
     }
@@ -4882,54 +4434,42 @@ def main() -> int:
     embedding_gate_failures = _evaluate_embedding_gate(
         matrix_summary=matrix_summary,
         min_embedding_enabled_ratio=float(
-            embedding_gate_thresholds.get("min_embedding_enabled_ratio", -1.0)
-            or -1.0
+            embedding_gate_thresholds.get("min_embedding_enabled_ratio", -1.0) or -1.0
         ),
         min_embedding_similarity_mean=float(
-            embedding_gate_thresholds.get("min_embedding_similarity_mean", -1.0)
-            or -1.0
+            embedding_gate_thresholds.get("min_embedding_similarity_mean", -1.0) or -1.0
         ),
         min_embedding_rerank_ratio=float(
-            embedding_gate_thresholds.get("min_embedding_rerank_ratio", -1.0)
-            or -1.0
+            embedding_gate_thresholds.get("min_embedding_rerank_ratio", -1.0) or -1.0
         ),
         min_embedding_cache_hit_ratio=float(
-            embedding_gate_thresholds.get("min_embedding_cache_hit_ratio", -1.0)
-            or -1.0
+            embedding_gate_thresholds.get("min_embedding_cache_hit_ratio", -1.0) or -1.0
         ),
         max_embedding_fallback_ratio=float(
-            embedding_gate_thresholds.get("max_embedding_fallback_ratio", -1.0)
-            or -1.0
+            embedding_gate_thresholds.get("max_embedding_fallback_ratio", -1.0) or -1.0
         ),
     )
     embedding_means_raw = matrix_summary.get("embedding_metrics_mean")
-    embedding_means = (
-        embedding_means_raw if isinstance(embedding_means_raw, dict) else {}
-    )
+    embedding_means = embedding_means_raw if isinstance(embedding_means_raw, dict) else {}
     embedding_gate_payload = {
         "enabled": embedding_gate_enabled,
         "passed": len(embedding_gate_failures) == 0,
         "source": str(embedding_gate_config.get("source", "disabled") or "disabled"),
         "thresholds": {
             "min_embedding_enabled_ratio": float(
-                embedding_gate_thresholds.get("min_embedding_enabled_ratio", -1.0)
-                or -1.0
+                embedding_gate_thresholds.get("min_embedding_enabled_ratio", -1.0) or -1.0
             ),
             "min_embedding_similarity_mean": float(
-                embedding_gate_thresholds.get("min_embedding_similarity_mean", -1.0)
-                or -1.0
+                embedding_gate_thresholds.get("min_embedding_similarity_mean", -1.0) or -1.0
             ),
             "min_embedding_rerank_ratio": float(
-                embedding_gate_thresholds.get("min_embedding_rerank_ratio", -1.0)
-                or -1.0
+                embedding_gate_thresholds.get("min_embedding_rerank_ratio", -1.0) or -1.0
             ),
             "min_embedding_cache_hit_ratio": float(
-                embedding_gate_thresholds.get("min_embedding_cache_hit_ratio", -1.0)
-                or -1.0
+                embedding_gate_thresholds.get("min_embedding_cache_hit_ratio", -1.0) or -1.0
             ),
             "max_embedding_fallback_ratio": float(
-                embedding_gate_thresholds.get("max_embedding_fallback_ratio", -1.0)
-                or -1.0
+                embedding_gate_thresholds.get("max_embedding_fallback_ratio", -1.0) or -1.0
             ),
         },
         "means": {
@@ -5021,9 +4561,7 @@ def main() -> int:
     feature_slices_gate_payload = {
         "enabled": feature_slices_gate_enabled,
         "passed": len(feature_slices_gate_failures) == 0,
-        "source": str(
-            feature_slices_gate_config.get("source", "disabled") or "disabled"
-        ),
+        "source": str(feature_slices_gate_config.get("source", "disabled") or "disabled"),
         "config": str(feature_slices_config_path),
         "summary_path": str(feature_slices_output / "feature_slices_summary.json"),
         "summary_passed": bool(feature_slices_summary.get("passed", False))
@@ -5039,14 +4577,8 @@ def main() -> int:
         base_passed
         and (not tabiv3_gate_enabled or len(tabiv3_gate_failures) == 0)
         and (not concept_gate_enabled or len(concept_gate_failures) == 0)
-        and (
-            not external_concept_gate_enabled
-            or len(external_concept_gate_failures) == 0
-        )
-        and (
-            not feature_slices_gate_enabled
-            or len(feature_slices_gate_failures) == 0
-        )
+        and (not external_concept_gate_enabled or len(external_concept_gate_failures) == 0)
+        and (not feature_slices_gate_enabled or len(feature_slices_gate_failures) == 0)
         and (not runtime_gate_enabled or len(runtime_gate_failures) == 0)
         and (not plugin_gate_enabled or len(plugin_gate_failures) == 0)
         and (
@@ -5112,14 +4644,10 @@ def main() -> int:
             if validation_rich_summary
             else False,
             "previous_repo": str(validation_rich_previous_summary.get("repo", "") or ""),
-            "previous_case_count": int(
-                validation_rich_previous_summary.get("case_count", 0) or 0
-            )
+            "previous_case_count": int(validation_rich_previous_summary.get("case_count", 0) or 0)
             if validation_rich_previous_summary
             else 0,
-            "previous_regressed": bool(
-                validation_rich_previous_summary.get("regressed", False)
-            )
+            "previous_regressed": bool(validation_rich_previous_summary.get("regressed", False))
             if validation_rich_previous_summary
             else False,
             "failed_checks": (
@@ -5140,9 +4668,7 @@ def main() -> int:
             "retrieval_control_plane_gate_summary": (
                 validation_rich_summary.get("retrieval_control_plane_gate_summary", {})
                 if isinstance(
-                    validation_rich_summary.get(
-                        "retrieval_control_plane_gate_summary", {}
-                    ),
+                    validation_rich_summary.get("retrieval_control_plane_gate_summary", {}),
                     dict,
                 )
                 else {}
@@ -5167,19 +4693,13 @@ def main() -> int:
             ),
             "validation_probe_summary": (
                 validation_rich_summary.get("validation_probe_summary", {})
-                if isinstance(
-                    validation_rich_summary.get("validation_probe_summary", {}), dict
-                )
+                if isinstance(validation_rich_summary.get("validation_probe_summary", {}), dict)
                 else {}
             ),
             "source_plan_validation_feedback_summary": (
-                validation_rich_summary.get(
-                    "source_plan_validation_feedback_summary", {}
-                )
+                validation_rich_summary.get("source_plan_validation_feedback_summary", {})
                 if isinstance(
-                    validation_rich_summary.get(
-                        "source_plan_validation_feedback_summary", {}
-                    ),
+                    validation_rich_summary.get("source_plan_validation_feedback_summary", {}),
                     dict,
                 )
                 else {}
@@ -5187,9 +4707,7 @@ def main() -> int:
             "source_plan_failure_signal_summary": (
                 validation_rich_summary.get("source_plan_failure_signal_summary", {})
                 if isinstance(
-                    validation_rich_summary.get(
-                        "source_plan_failure_signal_summary", {}
-                    ),
+                    validation_rich_summary.get("source_plan_failure_signal_summary", {}),
                     dict,
                 )
                 else {}
@@ -5197,9 +4715,7 @@ def main() -> int:
             "retrieval_default_strategy_summary": (
                 validation_rich_summary.get("retrieval_default_strategy_summary", {})
                 if isinstance(
-                    validation_rich_summary.get(
-                        "retrieval_default_strategy_summary", {}
-                    ),
+                    validation_rich_summary.get("retrieval_default_strategy_summary", {}),
                     dict,
                 )
                 else {}
@@ -5210,9 +4726,7 @@ def main() -> int:
                 else {}
             ),
             "previous_retrieval_control_plane_gate_summary": (
-                validation_rich_previous_summary.get(
-                    "retrieval_control_plane_gate_summary", {}
-                )
+                validation_rich_previous_summary.get("retrieval_control_plane_gate_summary", {})
                 if isinstance(
                     validation_rich_previous_summary.get(
                         "retrieval_control_plane_gate_summary", {}
@@ -5222,13 +4736,9 @@ def main() -> int:
                 else {}
             ),
             "previous_retrieval_frontier_gate_summary": (
-                validation_rich_previous_summary.get(
-                    "retrieval_frontier_gate_summary", {}
-                )
+                validation_rich_previous_summary.get("retrieval_frontier_gate_summary", {})
                 if isinstance(
-                    validation_rich_previous_summary.get(
-                        "retrieval_frontier_gate_summary", {}
-                    ),
+                    validation_rich_previous_summary.get("retrieval_frontier_gate_summary", {}),
                     dict,
                 )
                 else {}
@@ -5252,17 +4762,13 @@ def main() -> int:
             "previous_validation_probe_summary": (
                 validation_rich_previous_summary.get("validation_probe_summary", {})
                 if isinstance(
-                    validation_rich_previous_summary.get(
-                        "validation_probe_summary", {}
-                    ),
+                    validation_rich_previous_summary.get("validation_probe_summary", {}),
                     dict,
                 )
                 else {}
             ),
             "previous_source_plan_validation_feedback_summary": (
-                validation_rich_previous_summary.get(
-                    "source_plan_validation_feedback_summary", {}
-                )
+                validation_rich_previous_summary.get("source_plan_validation_feedback_summary", {})
                 if isinstance(
                     validation_rich_previous_summary.get(
                         "source_plan_validation_feedback_summary", {}
@@ -5272,25 +4778,17 @@ def main() -> int:
                 else {}
             ),
             "previous_source_plan_failure_signal_summary": (
-                validation_rich_previous_summary.get(
-                    "source_plan_failure_signal_summary", {}
-                )
+                validation_rich_previous_summary.get("source_plan_failure_signal_summary", {})
                 if isinstance(
-                    validation_rich_previous_summary.get(
-                        "source_plan_failure_signal_summary", {}
-                    ),
+                    validation_rich_previous_summary.get("source_plan_failure_signal_summary", {}),
                     dict,
                 )
                 else {}
             ),
             "previous_retrieval_default_strategy_summary": (
-                validation_rich_previous_summary.get(
-                    "retrieval_default_strategy_summary", {}
-                )
+                validation_rich_previous_summary.get("retrieval_default_strategy_summary", {})
                 if isinstance(
-                    validation_rich_previous_summary.get(
-                        "retrieval_default_strategy_summary", {}
-                    ),
+                    validation_rich_previous_summary.get("retrieval_default_strategy_summary", {}),
                     dict,
                 )
                 else {}
@@ -5326,9 +4824,7 @@ def main() -> int:
         print(
             "[freeze] matrix summary: passed={passed} regressed={regressed} repos={count}".format(
                 passed=bool(matrix_summary.get("passed", False)),
-                regressed=bool(
-                    matrix_summary.get("benchmark_regression_detected", False)
-                ),
+                regressed=bool(matrix_summary.get("benchmark_regression_detected", False)),
                 count=int(matrix_summary.get("repo_count", 0) or 0),
             )
         )
@@ -5386,20 +4882,10 @@ def main() -> int:
     if decision_observability_gate_enabled:
         print(
             "[freeze] decision-observability gate: mode={mode} source={source} enforced={enforced} present={present} passed={passed} failures={count}".format(
-                mode=str(
-                    decision_observability_gate_payload.get("mode", "disabled")
-                    or "disabled"
-                ),
-                source=str(
-                    decision_observability_gate_payload.get("source", "")
-                    or "disabled"
-                ),
-                enforced=bool(
-                    decision_observability_gate_payload.get("enforced", False)
-                ),
-                present=bool(
-                    decision_observability_gate_payload.get("summary_present", False)
-                ),
+                mode=str(decision_observability_gate_payload.get("mode", "disabled") or "disabled"),
+                source=str(decision_observability_gate_payload.get("source", "") or "disabled"),
+                enforced=bool(decision_observability_gate_payload.get("enforced", False)),
+                present=bool(decision_observability_gate_payload.get("summary_present", False)),
                 passed=len(decision_observability_gate_failures) == 0,
                 count=len(decision_observability_gate_failures),
             )
@@ -5412,15 +4898,10 @@ def main() -> int:
                 passed=len(tabiv3_gate_failures) == 0,
                 count=len(tabiv3_gate_failures),
                 latency=float(
-                    tabiv3_gate_payload.get("thresholds", {}).get(
-                        "latency_p95_ms_max", 0.0
-                    )
-                    or 0.0
+                    tabiv3_gate_payload.get("thresholds", {}).get("latency_p95_ms_max", 0.0) or 0.0
                 ),
                 repomap=float(
-                    tabiv3_gate_payload.get("thresholds", {}).get(
-                        "repomap_latency_p95_ms_max", 0.0
-                    )
+                    tabiv3_gate_payload.get("thresholds", {}).get("repomap_latency_p95_ms_max", 0.0)
                     or 0.0
                 ),
             )
@@ -5433,16 +4914,11 @@ def main() -> int:
                 passed=len(concept_gate_failures) == 0,
                 count=len(concept_gate_failures),
                 precision=float(
-                    concept_gate_payload.get("metrics", {}).get("precision_at_k", 0.0)
-                    or 0.0
+                    concept_gate_payload.get("metrics", {}).get("precision_at_k", 0.0) or 0.0
                 ),
-                noise=float(
-                    concept_gate_payload.get("metrics", {}).get("noise_rate", 0.0)
-                    or 0.0
-                ),
+                noise=float(concept_gate_payload.get("metrics", {}).get("noise_rate", 0.0) or 0.0),
                 latency=float(
-                    concept_gate_payload.get("metrics", {}).get("latency_p95_ms", 0.0)
-                    or 0.0
+                    concept_gate_payload.get("metrics", {}).get("latency_p95_ms", 0.0) or 0.0
                 ),
             )
         )
@@ -5453,21 +4929,14 @@ def main() -> int:
                 passed=len(external_concept_gate_failures) == 0,
                 count=len(external_concept_gate_failures),
                 precision=float(
-                    external_concept_gate_payload.get("metrics", {}).get(
-                        "precision_at_k", 0.0
-                    )
+                    external_concept_gate_payload.get("metrics", {}).get("precision_at_k", 0.0)
                     or 0.0
                 ),
                 noise=float(
-                    external_concept_gate_payload.get("metrics", {}).get(
-                        "noise_rate", 0.0
-                    )
-                    or 0.0
+                    external_concept_gate_payload.get("metrics", {}).get("noise_rate", 0.0) or 0.0
                 ),
                 latency=float(
-                    external_concept_gate_payload.get("metrics", {}).get(
-                        "latency_p95_ms", 0.0
-                    )
+                    external_concept_gate_payload.get("metrics", {}).get("latency_p95_ms", 0.0)
                     or 0.0
                 ),
             )
@@ -5497,16 +4966,9 @@ def main() -> int:
     if retrieval_policy_guard_enabled:
         print(
             "[freeze] retrieval policy guard: mode={mode} source={source} enforced={enforced} passed={passed} failures={count}".format(
-                mode=str(
-                    retrieval_policy_guard_payload.get("mode", "disabled")
-                    or "disabled"
-                ),
-                source=str(
-                    retrieval_policy_guard_payload.get("source", "") or "disabled"
-                ),
-                enforced=bool(
-                    retrieval_policy_guard_payload.get("enforced", False)
-                ),
+                mode=str(retrieval_policy_guard_payload.get("mode", "disabled") or "disabled"),
+                source=str(retrieval_policy_guard_payload.get("source", "") or "disabled"),
+                enforced=bool(retrieval_policy_guard_payload.get("enforced", False)),
                 passed=len(retrieval_policy_guard_failures) == 0,
                 count=len(retrieval_policy_guard_failures),
             )
@@ -5541,20 +5003,13 @@ def main() -> int:
                 passed=len(memory_gate_failures) == 0,
                 count=len(memory_gate_failures),
                 notes=float(
-                    memory_gate_payload.get("means", {}).get("notes_hit_ratio", 0.0)
-                    or 0.0
+                    memory_gate_payload.get("means", {}).get("notes_hit_ratio", 0.0) or 0.0
                 ),
                 profile=float(
-                    memory_gate_payload.get("means", {}).get(
-                        "profile_selected_mean", 0.0
-                    )
-                    or 0.0
+                    memory_gate_payload.get("means", {}).get("profile_selected_mean", 0.0) or 0.0
                 ),
                 capture=float(
-                    memory_gate_payload.get("means", {}).get(
-                        "capture_trigger_ratio", 0.0
-                    )
-                    or 0.0
+                    memory_gate_payload.get("means", {}).get("capture_trigger_ratio", 0.0) or 0.0
                 ),
             )
         )
@@ -5565,33 +5020,23 @@ def main() -> int:
                 passed=len(embedding_gate_failures) == 0,
                 count=len(embedding_gate_failures),
                 enabled_ratio=float(
-                    embedding_gate_payload.get("means", {}).get(
-                        "embedding_enabled_ratio", 0.0
-                    )
+                    embedding_gate_payload.get("means", {}).get("embedding_enabled_ratio", 0.0)
                     or 0.0
                 ),
                 similarity=float(
-                    embedding_gate_payload.get("means", {}).get(
-                        "embedding_similarity_mean", 0.0
-                    )
+                    embedding_gate_payload.get("means", {}).get("embedding_similarity_mean", 0.0)
                     or 0.0
                 ),
                 rerank=float(
-                    embedding_gate_payload.get("means", {}).get(
-                        "embedding_rerank_ratio", 0.0
-                    )
+                    embedding_gate_payload.get("means", {}).get("embedding_rerank_ratio", 0.0)
                     or 0.0
                 ),
                 cache_hit=float(
-                    embedding_gate_payload.get("means", {}).get(
-                        "embedding_cache_hit_ratio", 0.0
-                    )
+                    embedding_gate_payload.get("means", {}).get("embedding_cache_hit_ratio", 0.0)
                     or 0.0
                 ),
                 fallback=float(
-                    embedding_gate_payload.get("means", {}).get(
-                        "embedding_fallback_ratio", 0.0
-                    )
+                    embedding_gate_payload.get("means", {}).get("embedding_fallback_ratio", 0.0)
                     or 0.0
                 ),
             )

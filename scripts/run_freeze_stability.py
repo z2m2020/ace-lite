@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import json
@@ -109,11 +109,7 @@ def _classify_passes(*, passed_count: int, run_count: int) -> str:
 
 
 def _parse_csv_names(raw: str) -> list[str]:
-    values = [
-        item.strip()
-        for item in str(raw or "").split(",")
-        if item.strip()
-    ]
+    values = [item.strip() for item in str(raw or "").split(",") if item.strip()]
     deduped: list[str] = []
     seen: set[str] = set()
     for item in values:
@@ -193,11 +189,7 @@ def evaluate_stability(
     failure_rate = 1.0 - pass_rate if run_count > 0 else 1.0
 
     retry_samples = [int(item.tabiv3_retry_attempts) for item in iterations]
-    retry_median = (
-        float(statistics.median(retry_samples))
-        if retry_samples
-        else 0.0
-    )
+    retry_median = float(statistics.median(retry_samples)) if retry_samples else 0.0
 
     failed_runs: list[dict[str, Any]] = []
     for item in iterations:
@@ -216,26 +208,16 @@ def evaluate_stability(
     passes_retry_budget = retry_median <= max(0.0, float(max_retry_median))
 
     feature_slice_names = sorted(
-        {
-            name
-            for item in iterations
-            for name in item.feature_slice_results.keys()
-        }
+        {name for item in iterations for name in item.feature_slice_results}
     )
     tracked_slices = tracked_feature_slices or feature_slice_names
     feature_slice_stability: list[dict[str, Any]] = []
     tracked_feature_slice_failures: list[dict[str, Any]] = []
     for name in feature_slice_names:
         passed_runs = sum(
-            1
-            for item in iterations
-            if bool(item.feature_slice_results.get(name, False))
+            1 for item in iterations if bool(item.feature_slice_results.get(name, False))
         )
-        pass_rate_for_slice = (
-            float(passed_runs) / float(run_count)
-            if run_count > 0
-            else 0.0
-        )
+        pass_rate_for_slice = float(passed_runs) / float(run_count) if run_count > 0 else 0.0
         classification = _classify_passes(
             passed_count=passed_runs,
             run_count=run_count,
@@ -280,15 +262,11 @@ def evaluate_stability(
         "max_failure_rate": max(0.0, float(max_failure_rate)),
         "max_retry_median": max(0.0, float(max_retry_median)),
         "tracked_feature_slices": tracked_slices,
-        "min_feature_slice_pass_rate": max(
-            0.0, float(min_feature_slice_pass_rate)
-        ),
+        "min_feature_slice_pass_rate": max(0.0, float(min_feature_slice_pass_rate)),
         "feature_slice_stability": feature_slice_stability,
         "tracked_feature_slice_failures": tracked_feature_slice_failures,
         "passed": bool(
-            passes_failure_budget
-            and passes_retry_budget
-            and not tracked_feature_slice_failures
+            passes_failure_budget and passes_retry_budget and not tracked_feature_slice_failures
         ),
         "failed_runs": failed_runs,
     }
@@ -299,15 +277,11 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
     iterations = iterations_raw if isinstance(iterations_raw, list) else []
     tracked_feature_slices_raw = payload.get("tracked_feature_slices")
     tracked_feature_slices = (
-        tracked_feature_slices_raw
-        if isinstance(tracked_feature_slices_raw, list)
-        else []
+        tracked_feature_slices_raw if isinstance(tracked_feature_slices_raw, list) else []
     )
     feature_slice_stability_raw = payload.get("feature_slice_stability")
     feature_slice_stability = (
-        feature_slice_stability_raw
-        if isinstance(feature_slice_stability_raw, list)
-        else []
+        feature_slice_stability_raw if isinstance(feature_slice_stability_raw, list) else []
     )
     tracked_feature_slice_failures_raw = payload.get("tracked_feature_slice_failures")
     tracked_feature_slice_failures = (
@@ -324,7 +298,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         f"- Run count: {int(payload.get('run_count', 0) or 0)}",
         f"- Pass rate: {float(payload.get('pass_rate', 0.0) or 0.0):.4f}",
         f"- Failure rate: {float(payload.get('failure_rate', 0.0) or 0.0):.4f}",
-        f"- Classification: {str(payload.get('classification') or 'no_data')}",
+        f"- Classification: {payload.get('classification') or 'no_data'!s}",
         f"- Tabiv3 retry median: {float(payload.get('tabiv3_retry_median', 0.0) or 0.0):.4f}",
         f"- Allowed failure rate: {float(payload.get('max_failure_rate', 0.0) or 0.0):.4f}",
         f"- Allowed retry median: {float(payload.get('max_retry_median', 0.0) or 0.0):.4f}",
@@ -430,7 +404,9 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run repeated freeze checks and evaluate stability budgets.")
+    parser = argparse.ArgumentParser(
+        description="Run repeated freeze checks and evaluate stability budgets."
+    )
     parser.add_argument(
         "--matrix-config",
         default="benchmark/matrix/repos.yaml",
@@ -513,9 +489,7 @@ def main() -> int:
         max_failure_rate=max(0.0, float(args.max_failure_rate)),
         max_retry_median=max(0.0, float(args.max_retry_median)),
         tracked_feature_slices=tracked_feature_slices,
-        min_feature_slice_pass_rate=max(
-            0.0, float(args.min_feature_slice_pass_rate)
-        ),
+        min_feature_slice_pass_rate=max(0.0, float(args.min_feature_slice_pass_rate)),
     )
 
     payload = {

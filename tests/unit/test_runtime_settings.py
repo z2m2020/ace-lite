@@ -15,6 +15,7 @@ from ace_lite.runtime_settings_store import (
     persist_runtime_settings_record,
     resolve_user_runtime_settings_last_known_good_path,
     resolve_user_runtime_settings_path,
+    runtime_settings_paths_collide,
     write_runtime_settings_record,
 )
 
@@ -33,11 +34,15 @@ def test_runtime_settings_manager_resolves_plan_sources(tmp_path: Path, monkeypa
         encoding="utf-8",
     )
     (repo_root / ".ace-lite.yml").write_text(
-        yaml.safe_dump({"plan": {"retrieval": {"top_k_files": 2}, "plugins_enabled": True}}, sort_keys=False),
+        yaml.safe_dump(
+            {"plan": {"retrieval": {"top_k_files": 2}, "plugins_enabled": True}}, sort_keys=False
+        ),
         encoding="utf-8",
     )
     (cwd_dir / ".ace-lite.yml").write_text(
-        yaml.safe_dump({"plan": {"retrieval": {"top_k_files": 3}, "chunk": {"top_k": 11}}}, sort_keys=False),
+        yaml.safe_dump(
+            {"plan": {"retrieval": {"top_k_files": 3}, "chunk": {"top_k": 11}}}, sort_keys=False
+        ),
         encoding="utf-8",
     )
 
@@ -69,7 +74,9 @@ def test_runtime_settings_manager_resolves_plan_sources(tmp_path: Path, monkeypa
     assert snapshot.fingerprint
 
 
-def test_runtime_settings_manager_resolves_runtime_and_mcp_sources(tmp_path: Path, monkeypatch) -> None:
+def test_runtime_settings_manager_resolves_runtime_and_mcp_sources(
+    tmp_path: Path, monkeypatch
+) -> None:
     fake_home = tmp_path / "home"
     repo_root = tmp_path / "repo"
     cwd_dir = repo_root / "workspace"
@@ -121,13 +128,28 @@ def test_runtime_settings_manager_resolves_runtime_and_mcp_sources(tmp_path: Pat
     assert snapshot.snapshot["runtime"]["scheduler"]["enabled"] is True
     assert snapshot.provenance["runtime"]["scheduler"]["enabled"] == "repo_config"
     assert snapshot.snapshot["runtime"]["scheduler"]["heartbeat"]["interval_seconds"] == 15.0
-    assert snapshot.provenance["runtime"]["scheduler"]["heartbeat"]["interval_seconds"] == "cwd_config"
+    assert (
+        snapshot.provenance["runtime"]["scheduler"]["heartbeat"]["interval_seconds"] == "cwd_config"
+    )
     assert snapshot.snapshot["mcp"]["default_root"] == str(repo_root.resolve())
     assert snapshot.provenance["mcp"]["default_root"] == "explicit_override"
     assert snapshot.snapshot["mcp"]["memory_primary"] == "mcp"
     assert snapshot.provenance["mcp"]["memory_primary"] == "env"
     assert snapshot.snapshot["mcp"]["user_id"] == "fallback-user"
     assert snapshot.provenance["mcp"]["user_id"] == "identity_fallback"
+
+
+def test_runtime_settings_manager_uses_tuned_default_skills_token_budget(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    cwd_dir = repo_root / "workspace"
+    cwd_dir.mkdir(parents=True, exist_ok=True)
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
+
+    manager = RuntimeSettingsManager()
+    snapshot = manager.resolve(root=repo_root, cwd=cwd_dir)
+
+    assert snapshot.snapshot["plan"]["skills"]["token_budget"] == 1400
+    assert snapshot.provenance["plan"]["skills"]["token_budget"] == "default"
 
 
 def test_runtime_settings_manager_applies_runtime_profile_and_exposes_stats_tags(
@@ -223,10 +245,7 @@ def test_runtime_settings_manager_resolves_scoring_overlay_sources(
     assert snapshot.snapshot["plan"]["retrieval"]["heur_path_exact"] == 4.5
     assert snapshot.provenance["plan"]["retrieval"]["heur_path_exact"] == "repo_config"
     assert snapshot.snapshot["plan"]["retrieval"]["hybrid_re2_shortlist_min"] == 20
-    assert (
-        snapshot.provenance["plan"]["retrieval"]["hybrid_re2_shortlist_min"]
-        == "cwd_config"
-    )
+    assert snapshot.provenance["plan"]["retrieval"]["hybrid_re2_shortlist_min"] == "cwd_config"
     assert snapshot.snapshot["plan"]["chunking"]["file_prior_weight"] == 0.55
     assert snapshot.provenance["plan"]["chunking"]["file_prior_weight"] == "repo_config"
     assert snapshot.snapshot["plan"]["chunking"]["reference_cap"] == 3.5
@@ -255,14 +274,12 @@ def test_runtime_settings_store_paths_and_last_known_good_fallback(tmp_path: Pat
     current_path = resolve_user_runtime_settings_path(home_path=tmp_path)
     lkg_path = resolve_user_runtime_settings_last_known_good_path(home_path=tmp_path)
 
-    expected_current_suffix = Path(
-        DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH.replace("~/", "")
-    )
-    expected_lkg_suffix = Path(
-        DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH.replace("~/", "")
-    )
+    expected_current_suffix = Path(DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH.replace("~/", ""))
+    expected_lkg_suffix = Path(DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH.replace("~/", ""))
 
-    assert current_path.parts[-len(expected_current_suffix.parts) :] == expected_current_suffix.parts
+    assert (
+        current_path.parts[-len(expected_current_suffix.parts) :] == expected_current_suffix.parts
+    )
     assert lkg_path.parts[-len(expected_lkg_suffix.parts) :] == expected_lkg_suffix.parts
 
     valid_payload = build_runtime_settings_record(
@@ -296,3 +313,23 @@ def test_runtime_settings_store_paths_and_last_known_good_fallback(tmp_path: Pat
     assert lkg_summary["status"] == "valid"
     assert lkg_summary["valid"] is True
     assert lkg_summary["fingerprint"] == valid_payload["fingerprint"]
+
+
+def test_runtime_settings_paths_collide_detects_aliasing_slots(tmp_path: Path) -> None:
+    shared = tmp_path / "runtime-settings.json"
+    distinct = tmp_path / "last-known-good.json"
+
+    assert (
+        runtime_settings_paths_collide(
+            current_path=shared,
+            last_known_good_path=shared,
+        )
+        is True
+    )
+    assert (
+        runtime_settings_paths_collide(
+            current_path=shared,
+            last_known_good_path=distinct,
+        )
+        is False
+    )

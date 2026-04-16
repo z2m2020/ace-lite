@@ -82,7 +82,7 @@ from ace_lite.runtime_settings_store import (
     DEFAULT_RUNTIME_SETTINGS_CURRENT_PATH,
     DEFAULT_RUNTIME_SETTINGS_LAST_KNOWN_GOOD_PATH,
 )
-from ace_lite.skills import build_skill_catalog, build_skill_manifest
+from ace_lite.skills_contract import build_skills_catalog_contract
 from ace_lite.vcs_history import collect_git_head_snapshot
 from ace_lite.version import get_version, get_version_info
 
@@ -221,9 +221,12 @@ class AceLiteMcpService:
         source_root = str(self._runtime_source_tree.get("source_root") or "").strip()
         if not source_root:
             return {}
-        return collect_git_head_snapshot(
-            repo_root=source_root,
-            timeout_seconds=0.2,
+        return cast(
+            dict[str, Any],
+            collect_git_head_snapshot(
+                repo_root=source_root,
+                timeout_seconds=0.2,
+            ),
         )
 
     def _runtime_identity_payload(self) -> dict[str, Any]:
@@ -375,14 +378,7 @@ class AceLiteMcpService:
         def _operation() -> dict[str, Any]:
             root_path = self._resolve_root(root)
             skills_path = self._resolve_skills_dir(root_path=root_path, skills_dir=skills_dir)
-            manifest = build_skill_manifest(skills_path)
-            return {
-                "ok": True,
-                "root": str(root_path),
-                "skills_dir": str(skills_path),
-                "skill_count": len(manifest),
-                "markdown": build_skill_catalog(manifest),
-            }
+            return build_skills_catalog_contract(root_path=root_path, skills_path=skills_path)
 
         return self._run_tracked("ace_skills_catalog", _operation)
 
@@ -457,28 +453,31 @@ class AceLiteMcpService:
                 root_path=root_path,
                 config_pack=config_pack,
             )
-            return handle_plan_request(
-                query=query,
-                repo=repo,
-                root_path=root_path,
-                default_repo=self._config.default_repo,
-                skills_path=skills_path,
-                config_pack_path=config_pack_path,
-                time_range=time_range,
-                start_date=start_date,
-                end_date=end_date,
-                memory_primary=memory_primary,
-                memory_secondary=memory_secondary,
-                lsp_enabled=lsp_enabled,
-                plugins_enabled=plugins_enabled,
-                top_k_files=top_k_files,
-                min_candidate_score=min_candidate_score,
-                retrieval_policy=retrieval_policy,
-                include_full_payload=include_full_payload,
-                timeout_seconds=timeout_seconds,
-                default_timeout_seconds=float(self._config.plan_timeout_seconds),
-                run_plan_payload_fn=self._run_plan_payload,
-                plan_quick_fn=self.plan_quick,
+            return cast(
+                dict[str, Any],
+                handle_plan_request(
+                    query=query,
+                    repo=repo,
+                    root_path=root_path,
+                    default_repo=self._config.default_repo,
+                    skills_path=skills_path,
+                    config_pack_path=config_pack_path,
+                    time_range=time_range,
+                    start_date=start_date,
+                    end_date=end_date,
+                    memory_primary=memory_primary,
+                    memory_secondary=memory_secondary,
+                    lsp_enabled=lsp_enabled,
+                    plugins_enabled=plugins_enabled,
+                    top_k_files=top_k_files,
+                    min_candidate_score=min_candidate_score,
+                    retrieval_policy=retrieval_policy,
+                    include_full_payload=include_full_payload,
+                    timeout_seconds=timeout_seconds,
+                    default_timeout_seconds=float(self._config.plan_timeout_seconds),
+                    run_plan_payload_fn=self._run_plan_payload,
+                    plan_quick_fn=self.plan_quick,
+                ),
             )
 
         return self._run_tracked("ace_plan", _operation)
@@ -510,20 +509,23 @@ class AceLiteMcpService:
             plugins_enabled=plugins_enabled,
             config_pack_overrides=config_pack_overrides,
         )
-        return execute_mcp_plan_payload(
-            create_memory_provider_fn=create_memory_provider,
-            run_plan_fn=run_plan,
-            config=self._config,
-            normalized_query=normalized_query,
-            resolved_repo=resolved_repo,
-            root_path=root_path,
-            skills_path=skills_path,
-            time_range=time_range,
-            start_date=start_date,
-            end_date=end_date,
-            memory_primary=memory_primary,
-            memory_secondary=memory_secondary,
-            options=options,
+        return cast(
+            dict[str, Any],
+            execute_mcp_plan_payload(
+                create_memory_provider_fn=create_memory_provider,
+                run_plan_fn=run_plan,
+                config=self._config,
+                normalized_query=normalized_query,
+                resolved_repo=resolved_repo,
+                root_path=root_path,
+                skills_path=skills_path,
+                time_range=time_range,
+                start_date=start_date,
+                end_date=end_date,
+                memory_primary=memory_primary,
+                memory_secondary=memory_secondary,
+                options=options,
+            ),
         )
 
     def memory_search(
@@ -536,12 +538,15 @@ class AceLiteMcpService:
     ) -> dict[str, Any]:
         def _operation() -> dict[str, Any]:
             path = self._resolve_notes_path(notes_path=notes_path)
-            return handle_memory_search(
-                query=query,
-                limit=limit,
-                namespace=namespace,
-                path=path,
-                notes=self._iter_notes(path),
+            return cast(
+                dict[str, Any],
+                handle_memory_search(
+                    query=query,
+                    limit=limit,
+                    namespace=namespace,
+                    path=path,
+                    notes=self._iter_notes(path),
+                ),
             )
 
         return self._run_tracked("ace_memory_search", _operation)
@@ -569,17 +574,20 @@ class AceLiteMcpService:
             ).expanduser()
             if not resolved_db_path.is_absolute():
                 resolved_db_path = (root_path / resolved_db_path).resolve()
-            return handle_memory_graph_view(
-                db_path=resolved_db_path,
-                fact_handle=fact_handle,
-                seeds=tuple(seeds or ()),
-                repo=repo,
-                namespace=namespace,
-                user_id=user_id,
-                profile_key=profile_key,
-                as_of=as_of,
-                max_hops=max_hops,
-                limit=limit,
+            return cast(
+                dict[str, Any],
+                handle_memory_graph_view(
+                    db_path=resolved_db_path,
+                    fact_handle=fact_handle,
+                    seeds=tuple(seeds or ()),
+                    repo=repo,
+                    namespace=namespace,
+                    user_id=user_id,
+                    profile_key=profile_key,
+                    as_of=as_of,
+                    max_hops=max_hops,
+                    limit=limit,
+                ),
             )
 
         return self._run_tracked("ace_memory_graph_view", _operation)
@@ -628,13 +636,16 @@ class AceLiteMcpService:
                 timeout_seconds=timeout_seconds,
             )
             plan_payload = plan_result.get("plan", {})
-            return handle_retrieval_graph_view_request(
-                plan_payload=plan_payload,
-                limit=limit,
-                max_hops=max_hops,
-                repo=repo,
-                root=str(root_path),
-                query=query,
+            return cast(
+                dict[str, Any],
+                handle_retrieval_graph_view_request(
+                    plan_payload=plan_payload,
+                    limit=limit,
+                    max_hops=max_hops,
+                    repo=repo,
+                    root=str(root_path),
+                    query=query,
+                ),
             )
 
         return self._run_tracked("ace_retrieval_graph_view", _operation)
@@ -654,19 +665,22 @@ class AceLiteMcpService:
     ) -> dict[str, Any]:
         def _operation() -> dict[str, Any]:
             path = self._resolve_notes_path(notes_path=notes_path)
-            return handle_memory_store(
-                text=text,
-                namespace=namespace,
-                tags=tags,
-                path=path,
-                rows=None,
-                save_notes_fn=None,
-                append_note_fn=self._append_note,
-                req=req,
-                contract=contract,
-                area=area,
-                decision_type=decision_type,
-                task_id=task_id,
+            return cast(
+                dict[str, Any],
+                handle_memory_store(
+                    text=text,
+                    namespace=namespace,
+                    tags=tags,
+                    path=path,
+                    rows=None,
+                    save_notes_fn=None,
+                    append_note_fn=self._append_note,
+                    req=req,
+                    contract=contract,
+                    area=area,
+                    decision_type=decision_type,
+                    task_id=task_id,
+                ),
             )
 
         return self._run_tracked("ace_memory_store", _operation)
@@ -1037,20 +1051,26 @@ class AceLiteMcpService:
         )
 
     def _resolve_root(self, root: str | None) -> Path:
-        return resolve_root(root=root, default_root=self._config.default_root)
+        return cast(Path, resolve_root(root=root, default_root=self._config.default_root))
 
     def _resolve_skills_dir(self, *, root_path: Path, skills_dir: str | None) -> Path:
-        return resolve_skills_dir(
-            root_path=root_path,
-            skills_dir=skills_dir,
-            default_skills_dir=self._config.default_skills_dir,
+        return cast(
+            Path,
+            resolve_skills_dir(
+                root_path=root_path,
+                skills_dir=skills_dir,
+                default_skills_dir=self._config.default_skills_dir,
+            ),
         )
 
     def _resolve_config_pack_path(self, *, root_path: Path, config_pack: str | None) -> str | None:
-        return resolve_config_pack_path(
-            root_path=root_path,
-            config_pack=config_pack,
-            default_config_pack=self._config.config_pack,
+        return cast(
+            str | None,
+            resolve_config_pack_path(
+                root_path=root_path,
+                config_pack=config_pack,
+                default_config_pack=self._config.config_pack,
+            ),
         )
 
     @staticmethod
@@ -1060,21 +1080,27 @@ class AceLiteMcpService:
         output: str | None,
         default: str,
     ) -> Path:
-        return resolve_output_path(
-            root_path=root_path,
-            output=output,
-            default=default,
+        return cast(
+            Path,
+            resolve_output_path(
+                root_path=root_path,
+                output=output,
+                default=default,
+            ),
         )
 
     def _resolve_notes_path(self, *, notes_path: str | None) -> Path:
-        return resolve_notes_path(
-            notes_path=notes_path,
-            default_notes_path=self._config.notes_path,
+        return cast(
+            Path,
+            resolve_notes_path(
+                notes_path=notes_path,
+                default_notes_path=self._config.notes_path,
+            ),
         )
 
     @staticmethod
     def _load_notes(path: Path) -> list[dict[str, Any]]:
-        return load_notes(path)
+        return cast(list[dict[str, Any]], load_notes(path))
 
     @staticmethod
     def _save_notes(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -1090,7 +1116,7 @@ class AceLiteMcpService:
 
     @staticmethod
     def _wipe_notes(path: Path, namespace: str | None) -> tuple[int, int]:
-        return wipe_notes(path, namespace)
+        return cast(tuple[int, int], wipe_notes(path, namespace))
 
 
 __all__ = ["AceLiteMcpService"]

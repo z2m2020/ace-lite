@@ -40,6 +40,18 @@ MYPY_HOTSPOT_COMPANION_TARGETS = {
         "src/ace_lite/cli_app/orchestrator_factory_support.py",
         "src/ace_lite/cli_app/orchestrator_factory.py",
     ),
+    "src/ace_lite/runtime_settings.py": (
+        "src/ace_lite/runtime_settings_projection.py",
+        "src/ace_lite/runtime_settings_store.py",
+    ),
+    "src/ace_lite/plan_quick.py": (
+        "src/ace_lite/plan_quick_strategies.py",
+        "src/ace_lite/plan_quick_ranking.py",
+    ),
+    "src/ace_lite/benchmark/report.py": (
+        "src/ace_lite/benchmark/report_summary.py",
+        "src/ace_lite/benchmark/report_observability.py",
+    ),
 }
 
 
@@ -198,14 +210,8 @@ def _load_baseline(*, path: Path) -> list[dict[str, Any]]:
         findings = payload
     else:
         findings = []
-    normalized = [
-        _normalize_finding(item)
-        for item in findings
-        if isinstance(item, dict)
-    ]
-    filtered = [
-        item for item in normalized if item["package"] and item["id"]
-    ]
+    normalized = [_normalize_finding(item) for item in findings if isinstance(item, dict)]
+    filtered = [item for item in normalized if item["package"] and item["id"]]
     return sorted(filtered, key=lambda item: (item["package"], item["id"]))
 
 
@@ -387,9 +393,7 @@ def _build_hotspot_baseline_payload(
     coverage_payload = _load_coverage_payload(path=coverage_json_path)
     requested_paths = hotspot_paths if isinstance(hotspot_paths, list) else HOTSPOT_TARGETS
     ordered_paths = [
-        _normalize_hotspot_path(item)
-        for item in requested_paths
-        if _normalize_hotspot_path(item)
+        _normalize_hotspot_path(item) for item in requested_paths if _normalize_hotspot_path(item)
     ]
     hotspots: list[dict[str, Any]] = []
     for hotspot_path in ordered_paths:
@@ -438,9 +442,7 @@ def _build_hotspot_summary(
 
     requested_paths = hotspot_paths if isinstance(hotspot_paths, list) else HOTSPOT_TARGETS
     ordered_paths = [
-        _normalize_hotspot_path(item)
-        for item in requested_paths
-        if _normalize_hotspot_path(item)
+        _normalize_hotspot_path(item) for item in requested_paths if _normalize_hotspot_path(item)
     ]
     for item in baseline:
         if item not in ordered_paths:
@@ -634,36 +636,40 @@ def _build_markdown(summary: dict[str, Any]) -> str:
                 continue
             coverage = item.get("coverage", {})
             complexity = item.get("complexity", {})
+            coverage_percent_raw = coverage.get("percent") if isinstance(coverage, dict) else None
+            complexity_score_raw = complexity.get("score") if isinstance(complexity, dict) else None
+            baseline_coverage_raw = (
+                coverage.get("baseline_percent") if isinstance(coverage, dict) else None
+            )
+            baseline_complexity_raw = (
+                complexity.get("baseline_score") if isinstance(complexity, dict) else None
+            )
             coverage_percent = (
-                float(coverage.get("percent"))
-                if isinstance(coverage, dict)
-                and isinstance(coverage.get("percent"), (int, float))
+                float(coverage_percent_raw)
+                if isinstance(coverage_percent_raw, (int, float))
                 else None
             )
             complexity_score = (
-                int(complexity.get("score"))
-                if isinstance(complexity, dict)
-                and isinstance(complexity.get("score"), int)
-                else None
+                int(complexity_score_raw) if isinstance(complexity_score_raw, int) else None
             )
             baseline_coverage = (
-                float(coverage.get("baseline_percent"))
-                if isinstance(coverage, dict)
-                and isinstance(coverage.get("baseline_percent"), (int, float))
+                float(baseline_coverage_raw)
+                if isinstance(baseline_coverage_raw, (int, float))
                 else None
             )
             baseline_complexity = (
-                int(complexity.get("baseline_score"))
-                if isinstance(complexity, dict)
-                and isinstance(complexity.get("baseline_score"), int)
-                else None
+                int(baseline_complexity_raw) if isinstance(baseline_complexity_raw, int) else None
             )
             lines.append(
                 "| {path} | {coverage_percent} | {complexity_score} | {baseline_coverage} | {baseline_complexity} |".format(
                     path=str(item.get("path") or ""),
-                    coverage_percent=f"{coverage_percent:.2f}" if coverage_percent is not None else "-",
+                    coverage_percent=f"{coverage_percent:.2f}"
+                    if coverage_percent is not None
+                    else "-",
                     complexity_score=str(complexity_score) if complexity_score is not None else "-",
-                    baseline_coverage=f"{baseline_coverage:.2f}" if baseline_coverage is not None else "-",
+                    baseline_coverage=f"{baseline_coverage:.2f}"
+                    if baseline_coverage is not None
+                    else "-",
                     baseline_complexity=str(baseline_complexity)
                     if baseline_complexity is not None
                     else "-",
@@ -887,8 +893,8 @@ def run_quality_gate(
     baseline_findings = _load_baseline(path=baseline_path)
     diff = _diff_findings(current=current_findings, baseline=baseline_findings)
     pip_new_count = len(diff["new"])
-    pip_gate_passed = pip_command_ok and pip_parsed and (
-        (not fail_on_new_vulns) or pip_new_count == 0
+    pip_gate_passed = (
+        pip_command_ok and pip_parsed and ((not fail_on_new_vulns) or pip_new_count == 0)
     )
     if not pip_gate_passed:
         all_required_passed = False

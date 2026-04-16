@@ -10,13 +10,15 @@ def extract_seed_candidate_paths(
     top_k: int,
 ) -> list[str]:
     seeds: list[str] = []
+    seen: set[str] = set()
     for item in seed_candidates:
         if not isinstance(item, dict):
             continue
         path = str(item.get("path", "")).strip()
-        if not path or path not in files or path in seeds:
+        if not path or path not in files or path in seen:
             continue
         seeds.append(path)
+        seen.add(path)
         if len(seeds) >= top_k:
             break
     return seeds
@@ -62,9 +64,7 @@ def build_stage_repomap_explainability(
 ) -> dict[str, Any]:
     seed_hint_set = {str(path).strip() for path in seed_hints if str(path).strip()}
     subgraph_seed_set = {
-        str(path).strip()
-        for path in (subgraph_seed_paths or [])
-        if str(path).strip()
+        str(path).strip() for path in (subgraph_seed_paths or []) if str(path).strip()
     }
     if seed_hint_set:
         seed_strategy = "seed_candidates"
@@ -79,9 +79,7 @@ def build_stage_repomap_explainability(
                 "seed_candidate"
                 if str(path).strip() in seed_hint_set
                 else (
-                    "subgraph_seed"
-                    if str(path).strip() in subgraph_seed_set
-                    else "ranked_fallback"
+                    "subgraph_seed" if str(path).strip() in subgraph_seed_set else "ranked_fallback"
                 )
             ),
         }
@@ -89,13 +87,9 @@ def build_stage_repomap_explainability(
         if str(path).strip()
     ]
     import_set = {str(path).strip() for path in import_neighbors if str(path).strip()}
-    reference_set = {
-        str(path).strip() for path in reference_neighbors if str(path).strip()
-    }
+    reference_set = {str(path).strip() for path in reference_neighbors if str(path).strip()}
     included_import_count = sum(1 for path in included_neighbors if path in import_set)
-    included_reference_count = sum(
-        1 for path in included_neighbors if path in reference_set
-    )
+    included_reference_count = sum(1 for path in included_neighbors if path in reference_set)
     ambiguity = {
         "path_style_collision_count": sum(
             1 for values in path_style_to_paths.values() if len(values) > 1
@@ -104,9 +98,7 @@ def build_stage_repomap_explainability(
         "reference_multi_definition_symbol_count": sum(
             1 for values in symbol_to_paths.values() if len(values) > 1
         ),
-        "budget_trimmed_neighbor_count": max(
-            0, len(neighbor_candidates) - len(included_neighbors)
-        ),
+        "budget_trimmed_neighbor_count": max(0, len(neighbor_candidates) - len(included_neighbors)),
     }
     notes: list[str] = []
     for note in (
@@ -114,11 +106,7 @@ def build_stage_repomap_explainability(
         "subgraph_seed_paths_present" if subgraph_seed_set else "",
         "import_neighbors_present" if import_neighbors else "",
         "reference_neighbors_present" if reference_neighbors else "",
-        (
-            "budget_trimmed_neighbors"
-            if int(ambiguity["budget_trimmed_neighbor_count"]) > 0
-            else ""
-        ),
+        ("budget_trimmed_neighbors" if int(ambiguity["budget_trimmed_neighbor_count"]) > 0 else ""),
         (
             f"path_style_collisions:{int(ambiguity['path_style_collision_count'])}"
             if int(ambiguity["path_style_collision_count"]) > 0

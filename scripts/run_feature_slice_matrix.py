@@ -11,7 +11,9 @@ from typing import Any
 import yaml
 
 from ace_lite.benchmark_ops import (
-    CommandResult,
+    CommandResult as _CommandResult,
+)
+from ace_lite.benchmark_ops import (
     load_yaml,
     read_benchmark_case_fingerprints,
     read_benchmark_case_routing_source,
@@ -28,6 +30,7 @@ from ace_lite.feedback_store import SelectionFeedbackStore
 _run_command = run_command
 _require_success = require_success
 _load_yaml = load_yaml
+CommandResult = _CommandResult
 
 
 def _extract_thresholds(config: dict[str, Any], *, slice_name: str) -> dict[str, float]:
@@ -172,9 +175,9 @@ def _evaluate_perturbation_pair(
     noise_increase = float(perturbed_case.get("noise_rate", 0.0)) - float(
         baseline_case.get("noise_rate", 0.0)
     )
-    dependency_recall_delta = float(
-        perturbed_case.get("dependency_recall", 0.0)
-    ) - float(baseline_case.get("dependency_recall", 0.0))
+    dependency_recall_delta = float(perturbed_case.get("dependency_recall", 0.0)) - float(
+        baseline_case.get("dependency_recall", 0.0)
+    )
 
     task_success_min = float(thresholds.get("task_success_min", 1.0) or 1.0)
     if float(perturbed_case.get("task_success_hit", 0.0)) < task_success_min:
@@ -189,9 +192,7 @@ def _evaluate_perturbation_pair(
             }
         )
 
-    task_success_delta_min = float(
-        thresholds.get("task_success_delta_min", 0.0) or 0.0
-    )
+    task_success_delta_min = float(thresholds.get("task_success_delta_min", 0.0) or 0.0)
     if task_success_delta < task_success_delta_min:
         failures.append(
             {
@@ -236,8 +237,7 @@ def _evaluate_perturbation_pair(
         "noise_increase": noise_increase,
     }
     has_dependency_thresholds = any(
-        key in thresholds
-        for key in ("dependency_recall_min", "dependency_recall_delta_min")
+        key in thresholds for key in ("dependency_recall_min", "dependency_recall_delta_min")
     )
     if (
         has_dependency_thresholds
@@ -246,9 +246,7 @@ def _evaluate_perturbation_pair(
     ):
         deltas["dependency_recall_delta"] = dependency_recall_delta
 
-        dependency_recall_min = float(
-            thresholds.get("dependency_recall_min", 0.0) or 0.0
-        )
+        dependency_recall_min = float(thresholds.get("dependency_recall_min", 0.0) or 0.0)
         if float(perturbed_case.get("dependency_recall", 0.0)) < dependency_recall_min:
             failures.append(
                 {
@@ -587,7 +585,7 @@ def _seed_late_interaction_repo(root: Path) -> Path:
     (root / "src" / "late_interaction.py").write_text(
         (
             "def late_interaction_score(query: str, text: str) -> float:\n"
-            "    \"\"\"ColBERT-style late interaction scoring stub.\"\"\"\n"
+            '    """ColBERT-style late interaction scoring stub."""\n'
             "    return float(len(query) + len(text))\n"
         ),
         encoding="utf-8",
@@ -746,10 +744,7 @@ def _seed_dependency_recall_repo(root: Path) -> Path:
         encoding="utf-8",
     )
     (root / "src" / "app" / "validators" / "token_validator.py").write_text(
-        (
-            "def validate_token(raw_token: str) -> bool:\n"
-            "    return bool(raw_token)\n"
-        ),
+        ("def validate_token(raw_token: str) -> bool:\n    return bool(raw_token)\n"),
         encoding="utf-8",
     )
     (root / "src" / "app" / "fallback.py").write_text(
@@ -780,7 +775,7 @@ def _seed_perf_routing_repo(root: Path) -> Path:
     (root / "src" / "runtime" / "hotspot_ranker.py").write_text(
         (
             "def rank_latency_hotspots(samples: list[tuple[str, float]]) -> list[str]:\n"
-            "    \"\"\"Rank hotspot paths by descending latency pressure.\"\"\"\n"
+            '    """Rank hotspot paths by descending latency pressure."""\n'
             "    return [path for path, _ in sorted(samples, key=lambda item: (-item[1], item[0]))]\n"
         ),
         encoding="utf-8",
@@ -788,7 +783,7 @@ def _seed_perf_routing_repo(root: Path) -> Path:
     (root / "src" / "runtime" / "slo_budget.py").write_text(
         (
             "def enforce_slo_budget(latency_ms: float, budget_ms: float) -> bool:\n"
-            "    \"\"\"Return whether a latency observation stays inside the SLO budget.\"\"\"\n"
+            '    """Return whether a latency observation stays inside the SLO budget."""\n'
             "    return float(latency_ms) <= float(budget_ms)\n"
         ),
         encoding="utf-8",
@@ -796,7 +791,7 @@ def _seed_perf_routing_repo(root: Path) -> Path:
     (root / "src" / "indexing" / "stage_profiler.py").write_text(
         (
             "def profile_index_stage(samples: list[float]) -> float:\n"
-            "    \"\"\"Profile index-stage latency to surface hotspot regressions.\"\"\"\n"
+            '    """Profile index-stage latency to surface hotspot regressions."""\n'
             "    if not samples:\n"
             "        return 0.0\n"
             "    return max(float(value) for value in samples)\n"
@@ -806,7 +801,7 @@ def _seed_perf_routing_repo(root: Path) -> Path:
     (root / "src" / "indexing" / "context_budget.py").write_text(
         (
             "def trim_context_for_latency(lines: list[str], max_items: int) -> list[str]:\n"
-            "    \"\"\"Trim context packing when latency or budget pressure is high.\"\"\"\n"
+            '    """Trim context packing when latency or budget pressure is high."""\n'
             "    return list(lines[: max(0, int(max_items))])\n"
         ),
         encoding="utf-8",
@@ -849,11 +844,11 @@ def _seed_stale_majority_repo(root: Path) -> Path:
         (
             "class AuthService:\n"
             "    def validate_current_token(self, token: str) -> bool:\n"
-            "        \"\"\"Current auth token validator for active sessions.\"\"\"\n"
+            '        """Current auth token validator for active sessions."""\n'
             "        current_mode = True\n"
             "        return bool(token) and current_mode\n\n"
             "    def validate_legacy_token(self, token: str, *, strict: bool = False) -> bool:\n"
-            "        \"\"\"Legacy auth token validator kept for stale compatibility mode.\"\"\"\n"
+            '        """Legacy auth token validator kept for stale compatibility mode."""\n'
             "        legacy_mode = strict\n"
             "        return bool(token) and legacy_mode\n"
         ),
@@ -954,17 +949,11 @@ def _seed_topological_shield_repo(root: Path) -> Path:
         encoding="utf-8",
     )
     (root / "src" / "defs" / "helper.py").write_text(
-        (
-            "def resolve_helper(token: str) -> str:\n"
-            "    return token.strip()\n"
-        ),
+        ("def resolve_helper(token: str) -> str:\n    return token.strip()\n"),
         encoding="utf-8",
     )
     (root / "src" / "defs" / "logger.py").write_text(
-        (
-            "def shared_logger(token: str) -> None:\n"
-            "    _ = token\n"
-        ),
+        ("def shared_logger(token: str) -> None:\n    _ = token\n"),
         encoding="utf-8",
     )
 
@@ -1003,9 +992,7 @@ def _run_perf_routing_slice(
         slice_name="perf_routing",
         key="perf_routing",
     )
-    routing_policy = str(
-        perf_cfg.get("retrieval_policy", "general") or "general"
-    ).strip().lower()
+    routing_policy = str(perf_cfg.get("retrieval_policy", "general") or "general").strip().lower()
     off_precomputed = _coerce_bool(
         perf_cfg.get("off_precomputed_skills_routing"),
         default=False,
@@ -1113,18 +1100,12 @@ def _run_perf_routing_slice(
     on_latency = float(on_metrics.get("latency_p95_ms", 0.0) or 0.0)
     off_skills_latency = float(off_metrics.get("skills_latency_p95_ms", 0.0) or 0.0)
     on_skills_latency = float(on_metrics.get("skills_latency_p95_ms", 0.0) or 0.0)
-    off_skills_budget_used = float(
-        off_metrics.get("skills_token_budget_used_mean", 0.0) or 0.0
-    )
-    on_skills_budget_used = float(
-        on_metrics.get("skills_token_budget_used_mean", 0.0) or 0.0
-    )
+    off_skills_budget_used = float(off_metrics.get("skills_token_budget_used_mean", 0.0) or 0.0)
+    on_skills_budget_used = float(on_metrics.get("skills_token_budget_used_mean", 0.0) or 0.0)
     off_skills_budget_exhausted = float(
         off_metrics.get("skills_budget_exhausted_ratio", 0.0) or 0.0
     )
-    on_skills_budget_exhausted = float(
-        on_metrics.get("skills_budget_exhausted_ratio", 0.0) or 0.0
-    )
+    on_skills_budget_exhausted = float(on_metrics.get("skills_budget_exhausted_ratio", 0.0) or 0.0)
 
     deltas = {
         "task_success_delta": on_task_success - off_task_success,
@@ -1183,9 +1164,7 @@ def _run_perf_routing_slice(
             }
         )
 
-    task_success_delta_min = float(
-        thresholds.get("task_success_delta_min", 0.0) or 0.0
-    )
+    task_success_delta_min = float(thresholds.get("task_success_delta_min", 0.0) or 0.0)
     if deltas["task_success_delta"] < task_success_delta_min:
         failures.append(
             {
@@ -1245,9 +1224,7 @@ def _run_perf_routing_slice(
                 "metric": "skills_latency_growth_factor",
                 "actual": deltas["skills_latency_growth_factor"],
                 "operator": "<=",
-                "expected": float(
-                    thresholds.get("skills_latency_growth_factor_max", 1.0) or 1.0
-                ),
+                "expected": float(thresholds.get("skills_latency_growth_factor_max", 1.0) or 1.0),
             }
         )
 
@@ -1316,17 +1293,13 @@ def _run_stale_majority_slice(
     thresholds = _extract_thresholds(config, slice_name=lane)
     stale_cfg = _extract_slice_config(config, slice_name=lane, key=lane)
 
-    routing_policy = str(
-        stale_cfg.get("retrieval_policy", "general") or "general"
-    ).strip().lower()
+    routing_policy = str(stale_cfg.get("retrieval_policy", "general") or "general").strip().lower()
     top_k_files = max(1, int(stale_cfg.get("top_k_files", 1) or 1))
     chunk_top_k = max(1, int(stale_cfg.get("chunk_top_k", 8) or 8))
-    chunk_guard_mode = str(
-        stale_cfg.get("chunk_guard_mode", "report_only") or "report_only"
-    ).strip().lower()
-    chunk_guard_lambda_penalty = float(
-        stale_cfg.get("chunk_guard_lambda_penalty", 4.0) or 4.0
+    chunk_guard_mode = (
+        str(stale_cfg.get("chunk_guard_mode", "report_only") or "report_only").strip().lower()
     )
+    chunk_guard_lambda_penalty = float(stale_cfg.get("chunk_guard_lambda_penalty", 4.0) or 4.0)
     chunk_guard_min_pool = max(1, int(stale_cfg.get("chunk_guard_min_pool", 1) or 1))
     chunk_guard_min_marginal_utility = float(
         stale_cfg.get("chunk_guard_min_marginal_utility", 0.2) or 0.2
@@ -1457,18 +1430,11 @@ def _run_stale_majority_slice(
             else (1.0 if on_latency <= 0.0 else float("inf"))
         ),
         "pairwise_conflict_count_delta": on_pairwise_conflict_count
-        - float(
-            off_lane_metrics.get("chunk_guard_pairwise_conflict_count_mean", 0.0) or 0.0
-        ),
+        - float(off_lane_metrics.get("chunk_guard_pairwise_conflict_count_mean", 0.0) or 0.0),
         "expected_retained_hit_rate_delta": on_expected_retained_hit_rate
-        - float(
-            off_lane_metrics.get("chunk_guard_expected_retained_hit_rate_mean", 0.0)
-            or 0.0
-        ),
+        - float(off_lane_metrics.get("chunk_guard_expected_retained_hit_rate_mean", 0.0) or 0.0),
         "report_only_improved_rate_delta": on_report_only_improved_rate
-        - float(
-            off_lane_metrics.get("chunk_guard_report_only_improved_rate", 0.0) or 0.0
-        ),
+        - float(off_lane_metrics.get("chunk_guard_report_only_improved_rate", 0.0) or 0.0),
     }
 
     failures: list[dict[str, Any]] = []
@@ -1505,9 +1471,7 @@ def _run_stale_majority_slice(
             }
         )
 
-    task_success_delta_min = float(
-        thresholds.get("task_success_delta_min", 0.0) or 0.0
-    )
+    task_success_delta_min = float(thresholds.get("task_success_delta_min", 0.0) or 0.0)
     if deltas["task_success_delta"] < task_success_delta_min:
         failures.append(
             {
@@ -1543,9 +1507,7 @@ def _run_stale_majority_slice(
             }
         )
 
-    latency_growth_factor_max = float(
-        thresholds.get("latency_growth_factor_max", 2.0) or 2.0
-    )
+    latency_growth_factor_max = float(thresholds.get("latency_growth_factor_max", 2.0) or 2.0)
     if deltas["latency_growth_factor"] > latency_growth_factor_max:
         failures.append(
             {
@@ -1639,21 +1601,13 @@ def _run_topological_shield_slice(
     thresholds = _extract_thresholds(config, slice_name=lane)
     shield_cfg = _extract_slice_config(config, slice_name=lane, key=lane)
 
-    routing_policy = str(
-        shield_cfg.get("retrieval_policy", "general") or "general"
-    ).strip().lower()
+    routing_policy = str(shield_cfg.get("retrieval_policy", "general") or "general").strip().lower()
     top_k_files = max(1, int(shield_cfg.get("top_k_files", 4) or 4))
     chunk_top_k = max(1, int(shield_cfg.get("chunk_top_k", 8) or 8))
-    shield_mode = str(
-        shield_cfg.get("mode", "report_only") or "report_only"
-    ).strip().lower()
+    shield_mode = str(shield_cfg.get("mode", "report_only") or "report_only").strip().lower()
     max_attenuation = float(shield_cfg.get("max_attenuation", 0.6) or 0.6)
-    shared_parent_attenuation = float(
-        shield_cfg.get("shared_parent_attenuation", 0.2) or 0.2
-    )
-    adjacency_attenuation = float(
-        shield_cfg.get("adjacency_attenuation", 0.5) or 0.5
-    )
+    shared_parent_attenuation = float(shield_cfg.get("shared_parent_attenuation", 0.2) or 0.2)
+    adjacency_attenuation = float(shield_cfg.get("adjacency_attenuation", 0.5) or 0.5)
 
     env = {"HOME": str(workdir), "USERPROFILE": str(workdir)}
     off_dir = output_dir / "topological-shield-off"
@@ -1752,9 +1706,7 @@ def _run_topological_shield_slice(
         lane=lane,
     )
     on_case_fingerprints = _read_benchmark_case_fingerprints(on_dir / "results.json")
-    repeat_case_fingerprints = _read_benchmark_case_fingerprints(
-        repeat_dir / "results.json"
-    )
+    repeat_case_fingerprints = _read_benchmark_case_fingerprints(repeat_dir / "results.json")
     repeat_case_fingerprints_equal = on_case_fingerprints == repeat_case_fingerprints
     repeat_lane_metrics_equal = on_lane_metrics == repeat_lane_metrics
 
@@ -1854,9 +1806,7 @@ def _run_topological_shield_slice(
             }
         )
 
-    task_success_delta_min = float(
-        thresholds.get("task_success_delta_min", 0.0) or 0.0
-    )
+    task_success_delta_min = float(thresholds.get("task_success_delta_min", 0.0) or 0.0)
     if deltas["task_success_delta"] < task_success_delta_min:
         failures.append(
             {
@@ -1892,9 +1842,7 @@ def _run_topological_shield_slice(
             }
         )
 
-    latency_growth_factor_max = float(
-        thresholds.get("latency_growth_factor_max", 2.0) or 2.0
-    )
+    latency_growth_factor_max = float(thresholds.get("latency_growth_factor_max", 2.0) or 2.0)
     if deltas["latency_growth_factor"] > latency_growth_factor_max:
         failures.append(
             {
@@ -1920,9 +1868,7 @@ def _run_topological_shield_slice(
             }
         )
 
-    attenuation_total_mean_min = float(
-        thresholds.get("attenuation_total_mean_min", 0.0) or 0.0
-    )
+    attenuation_total_mean_min = float(thresholds.get("attenuation_total_mean_min", 0.0) or 0.0)
     if on_attenuation_total < attenuation_total_mean_min:
         failures.append(
             {
@@ -2011,12 +1957,14 @@ def _run_dependency_recall_slice(
         slice_name="dependency_recall",
         key="dependency_recall",
     )
-    off_profile = str(
-        dep_cfg.get("off_repomap_ranking_profile", "heuristic") or "heuristic"
-    ).strip().lower()
-    on_profile = str(
-        dep_cfg.get("on_repomap_ranking_profile", "graph_seeded") or "graph_seeded"
-    ).strip().lower()
+    off_profile = (
+        str(dep_cfg.get("off_repomap_ranking_profile", "heuristic") or "heuristic").strip().lower()
+    )
+    on_profile = (
+        str(dep_cfg.get("on_repomap_ranking_profile", "graph_seeded") or "graph_seeded")
+        .strip()
+        .lower()
+    )
     repomap_top_k = max(1, int(dep_cfg.get("repomap_top_k", 1) or 1))
     repomap_neighbor_limit = max(1, int(dep_cfg.get("repomap_neighbor_limit", 2) or 2))
     repomap_budget_tokens = max(64, int(dep_cfg.get("repomap_budget_tokens", 256) or 256))
@@ -2085,9 +2033,7 @@ def _run_dependency_recall_slice(
         label="dependency recall slice off",
     )
     off_metrics = _read_benchmark_metrics(off_dir / "results.json")
-    off_repomap_seed_summary = _read_benchmark_repomap_seed_summary(
-        off_dir / "results.json"
-    )
+    off_repomap_seed_summary = _read_benchmark_repomap_seed_summary(off_dir / "results.json")
 
     _require_success(
         _run_command(
@@ -2103,9 +2049,7 @@ def _run_dependency_recall_slice(
         label="dependency recall slice on",
     )
     on_metrics = _read_benchmark_metrics(on_dir / "results.json")
-    on_repomap_seed_summary = _read_benchmark_repomap_seed_summary(
-        on_dir / "results.json"
-    )
+    on_repomap_seed_summary = _read_benchmark_repomap_seed_summary(on_dir / "results.json")
 
     off_dependency = float(off_metrics.get("dependency_recall", 0.0) or 0.0)
     on_dependency = float(on_metrics.get("dependency_recall", 0.0) or 0.0)
@@ -2140,9 +2084,7 @@ def _run_dependency_recall_slice(
             }
         )
 
-    dependency_recall_delta_min = float(
-        thresholds.get("dependency_recall_delta_min", 0.0) or 0.0
-    )
+    dependency_recall_delta_min = float(thresholds.get("dependency_recall_delta_min", 0.0) or 0.0)
     if deltas["dependency_recall_delta"] < dependency_recall_delta_min:
         failures.append(
             {
@@ -2178,9 +2120,7 @@ def _run_dependency_recall_slice(
             }
         )
 
-    latency_growth_factor_max = float(
-        thresholds.get("latency_growth_factor_max", 2.0) or 2.0
-    )
+    latency_growth_factor_max = float(thresholds.get("latency_growth_factor_max", 2.0) or 2.0)
     if deltas["latency_growth_factor"] > latency_growth_factor_max:
         failures.append(
             {
@@ -2223,7 +2163,7 @@ def _seed_perturbation_baseline_repo(root: Path) -> Path:
     (root / "src" / "auth" / "token_validator.py").write_text(
         (
             "def validate_token(token: str) -> bool:\n"
-            "    \"\"\"Auth token validator guard for session checks.\"\"\"\n"
+            '    """Auth token validator guard for session checks."""\n'
             "    return bool(token)\n"
         ),
         encoding="utf-8",
@@ -2231,7 +2171,7 @@ def _seed_perturbation_baseline_repo(root: Path) -> Path:
     (root / "src" / "pipeline" / "source_plan_builder.py").write_text(
         (
             "def build_source_plan() -> list[str]:\n"
-            "    \"\"\"Pipeline source plan builder for stage assembly.\"\"\"\n"
+            '    """Pipeline source plan builder for stage assembly."""\n'
             "    return ['memory', 'index', 'repomap']\n"
         ),
         encoding="utf-8",
@@ -2239,7 +2179,7 @@ def _seed_perturbation_baseline_repo(root: Path) -> Path:
     (root / "src" / "benchmarking" / "matrix_summary.py").write_text(
         (
             "def build_matrix_summary() -> dict[str, float]:\n"
-            "    \"\"\"Build benchmark matrix summary artifacts.\"\"\"\n"
+            '    """Build benchmark matrix summary artifacts."""\n'
             "    return {'precision_at_k': 1.0}\n"
         ),
         encoding="utf-8",
@@ -2247,7 +2187,7 @@ def _seed_perturbation_baseline_repo(root: Path) -> Path:
     (root / "src" / "retrieval" / "candidate_ranker.py").write_text(
         (
             "def rank_candidates(query: str) -> list[str]:\n"
-            "    \"\"\"Candidate ranking heuristics for retrieval ordering.\"\"\"\n"
+            '    """Candidate ranking heuristics for retrieval ordering."""\n'
             "    return [query]\n"
         ),
         encoding="utf-8",
@@ -2255,7 +2195,7 @@ def _seed_perturbation_baseline_repo(root: Path) -> Path:
     (root / "src" / "retrieval" / "context_packer.py").write_text(
         (
             "def pack_context_window(lines: list[str], budget: int) -> list[str]:\n"
-            "    \"\"\"Apply a retrieval context packing budget to the chosen lines.\"\"\"\n"
+            '    """Apply a retrieval context packing budget to the chosen lines."""\n'
             "    return list(lines[: max(0, budget)])\n"
         ),
         encoding="utf-8",
@@ -2313,7 +2253,7 @@ def _seed_perturbation_perturbed_repo(root: Path) -> Path:
     (root / "src" / "auth" / "token_guard.py").write_text(
         (
             "def validate_token(token: str) -> bool:\n"
-            "    \"\"\"Auth token validation guard after rename.\"\"\"\n"
+            '    """Auth token validation guard after rename."""\n'
             "    return bool(token)\n"
         ),
         encoding="utf-8",
@@ -2321,7 +2261,7 @@ def _seed_perturbation_perturbed_repo(root: Path) -> Path:
     (root / "src" / "planning" / "source_plan_builder.py").write_text(
         (
             "def build_source_plan() -> list[str]:\n"
-            "    \"\"\"Planning source plan builder after path move.\"\"\"\n"
+            '    """Planning source plan builder after path move."""\n'
             "    return ['memory', 'index', 'repomap']\n"
         ),
         encoding="utf-8",
@@ -2329,7 +2269,7 @@ def _seed_perturbation_perturbed_repo(root: Path) -> Path:
     (root / "src" / "benchmarking" / "matrix_summary.py").write_text(
         (
             "def build_matrix_summary() -> dict[str, float]:\n"
-            "    \"\"\"Build benchmark matrix summary artifacts.\"\"\"\n"
+            '    """Build benchmark matrix summary artifacts."""\n'
             "    return {'precision_at_k': 1.0}\n"
         ),
         encoding="utf-8",
@@ -2337,7 +2277,7 @@ def _seed_perturbation_perturbed_repo(root: Path) -> Path:
     (root / "src" / "retrieval" / "candidate_ranker.py").write_text(
         (
             "def rank_candidates(query: str) -> list[str]:\n"
-            "    \"\"\"Module that orders candidate files during retrieval.\"\"\"\n"
+            '    """Module that orders candidate files during retrieval."""\n'
             "    return [query]\n"
         ),
         encoding="utf-8",
@@ -2354,7 +2294,7 @@ def _seed_perturbation_perturbed_repo(root: Path) -> Path:
             "    used = min(len(lines), max(0, budget))\n"
             "    return float(used) / float(max(1, budget))\n\n"
             "def pack_context_window(lines: list[str], budget: int) -> list[str]:\n"
-            "    \"\"\"Apply a retrieval context packing budget to the chosen lines.\"\"\"\n"
+            '    """Apply a retrieval context packing budget to the chosen lines."""\n'
             "    cleaned = _drop_debug_headers(lines)\n"
             "    snapshot = _emit_chunk_snapshot(cleaned)\n"
             "    _ = _score_candidate_pressure(snapshot, budget)\n"
@@ -2428,9 +2368,7 @@ def _run_perturbation_slice(
         slice_name="perturbation",
         key="perturbation",
     )
-    chunk_guard_mode = str(
-        perturbation_cfg.get("chunk_guard_mode", "off") or "off"
-    ).strip().lower()
+    chunk_guard_mode = str(perturbation_cfg.get("chunk_guard_mode", "off") or "off").strip().lower()
     if chunk_guard_mode not in {"off", "report_only", "enforce"}:
         chunk_guard_mode = "off"
     chunk_guard_lambda_penalty = float(
@@ -2539,12 +2477,6 @@ def _run_perturbation_slice(
 
     baseline_metrics = _read_benchmark_metrics(baseline_output / "results.json")
     perturbed_metrics = _read_benchmark_metrics(perturbed_output / "results.json")
-    baseline_repomap_seed_summary = _read_benchmark_repomap_seed_summary(
-        baseline_output / "results.json"
-    )
-    perturbed_repomap_seed_summary = _read_benchmark_repomap_seed_summary(
-        perturbed_output / "results.json"
-    )
     baseline_rows = _read_benchmark_case_rows(baseline_output / "results.json")
     perturbed_rows = _read_benchmark_case_rows(perturbed_output / "results.json")
 
@@ -2589,8 +2521,7 @@ def _run_perturbation_slice(
             - baseline_metrics.get("precision_at_k", 0.0)
         ),
         "noise_increase": float(
-            perturbed_metrics.get("noise_rate", 0.0)
-            - baseline_metrics.get("noise_rate", 0.0)
+            perturbed_metrics.get("noise_rate", 0.0) - baseline_metrics.get("noise_rate", 0.0)
         ),
     }
 
@@ -2633,10 +2564,7 @@ def _seed_repomap_perturbation_baseline_repo(root: Path) -> Path:
         encoding="utf-8",
     )
     (root / "src" / "app" / "validation" / "token_policy.py").write_text(
-        (
-            "def token_allowed(token: str) -> bool:\n"
-            "    return bool(token)\n"
-        ),
+        ("def token_allowed(token: str) -> bool:\n    return bool(token)\n"),
         encoding="utf-8",
     )
     (root / "src" / "app" / "fallback.py").write_text(
@@ -2686,10 +2614,7 @@ def _seed_repomap_perturbation_perturbed_repo(root: Path) -> Path:
         encoding="utf-8",
     )
     (root / "src" / "app" / "access" / "policies" / "token_policy.py").write_text(
-        (
-            "def token_allowed(token: str) -> bool:\n"
-            "    return bool(token)\n"
-        ),
+        ("def token_allowed(token: str) -> bool:\n    return bool(token)\n"),
         encoding="utf-8",
     )
     (root / "src" / "app" / "fallback.py").write_text(
@@ -2734,16 +2659,14 @@ def _run_repomap_perturbation_slice(
         slice_name="repomap_perturbation",
         key="repomap_perturbation",
     )
-    ranking_profile = str(
-        repomap_cfg.get("repomap_ranking_profile", "graph_seeded") or "graph_seeded"
-    ).strip().lower()
+    ranking_profile = (
+        str(repomap_cfg.get("repomap_ranking_profile", "graph_seeded") or "graph_seeded")
+        .strip()
+        .lower()
+    )
     repomap_top_k = max(1, int(repomap_cfg.get("repomap_top_k", 1) or 1))
-    repomap_neighbor_limit = max(
-        1, int(repomap_cfg.get("repomap_neighbor_limit", 2) or 2)
-    )
-    repomap_budget_tokens = max(
-        64, int(repomap_cfg.get("repomap_budget_tokens", 256) or 256)
-    )
+    repomap_neighbor_limit = max(1, int(repomap_cfg.get("repomap_neighbor_limit", 2) or 2))
+    repomap_budget_tokens = max(64, int(repomap_cfg.get("repomap_budget_tokens", 256) or 256))
 
     baseline_output = output_dir / "repomap-perturbation-baseline"
     perturbed_output = output_dir / "repomap-perturbation-perturbed"
@@ -2875,8 +2798,7 @@ def _run_repomap_perturbation_slice(
             - baseline_metrics.get("precision_at_k", 0.0)
         ),
         "noise_increase": float(
-            perturbed_metrics.get("noise_rate", 0.0)
-            - baseline_metrics.get("noise_rate", 0.0)
+            perturbed_metrics.get("noise_rate", 0.0) - baseline_metrics.get("noise_rate", 0.0)
         ),
         "dependency_recall_delta": float(
             perturbed_metrics.get("dependency_recall", 0.0)
@@ -2907,9 +2829,7 @@ def _run_repomap_perturbation_slice(
 
 def _seed_index_repo(root: Path) -> None:
     (root / "src").mkdir(parents=True, exist_ok=True)
-    (root / "src" / "alpha.py").write_text(
-        "def alpha() -> int:\n    return 1\n", encoding="utf-8"
-    )
+    (root / "src" / "alpha.py").write_text("def alpha() -> int:\n    return 1\n", encoding="utf-8")
     (root / "src" / "beta.py").write_text("def beta() -> int:\n    return 2\n", encoding="utf-8")
 
 
@@ -3099,9 +3019,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
             routing_sources_raw = item.get("routing_sources")
             off = off_raw if isinstance(off_raw, dict) else {}
             on = on_raw if isinstance(on_raw, dict) else {}
-            routing_sources = (
-                routing_sources_raw if isinstance(routing_sources_raw, dict) else {}
-            )
+            routing_sources = routing_sources_raw if isinstance(routing_sources_raw, dict) else {}
             off_metrics = off.get("metrics") if isinstance(off.get("metrics"), dict) else {}
             on_metrics = on.get("metrics") if isinstance(on.get("metrics"), dict) else {}
             lines.append(
@@ -3111,9 +3029,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
                     precision=float(off_metrics.get("precision_at_k", 0.0) or 0.0),
                     noise=float(off_metrics.get("noise_rate", 0.0) or 0.0),
                     latency=float(off_metrics.get("latency_p95_ms", 0.0) or 0.0),
-                    skills_latency=float(
-                        off_metrics.get("skills_latency_p95_ms", 0.0) or 0.0
-                    ),
+                    skills_latency=float(off_metrics.get("skills_latency_p95_ms", 0.0) or 0.0),
                     skills_budget=float(
                         off_metrics.get("skills_token_budget_used_mean", 0.0) or 0.0
                     ),
@@ -3129,9 +3045,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
                     precision=float(on_metrics.get("precision_at_k", 0.0) or 0.0),
                     noise=float(on_metrics.get("noise_rate", 0.0) or 0.0),
                     latency=float(on_metrics.get("latency_p95_ms", 0.0) or 0.0),
-                    skills_latency=float(
-                        on_metrics.get("skills_latency_p95_ms", 0.0) or 0.0
-                    ),
+                    skills_latency=float(on_metrics.get("skills_latency_p95_ms", 0.0) or 0.0),
                     skills_budget=float(
                         on_metrics.get("skills_token_budget_used_mean", 0.0) or 0.0
                     ),
@@ -3213,13 +3127,9 @@ def _render_markdown(summary: dict[str, Any]) -> str:
                 lines.append(
                     "- Chunk guard: mode={mode}, lambda_penalty={penalty:.2f}, min_pool={min_pool}, min_marginal_utility={utility:.2f}".format(
                         mode=str(chunk_guard.get("mode") or "report_only"),
-                        penalty=float(
-                            chunk_guard.get("lambda_penalty", 0.0) or 0.0
-                        ),
+                        penalty=float(chunk_guard.get("lambda_penalty", 0.0) or 0.0),
                         min_pool=int(chunk_guard.get("min_pool", 0) or 0),
-                        utility=float(
-                            chunk_guard.get("min_marginal_utility", 0.0) or 0.0
-                        ),
+                        utility=float(chunk_guard.get("min_marginal_utility", 0.0) or 0.0),
                     )
                 )
             lines.append("")
@@ -3258,8 +3168,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
                         or 0.0
                     ),
                     improved=float(
-                        off_lane_metrics.get("chunk_guard_report_only_improved_rate", 0.0)
-                        or 0.0
+                        off_lane_metrics.get("chunk_guard_report_only_improved_rate", 0.0) or 0.0
                     ),
                     conflicts=float(
                         off_lane_metrics.get(
@@ -3290,8 +3199,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
                         or 0.0
                     ),
                     improved=float(
-                        on_lane_metrics.get("chunk_guard_report_only_improved_rate", 0.0)
-                        or 0.0
+                        on_lane_metrics.get("chunk_guard_report_only_improved_rate", 0.0) or 0.0
                     ),
                     conflicts=float(
                         on_lane_metrics.get(
@@ -3317,15 +3225,9 @@ def _render_markdown(summary: dict[str, Any]) -> str:
                 lines.append(
                     "- Topological shield: mode={mode}, max_attenuation={max_attenuation:.2f}, shared_parent_attenuation={shared_parent:.2f}, adjacency_attenuation={adjacency:.2f}".format(
                         mode=str(shield.get("mode") or "report_only"),
-                        max_attenuation=float(
-                            shield.get("max_attenuation", 0.0) or 0.0
-                        ),
-                        shared_parent=float(
-                            shield.get("shared_parent_attenuation", 0.0) or 0.0
-                        ),
-                        adjacency=float(
-                            shield.get("adjacency_attenuation", 0.0) or 0.0
-                        ),
+                        max_attenuation=float(shield.get("max_attenuation", 0.0) or 0.0),
+                        shared_parent=float(shield.get("shared_parent_attenuation", 0.0) or 0.0),
+                        adjacency=float(shield.get("adjacency_attenuation", 0.0) or 0.0),
                     )
                 )
             lines.append("")
@@ -3444,9 +3346,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
                     mode=str(chunk_guard.get("mode") or "report_only"),
                     penalty=float(chunk_guard.get("lambda_penalty", 0.0) or 0.0),
                     min_pool=int(chunk_guard.get("min_pool", 0) or 0),
-                    utility=float(
-                        chunk_guard.get("min_marginal_utility", 0.0) or 0.0
-                    ),
+                    utility=float(chunk_guard.get("min_marginal_utility", 0.0) or 0.0),
                 )
             )
             lines.append("")
@@ -3467,19 +3367,11 @@ def _render_markdown(summary: dict[str, Any]) -> str:
             )
             if baseline_repomap_seed_summary:
                 lines.append(
-                    "- Repomap seed summary (baseline): {summary}".format(
-                        summary=_format_repomap_seed_summary(
-                            baseline_repomap_seed_summary
-                        )
-                    )
+                    f"- Repomap seed summary (baseline): {_format_repomap_seed_summary(baseline_repomap_seed_summary)}"
                 )
             if perturbed_repomap_seed_summary:
                 lines.append(
-                    "- Repomap seed summary (perturbed): {summary}".format(
-                        summary=_format_repomap_seed_summary(
-                            perturbed_repomap_seed_summary
-                        )
-                    )
+                    f"- Repomap seed summary (perturbed): {_format_repomap_seed_summary(perturbed_repomap_seed_summary)}"
                 )
             if baseline_repomap_seed_summary or perturbed_repomap_seed_summary:
                 lines.append("")
@@ -3506,9 +3398,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
                         task_success=float(deltas.get("task_success_delta", 0.0) or 0.0),
                         precision=float(deltas.get("precision_delta", 0.0) or 0.0),
                         noise=float(deltas.get("noise_increase", 0.0) or 0.0),
-                        dependency=float(
-                            deltas.get("dependency_recall_delta", 0.0) or 0.0
-                        ),
+                        dependency=float(deltas.get("dependency_recall_delta", 0.0) or 0.0),
                     )
                 )
             else:
@@ -3650,9 +3540,7 @@ def main() -> int:
 
     summary_json = output_dir / "feature_slices_summary.json"
     summary_md = output_dir / "feature_slices_summary.md"
-    summary_json.write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    summary_json.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     summary_md.write_text(_render_markdown(summary), encoding="utf-8")
 
     if args.fail_on_thresholds and not passed:

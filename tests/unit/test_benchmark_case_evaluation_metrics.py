@@ -8,7 +8,22 @@ from ace_lite.benchmark.case_evaluation_metrics import (
 def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
     plan_payload = {
         "skills": {
-            "selected": [{"name": "skill-a"}, {"name": "skill-b"}],
+            "selected": [
+                {
+                    "name": "skill-a",
+                    "matched_count": 3,
+                    "signal_count": 2,
+                    "priority": 4,
+                    "manifest_load_mode": "metadata_only",
+                },
+                {
+                    "name": "skill-b",
+                    "matched_count": 1,
+                    "signal_count": 1,
+                    "priority": 2,
+                    "manifest_load_mode": "body_scan",
+                },
+            ],
             "token_budget": 600,
             "token_budget_used": 250,
             "markdown_bytes_loaded": 512,
@@ -90,6 +105,11 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
                 "actions_executed": 1,
                 "stop_reason": "completed",
                 "replay_safe": True,
+                "last_action": {
+                    "action_type": "request_more_context",
+                    "reason": "source_plan_validation_findings",
+                    "focus_paths": ["src/app.py", "src/build.py"],
+                },
                 "last_rerun_policy": {"policy_id": "source_plan_refresh"},
                 "action_type_counts": {
                     "request_more_context": 1,
@@ -254,6 +274,11 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
     assert metrics.chunk_contract_fallback_count == 2
     assert metrics.unsupported_language_fallback_count == 1
     assert metrics.skills_selected_count == 2.0
+    assert metrics.skills_manifest_metadata_only_selected_count == 1
+    assert metrics.skills_manifest_body_scan_selected_count == 1
+    assert metrics.skills_selected_matched_count_mean == 2.0
+    assert metrics.skills_selected_signal_count_mean == 1.5
+    assert metrics.skills_selected_priority_mean == 3.0
     assert metrics.source_plan_granularity_preferred_count == 1
     assert metrics.multi_channel_rrf_enabled is True
     assert metrics.multi_channel_rrf_applied is True
@@ -312,9 +337,12 @@ def test_build_case_evaluation_metrics_rich_payload_contract() -> None:
     assert metrics.agent_loop_stop_reason == "completed"
     assert metrics.agent_loop_replay_safe is True
     assert metrics.agent_loop_last_policy_id == "source_plan_refresh"
+    assert metrics.agent_loop_last_action_reason == "source_plan_validation_findings"
     assert metrics.agent_loop_request_more_context_count == 1
     assert metrics.agent_loop_request_source_plan_retry_count == 1
     assert metrics.agent_loop_request_validation_retry_count == 0
+    assert metrics.agent_loop_validation_findings_refine_applied is True
+    assert metrics.agent_loop_validation_findings_refine_focus_path_count == 2
     assert metrics.source_plan_evidence_summary == {
         "direct_count": 1.0,
         "neighbor_context_count": 1.0,

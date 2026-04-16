@@ -11,9 +11,7 @@ def _read_repo_text(relative_path: str) -> str:
 
 class TestBenchmarkSeamBoundaries:
     def test_report_observability_uses_memory_seam(self) -> None:
-        observability_text = _read_repo_text(
-            "src/ace_lite/benchmark/report_observability.py"
-        )
+        observability_text = _read_repo_text("src/ace_lite/benchmark/report_observability.py")
 
         expected_tokens = (
             "from ace_lite.benchmark.report_observability_memory import (",
@@ -21,10 +19,10 @@ class TestBenchmarkSeamBoundaries:
             "append_feedback_observability_summary as _append_feedback_observability_summary_impl",
             "append_ltm_explainability_summary as _append_ltm_explainability_summary_impl",
             "append_preference_observability_summary as _append_preference_observability_summary_impl",
-            "return _append_preference_observability_summary_impl(lines, results)",
-            "return _append_feedback_observability_summary_impl(lines, results)",
-            "return _append_ltm_explainability_summary_impl(lines, results)",
-            "return _append_feedback_loop_summary_impl(lines, results)",
+            "_append_preference_observability_summary_impl(lines, results)",
+            "_append_feedback_observability_summary_impl(lines, results)",
+            "_append_ltm_explainability_summary_impl(lines, results)",
+            "_append_feedback_loop_summary_impl(lines, results)",
         )
         for token in expected_tokens:
             assert token in observability_text
@@ -44,10 +42,37 @@ class TestBenchmarkSeamBoundaries:
         for token in forbidden_local_impl_tokens:
             assert token not in observability_text
 
-    def test_report_observability_uses_routing_seam(self) -> None:
-        observability_text = _read_repo_text(
-            "src/ace_lite/benchmark/report_observability.py"
+    def test_report_observability_uses_core_summary_seam(self) -> None:
+        observability_text = _read_repo_text("src/ace_lite/benchmark/report_observability.py")
+
+        expected_tokens = (
+            "from ace_lite.benchmark.report_observability_core import (",
+            "append_evidence_insufficiency_summary as _append_evidence_insufficiency_summary_impl",
+            "append_missing_context_risk_summary as _append_missing_context_risk_summary_impl",
+            "append_reward_log_summary as _append_reward_log_summary_impl",
+            "format_decision_event as _format_decision_event_impl",
+            "_append_evidence_insufficiency_summary_impl(lines, results)",
+            "_append_missing_context_risk_summary_impl(lines, results)",
+            "_append_reward_log_summary_impl(lines, results)",
+            "return _format_decision_event_impl(event)",
         )
+        for token in expected_tokens:
+            assert token in observability_text
+
+        forbidden_local_impl_tokens = (
+            'summary = get_summary_mapping(results=results, key="evidence_insufficiency_summary")',
+            'summary = get_summary_mapping(results=results, key="missing_context_risk_summary")',
+            'summary_raw = results.get("reward_log_summary")',
+            'lines.append("## Evidence Insufficiency Summary")',
+            'lines.append("## Missing-Context Risk Summary")',
+            'lines.append("## Reward Log Summary")',
+            "parts = [part for part in (stage, action, target) if part]",
+        )
+        for token in forbidden_local_impl_tokens:
+            assert token not in observability_text
+
+    def test_report_observability_uses_routing_seam(self) -> None:
+        observability_text = _read_repo_text("src/ace_lite/benchmark/report_observability.py")
 
         expected_tokens = (
             "from ace_lite.benchmark.report_observability_routing import (",
@@ -55,10 +80,10 @@ class TestBenchmarkSeamBoundaries:
             "append_context_refine_summary as _append_context_refine_summary_impl",
             "append_retrieval_context_observability_summary as _append_retrieval_context_observability_summary_impl",
             "append_retrieval_default_strategy_summary as _append_retrieval_default_strategy_summary_impl",
-            "return _append_retrieval_context_observability_summary_impl(lines, results)",
-            "return _append_retrieval_default_strategy_summary_impl(lines, results)",
-            "return _append_adaptive_router_observability_summary_impl(lines, results)",
-            "return _append_context_refine_summary_impl(lines, results)",
+            "_append_retrieval_context_observability_summary_impl(lines, results)",
+            "_append_retrieval_default_strategy_summary_impl(lines, results)",
+            "_append_adaptive_router_observability_summary_impl(lines, results)",
+            "_append_context_refine_summary_impl(lines, results)",
         )
         for token in expected_tokens:
             assert token in observability_text
@@ -79,9 +104,7 @@ class TestBenchmarkSeamBoundaries:
             assert token not in observability_text
 
     def test_report_observability_uses_governance_seam(self) -> None:
-        observability_text = _read_repo_text(
-            "src/ace_lite/benchmark/report_observability.py"
-        )
+        observability_text = _read_repo_text("src/ace_lite/benchmark/report_observability.py")
 
         expected_tokens = (
             "from ace_lite.benchmark.report_observability_governance import (",
@@ -89,10 +112,10 @@ class TestBenchmarkSeamBoundaries:
             "append_retrieval_control_plane_gate_summary as _append_retrieval_control_plane_gate_summary_impl",
             "append_wave1_context_governance_summary as _append_wave1_context_governance_summary_impl",
             "append_workload_taxonomy_summary as _append_workload_taxonomy_summary_impl",
-            "return _append_wave1_context_governance_summary_impl(lines, results)",
-            "return _append_retrieval_control_plane_gate_summary_impl(lines, results)",
-            "return _append_decision_observability_summary_impl(lines, results)",
-            "return _append_workload_taxonomy_summary_impl(lines, results)",
+            "_append_wave1_context_governance_summary_impl(lines, results)",
+            "_append_retrieval_control_plane_gate_summary_impl(lines, results)",
+            "_append_decision_observability_summary_impl(lines, results)",
+            "_append_workload_taxonomy_summary_impl(lines, results)",
         )
         for token in expected_tokens:
             assert token in observability_text

@@ -39,9 +39,12 @@ from ace_lite.orchestrator_runtime_support_types import (
     SOURCE_PLAN_LIFECYCLE,
     OrchestratorAgentLoopResult,
     OrchestratorFinalizationDependencies,
+    OrchestratorFinalizationRequest,
     OrchestratorFinalizationResult,
     OrchestratorLifecycleDescriptor,
+    OrchestratorLifecycleRequest,
     OrchestratorLifecycleResult,
+    OrchestratorPreparationRequest,
     OrchestratorPreparationResult,
     OrchestratorSourcePlanReplayResult,
     get_lifecycle_descriptor,
@@ -75,19 +78,21 @@ def run_orchestrator_lifecycle(
     return cast(
         OrchestratorLifecycleResult,
         execute_orchestrator_lifecycle(
-        orchestrator=orchestrator,
-        query=query,
-        repo=repo,
-        root_path=root_path,
-        temporal_input=temporal_input,
-        plugins_loaded=plugins_loaded,
-        ctx=ctx,
-        registry=registry,
-        hook_bus=hook_bus,
-        iter_lifecycle_descriptors_fn=iter_lifecycle_descriptors,
-        run_pre_source_plan_stages_fn=run_pre_source_plan_stages,
-        run_source_plan_stage_with_replay_fn=run_source_plan_stage_with_replay,
-        run_post_source_plan_runtime_fn=run_post_source_plan_runtime,
+            orchestrator=orchestrator,
+            request=OrchestratorLifecycleRequest(
+                query=query,
+                repo=repo,
+                root_path=root_path,
+                temporal_input=temporal_input,
+                plugins_loaded=plugins_loaded,
+                ctx=ctx,
+                registry=registry,
+                hook_bus=hook_bus,
+            ),
+            iter_lifecycle_descriptors_fn=iter_lifecycle_descriptors,
+            run_pre_source_plan_stages_fn=run_pre_source_plan_stages,
+            run_source_plan_stage_with_replay_fn=run_source_plan_stage_with_replay,
+            run_post_source_plan_runtime_fn=run_post_source_plan_runtime,
         ),
     )
 
@@ -106,15 +111,17 @@ def run_orchestrator_preparation(
     return cast(
         OrchestratorPreparationResult,
         execute_orchestrator_preparation(
-        orchestrator=orchestrator,
-        query=query,
-        repo=repo,
-        root=root,
-        time_range=time_range,
-        start_date=start_date,
-        end_date=end_date,
-        filters=filters,
-        load_conventions_fn=load_conventions,
+            orchestrator=orchestrator,
+            request=OrchestratorPreparationRequest(
+                query=query,
+                repo=repo,
+                root=root,
+                time_range=time_range,
+                start_date=start_date,
+                end_date=end_date,
+                filters=filters,
+            ),
+            load_conventions_fn=load_conventions,
         ),
     )
 
@@ -135,20 +142,20 @@ def run_orchestrator_finalization(
     replay_cache_info: dict[str, Any],
 ) -> OrchestratorFinalizationResult:
     return execute_orchestrator_finalization(
-        query=query,
-        repo=repo,
-        root_path=root_path,
-        conventions=conventions,
-        ctx=ctx,
-        stage_metrics=stage_metrics,
-        plugins_loaded=plugins_loaded,
-        started_at=started_at,
-        total_ms=total_ms,
-        contract_error=contract_error,
-        replay_cache_info=replay_cache_info,
-        dependencies=build_orchestrator_finalization_dependencies(
-            orchestrator=orchestrator
+        request=OrchestratorFinalizationRequest(
+            query=query,
+            repo=repo,
+            root_path=root_path,
+            conventions=conventions,
+            ctx=ctx,
+            stage_metrics=stage_metrics,
+            plugins_loaded=plugins_loaded,
+            started_at=started_at,
+            total_ms=total_ms,
+            contract_error=contract_error,
+            replay_cache_info=replay_cache_info,
         ),
+        dependencies=build_orchestrator_finalization_dependencies(orchestrator=orchestrator),
         apply_contract_error_to_payload_fn=_apply_contract_error_to_payload,
         validate_context_plan_fn=validate_context_plan,
     )
@@ -190,13 +197,13 @@ def run_pre_source_plan_stages(
     return cast(
         tuple[list[StageMetric], StageContractError | None],
         execute_pre_source_plan_stages(
-        orchestrator=orchestrator,
-        repo=repo,
-        ctx=ctx,
-        registry=registry,
-        hook_bus=hook_bus,
-        descriptor=descriptor,
-        run_stage_sequence_fn=_run_stage_sequence,
+            orchestrator=orchestrator,
+            repo=repo,
+            ctx=ctx,
+            registry=registry,
+            hook_bus=hook_bus,
+            descriptor=descriptor,
+            run_stage_sequence_fn=_run_stage_sequence,
         ),
     )
 
@@ -219,22 +226,22 @@ def run_source_plan_stage_with_replay(
     return cast(
         tuple[StageContractError | None, dict[str, Any]],
         execute_source_plan_stage_with_replay(
-        orchestrator=orchestrator,
-        query=query,
-        repo=repo,
-        root_path=root_path,
-        temporal_input=temporal_input,
-        plugins_loaded=plugins_loaded,
-        ctx=ctx,
-        registry=registry,
-        hook_bus=hook_bus,
-        stage_metrics=stage_metrics,
-        contract_error=contract_error,
-        descriptor=descriptor,
-        prepare_source_plan_replay_fn=prepare_source_plan_replay,
-        finalize_source_plan_replay_fn=finalize_source_plan_replay,
-        build_stage_tags_fn=build_stage_tags,
-        run_stage_sequence_fn=_run_stage_sequence,
+            orchestrator=orchestrator,
+            query=query,
+            repo=repo,
+            root_path=root_path,
+            temporal_input=temporal_input,
+            plugins_loaded=plugins_loaded,
+            ctx=ctx,
+            registry=registry,
+            hook_bus=hook_bus,
+            stage_metrics=stage_metrics,
+            contract_error=contract_error,
+            descriptor=descriptor,
+            prepare_source_plan_replay_fn=prepare_source_plan_replay,
+            finalize_source_plan_replay_fn=finalize_source_plan_replay,
+            build_stage_tags_fn=build_stage_tags,
+            run_stage_sequence_fn=_run_stage_sequence,
         ),
     )
 
@@ -252,13 +259,13 @@ def prepare_source_plan_replay(
     return cast(
         OrchestratorSourcePlanReplayResult,
         execute_prepare_source_plan_replay(
-        orchestrator=orchestrator,
-        query=query,
-        repo=repo,
-        root_path=root_path,
-        temporal_input=temporal_input,
-        plugins_loaded=plugins_loaded,
-        ctx=ctx,
+            orchestrator=orchestrator,
+            query=query,
+            repo=repo,
+            root_path=root_path,
+            temporal_input=temporal_input,
+            plugins_loaded=plugins_loaded,
+            ctx=ctx,
         ),
     )
 
@@ -275,12 +282,12 @@ def finalize_source_plan_replay(
     return cast(
         dict[str, Any],
         execute_finalize_source_plan_replay(
-        orchestrator=orchestrator,
-        query=query,
-        repo=repo,
-        source_plan_stage=source_plan_stage,
-        contract_error=contract_error,
-        replay_result=replay_result,
+            orchestrator=orchestrator,
+            query=query,
+            repo=repo,
+            source_plan_stage=source_plan_stage,
+            contract_error=contract_error,
+            replay_result=replay_result,
         ),
     )
 
@@ -325,16 +332,16 @@ def run_post_source_plan_agent_loop(
     return cast(
         OrchestratorAgentLoopResult,
         execute_post_source_plan_agent_loop(
-        orchestrator=orchestrator,
-        query=query,
-        repo=repo,
-        ctx=ctx,
-        registry=registry,
-        hook_bus=hook_bus,
-        stage_metrics=stage_metrics,
-        controller_cls=BoundedLoopController,
-        get_stage_state_fn=_get_stage_state,
-        resolve_agent_loop_rerun_stages_fn=_resolve_agent_loop_rerun_stages,
+            orchestrator=orchestrator,
+            query=query,
+            repo=repo,
+            ctx=ctx,
+            registry=registry,
+            hook_bus=hook_bus,
+            stage_metrics=stage_metrics,
+            controller_cls=BoundedLoopController,
+            get_stage_state_fn=_get_stage_state,
+            resolve_agent_loop_rerun_stages_fn=_resolve_agent_loop_rerun_stages,
         ),
     )
 
@@ -347,9 +354,7 @@ _apply_contract_error_to_payload = _RUNTIME_SUPPORT_COMPAT.apply_contract_error_
 def _resolve_agent_loop_rerun_stages(*, action_type: str) -> list[str]:
     return cast(
         list[str],
-        _RUNTIME_SUPPORT_COMPAT.resolve_agent_loop_rerun_stages(
-            action_type=action_type
-        ),
+        _RUNTIME_SUPPORT_COMPAT.resolve_agent_loop_rerun_stages(action_type=action_type),
     )
 
 
@@ -360,9 +365,12 @@ __all__ = [
     "SOURCE_PLAN_LIFECYCLE",
     "OrchestratorAgentLoopResult",
     "OrchestratorFinalizationDependencies",
+    "OrchestratorFinalizationRequest",
     "OrchestratorFinalizationResult",
     "OrchestratorLifecycleDescriptor",
+    "OrchestratorLifecycleRequest",
     "OrchestratorLifecycleResult",
+    "OrchestratorPreparationRequest",
     "OrchestratorPreparationResult",
     "OrchestratorSourcePlanReplayResult",
     "build_orchestrator_finalization_dependencies",

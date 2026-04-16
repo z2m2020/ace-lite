@@ -82,6 +82,18 @@ lane from the same tree:
 Review `artifacts/benchmark/validation_rich/latest/results.json` and the paired
 report output to confirm `task_success_rate`, `precision_at_k`, `noise_rate`,
 and `validation_test_count` stay non-regressed on that validation-specific lane.
+If the release also changes `context_refine` review semantics or how
+`source_plan` consumes `candidate_review`, collect the dedicated context-refine
+lane as well:
+
+```powershell
+python scripts/run_context_refine_stability.py --root . --summary artifacts/benchmark/context_refine/latest/summary.json --output artifacts/benchmark/context_refine/latest/context_refine_stability.json --runs 1
+```
+
+Review `artifacts/benchmark/context_refine/latest/context_refine_stability.json`
+and confirm `present_case_rate`, `watch_case_rate`, `thin_context_case_rate`,
+and `need_more_read_count_mean` remain within the expected range for the same
+release evidence set.
 If the release changes chunk selection, chunk semantic rerank, or contextual
 chunking behavior, also review the same summary/report pair for top-level
 `retrieval_context_observability_summary` and

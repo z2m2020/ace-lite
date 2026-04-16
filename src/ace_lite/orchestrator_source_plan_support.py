@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -12,6 +13,8 @@ class OrchestratorSourcePlanRuntime:
     chunk_token_budget: int
     chunk_disclosure: str
     policy_version: str
+    handoff_artifact_dir: str
+    handoff_notes_path: str
 
 
 def build_orchestrator_source_plan_runtime(
@@ -28,6 +31,10 @@ def build_orchestrator_source_plan_runtime(
         chunk_token_budget=int(chunking.token_budget),
         chunk_disclosure=str(chunking.disclosure),
         policy_version=str(retrieval.policy_version),
+        handoff_artifact_dir=str(Path("artifacts") / "handoffs" / "latest"),
+        handoff_notes_path=str(
+            config.memory.capture.notes_path or "context-map/memory_notes.jsonl"
+        ),
     )
 
 

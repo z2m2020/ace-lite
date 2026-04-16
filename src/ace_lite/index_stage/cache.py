@@ -7,7 +7,7 @@ import json
 import sqlite3
 from pathlib import Path
 from time import time
-from typing import Any
+from typing import Any, cast
 
 from ace_lite.repomap.cache_utils import selective_copy_payload
 from ace_lite.stage_artifact_cache import StageArtifactCache
@@ -16,10 +16,9 @@ _SCHEMA_VERSION = "index-candidate-cache-v1"
 _MAX_ENTRIES = 96
 _STAGE_NAME = "index_candidates"
 
-_INDEX_CANDIDATE_ARTIFACT_MEMORY: dict[
-    tuple[str, str, str], tuple[int, int, dict[str, Any]]
-] = {}
+_INDEX_CANDIDATE_ARTIFACT_MEMORY: dict[tuple[str, str, str], tuple[int, int, dict[str, Any]]] = {}
 _INDEX_CANDIDATE_CACHE_MEMORY: dict[tuple[str, str], tuple[int, int, dict[str, Any]]] = {}
+_INDEX_CANDIDATE_MANAGER_MEMORY: dict[str, StageArtifactCache] = {}
 
 
 def default_index_candidate_cache_path(*, root: str) -> Path:
@@ -78,9 +77,7 @@ def build_index_candidate_cache_key(
         "multi_channel_rrf_enabled": bool(multi_channel_rrf_enabled),
         "chunk_guard_mode": str(chunk_guard_mode or ""),
         "topological_shield_mode": str(topological_shield_mode or ""),
-        "settings_payload": (
-            settings_payload if isinstance(settings_payload, dict) else {}
-        ),
+        "settings_payload": (settings_payload if isinstance(settings_payload, dict) else {}),
         "content_version": str(content_version or ""),
     }
     text = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -130,9 +127,7 @@ def refresh_cached_index_candidate_payload(
             "chunk_count": int(index_chunk_cache_contract.get("chunk_count", 0) or 0),
         }
     materialized["parser"] = (
-        dict(index_data.get("parser", {}))
-        if isinstance(index_data.get("parser"), dict)
-        else {}
+        dict(index_data.get("parser", {})) if isinstance(index_data.get("parser"), dict) else {}
     )
     materialized["cache"] = dict(cache_info)
 
@@ -183,7 +178,7 @@ def load_cached_index_candidates_checked(
             continue
         legacy_payload = entry.get("payload")
         if isinstance(legacy_payload, dict):
-            return selective_copy_payload(legacy_payload)
+            return cast(dict[str, Any], selective_copy_payload(legacy_payload))
         if backend != "stage_artifact_cache":
             continue
 
@@ -204,7 +199,7 @@ def load_cached_index_candidates_checked(
             key=key,
             payload=materialized,
         )
-        return selective_copy_payload(materialized)
+        return cast(dict[str, Any], selective_copy_payload(materialized))
     return None
 
 
@@ -291,15 +286,21 @@ def store_cached_index_candidates(
 
 def _build_stage_artifact_cache(*, cache_path: Path) -> StageArtifactCache:
     anchor = Path(cache_path).resolve()
+    memory_key = str(anchor)
+    cached = _INDEX_CANDIDATE_MANAGER_MEMORY.get(memory_key)
+    if cached is not None:
+        return cached
     payload_root = anchor.parent / "artifacts"
     temp_root = payload_root / "tmp"
     db_path = anchor.parent / "stage-artifact-cache.db"
-    return StageArtifactCache(
+    manager = StageArtifactCache(
         repo_root=anchor.parent,
         db_path=db_path,
         payload_root=payload_root,
         temp_root=temp_root,
     )
+    _INDEX_CANDIDATE_MANAGER_MEMORY[memory_key] = manager
+    return manager
 
 
 def _build_query_hash(value: str) -> str:
@@ -323,9 +324,7 @@ def _normalize_cache_meta(meta: Any) -> dict[str, Any]:
     if not isinstance(meta, dict):
         return {}
     return {
-        str(key): value
-        for key, value in meta.items()
-        if isinstance(key, str) and str(key).strip()
+        str(key): value for key, value in meta.items() if isinstance(key, str) and str(key).strip()
     }
 
 
@@ -423,7 +422,7 @@ def _load_artifact_memory(
     if cached[0] != stat.st_mtime_ns or cached[1] != stat.st_size:
         _INDEX_CANDIDATE_ARTIFACT_MEMORY.pop(memory_key, None)
         return None
-    return selective_copy_payload(cached[2])
+    return cast(dict[str, Any], selective_copy_payload(cached[2]))
 
 
 def _store_artifact_memory(

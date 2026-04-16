@@ -1065,10 +1065,7 @@ def _build_latency_slo_summary_markdown(*, payload: dict[str, Any]) -> str:
     )
     for metric, _label, _description in SLO_HARD_BUDGET_FEATURES:
         lines.append(
-            "| {metric} | {value:.2f} |".format(
-                metric=metric,
-                value=float(budget_limits.get(metric, 0.0) or 0.0),
-            )
+            f"| {metric} | {float(budget_limits.get(metric, 0.0) or 0.0):.2f} |"
         )
 
     lines.extend(
@@ -1205,10 +1202,7 @@ def _build_latency_slo_summary_markdown(*, payload: dict[str, Any]) -> str:
         )
         for metric, _label, _description in SLO_HARD_BUDGET_FEATURES:
             lines.append(
-                "| {metric} | {value:.2f} |".format(
-                    metric=metric,
-                    value=float(bucket_limits.get(metric, 0.0) or 0.0),
-                )
+                f"| {metric} | {float(bucket_limits.get(metric, 0.0) or 0.0):.2f} |"
             )
         for metric, _label, _description in SLO_DYNAMIC_DOWNGRADE_FEATURES:
             if metric == "slo_downgrade_case_rate":

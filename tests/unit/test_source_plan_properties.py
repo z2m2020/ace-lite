@@ -246,9 +246,7 @@ def test_run_source_plan_emits_patch_artifact_candidates() -> None:
                 "hunk_count": 1,
             }
         ],
-        rollback_anchors=[
-            {"path": "src/app.py", "strategy": "git_restore", "anchor": "HEAD"}
-        ],
+        rollback_anchors=[{"path": "src/app.py", "strategy": "git_restore", "anchor": "HEAD"}],
         patch_text="\n".join(
             [
                 "diff --git a/src/app.py b/src/app.py",
@@ -271,9 +269,7 @@ def test_run_source_plan_emits_patch_artifact_candidates() -> None:
                 "hunk_count": 1,
             }
         ],
-        rollback_anchors=[
-            {"path": "src/worker.py", "strategy": "git_restore", "anchor": "HEAD"}
-        ],
+        rollback_anchors=[{"path": "src/worker.py", "strategy": "git_restore", "anchor": "HEAD"}],
         patch_text="\n".join(
             [
                 "diff --git a/src/worker.py b/src/worker.py",
@@ -584,10 +580,7 @@ def test_run_source_plan_preserves_mixed_chunk_disclosure_contracts() -> None:
     ]
     assert result["candidate_chunks"][0]["skeleton"]["mode"] == "skeleton_light"
     assert result["candidate_chunks"][1]["disclosure_requested"] == "skeleton_light"
-    assert (
-        result["candidate_chunks"][1]["disclosure_fallback_reason"]
-        == "unsupported_language"
-    )
+    assert result["candidate_chunks"][1]["disclosure_fallback_reason"] == "unsupported_language"
     assert "skeleton" not in result["candidate_chunks"][1]
     assert result["chunk_contract"] == {
         "schema_version": CHUNK_SKELETON_SCHEMA_VERSION,
@@ -599,9 +592,10 @@ def test_run_source_plan_preserves_mixed_chunk_disclosure_contracts() -> None:
         "skeleton_modes": ["skeleton_light"],
         "skeleton_schema_versions": [CHUNK_SKELETON_SCHEMA_VERSION],
     }
-    assert [
-        item["chunk_ref"]["skeleton_available"] for item in result["chunk_steps"]
-    ] == [True, False]
+    assert [item["chunk_ref"]["skeleton_available"] for item in result["chunk_steps"]] == [
+        True,
+        False,
+    ]
 
 
 def test_run_source_plan_does_not_leak_internal_chunk_sidecars() -> None:
@@ -657,9 +651,7 @@ def test_run_source_plan_does_not_leak_internal_chunk_sidecars() -> None:
     assert "_robust_signature_lite" not in result["chunk_steps"][0]["chunk_ref"]
     assert "_topological_shield" not in result["chunk_steps"][0]["chunk_ref"]
 
-    source_plan_step = next(
-        item for item in result["steps"] if item.get("stage") == "source_plan"
-    )
+    source_plan_step = next(item for item in result["steps"] if item.get("stage") == "source_plan")
     assert "_retrieval_context" not in source_plan_step["candidate_chunks"][0]
     assert "_robust_signature_lite" not in source_plan_step["candidate_chunks"][0]
     assert "_topological_shield" not in source_plan_step["candidate_chunks"][0]
@@ -1612,12 +1604,8 @@ def test_run_source_plan_emits_machine_readable_grounding_roles() -> None:
     )
     assert chunk_step_ref["evidence"]["role"] == "hint_only"
 
-    source_plan_step = next(
-        item for item in result["steps"] if item.get("stage") == "source_plan"
-    )
-    step_roles = [
-        item["evidence"]["role"] for item in source_plan_step["candidate_chunks"][:3]
-    ]
+    source_plan_step = next(item for item in result["steps"] if item.get("stage") == "source_plan")
+    step_roles = [item["evidence"]["role"] for item in source_plan_step["candidate_chunks"][:3]]
     assert step_roles == ["direct", "neighbor_context", "hint_only"]
 
     assert result["evidence_summary"] == {

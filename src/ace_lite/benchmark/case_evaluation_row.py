@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 from ace_lite.benchmark.case_contracts import derive_benchmark_case_dev_feedback
@@ -171,6 +171,11 @@ def build_case_evaluation_row(
     skills_hydration_latency_ms: float,
     skills_metadata_only_routing: bool,
     skills_precomputed_route: bool,
+    skills_manifest_metadata_only_selected_count: int,
+    skills_manifest_body_scan_selected_count: int,
+    skills_selected_matched_count_mean: float,
+    skills_selected_signal_count_mean: float,
+    skills_selected_priority_mean: float,
     candidate_rows_materialized_count: int,
     candidate_chunks_materialized_count: int,
     source_plan_candidate_chunks_materialized_count: int,
@@ -203,9 +208,12 @@ def build_case_evaluation_row(
     agent_loop_stop_reason: str,
     agent_loop_replay_safe: bool,
     agent_loop_last_policy_id: str,
+    agent_loop_last_action_reason: str = "",
     agent_loop_request_more_context_count: int,
     agent_loop_request_source_plan_retry_count: int,
     agent_loop_request_validation_retry_count: int,
+    agent_loop_validation_findings_refine_applied: bool = False,
+    agent_loop_validation_findings_refine_focus_path_count: int = 0,
     source_plan_validation_feedback_present: bool,
     source_plan_validation_feedback_status: str,
     source_plan_validation_feedback_issue_count: int,
@@ -357,9 +365,7 @@ def build_case_evaluation_row(
     issue_report_raw = case.get("issue_report")
     issue_report = issue_report_raw if isinstance(issue_report_raw, dict) else {}
     issue_report_issue_id = str(issue_report.get("issue_id") or "").strip()
-    issue_report_plan_payload_ref = str(
-        issue_report.get("plan_payload_ref") or ""
-    ).strip()
+    issue_report_plan_payload_ref = str(issue_report.get("plan_payload_ref") or "").strip()
     issue_report_status = str(issue_report.get("status") or "").strip()
     issue_report_occurred_at = _normalize_timestamp(issue_report.get("occurred_at"))
     issue_report_resolved_at = _normalize_timestamp(issue_report.get("resolved_at"))
@@ -464,16 +470,10 @@ def build_case_evaluation_row(
         "contextual_sidecar_reference_hint_coverage_ratio": float(
             contextual_sidecar_reference_hint_coverage_ratio
         ),
-        "retrieval_context_pool_chunk_count": float(
-            retrieval_context_pool_chunk_count
-        ),
-        "retrieval_context_pool_coverage_ratio": (
-            retrieval_context_pool_coverage_ratio
-        ),
+        "retrieval_context_pool_chunk_count": float(retrieval_context_pool_chunk_count),
+        "retrieval_context_pool_coverage_ratio": (retrieval_context_pool_coverage_ratio),
         "chunk_contract_fallback_count": float(chunk_contract_fallback_count),
-        "chunk_contract_skeleton_chunk_count": float(
-            chunk_contract_skeleton_chunk_count
-        ),
+        "chunk_contract_skeleton_chunk_count": float(chunk_contract_skeleton_chunk_count),
         "chunk_contract_fallback_ratio": chunk_contract_fallback_ratio,
         "chunk_contract_skeleton_ratio": chunk_contract_skeleton_ratio,
         "chunk_cache_contract_present": 1.0 if chunk_cache_contract_present else 0.0,
@@ -485,9 +485,7 @@ def build_case_evaluation_row(
         ),
         "chunk_cache_contract_file_count": float(chunk_cache_contract_file_count),
         "chunk_cache_contract_chunk_count": float(chunk_cache_contract_chunk_count),
-        "unsupported_language_fallback_count": float(
-            unsupported_language_fallback_count
-        ),
+        "unsupported_language_fallback_count": float(unsupported_language_fallback_count),
         "unsupported_language_fallback_ratio": unsupported_language_fallback_ratio,
         "chunk_cache_contract": {
             "present": bool(chunk_cache_contract_present),
@@ -524,40 +522,22 @@ def build_case_evaluation_row(
         "graph_closure_total": float(graph_closure_total),
         "topological_shield_enabled": 1.0 if topological_shield_enabled else 0.0,
         "topological_shield_mode": str(topological_shield_mode),
-        "topological_shield_report_only": (
-            1.0 if topological_shield_report_only else 0.0
-        ),
-        "topological_shield_max_attenuation": float(
-            topological_shield_max_attenuation
-        ),
+        "topological_shield_report_only": (1.0 if topological_shield_report_only else 0.0),
+        "topological_shield_max_attenuation": float(topological_shield_max_attenuation),
         "topological_shield_shared_parent_attenuation": float(
             topological_shield_shared_parent_attenuation
         ),
-        "topological_shield_adjacency_attenuation": float(
-            topological_shield_adjacency_attenuation
-        ),
+        "topological_shield_adjacency_attenuation": float(topological_shield_adjacency_attenuation),
         "topological_shield_attenuated_chunk_count": float(
             topological_shield_attenuated_chunk_count
         ),
-        "topological_shield_coverage_ratio": float(
-            topological_shield_coverage_ratio
-        ),
-        "topological_shield_attenuation_total": float(
-            topological_shield_attenuation_total
-        ),
-        "topological_shield_attenuation_per_chunk": (
-            topological_shield_attenuation_per_chunk
-        ),
-        "graph_source_provider_loaded": (
-            1.0 if graph_source_provider_loaded else 0.0
-        ),
-        "graph_source_projection_fallback": (
-            1.0 if graph_source_projection_fallback else 0.0
-        ),
+        "topological_shield_coverage_ratio": float(topological_shield_coverage_ratio),
+        "topological_shield_attenuation_total": float(topological_shield_attenuation_total),
+        "topological_shield_attenuation_per_chunk": (topological_shield_attenuation_per_chunk),
+        "graph_source_provider_loaded": (1.0 if graph_source_provider_loaded else 0.0),
+        "graph_source_projection_fallback": (1.0 if graph_source_projection_fallback else 0.0),
         "graph_source_edge_count": float(graph_source_edge_count),
-        "graph_source_inbound_signal_chunk_count": float(
-            graph_source_inbound_signal_chunk_count
-        ),
+        "graph_source_inbound_signal_chunk_count": float(graph_source_inbound_signal_chunk_count),
         "graph_source_inbound_signal_coverage_ratio": float(
             graph_source_inbound_signal_coverage_ratio
         ),
@@ -567,30 +547,29 @@ def build_case_evaluation_row(
         "graph_source_centrality_signal_coverage_ratio": float(
             graph_source_centrality_signal_coverage_ratio
         ),
-        "graph_source_pagerank_signal_chunk_count": float(
-            graph_source_pagerank_signal_chunk_count
-        ),
+        "graph_source_pagerank_signal_chunk_count": float(graph_source_pagerank_signal_chunk_count),
         "graph_source_pagerank_signal_coverage_ratio": float(
             graph_source_pagerank_signal_coverage_ratio
         ),
         "skills_selected_count": skills_selected_count,
         "skills_token_budget": skills_token_budget,
         "skills_token_budget_used": skills_token_budget_used,
-        "skills_token_budget_utilization_ratio": (
-            skills_token_budget_utilization_ratio
-        ),
+        "skills_token_budget_utilization_ratio": (skills_token_budget_utilization_ratio),
         "skills_budget_exhausted": 1.0 if skills_budget_exhausted else 0.0,
         "skills_skipped_for_budget_count": skills_skipped_for_budget_count,
         "skills_route_latency_ms": skills_route_latency_ms,
         "skills_hydration_latency_ms": skills_hydration_latency_ms,
-        "skills_metadata_only_routing": (
-            1.0 if skills_metadata_only_routing else 0.0
-        ),
+        "skills_metadata_only_routing": (1.0 if skills_metadata_only_routing else 0.0),
         "skills_precomputed_route": 1.0 if skills_precomputed_route else 0.0,
-        "candidate_rows_materialized_count": float(candidate_rows_materialized_count),
-        "candidate_chunks_materialized_count": float(
-            candidate_chunks_materialized_count
+        "skills_manifest_metadata_only_selected_count": float(
+            skills_manifest_metadata_only_selected_count
         ),
+        "skills_manifest_body_scan_selected_count": float(skills_manifest_body_scan_selected_count),
+        "skills_selected_matched_count_mean": float(skills_selected_matched_count_mean),
+        "skills_selected_signal_count_mean": float(skills_selected_signal_count_mean),
+        "skills_selected_priority_mean": float(skills_selected_priority_mean),
+        "candidate_rows_materialized_count": float(candidate_rows_materialized_count),
+        "candidate_chunks_materialized_count": float(candidate_chunks_materialized_count),
         "source_plan_candidate_chunks_materialized_count": float(
             source_plan_candidate_chunks_materialized_count
         ),
@@ -600,9 +579,7 @@ def build_case_evaluation_row(
         "workload_taxonomy": workload_taxonomy,
         "plan_replay_cache_enabled": 1.0 if plan_replay_cache_enabled else 0.0,
         "plan_replay_cache_hit": 1.0 if plan_replay_cache_hit else 0.0,
-        "plan_replay_cache_stale_hit_safe": (
-            1.0 if plan_replay_cache_stale_hit_safe else 0.0
-        ),
+        "plan_replay_cache_stale_hit_safe": (1.0 if plan_replay_cache_stale_hit_safe else 0.0),
         "chunk_stage_miss_applicable": 1.0 if chunk_stage_miss["applicable"] else 0.0,
         "chunk_stage_miss_classified": 1.0 if chunk_stage_miss["label"] else 0.0,
         "chunk_stage_miss": str(chunk_stage_miss["label"]),
@@ -626,16 +603,10 @@ def build_case_evaluation_row(
         "validation_branch_patch_artifact_present": (
             1.0 if validation_branch_patch_artifact_present else 0.0
         ),
-        "validation_branch_archive_present": (
-            1.0 if validation_branch_archive_present else 0.0
-        ),
+        "validation_branch_archive_present": (1.0 if validation_branch_archive_present else 0.0),
         "validation_branch_parallel": 1.0 if validation_branch_parallel else 0.0,
-        "validation_branch_winner_passed": (
-            1.0 if validation_branch_winner_passed else 0.0
-        ),
-        "validation_branch_winner_regressed": (
-            1.0 if validation_branch_winner_regressed else 0.0
-        ),
+        "validation_branch_winner_passed": (1.0 if validation_branch_winner_passed else 0.0),
+        "validation_branch_winner_regressed": (1.0 if validation_branch_winner_regressed else 0.0),
         "validation_branch_winner_score": float(validation_branch_winner_score),
         "validation_branch_winner_after_issue_count": float(
             validation_branch_winner_after_issue_count
@@ -648,14 +619,19 @@ def build_case_evaluation_row(
         "agent_loop_stop_reason": str(agent_loop_stop_reason or ""),
         "agent_loop_replay_safe": 1.0 if agent_loop_replay_safe else 0.0,
         "agent_loop_last_policy_id": str(agent_loop_last_policy_id or ""),
-        "agent_loop_request_more_context_count": float(
-            agent_loop_request_more_context_count
-        ),
+        "agent_loop_last_action_reason": str(agent_loop_last_action_reason or ""),
+        "agent_loop_request_more_context_count": float(agent_loop_request_more_context_count),
         "agent_loop_request_source_plan_retry_count": float(
             agent_loop_request_source_plan_retry_count
         ),
         "agent_loop_request_validation_retry_count": float(
             agent_loop_request_validation_retry_count
+        ),
+        "agent_loop_validation_findings_refine_applied": (
+            1.0 if agent_loop_validation_findings_refine_applied else 0.0
+        ),
+        "agent_loop_validation_findings_refine_focus_path_count": float(
+            agent_loop_validation_findings_refine_focus_path_count
         ),
         "validation_branch": {
             "applicable": bool(validation_branch_case),
@@ -668,9 +644,7 @@ def build_case_evaluation_row(
             "winner_passed": bool(validation_branch_winner_passed),
             "winner_regressed": bool(validation_branch_winner_regressed),
             "winner_score": float(validation_branch_winner_score),
-            "winner_after_issue_count": int(
-                validation_branch_winner_after_issue_count
-            ),
+            "winner_after_issue_count": int(validation_branch_winner_after_issue_count),
         },
         "agent_loop_control_plane": {
             "observed": bool(agent_loop_observed),
@@ -681,20 +655,21 @@ def build_case_evaluation_row(
             "stop_reason": str(agent_loop_stop_reason or ""),
             "replay_safe": bool(agent_loop_replay_safe),
             "last_policy_id": str(agent_loop_last_policy_id or ""),
+            "last_action_reason": str(agent_loop_last_action_reason or ""),
             "request_more_context_count": int(agent_loop_request_more_context_count),
-            "request_source_plan_retry_count": int(
-                agent_loop_request_source_plan_retry_count
+            "request_source_plan_retry_count": int(agent_loop_request_source_plan_retry_count),
+            "request_validation_retry_count": int(agent_loop_request_validation_retry_count),
+            "validation_findings_refine_applied": bool(
+                agent_loop_validation_findings_refine_applied
             ),
-            "request_validation_retry_count": int(
-                agent_loop_request_validation_retry_count
+            "validation_findings_refine_focus_path_count": int(
+                agent_loop_validation_findings_refine_focus_path_count
             ),
         },
         "source_plan_validation_feedback_present": (
             1.0 if source_plan_validation_feedback_present else 0.0
         ),
-        "source_plan_validation_feedback_status": str(
-            source_plan_validation_feedback_status or ""
-        ),
+        "source_plan_validation_feedback_status": str(source_plan_validation_feedback_status or ""),
         "source_plan_validation_feedback_issue_count": float(
             source_plan_validation_feedback_issue_count
         ),
@@ -716,9 +691,7 @@ def build_case_evaluation_row(
         ),
         "source_plan_validation_feedback_probe_failed": (
             1.0
-            if str(source_plan_validation_feedback_probe_status or "")
-            .strip()
-            .lower()
+            if str(source_plan_validation_feedback_probe_status or "").strip().lower()
             in {"failed", "degraded"}
             or int(source_plan_validation_feedback_probe_issue_count or 0) > 0
             else 0.0
@@ -730,13 +703,9 @@ def build_case_evaluation_row(
             source_plan_validation_feedback_executed_test_count
         ),
         "source_plan_failure_signal_origin": str(source_plan_failure_signal_origin or ""),
-        "source_plan_failure_signal_present": (
-            1.0 if source_plan_failure_signal_present else 0.0
-        ),
+        "source_plan_failure_signal_present": (1.0 if source_plan_failure_signal_present else 0.0),
         "source_plan_failure_signal_status": str(source_plan_failure_signal_status or ""),
-        "source_plan_failure_signal_issue_count": float(
-            source_plan_failure_signal_issue_count
-        ),
+        "source_plan_failure_signal_issue_count": float(source_plan_failure_signal_issue_count),
         "source_plan_failure_signal_failed": (
             1.0 if source_plan_failure_signal_has_failure else 0.0
         ),
@@ -810,12 +779,8 @@ def build_case_evaluation_row(
         "source_plan_graph_closure_preferred_count": float(
             source_plan_graph_closure_preferred_count
         ),
-        "source_plan_granularity_preferred_count": float(
-            source_plan_granularity_preferred_count
-        ),
-        "source_plan_focused_file_promoted_count": float(
-            source_plan_focused_file_promoted_count
-        ),
+        "source_plan_granularity_preferred_count": float(source_plan_granularity_preferred_count),
+        "source_plan_focused_file_promoted_count": float(source_plan_focused_file_promoted_count),
         "source_plan_packed_path_count": float(source_plan_packed_path_count),
         "source_plan_chunk_retention_ratio": source_plan_chunk_retention_ratio,
         "source_plan_packed_path_ratio": source_plan_packed_path_ratio,
@@ -847,9 +812,7 @@ def build_case_evaluation_row(
                 if str(key).strip()
             },
             "attribution_preview": [
-                str(item).strip()
-                for item in ltm_attribution_preview
-                if str(item).strip()
+                str(item).strip() for item in ltm_attribution_preview if str(item).strip()
             ],
         },
         "feedback_surface": feedback_surface,
@@ -863,17 +826,11 @@ def build_case_evaluation_row(
         "issue_report_resolution_note": issue_report_resolution_note,
         "issue_report_time_to_fix_hours": float(issue_report_time_to_fix_hours),
         "dev_feedback_issue_count": float(dev_feedback_issue_count),
-        "dev_feedback_linked_fix_issue_count": float(
-            dev_feedback_linked_fix_issue_count
-        ),
-        "dev_feedback_resolved_issue_count": float(
-            dev_feedback_resolved_issue_count
-        ),
+        "dev_feedback_linked_fix_issue_count": float(dev_feedback_linked_fix_issue_count),
+        "dev_feedback_resolved_issue_count": float(dev_feedback_resolved_issue_count),
         "dev_feedback_created_at": dev_feedback_created_at,
         "dev_feedback_resolved_at": dev_feedback_resolved_at,
-        "dev_feedback_issue_time_to_fix_hours": float(
-            dev_feedback_issue_time_to_fix_hours
-        ),
+        "dev_feedback_issue_time_to_fix_hours": float(dev_feedback_issue_time_to_fix_hours),
         "dev_issue_to_fix_rate": (
             float(dev_feedback_linked_fix_issue_count) / float(dev_feedback_issue_count)
             if dev_feedback_issue_count > 0
@@ -888,20 +845,13 @@ def build_case_evaluation_row(
             "issue_report_resolved_at": issue_report_resolved_at,
             "issue_report_time_to_fix_hours": float(issue_report_time_to_fix_hours),
             "dev_feedback_issue_count": int(dev_feedback_issue_count),
-            "dev_feedback_linked_fix_issue_count": int(
-                dev_feedback_linked_fix_issue_count
-            ),
-            "dev_feedback_resolved_issue_count": int(
-                dev_feedback_resolved_issue_count
-            ),
+            "dev_feedback_linked_fix_issue_count": int(dev_feedback_linked_fix_issue_count),
+            "dev_feedback_resolved_issue_count": int(dev_feedback_resolved_issue_count),
             "dev_feedback_created_at": dev_feedback_created_at,
             "dev_feedback_resolved_at": dev_feedback_resolved_at,
-            "dev_feedback_issue_time_to_fix_hours": float(
-                dev_feedback_issue_time_to_fix_hours
-            ),
+            "dev_feedback_issue_time_to_fix_hours": float(dev_feedback_issue_time_to_fix_hours),
             "dev_issue_to_fix_rate": (
-                float(dev_feedback_linked_fix_issue_count)
-                / float(dev_feedback_issue_count)
+                float(dev_feedback_linked_fix_issue_count) / float(dev_feedback_issue_count)
                 if dev_feedback_issue_count > 0
                 else 0.0
             ),
@@ -914,13 +864,9 @@ def build_case_evaluation_row(
         "feedback_boosted_paths": float(feedback_boosted_paths),
         "multi_channel_rrf_enabled": 1.0 if multi_channel_rrf_enabled else 0.0,
         "multi_channel_rrf_applied": 1.0 if multi_channel_rrf_applied else 0.0,
-        "multi_channel_rrf_granularity_count": float(
-            multi_channel_rrf_granularity_count
-        ),
+        "multi_channel_rrf_granularity_count": float(multi_channel_rrf_granularity_count),
         "multi_channel_rrf_pool_size": float(multi_channel_rrf_pool_size),
-        "multi_channel_rrf_granularity_pool_ratio": float(
-            multi_channel_rrf_granularity_pool_ratio
-        ),
+        "multi_channel_rrf_granularity_pool_ratio": float(multi_channel_rrf_granularity_pool_ratio),
         "graph_lookup_enabled": 1.0 if graph_lookup_enabled else 0.0,
         "graph_lookup_reason": str(graph_lookup_reason),
         "graph_lookup_guarded": 1.0 if graph_lookup_guarded else 0.0,
@@ -936,12 +882,8 @@ def build_case_evaluation_row(
         "graph_lookup_query_terms_count": float(graph_lookup_query_terms_count),
         "graph_lookup_normalization": str(graph_lookup_normalization),
         "graph_lookup_guard_max_candidates": float(graph_lookup_guard_max_candidates),
-        "graph_lookup_guard_min_query_terms": float(
-            graph_lookup_guard_min_query_terms
-        ),
-        "graph_lookup_guard_max_query_terms": float(
-            graph_lookup_guard_max_query_terms
-        ),
+        "graph_lookup_guard_min_query_terms": float(graph_lookup_guard_min_query_terms),
+        "graph_lookup_guard_max_query_terms": float(graph_lookup_guard_max_query_terms),
         "graph_lookup_query_hit_paths": float(graph_lookup_query_hit_paths),
         "graph_lookup_scip_signal_paths": float(graph_lookup_scip_signal_paths),
         "graph_lookup_xref_signal_paths": float(graph_lookup_xref_signal_paths),
@@ -961,12 +903,8 @@ def build_case_evaluation_row(
             "mode": str(topological_shield_mode),
             "report_only": bool(topological_shield_report_only),
             "max_attenuation": float(topological_shield_max_attenuation),
-            "shared_parent_attenuation": float(
-                topological_shield_shared_parent_attenuation
-            ),
-            "adjacency_attenuation": float(
-                topological_shield_adjacency_attenuation
-            ),
+            "shared_parent_attenuation": float(topological_shield_shared_parent_attenuation),
+            "adjacency_attenuation": float(topological_shield_adjacency_attenuation),
             "attenuated_chunk_count": int(topological_shield_attenuated_chunk_count),
             "coverage_ratio": float(topological_shield_coverage_ratio),
             "attenuation_total": float(topological_shield_attenuation_total),
@@ -977,21 +915,13 @@ def build_case_evaluation_row(
             "projection_fallback": bool(graph_source_projection_fallback),
             "edge_count": int(graph_source_edge_count),
             "inbound_signal_chunk_count": int(graph_source_inbound_signal_chunk_count),
-            "inbound_signal_coverage_ratio": float(
-                graph_source_inbound_signal_coverage_ratio
-            ),
-            "centrality_signal_chunk_count": int(
-                graph_source_centrality_signal_chunk_count
-            ),
+            "inbound_signal_coverage_ratio": float(graph_source_inbound_signal_coverage_ratio),
+            "centrality_signal_chunk_count": int(graph_source_centrality_signal_chunk_count),
             "centrality_signal_coverage_ratio": float(
                 graph_source_centrality_signal_coverage_ratio
             ),
-            "pagerank_signal_chunk_count": int(
-                graph_source_pagerank_signal_chunk_count
-            ),
-            "pagerank_signal_coverage_ratio": float(
-                graph_source_pagerank_signal_coverage_ratio
-            ),
+            "pagerank_signal_chunk_count": int(graph_source_pagerank_signal_chunk_count),
+            "pagerank_signal_coverage_ratio": float(graph_source_pagerank_signal_coverage_ratio),
         },
         "feedback_boost": {
             "enabled": bool(feedback_enabled),
@@ -1045,24 +975,14 @@ def build_case_evaluation_row(
         },
         "native_scip_loaded": 1.0 if native_scip_loaded else 0.0,
         "native_scip_document_count": float(native_scip_document_count),
-        "native_scip_definition_occurrence_count": float(
-            native_scip_definition_occurrence_count
-        ),
-        "native_scip_reference_occurrence_count": float(
-            native_scip_reference_occurrence_count
-        ),
-        "native_scip_symbol_definition_count": float(
-            native_scip_symbol_definition_count
-        ),
+        "native_scip_definition_occurrence_count": float(native_scip_definition_occurrence_count),
+        "native_scip_reference_occurrence_count": float(native_scip_reference_occurrence_count),
+        "native_scip_symbol_definition_count": float(native_scip_symbol_definition_count),
         "native_scip": {
             "loaded": bool(native_scip_loaded),
             "document_count": int(native_scip_document_count),
-            "definition_occurrence_count": int(
-                native_scip_definition_occurrence_count
-            ),
-            "reference_occurrence_count": int(
-                native_scip_reference_occurrence_count
-            ),
+            "definition_occurrence_count": int(native_scip_definition_occurrence_count),
+            "reference_occurrence_count": int(native_scip_reference_occurrence_count),
             "symbol_definition_count": int(native_scip_symbol_definition_count),
         },
         "policy_profile": policy_profile,
@@ -1075,9 +995,7 @@ def build_case_evaluation_row(
         "router_shadow_arm_id": router_shadow_arm_id,
         "router_shadow_source": router_shadow_source,
         "router_shadow_confidence": router_shadow_confidence,
-        "router_online_bandit_requested": (
-            1.0 if router_online_bandit_requested else 0.0
-        ),
+        "router_online_bandit_requested": (1.0 if router_online_bandit_requested else 0.0),
         "router_experiment_enabled": 1.0 if router_experiment_enabled else 0.0,
         "router_online_bandit_active": 1.0 if router_online_bandit_active else 0.0,
         "router_is_exploration": 1.0 if router_is_exploration else 0.0,
@@ -1091,9 +1009,7 @@ def build_case_evaluation_row(
         "embedding_enabled": 1.0 if embedding_enabled else 0.0,
         "embedding_runtime_provider": str(embedding_runtime_provider or ""),
         "embedding_strategy_mode": str(embedding_strategy_mode or ""),
-        "embedding_semantic_rerank_applied": (
-            1.0 if embedding_semantic_rerank_applied else 0.0
-        ),
+        "embedding_semantic_rerank_applied": (1.0 if embedding_semantic_rerank_applied else 0.0),
         "embedding_similarity_mean": embedding_similarity_mean,
         "embedding_similarity_max": embedding_similarity_max,
         "embedding_rerank_ratio": embedding_rerank_ratio,
@@ -1105,12 +1021,8 @@ def build_case_evaluation_row(
         "xref_time_budget_ms": xref_time_budget_ms,
         "parallel_docs_timed_out": 1.0 if parallel_docs_timed_out else 0.0,
         "parallel_worktree_timed_out": 1.0 if parallel_worktree_timed_out else 0.0,
-        "embedding_time_budget_exceeded": (
-            1.0 if embedding_time_budget_exceeded else 0.0
-        ),
-        "embedding_adaptive_budget_applied": (
-            1.0 if embedding_adaptive_budget_applied else 0.0
-        ),
+        "embedding_time_budget_exceeded": (1.0 if embedding_time_budget_exceeded else 0.0),
+        "embedding_adaptive_budget_applied": (1.0 if embedding_adaptive_budget_applied else 0.0),
         "chunk_semantic_time_budget_exceeded": (
             1.0 if chunk_semantic_time_budget_exceeded else 0.0
         ),
@@ -1121,12 +1033,8 @@ def build_case_evaluation_row(
         "chunk_guard_report_only": 1.0 if chunk_guard_report_only else 0.0,
         "chunk_guard_filtered_count": float(chunk_guard_filtered_count),
         "chunk_guard_filter_ratio": float(chunk_guard_filter_ratio),
-        "chunk_guard_pairwise_conflict_count": float(
-            chunk_guard_pairwise_conflict_count
-        ),
-        "chunk_guard_pairwise_conflict_density": (
-            chunk_guard_pairwise_conflict_density
-        ),
+        "chunk_guard_pairwise_conflict_count": float(chunk_guard_pairwise_conflict_count),
+        "chunk_guard_pairwise_conflict_density": (chunk_guard_pairwise_conflict_density),
         "chunk_guard_fallback": 1.0 if chunk_guard_fallback else 0.0,
         "chunk_guard_expectation_applicable": (
             1.0 if chunk_guard_expectation["applicable"] else 0.0

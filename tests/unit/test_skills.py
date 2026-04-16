@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import textwrap
 from pathlib import Path
@@ -208,9 +208,7 @@ def test_build_manifest_estimate_with_default_sections_avoids_full_section_extra
         skills_module,
         "_extract_sections",
         lambda markdown_body: (_ for _ in ()).throw(
-            AssertionError(
-                "should not call _extract_sections for default_sections estimate"
-            )
+            AssertionError("should not call _extract_sections for default_sections estimate")
         ),
     )
 
@@ -451,8 +449,7 @@ def test_lint_skill_manifest_flags_low_discriminative_routing_overlap() -> None:
         for item in issues
     )
     assert any(
-        item["field"] == "routing_metadata" and item["keyword"] == "review"
-        for item in issues
+        item["field"] == "routing_metadata" and item["keyword"] == "review" for item in issues
     )
 
 
@@ -478,8 +475,7 @@ def test_lint_skill_manifest_flags_missing_default_section_heading(tmp_path: Pat
     issues = lint_skill_manifest(manifest)
 
     assert any(
-        item["field"] == "default_sections" and item["keyword"] == "Missing"
-        for item in issues
+        item["field"] == "default_sections" and item["keyword"] == "Missing" for item in issues
     )
 
 
@@ -628,6 +624,10 @@ def test_run_skills_exposes_selected_token_estimates(
     assert payload["hydrated_skill_count"] == len(payload["selected"])
     assert payload["markdown_bytes_loaded"] > 0
     assert payload["selected"][0]["estimated_tokens"] > 0
+    assert payload["selected"][0]["matched_count"] >= 1
+    assert payload["selected"][0]["signal_count"] >= 1
+    assert payload["selected"][0]["priority"] >= 0
+    assert payload["selected"][0]["manifest_load_mode"] in {"metadata_only", "body_scan"}
     assert payload["selected_token_estimate_total"] >= payload["selected"][0]["estimated_tokens"]
 
 
@@ -661,7 +661,12 @@ def test_run_skills_can_expand_budget_candidate_pool_when_top_n_cannot_fit(
         {"name": "big-a", "path": "skills/big-a.md", "description": "big-a", "token_estimate": 9},
         {"name": "big-b", "path": "skills/big-b.md", "description": "big-b", "token_estimate": 8},
         {"name": "big-c", "path": "skills/big-c.md", "description": "big-c", "token_estimate": 7},
-        {"name": "small-fit", "path": "skills/small-fit.md", "description": "small-fit", "token_estimate": 2},
+        {
+            "name": "small-fit",
+            "path": "skills/small-fit.md",
+            "description": "small-fit",
+            "token_estimate": 2,
+        },
     ]
 
     def fake_select_skills(query_ctx, skill_manifest, top_n=3):
@@ -669,7 +674,9 @@ def test_run_skills_can_expand_budget_candidate_pool_when_top_n_cannot_fit(
         return [dict(item) for item in skill_manifest[:top_n]]
 
     monkeypatch.setattr(skills_stage, "select_skills", fake_select_skills)
-    monkeypatch.setattr(skills_stage, "load_sections", lambda path, headings: {"Workflow": f"{path}:{headings}"})
+    monkeypatch.setattr(
+        skills_stage, "load_sections", lambda path, headings: {"Workflow": f"{path}:{headings}"}
+    )
 
     ctx = StageContext(
         query="fix openmemory 405 issue",
@@ -704,7 +711,11 @@ def test_run_skills_reuses_token_estimate_cache_for_manifest_and_selected_fallba
     ]
     calls = 0
 
-    monkeypatch.setattr(skills_stage, "select_skills", lambda query_ctx, skill_manifest, top_n=3: [dict(skill_manifest[0])])
+    monkeypatch.setattr(
+        skills_stage,
+        "select_skills",
+        lambda query_ctx, skill_manifest, top_n=3: [dict(skill_manifest[0])],
+    )
     monkeypatch.setattr(skills_stage, "load_sections", lambda path, headings: {})
 
     def fake_estimate_tokens(text: str) -> int:
@@ -760,6 +771,23 @@ def test_run_skills_can_reuse_precomputed_route(
     )
     assert payload["selected"]
     assert payload["selected"][0]["name"] == routed["selected"][0]["name"]
+
+
+def test_run_skills_uses_tuned_default_token_budget_when_not_provided(
+    fake_skill_manifest: list[dict[str, Any]],
+) -> None:
+    ctx = StageContext(
+        query="fix openmemory 405 issue",
+        repo="demo",
+        root=".",
+        state={"index": {"module_hint": "infra.mcp"}},
+    )
+    payload = run_skills(
+        ctx=ctx,
+        skill_manifest=fake_skill_manifest,
+    )
+
+    assert payload["token_budget"] == 1400
 
 
 @pytest.mark.parametrize(
@@ -865,9 +893,9 @@ def test_cross_agent_skill_routing_prefers_expected_top1() -> None:
             }
             selected = select_skills(query_ctx, manifest, top_n=1)
             assert selected, f"no skill selected for query: {query}"
-            assert (
-                selected[0]["name"] == expected_name
-            ), f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
+            assert selected[0]["name"] == expected_name, (
+                f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
+            )
 
 
 def test_handoff_query_outranks_benchmark_when_intent_is_handoff() -> None:
@@ -923,9 +951,9 @@ def test_cross_project_borrowing_skill_routes_external_analysis_queries() -> Non
         }
         selected = select_skills(query_ctx, manifest, top_n=1)
         assert selected, f"no skill selected for query: {query}"
-        assert (
-            selected[0]["name"] == "cross-project-borrowing-and-adaptation"
-        ), f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
+        assert selected[0]["name"] == "cross-project-borrowing-and-adaptation", (
+            f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
+        )
 
 
 def test_module_hint_promotes_mem0_skill() -> None:
@@ -981,9 +1009,9 @@ def test_ace_dev_skill_routes_ace_lite_operations() -> None:
         }
         selected = select_skills(query_ctx, manifest, top_n=1)
         assert selected, f"no skill selected for query: {query}"
-        assert (
-            selected[0]["name"] == "ace-dev"
-        ), f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
+        assert selected[0]["name"] == "ace-dev", (
+            f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
+        )
 
 
 def test_primary_skill_text_is_clean_and_scoped() -> None:
@@ -1011,13 +1039,9 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "Prompt boundary contract check" in ace_dev_text
 
     manifest = _repo_skill_manifest()
-    assert "ace-dev-flac-music-android-kotlin" not in {
-        item["name"] for item in manifest
-    }
+    assert "ace-dev-flac-music-android-kotlin" not in {item["name"] for item in manifest}
 
-    mem0_text = (
-        repo_root / "skills" / "mem0-codex-playbook.md"
-    ).read_text(encoding="utf-8")
+    mem0_text = (repo_root / "skills" / "mem0-codex-playbook.md").read_text(encoding="utf-8")
     assert "bridge" in mem0_text.lower()
     assert "dimension mismatch" in mem0_text.lower()
     assert "memory lifecycle" in mem0_text.lower()
@@ -1025,9 +1049,9 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "Scenario Templates" in mem0_text
     assert "Noisy retrieval cleanup" in mem0_text
 
-    benchmark_text = (
-        repo_root / "skills" / "cross-agent-benchmark-tuning-loop.md"
-    ).read_text(encoding="utf-8")
+    benchmark_text = (repo_root / "skills" / "cross-agent-benchmark-tuning-loop.md").read_text(
+        encoding="utf-8"
+    )
     assert "adaptive_router_mode" in benchmark_text
     assert "trace_export_enabled" in benchmark_text
     assert "plan_replay_cache" in benchmark_text
@@ -1037,9 +1061,9 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "run_skill_validation.py" in benchmark_text
     assert "skill_validation_matrix.json" in benchmark_text
 
-    release_text = (
-        repo_root / "skills" / "cross-agent-release-readiness.md"
-    ).read_text(encoding="utf-8")
+    release_text = (repo_root / "skills" / "cross-agent-release-readiness.md").read_text(
+        encoding="utf-8"
+    )
     assert "junit_xml" in release_text
     assert "sbfl_metric" in release_text
     assert "trace_export_path" in release_text
@@ -1048,9 +1072,9 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "RC dry run" in release_text
     assert "skill_validation_matrix" in release_text
 
-    bugfix_text = (
-        repo_root / "skills" / "cross-agent-bugfix-and-regression.md"
-    ).read_text(encoding="utf-8")
+    bugfix_text = (repo_root / "skills" / "cross-agent-bugfix-and-regression.md").read_text(
+        encoding="utf-8"
+    )
     assert "--failed-test-report" in bugfix_text
     assert "--scip-provider" in bugfix_text
     assert "verify_version_install_sync()" in bugfix_text
@@ -1061,9 +1085,9 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "超时" in bugfix_text
     assert "回归" in bugfix_text
 
-    intake_text = (
-        repo_root / "skills" / "cross-agent-intake-and-scope.md"
-    ).read_text(encoding="utf-8")
+    intake_text = (repo_root / "skills" / "cross-agent-intake-and-scope.md").read_text(
+        encoding="utf-8"
+    )
     assert "Artifact Checklist" in intake_text
     assert "trace_export_path" in intake_text
     assert "skills_token_budget" in intake_text
@@ -1073,9 +1097,9 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "范围不一致" in intake_text
     assert "约束" in intake_text
 
-    handoff_text = (
-        repo_root / "skills" / "cross-agent-handoff-and-context-sync.md"
-    ).read_text(encoding="utf-8")
+    handoff_text = (repo_root / "skills" / "cross-agent-handoff-and-context-sync.md").read_text(
+        encoding="utf-8"
+    )
     assert "final_query" in handoff_text
     assert "replay_fingerprint" in handoff_text
     assert "metadata_only_routing" in handoff_text
@@ -1084,9 +1108,9 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "交接" in handoff_text
     assert "上下文同步" in handoff_text
 
-    refactor_text = (
-        repo_root / "skills" / "cross-agent-refactor-safeguards.md"
-    ).read_text(encoding="utf-8")
+    refactor_text = (repo_root / "skills" / "cross-agent-refactor-safeguards.md").read_text(
+        encoding="utf-8"
+    )
     assert "pipeline_order" in refactor_text
     assert "validation_result_v1" in refactor_text
     assert "agent_loop_summary_v1" in refactor_text
@@ -1097,18 +1121,21 @@ def test_primary_skill_text_is_clean_and_scoped() -> None:
     assert "重构" in refactor_text
     assert "去重" in refactor_text
 
-    mem0_iteration_text = (
-        repo_root / "skills" / "mem0-iteration-loop.md"
-    ).read_text(encoding="utf-8")
+    mem0_iteration_text = (repo_root / "skills" / "mem0-iteration-loop.md").read_text(
+        encoding="utf-8"
+    )
     assert "Artifact Checklist" in mem0_iteration_text
     assert "embedding model and dimension" in mem0_iteration_text
     assert "噪声" in mem0_iteration_text
     assert "检索质量" in mem0_iteration_text
 
-    borrowing_text = (
-        repo_root / "skills" / "cross-project-borrowing-and-adaptation.md"
-    ).read_text(encoding="utf-8")
-    assert "default_sections: [Workflow, Evidence Checklist, Borrowing Matrix, Borrowing Ledger, Output Contract]" in borrowing_text
+    borrowing_text = (repo_root / "skills" / "cross-project-borrowing-and-adaptation.md").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "default_sections: [Workflow, Evidence Checklist, Borrowing Matrix, Borrowing Ledger, Output Contract]"
+        in borrowing_text
+    )
     assert "Evidence Checklist" in borrowing_text
     assert "Borrowing Matrix" in borrowing_text
     assert "Borrowing Ledger" in borrowing_text
@@ -1178,9 +1205,9 @@ def test_cross_agent_benchmark_routes_feedback_queries() -> None:
         }
         selected = select_skills(query_ctx, manifest, top_n=1)
         assert selected, f"no skill selected for query: {query}"
-        assert (
-            selected[0]["name"] == "cross-agent-benchmark-tuning-loop"
-        ), f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
+        assert selected[0]["name"] == "cross-agent-benchmark-tuning-loop", (
+            f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
+        )
 
 
 def test_cross_agent_refactor_routes_runtime_contract_queries() -> None:
@@ -1199,9 +1226,9 @@ def test_cross_agent_refactor_routes_runtime_contract_queries() -> None:
         }
         selected = select_skills(query_ctx, manifest, top_n=1)
         assert selected, f"no skill selected for query: {query}"
-        assert (
-            selected[0]["name"] == "cross-agent-refactor-safeguards"
-        ), f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
+        assert selected[0]["name"] == "cross-agent-refactor-safeguards", (
+            f"unexpected top-1 skill for query: {query}; got {selected[0]['name']}"
+        )
 
 
 def test_cross_agent_release_routes_diagnostics_and_trace_queries() -> None:
@@ -1298,9 +1325,7 @@ def test_skill_routing_boundary_matrix_top1(query: str, expected_top1: str) -> N
         ),
     ],
 )
-def test_skill_routing_boundary_matrix_top2(
-    query: str, expected_order: list[str]
-) -> None:
+def test_skill_routing_boundary_matrix_top2(query: str, expected_order: list[str]) -> None:
     selected = _select_repo_skill_names(query, top_n=len(expected_order))
     assert selected[: len(expected_order)] == expected_order
 

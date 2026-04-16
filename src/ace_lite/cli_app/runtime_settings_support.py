@@ -18,6 +18,7 @@ from ace_lite.runtime_settings_store import (
     persist_runtime_settings_record,
     resolve_user_runtime_settings_last_known_good_path,
     resolve_user_runtime_settings_path,
+    runtime_settings_paths_collide,
 )
 
 
@@ -53,9 +54,7 @@ def evaluate_runtime_memory_state(
         warnings.append(
             "Memory providers are disabled (memory_primary=none, memory_secondary=none)."
         )
-        recommendations.extend(
-            memory_config_recommendations_fn(root=root, skills_dir=skills_dir)
-        )
+        recommendations.extend(memory_config_recommendations_fn(root=root, skills_dir=skills_dir))
     return {
         "primary": primary,
         "secondary": secondary,
@@ -142,6 +141,10 @@ def build_runtime_settings_governance_payload(bundle: dict[str, Any]) -> dict[st
     lkg_record = inspect_runtime_settings_record(lkg_path)
     current_valid_payload = load_valid_runtime_settings_record(current_path)
     lkg_valid_payload = load_valid_runtime_settings_record(lkg_path)
+    paths_collide = runtime_settings_paths_collide(
+        current_path=current_path,
+        last_known_good_path=lkg_path,
+    )
     current_fingerprint = str(current_record.get("fingerprint") or "").strip()
     lkg_fingerprint = str(lkg_record.get("fingerprint") or "").strip()
     persisted_record = (
@@ -149,8 +152,7 @@ def build_runtime_settings_governance_payload(bundle: dict[str, Any]) -> dict[st
     )
     persisted_metadata = (
         persisted_record.get("metadata", {})
-        if isinstance(persisted_record, dict)
-        and isinstance(persisted_record.get("metadata"), dict)
+        if isinstance(persisted_record, dict) and isinstance(persisted_record.get("metadata"), dict)
         else {}
     )
     persisted_fingerprint = (
@@ -158,11 +160,19 @@ def build_runtime_settings_governance_payload(bundle: dict[str, Any]) -> dict[st
         if isinstance(persisted_record, dict)
         else ""
     )
-    resolved_matches_current = bool(current_fingerprint) and current_fingerprint == resolved.fingerprint
-    resolved_matches_last_known_good = bool(lkg_fingerprint) and lkg_fingerprint == resolved.fingerprint
-    resolved_matches_persisted = bool(persisted_fingerprint) and persisted_fingerprint == resolved.fingerprint
+    resolved_matches_current = (
+        bool(current_fingerprint) and current_fingerprint == resolved.fingerprint
+    )
+    resolved_matches_last_known_good = (
+        bool(lkg_fingerprint) and lkg_fingerprint == resolved.fingerprint
+    )
+    resolved_matches_persisted = (
+        bool(persisted_fingerprint) and persisted_fingerprint == resolved.fingerprint
+    )
     governance_state = "unpersisted"
-    if resolved_matches_current and resolved_matches_last_known_good:
+    if paths_collide:
+        governance_state = "path_collision"
+    elif resolved_matches_current and resolved_matches_last_known_good:
         governance_state = "aligned"
     elif resolved_matches_current:
         governance_state = "current_only_aligned"
@@ -174,9 +184,17 @@ def build_runtime_settings_governance_payload(bundle: dict[str, Any]) -> dict[st
         governance_state = "current_invalid_using_last_known_good"
     elif current_record["exists"]:
         governance_state = "current_invalid"
+    config_consistency_state = "warning" if config_warnings else "clean"
+    last_known_good_update_allowed = (not paths_collide) and config_consistency_state == "clean"
+    if paths_collide:
+        last_known_good_update_reason = "path_collision"
+    elif config_consistency_state != "clean":
+        last_known_good_update_reason = "config_warning_blocked"
+    else:
+        last_known_good_update_reason = "allowed"
     return {
         "governance_state": governance_state,
-        "config_consistency_state": "warning" if config_warnings else "clean",
+        "config_consistency_state": config_consistency_state,
         "config_warning_count": len(config_warnings),
         "config_warning_codes": [item["code"] for item in config_warnings],
         "config_warnings": config_warnings,
@@ -194,9 +212,11 @@ def build_runtime_settings_governance_payload(bundle: dict[str, Any]) -> dict[st
         "resolved_matches_current": resolved_matches_current,
         "resolved_matches_last_known_good": resolved_matches_last_known_good,
         "resolved_matches_persisted": resolved_matches_persisted,
-        "persist_recommended": not (
-            resolved_matches_current and resolved_matches_last_known_good
-        ),
+        "persist_paths_collide": paths_collide,
+        "persist_recommended": (not paths_collide)
+        and not (resolved_matches_current and resolved_matches_last_known_good),
+        "last_known_good_update_allowed": last_known_good_update_allowed,
+        "last_known_good_update_reason": last_known_good_update_reason,
         "persisted_selected_profile": (
             str(persisted_metadata.get("selected_profile")).strip()
             if persisted_metadata.get("selected_profile") is not None
@@ -255,21 +275,34 @@ def collect_runtime_settings_persist_payload(
         provenance=resolved.provenance,
         metadata=resolved.metadata,
     )
+    persisted_bundle = dict(bundle)
+    governance_raw = bundle.get("governance")
+    governance: dict[str, Any] = governance_raw if isinstance(governance_raw, dict) else {}
+    effective_update_last_known_good = bool(update_last_known_good) and bool(
+        governance.get("last_known_good_update_allowed", False)
+    )
+    persisted_bundle["persisted_record"] = record
+    persisted_bundle["persisted_source"] = "current"
     persist_runtime_settings_record(
         current_path=bundle["resolved_current_path"],
         last_known_good_path=bundle["resolved_lkg_path"],
         payload=record,
-        update_last_known_good=update_last_known_good,
+        update_last_known_good=effective_update_last_known_good,
     )
-    persisted_bundle = dict(bundle)
-    persisted_bundle["persisted_record"] = record
-    persisted_bundle["persisted_source"] = "current"
-    persisted_bundle["governance"] = build_runtime_settings_governance_payload(
-        persisted_bundle
-    )
+    persisted_bundle["governance"] = build_runtime_settings_governance_payload(persisted_bundle)
     payload = build_runtime_settings_payload(persisted_bundle)
     payload["persisted_path"] = str(bundle["resolved_current_path"])
-    payload["last_known_good_updated"] = bool(update_last_known_good)
+    payload["last_known_good_update_requested"] = bool(update_last_known_good)
+    payload["last_known_good_updated"] = effective_update_last_known_good
+    payload["last_known_good_update_reason"] = (
+        "updated"
+        if effective_update_last_known_good
+        else (
+            str(governance.get("last_known_good_update_reason") or "blocked")
+            if update_last_known_good
+            else "not_requested"
+        )
+    )
     return {
         "ok": True,
         "event": "runtime_settings_persist",

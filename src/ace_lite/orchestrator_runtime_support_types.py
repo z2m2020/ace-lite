@@ -110,6 +110,44 @@ class OrchestratorPreparationResult:
     ctx: StageContext
 
 
+@dataclass(frozen=True, slots=True)
+class OrchestratorPreparationRequest:
+    query: str
+    repo: str
+    root: str
+    time_range: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    filters: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class OrchestratorLifecycleRequest:
+    query: str
+    repo: str
+    root_path: str
+    temporal_input: dict[str, Any]
+    plugins_loaded: list[str]
+    ctx: StageContext
+    registry: StageRegistry
+    hook_bus: HookBus
+
+
+@dataclass(frozen=True, slots=True)
+class OrchestratorFinalizationRequest:
+    query: str
+    repo: str
+    root_path: str
+    conventions: dict[str, Any]
+    ctx: StageContext
+    stage_metrics: list[StageMetric]
+    plugins_loaded: list[str]
+    started_at: datetime
+    total_ms: float
+    contract_error: StageContractError | None
+    replay_cache_info: dict[str, Any]
+
+
 @dataclass(slots=True)
 class OrchestratorAgentLoopResult:
     contract_error: StageContractError | None
@@ -153,9 +191,7 @@ ORCHESTRATOR_LIFECYCLE = (
     SOURCE_PLAN_LIFECYCLE,
     POST_SOURCE_PLAN_LIFECYCLE,
 )
-_ORCHESTRATOR_LIFECYCLE_MAP = {
-    descriptor.name: descriptor for descriptor in ORCHESTRATOR_LIFECYCLE
-}
+_ORCHESTRATOR_LIFECYCLE_MAP = {descriptor.name: descriptor for descriptor in ORCHESTRATOR_LIFECYCLE}
 
 
 def iter_lifecycle_descriptors() -> tuple[OrchestratorLifecycleDescriptor, ...]:
@@ -179,9 +215,12 @@ __all__ = [
     "FinalizationTraceExporter",
     "OrchestratorAgentLoopResult",
     "OrchestratorFinalizationDependencies",
+    "OrchestratorFinalizationRequest",
     "OrchestratorFinalizationResult",
     "OrchestratorLifecycleDescriptor",
+    "OrchestratorLifecycleRequest",
     "OrchestratorLifecycleResult",
+    "OrchestratorPreparationRequest",
     "OrchestratorPreparationResult",
     "OrchestratorSourcePlanReplayResult",
     "get_lifecycle_descriptor",

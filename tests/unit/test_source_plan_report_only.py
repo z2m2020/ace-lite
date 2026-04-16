@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from ace_lite.source_plan.report_only import (
+    append_handoff_payload_note,
     build_candidate_review,
     build_handoff_payload,
+    build_handoff_payload_note,
     build_history_hits,
     build_session_end_report,
     build_validation_findings,
+    render_handoff_payload_markdown,
+    write_handoff_payload_artifacts,
 )
 
 
@@ -40,9 +47,7 @@ def test_build_history_hits_emits_stable_summary() -> None:
     assert summary["enabled"] is True
     assert summary["hit_count"] == 1
     assert len(summary["hits"]) == 1
-    assert summary["hits"][0]["matched_paths"] == [
-        "src/ace_lite/pipeline/stages/source_plan.py"
-    ]
+    assert summary["hits"][0]["matched_paths"] == ["src/ace_lite/pipeline/stages/source_plan.py"]
 
 
 def test_build_candidate_review_and_session_end_report_capture_watch_items() -> None:
@@ -122,6 +127,7 @@ def test_build_validation_findings_tracks_warn_and_blocker_counts() -> None:
     assert findings["schema_version"] == "validation_findings_v1"
     assert findings["governance_mode"] == "advisory_report_only"
     assert findings["allowed_actions"] == ["request_more_context"]
+    assert findings["request_more_context_reason"] == "source_plan_validation_findings"
     assert findings["status"] == "failed"
     assert findings["warn_count"] >= 1
     assert findings["blocker_count"] >= 1
@@ -130,6 +136,7 @@ def test_build_validation_findings_tracks_warn_and_blocker_counts() -> None:
     assert findings["focus_paths"] == ["src/app.py", "src/build.py"]
     assert "invalid syntax" in findings["query_hint"]
     assert findings["needs_followup"] is True
+    assert findings["refine_hints"]
     assert findings["recommendations"]
 
 
@@ -158,3 +165,95 @@ def test_build_handoff_payload_dedupes_signal_lists() -> None:
     assert payload["verify"] == ["pytest tests/unit/test_a.py -q"]
     assert payload["focus_paths"] == ["src/a.py", "src/b.py"]
     assert payload["validation_status"] == "warn"
+
+
+def test_write_handoff_payload_artifacts_writes_json_and_markdown(tmp_path: Path) -> None:
+    payload = {
+        "schema_version": "handoff_payload_v1",
+        "goal": "stabilize report signals",
+        "next_tasks": ["run tests", "inspect diff"],
+        "focus_paths": ["src/a.py"],
+        "unresolved": ["issue one"],
+        "verify": ["pytest -q tests/unit/test_a.py"],
+        "risks": ["risk_a"],
+        "validation_status": "warn",
+    }
+
+    result = write_handoff_payload_artifacts(
+        payload,
+        "artifacts/handoffs/latest",
+        root=str(tmp_path),
+    )
+
+    json_path = tmp_path / "artifacts" / "handoffs" / "latest" / "handoff_payload.json"
+    markdown_path = tmp_path / "artifacts" / "handoffs" / "latest" / "handoff_payload.md"
+    assert result["ok"] is True
+    assert result["json_path"] == str(json_path.resolve())
+    assert result["markdown_path"] == str(markdown_path.resolve())
+    assert json.loads(json_path.read_text(encoding="utf-8"))["goal"] == "stabilize report signals"
+    markdown = markdown_path.read_text(encoding="utf-8")
+    assert "# Handoff Payload" in markdown
+    assert "## Next Tasks" in markdown
+    assert "run tests" in markdown
+
+
+def test_build_and_append_handoff_payload_note_preserves_artifact_refs(tmp_path: Path) -> None:
+    payload = {
+        "schema_version": "handoff_payload_v1",
+        "goal": "stabilize report signals",
+        "next_tasks": ["run tests"],
+        "focus_paths": ["src/a.py"],
+        "unresolved": ["issue one"],
+        "verify": ["pytest -q tests/unit/test_a.py"],
+        "validation_status": "warn",
+    }
+    note = build_handoff_payload_note(
+        query="stabilize report signals",
+        repo="demo",
+        handoff_payload=payload,
+        namespace="repo:demo",
+        artifact_refs=["artifacts/handoffs/latest/handoff_payload.json"],
+    )
+
+    assert note["source"] == "handoff_payload_v1"
+    assert note["namespace"] == "repo:demo"
+    assert "handoff: stabilize report signals" in note["text"]
+    assert note["artifact_refs"] == ["artifacts/handoffs/latest/handoff_payload.json"]
+
+    notes_path = tmp_path / "context-map" / "memory_notes.jsonl"
+    result = append_handoff_payload_note(
+        notes_path=notes_path,
+        query="stabilize report signals",
+        repo="demo",
+        handoff_payload=payload,
+        namespace="repo:demo",
+        artifact_refs=["artifacts/handoffs/latest/handoff_payload.json"],
+    )
+
+    assert result["ok"] is True
+    rows = [line for line in notes_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(rows) == 1
+    persisted = json.loads(rows[0])
+    assert persisted["namespace"] == "repo:demo"
+    assert persisted["artifact_refs"] == ["artifacts/handoffs/latest/handoff_payload.json"]
+
+
+def test_render_handoff_payload_markdown_includes_core_sections() -> None:
+    markdown = render_handoff_payload_markdown(
+        {
+            "schema_version": "handoff_payload_v1",
+            "goal": "stabilize report signals",
+            "next_tasks": ["run tests"],
+            "focus_paths": ["src/a.py"],
+            "unresolved": ["issue one"],
+            "verify": ["pytest -q tests/unit/test_a.py"],
+            "risks": ["risk_a"],
+            "validation_status": "warn",
+        }
+    )
+
+    assert "# Handoff Payload" in markdown
+    assert "## Focus Paths" in markdown
+    assert "## Next Tasks" in markdown
+    assert "## Unresolved" in markdown
+    assert "## Verify" in markdown

@@ -8,6 +8,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.82] - 2026-04-16
+
+### Changed
+
+- Closed the late maintainability wave set by stabilizing shared seams across skills catalog/MCP-CLI handoff, workspace context-report writing, case-evaluation payload builders, observability summaries, and source-plan report-only helpers.
+- Added dedicated benchmark/config lanes plus focused optimizations for `context_refine`, index candidate cache reuse, repomap seed pruning, and skills budget defaults, while expanding the golden/test maintenance guardrails that keep those seams stable.
+
 ## [0.3.79] - 2026-04-14
 
 ### Changed

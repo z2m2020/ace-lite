@@ -112,9 +112,12 @@ class CaseEvaluationMetrics:
     agent_loop_stop_reason: str
     agent_loop_replay_safe: bool
     agent_loop_last_policy_id: str
+    agent_loop_last_action_reason: str
     agent_loop_request_more_context_count: int
     agent_loop_request_source_plan_retry_count: int
     agent_loop_request_validation_retry_count: int
+    agent_loop_validation_findings_refine_applied: bool
+    agent_loop_validation_findings_refine_focus_path_count: int
     source_plan_validation_feedback_present: bool
     source_plan_validation_feedback_status: str
     source_plan_validation_feedback_issue_count: int
@@ -313,6 +316,11 @@ class CaseEvaluationMetrics:
     skills_hydration_latency_ms: float
     skills_metadata_only_routing: bool
     skills_precomputed_route: bool
+    skills_manifest_metadata_only_selected_count: int
+    skills_manifest_body_scan_selected_count: int
+    skills_selected_matched_count_mean: float
+    skills_selected_signal_count_mean: float
+    skills_selected_priority_mean: float
     candidate_rows_materialized_count: int
     candidate_chunks_materialized_count: int
     source_plan_candidate_chunks_materialized_count: int
@@ -430,8 +438,7 @@ def build_case_evaluation_metrics(
         (
             item
             for item in source_plan_steps
-            if isinstance(item, dict)
-            and str(item.get("stage") or "").strip() == "validate"
+            if isinstance(item, dict) and str(item.get("stage") or "").strip() == "validate"
         ),
         {},
     )
@@ -457,15 +464,11 @@ def build_case_evaluation_metrics(
     repomap_payload = _as_dict(plan_payload.get("repomap"))
     index_subgraph_payload = _as_dict(index_payload.get("subgraph_payload"))
     subgraph_payload = (
-        source_plan_subgraph_payload
-        if source_plan_subgraph_payload
-        else index_subgraph_payload
+        source_plan_subgraph_payload if source_plan_subgraph_payload else index_subgraph_payload
     )
     subgraph_edge_counts = _as_dict(subgraph_payload.get("edge_counts"))
     subgraph_seed_paths = _as_list(subgraph_payload.get("seed_paths"))
-    subgraph_seed_path_count = len(
-        [item for item in subgraph_seed_paths if str(item).strip()]
-    )
+    subgraph_seed_path_count = len([item for item in subgraph_seed_paths if str(item).strip()])
     subgraph_edge_type_count = len(
         [
             key
@@ -514,9 +517,7 @@ def build_case_evaluation_metrics(
     validation_branch_selection = _as_dict(validation_payload.get("branch_selection"))
     validation_branch_candidates = _as_list(validation_branch_batch.get("candidates"))
     validation_branch_candidate_count = max(
-        len(
-            [item for item in validation_branch_candidates if isinstance(item, dict)]
-        ),
+        len([item for item in validation_branch_candidates if isinstance(item, dict)]),
         max(0, int(validation_branch_batch.get("candidate_count", 0) or 0)),
     )
     validation_branch_rejected = _as_list(validation_branch_selection.get("rejected"))
@@ -544,9 +545,7 @@ def build_case_evaluation_metrics(
     validation_branch_winner_score = _as_dict(
         validation_branch_selection.get("winner_validation_branch_score")
     )
-    validation_branch_winner_passed = bool(
-        validation_branch_winner_score.get("passed", False)
-    )
+    validation_branch_winner_passed = bool(validation_branch_winner_score.get("passed", False))
     validation_branch_winner_regressed = bool(
         validation_branch_winner_score.get("regressed", False)
     )
@@ -573,6 +572,9 @@ def build_case_evaluation_metrics(
     agent_loop_last_policy_id = str(
         _as_dict(agent_loop_payload.get("last_rerun_policy")).get("policy_id", "") or ""
     ).strip()
+    agent_loop_last_action = _as_dict(agent_loop_payload.get("last_action"))
+    agent_loop_last_action_reason = str(agent_loop_last_action.get("reason", "") or "").strip()
+    last_action_focus_paths = _as_list(agent_loop_last_action.get("focus_paths"))
     agent_loop_action_type_counts = _as_dict(agent_loop_payload.get("action_type_counts"))
     agent_loop_request_more_context_count = max(
         0,
@@ -585,6 +587,15 @@ def build_case_evaluation_metrics(
     agent_loop_request_validation_retry_count = max(
         0,
         int(agent_loop_action_type_counts.get("request_validation_retry", 0) or 0),
+    )
+    agent_loop_validation_findings_refine_applied = bool(
+        str(agent_loop_last_action.get("action_type", "") or "").strip() == "request_more_context"
+        and agent_loop_last_action_reason == "source_plan_validation_findings"
+    )
+    agent_loop_validation_findings_refine_focus_path_count = (
+        len([item for item in last_action_focus_paths if str(item).strip()])
+        if agent_loop_validation_findings_refine_applied
+        else 0
     )
     source_plan_validation_feedback_present = bool(source_plan_validation_feedback)
     source_plan_validation_feedback_status = str(
@@ -625,9 +636,9 @@ def build_case_evaluation_metrics(
         int(
             repomap_payload.get(
                 "worktree_seed_count",
-                _as_dict(stage_observability.get("repomap")).get("tags", {}).get(
-                    "worktree_seed_count", 0
-                ),
+                _as_dict(stage_observability.get("repomap"))
+                .get("tags", {})
+                .get("worktree_seed_count", 0),
             )
             or 0
         ),
@@ -637,9 +648,9 @@ def build_case_evaluation_metrics(
         int(
             repomap_payload.get(
                 "subgraph_seed_count",
-                _as_dict(stage_observability.get("repomap")).get("tags", {}).get(
-                    "subgraph_seed_count", 0
-                ),
+                _as_dict(stage_observability.get("repomap"))
+                .get("tags", {})
+                .get("subgraph_seed_count", 0),
             )
             or 0
         ),
@@ -649,9 +660,9 @@ def build_case_evaluation_metrics(
         int(
             repomap_payload.get(
                 "seed_candidates_count",
-                _as_dict(stage_observability.get("repomap")).get("tags", {}).get(
-                    "seed_candidates_count", 0
-                ),
+                _as_dict(stage_observability.get("repomap"))
+                .get("tags", {})
+                .get("seed_candidates_count", 0),
             )
             or 0
         ),
@@ -659,9 +670,7 @@ def build_case_evaluation_metrics(
     repomap_cache_hit = bool(
         repomap_cache_payload.get(
             "hit",
-            _as_dict(stage_observability.get("repomap")).get("tags", {}).get(
-                "cache_hit", False
-            ),
+            _as_dict(stage_observability.get("repomap")).get("tags", {}).get("cache_hit", False),
         )
     )
     repomap_precompute_hit = bool(repomap_precompute_payload.get("hit", False))
@@ -684,11 +693,7 @@ def build_case_evaluation_metrics(
     validation_tests = _as_list(source_plan_payload.get("validation_tests"))
     memory_count = max(0, int(memory_payload.get("count", 0) or 0))
     notes_selected_count = max(0, int(notes_payload.get("selected_count", 0) or 0))
-    notes_hit_ratio = (
-        float(notes_selected_count) / float(memory_count)
-        if memory_count > 0
-        else 0.0
-    )
+    notes_hit_ratio = float(notes_selected_count) / float(memory_count) if memory_count > 0 else 0.0
     profile_selected_count = max(
         0,
         int(profile_payload.get("selected_count", 0) or 0),
@@ -709,10 +714,7 @@ def build_case_evaluation_metrics(
         for item in ltm_attribution
         if isinstance(item, dict)
         and isinstance(item.get("graph_neighborhood"), dict)
-        and int(
-            _as_dict(item.get("graph_neighborhood")).get("triple_count", 0) or 0
-        )
-        > 0
+        and int(_as_dict(item.get("graph_neighborhood")).get("triple_count", 0) or 0) > 0
     )
     ltm_constraint_summary = _as_dict(source_plan_payload.get("ltm_constraint_summary"))
     ltm_plan_constraint_count = max(
@@ -1149,9 +1151,7 @@ def build_case_evaluation_metrics(
     native_scip_provider = str(scip_payload.get("provider", "") or "").strip().lower()
     native_scip_loaded = bool(scip_payload.get("loaded", False)) and native_scip_provider == "scip"
     native_scip_document_count = (
-        max(0, int(scip_payload.get("document_count", 0) or 0))
-        if native_scip_loaded
-        else 0
+        max(0, int(scip_payload.get("document_count", 0) or 0)) if native_scip_loaded else 0
     )
     native_scip_definition_occurrence_count = (
         max(0, int(scip_payload.get("definition_occurrence_count", 0) or 0))
@@ -1171,10 +1171,13 @@ def build_case_evaluation_metrics(
     embedding_enabled = bool(embeddings_payload.get("enabled", False))
     embedding_fallback = bool(embeddings_payload.get("fallback", False))
     embedding_cache_hit = bool(embeddings_payload.get("cache_hit", False))
-    embedding_runtime_provider = str(
-        embeddings_payload.get("runtime_provider", embeddings_payload.get("provider", ""))
-        or ""
-    ).strip().lower()
+    embedding_runtime_provider = (
+        str(
+            embeddings_payload.get("runtime_provider", embeddings_payload.get("provider", "")) or ""
+        )
+        .strip()
+        .lower()
+    )
     if embedding_runtime_provider in cross_encoder_providers:
         embedding_strategy_mode = "cross_encoder"
     elif embedding_runtime_provider in embedding_only_providers:
@@ -1194,22 +1197,14 @@ def build_case_evaluation_metrics(
         if embedding_rerank_pool > 0
         else 0.0
     )
-    embedding_similarity_mean = float(
-        embeddings_payload.get("similarity_mean", 0.0) or 0.0
-    )
-    embedding_similarity_max = float(
-        embeddings_payload.get("similarity_max", 0.0) or 0.0
-    )
+    embedding_similarity_mean = float(embeddings_payload.get("similarity_mean", 0.0) or 0.0)
+    embedding_similarity_max = float(embeddings_payload.get("similarity_max", 0.0) or 0.0)
     docs_backend_fallback_reason = str(
         docs_payload.get("backend_fallback_reason", "") or ""
     ).strip()
     memory_fallback_reason = str(memory_payload.get("fallback_reason", "") or "").strip()
-    memory_gate_skip_reason = str(
-        memory_gate_payload.get("skip_reason", "") or ""
-    ).strip()
-    memory_namespace_fallback = str(
-        memory_namespace_payload.get("fallback", "") or ""
-    ).strip()
+    memory_gate_skip_reason = str(memory_gate_payload.get("skip_reason", "") or "").strip()
+    memory_namespace_fallback = str(memory_namespace_payload.get("fallback", "") or "").strip()
     chunk_semantic_reason = str(chunk_semantic_payload.get("reason", "") or "").strip()
     parallel_time_budget_ms = float(
         parallel_payload.get("time_budget_ms", index_tags.get("parallel_time_budget_ms", 0.0))
@@ -1230,8 +1225,7 @@ def build_case_evaluation_metrics(
         or 0.0
     )
     xref_time_budget_ms = float(
-        xref_payload.get("time_budget_ms", augment_tags.get("xref_time_budget_ms", 0.0))
-        or 0.0
+        xref_payload.get("time_budget_ms", augment_tags.get("xref_time_budget_ms", 0.0)) or 0.0
     )
     parallel_docs_timed_out = bool(
         parallel_docs_payload.get(
@@ -1401,8 +1395,7 @@ def build_case_evaluation_metrics(
     chunk_cache_contract_metadata_aligned = bool(
         chunk_cache_contract_fingerprint
         and chunk_cache_contract_metadata_fingerprint
-        and chunk_cache_contract_fingerprint
-        == chunk_cache_contract_metadata_fingerprint
+        and chunk_cache_contract_fingerprint == chunk_cache_contract_metadata_fingerprint
     )
     chunk_cache_contract_file_count = max(
         0,
@@ -1415,8 +1408,7 @@ def build_case_evaluation_metrics(
     unsupported_language_fallback_count = sum(
         1
         for item in raw_candidate_chunks
-        if str(item.get("disclosure_fallback_reason") or "").strip()
-        == "unsupported_language"
+        if str(item.get("disclosure_fallback_reason") or "").strip() == "unsupported_language"
     )
     unsupported_language_fallback_ratio = safe_ratio(
         unsupported_language_fallback_count,
@@ -1474,13 +1466,10 @@ def build_case_evaluation_metrics(
     )
     retrieval_context_pool_chunk_count = max(
         0,
-        int(
-            chunk_semantic_payload.get("retrieval_context_pool_chunk_count", 0.0) or 0
-        ),
+        int(chunk_semantic_payload.get("retrieval_context_pool_chunk_count", 0.0) or 0),
     )
     retrieval_context_pool_coverage_ratio = float(
-        chunk_semantic_payload.get("retrieval_context_pool_coverage_ratio", 0.0)
-        or 0.0
+        chunk_semantic_payload.get("retrieval_context_pool_coverage_ratio", 0.0) or 0.0
     )
     robust_signature_count = max(
         0,
@@ -1631,7 +1620,9 @@ def build_case_evaluation_metrics(
                 else "off",
             )
             or "off"
-        ).strip().lower()
+        )
+        .strip()
+        .lower()
         or "off"
     )
     topological_shield_max_attenuation = float(
@@ -1777,9 +1768,7 @@ def build_case_evaluation_metrics(
     )
     selected_skills = _as_list(skills_payload.get("selected"))
     skipped_for_budget = _as_list(skills_payload.get("skipped_for_budget"))
-    skills_selected_count = float(
-        len([item for item in selected_skills if isinstance(item, dict)])
-    )
+    skills_selected_count = float(len([item for item in selected_skills if isinstance(item, dict)]))
     skills_skipped_for_budget_count = float(
         len([item for item in skipped_for_budget if isinstance(item, dict)])
     )
@@ -1793,14 +1782,49 @@ def build_case_evaluation_metrics(
     )
     skills_budget_exhausted = bool(skills_payload.get("budget_exhausted", False))
     skills_route_latency_ms = float(skills_payload.get("route_latency_ms", 0.0) or 0.0)
-    skills_hydration_latency_ms = float(
-        skills_payload.get("hydration_latency_ms", 0.0) or 0.0
-    )
-    skills_metadata_only_routing = bool(
-        skills_payload.get("metadata_only_routing", False)
-    )
+    skills_hydration_latency_ms = float(skills_payload.get("hydration_latency_ms", 0.0) or 0.0)
+    skills_metadata_only_routing = bool(skills_payload.get("metadata_only_routing", False))
     skills_precomputed_route = (
         str(skills_payload.get("routing_source") or "").strip().lower() == "precomputed"
+    )
+    selected_skill_dicts = [item for item in selected_skills if isinstance(item, dict)]
+    skills_manifest_metadata_only_selected_count = max(
+        0,
+        len(
+            [
+                item
+                for item in selected_skill_dicts
+                if str(item.get("manifest_load_mode") or "metadata_only").strip() == "metadata_only"
+            ]
+        ),
+    )
+    skills_manifest_body_scan_selected_count = max(
+        0,
+        len(
+            [
+                item
+                for item in selected_skill_dicts
+                if str(item.get("manifest_load_mode") or "").strip() == "body_scan"
+            ]
+        ),
+    )
+    skills_selected_matched_count_mean = (
+        sum(float(item.get("matched_count", 0.0) or 0.0) for item in selected_skill_dicts)
+        / float(len(selected_skill_dicts))
+        if selected_skill_dicts
+        else 0.0
+    )
+    skills_selected_signal_count_mean = (
+        sum(float(item.get("signal_count", 0.0) or 0.0) for item in selected_skill_dicts)
+        / float(len(selected_skill_dicts))
+        if selected_skill_dicts
+        else 0.0
+    )
+    skills_selected_priority_mean = (
+        sum(float(item.get("priority", 0.0) or 0.0) for item in selected_skill_dicts)
+        / float(len(selected_skill_dicts))
+        if selected_skill_dicts
+        else 0.0
     )
     skills_markdown_bytes_loaded = max(
         0,
@@ -1827,7 +1851,9 @@ def build_case_evaluation_metrics(
     source_plan_failure_signal_summary = _as_dict(
         plan_replay_cache_payload.get("failure_signal_summary")
     )
-    source_plan_failure_signal_origin = "plan_replay_cache" if source_plan_failure_signal_summary else ""
+    source_plan_failure_signal_origin = (
+        "plan_replay_cache" if source_plan_failure_signal_summary else ""
+    )
     if not source_plan_failure_signal_summary:
         source_plan_failure_signal_summary = _as_dict(
             observability_payload.get("source_plan_failure_signal_summary")
@@ -2125,9 +2151,7 @@ def build_case_evaluation_metrics(
     )
 
     policy_profile = str(index_payload.get("policy_name") or "").strip()
-    docs_enabled_flag = bool(
-        index_metadata.get("docs_enabled", docs_payload.get("enabled", False))
-    )
+    docs_enabled_flag = bool(index_metadata.get("docs_enabled", docs_payload.get("enabled", False)))
     docs_section_count = int(
         index_metadata.get("docs_section_count", docs_payload.get("section_count", 0)) or 0
     )
@@ -2154,17 +2178,13 @@ def build_case_evaluation_metrics(
         validation_branch_candidate_count=validation_branch_candidate_count,
         validation_branch_rejected_count=validation_branch_rejected_count,
         validation_branch_selection_present=validation_branch_selection_present,
-        validation_branch_patch_artifact_present=(
-            validation_branch_patch_artifact_present
-        ),
+        validation_branch_patch_artifact_present=(validation_branch_patch_artifact_present),
         validation_branch_archive_present=validation_branch_archive_present,
         validation_branch_parallel=validation_branch_parallel,
         validation_branch_winner_passed=validation_branch_winner_passed,
         validation_branch_winner_regressed=validation_branch_winner_regressed,
         validation_branch_winner_score=validation_branch_winner_score_value,
-        validation_branch_winner_after_issue_count=(
-            validation_branch_winner_after_issue_count
-        ),
+        validation_branch_winner_after_issue_count=(validation_branch_winner_after_issue_count),
         agent_loop_observed=agent_loop_observed,
         agent_loop_enabled=agent_loop_enabled,
         agent_loop_attempted=agent_loop_attempted,
@@ -2173,25 +2193,20 @@ def build_case_evaluation_metrics(
         agent_loop_stop_reason=agent_loop_stop_reason,
         agent_loop_replay_safe=agent_loop_replay_safe,
         agent_loop_last_policy_id=agent_loop_last_policy_id,
+        agent_loop_last_action_reason=agent_loop_last_action_reason,
         agent_loop_request_more_context_count=agent_loop_request_more_context_count,
-        agent_loop_request_source_plan_retry_count=(
-            agent_loop_request_source_plan_retry_count
+        agent_loop_request_source_plan_retry_count=(agent_loop_request_source_plan_retry_count),
+        agent_loop_request_validation_retry_count=(agent_loop_request_validation_retry_count),
+        agent_loop_validation_findings_refine_applied=(
+            agent_loop_validation_findings_refine_applied
         ),
-        agent_loop_request_validation_retry_count=(
-            agent_loop_request_validation_retry_count
+        agent_loop_validation_findings_refine_focus_path_count=(
+            agent_loop_validation_findings_refine_focus_path_count
         ),
-        source_plan_validation_feedback_present=(
-            source_plan_validation_feedback_present
-        ),
-        source_plan_validation_feedback_status=(
-            source_plan_validation_feedback_status
-        ),
-        source_plan_validation_feedback_issue_count=(
-            source_plan_validation_feedback_issue_count
-        ),
-        source_plan_validation_feedback_probe_status=(
-            source_plan_validation_feedback_probe_status
-        ),
+        source_plan_validation_feedback_present=(source_plan_validation_feedback_present),
+        source_plan_validation_feedback_status=(source_plan_validation_feedback_status),
+        source_plan_validation_feedback_issue_count=(source_plan_validation_feedback_issue_count),
+        source_plan_validation_feedback_probe_status=(source_plan_validation_feedback_probe_status),
         source_plan_validation_feedback_probe_issue_count=(
             source_plan_validation_feedback_probe_issue_count
         ),
@@ -2208,12 +2223,8 @@ def build_case_evaluation_metrics(
         source_plan_failure_signal_present=source_plan_failure_signal_present,
         source_plan_failure_signal_status=source_plan_failure_signal_status,
         source_plan_failure_signal_issue_count=source_plan_failure_signal_issue_count,
-        source_plan_failure_signal_probe_status=(
-            source_plan_failure_signal_probe_status
-        ),
-        source_plan_failure_signal_probe_issue_count=(
-            source_plan_failure_signal_probe_issue_count
-        ),
+        source_plan_failure_signal_probe_status=(source_plan_failure_signal_probe_status),
+        source_plan_failure_signal_probe_issue_count=(source_plan_failure_signal_probe_issue_count),
         source_plan_failure_signal_probe_executed_count=(
             source_plan_failure_signal_probe_executed_count
         ),
@@ -2267,9 +2278,7 @@ def build_case_evaluation_metrics(
         multi_channel_rrf_applied=multi_channel_rrf_applied,
         multi_channel_rrf_granularity_count=multi_channel_rrf_granularity_count,
         multi_channel_rrf_pool_size=multi_channel_rrf_pool_size,
-        multi_channel_rrf_granularity_pool_ratio=(
-            multi_channel_rrf_granularity_pool_ratio
-        ),
+        multi_channel_rrf_granularity_pool_ratio=(multi_channel_rrf_granularity_pool_ratio),
         graph_lookup_enabled=graph_lookup_enabled,
         graph_lookup_reason=graph_lookup_reason,
         graph_lookup_guarded=graph_lookup_guarded,
@@ -2303,12 +2312,8 @@ def build_case_evaluation_metrics(
         graph_lookup_query_hit_path_ratio=graph_lookup_query_hit_path_ratio,
         native_scip_loaded=native_scip_loaded,
         native_scip_document_count=native_scip_document_count,
-        native_scip_definition_occurrence_count=(
-            native_scip_definition_occurrence_count
-        ),
-        native_scip_reference_occurrence_count=(
-            native_scip_reference_occurrence_count
-        ),
+        native_scip_definition_occurrence_count=(native_scip_definition_occurrence_count),
+        native_scip_reference_occurrence_count=(native_scip_reference_occurrence_count),
         native_scip_symbol_definition_count=native_scip_symbol_definition_count,
         embedding_enabled=embedding_enabled,
         embedding_fallback=embedding_fallback,
@@ -2353,9 +2358,7 @@ def build_case_evaluation_metrics(
         retrieval_context_chunk_count=retrieval_context_chunk_count,
         retrieval_context_coverage_ratio=retrieval_context_coverage_ratio,
         retrieval_context_char_count_mean=retrieval_context_char_count_mean,
-        contextual_sidecar_parent_symbol_chunk_count=(
-            contextual_sidecar_parent_symbol_chunk_count
-        ),
+        contextual_sidecar_parent_symbol_chunk_count=(contextual_sidecar_parent_symbol_chunk_count),
         contextual_sidecar_parent_symbol_coverage_ratio=(
             contextual_sidecar_parent_symbol_coverage_ratio
         ),
@@ -2372,12 +2375,8 @@ def build_case_evaluation_metrics(
         chunk_contract_fallback_ratio=chunk_contract_fallback_ratio,
         chunk_contract_skeleton_ratio=chunk_contract_skeleton_ratio,
         chunk_cache_contract_present=chunk_cache_contract_present,
-        chunk_cache_contract_fingerprint_present=(
-            chunk_cache_contract_fingerprint_present
-        ),
-        chunk_cache_contract_metadata_aligned=(
-            chunk_cache_contract_metadata_aligned
-        ),
+        chunk_cache_contract_fingerprint_present=(chunk_cache_contract_fingerprint_present),
+        chunk_cache_contract_metadata_aligned=(chunk_cache_contract_metadata_aligned),
         chunk_cache_contract_file_count=chunk_cache_contract_file_count,
         chunk_cache_contract_chunk_count=chunk_cache_contract_chunk_count,
         unsupported_language_fallback_count=unsupported_language_fallback_count,
@@ -2401,36 +2400,22 @@ def build_case_evaluation_metrics(
         topological_shield_mode=topological_shield_mode,
         topological_shield_report_only=topological_shield_report_only,
         topological_shield_max_attenuation=topological_shield_max_attenuation,
-        topological_shield_shared_parent_attenuation=(
-            topological_shield_shared_parent_attenuation
-        ),
-        topological_shield_adjacency_attenuation=(
-            topological_shield_adjacency_attenuation
-        ),
+        topological_shield_shared_parent_attenuation=(topological_shield_shared_parent_attenuation),
+        topological_shield_adjacency_attenuation=(topological_shield_adjacency_attenuation),
         topological_shield_attenuated_chunk_count=topological_shield_attenuated_chunk_count,
         topological_shield_coverage_ratio=topological_shield_coverage_ratio,
         topological_shield_attenuation_total=topological_shield_attenuation_total,
         graph_source_provider_loaded=graph_source_provider_loaded,
         graph_source_projection_fallback=graph_source_projection_fallback,
         graph_source_edge_count=graph_source_edge_count,
-        graph_source_inbound_signal_chunk_count=(
-            graph_source_inbound_signal_chunk_count
-        ),
-        graph_source_inbound_signal_coverage_ratio=(
-            graph_source_inbound_signal_coverage_ratio
-        ),
-        graph_source_centrality_signal_chunk_count=(
-            graph_source_centrality_signal_chunk_count
-        ),
+        graph_source_inbound_signal_chunk_count=(graph_source_inbound_signal_chunk_count),
+        graph_source_inbound_signal_coverage_ratio=(graph_source_inbound_signal_coverage_ratio),
+        graph_source_centrality_signal_chunk_count=(graph_source_centrality_signal_chunk_count),
         graph_source_centrality_signal_coverage_ratio=(
             graph_source_centrality_signal_coverage_ratio
         ),
-        graph_source_pagerank_signal_chunk_count=(
-            graph_source_pagerank_signal_chunk_count
-        ),
-        graph_source_pagerank_signal_coverage_ratio=(
-            graph_source_pagerank_signal_coverage_ratio
-        ),
+        graph_source_pagerank_signal_chunk_count=(graph_source_pagerank_signal_chunk_count),
+        graph_source_pagerank_signal_coverage_ratio=(graph_source_pagerank_signal_coverage_ratio),
         skills_selected_count=skills_selected_count,
         skills_skipped_for_budget_count=skills_skipped_for_budget_count,
         skills_token_budget=skills_token_budget,
@@ -2440,6 +2425,11 @@ def build_case_evaluation_metrics(
         skills_hydration_latency_ms=skills_hydration_latency_ms,
         skills_metadata_only_routing=skills_metadata_only_routing,
         skills_precomputed_route=skills_precomputed_route,
+        skills_manifest_metadata_only_selected_count=(skills_manifest_metadata_only_selected_count),
+        skills_manifest_body_scan_selected_count=skills_manifest_body_scan_selected_count,
+        skills_selected_matched_count_mean=skills_selected_matched_count_mean,
+        skills_selected_signal_count_mean=skills_selected_signal_count_mean,
+        skills_selected_priority_mean=skills_selected_priority_mean,
         candidate_rows_materialized_count=candidate_rows_materialized_count,
         candidate_chunks_materialized_count=candidate_chunks_materialized_count,
         source_plan_candidate_chunks_materialized_count=(
@@ -2449,35 +2439,21 @@ def build_case_evaluation_metrics(
         plan_replay_cache_enabled=plan_replay_cache_enabled,
         plan_replay_cache_hit=plan_replay_cache_hit,
         plan_replay_cache_stale_hit_safe=plan_replay_cache_stale_hit_safe,
-        source_plan_graph_closure_preference_enabled=(
-            source_plan_graph_closure_preference_enabled
-        ),
+        source_plan_graph_closure_preference_enabled=(source_plan_graph_closure_preference_enabled),
         source_plan_graph_closure_bonus_candidate_count=(
             source_plan_graph_closure_bonus_candidate_count
         ),
-        source_plan_graph_closure_preferred_count=(
-            source_plan_graph_closure_preferred_count
-        ),
-        source_plan_granularity_preferred_count=(
-            source_plan_granularity_preferred_count
-        ),
-        source_plan_focused_file_promoted_count=(
-            source_plan_focused_file_promoted_count
-        ),
+        source_plan_graph_closure_preferred_count=(source_plan_graph_closure_preferred_count),
+        source_plan_granularity_preferred_count=(source_plan_granularity_preferred_count),
+        source_plan_focused_file_promoted_count=(source_plan_focused_file_promoted_count),
         source_plan_packed_path_count=source_plan_packed_path_count,
         source_plan_packing_reason=source_plan_packing_reason,
         source_plan_chunk_retention_ratio=source_plan_chunk_retention_ratio,
         source_plan_packed_path_ratio=source_plan_packed_path_ratio,
-        skills_token_budget_utilization_ratio=(
-            skills_token_budget_utilization_ratio
-        ),
+        skills_token_budget_utilization_ratio=(skills_token_budget_utilization_ratio),
         graph_transfer_per_seed_ratio=graph_transfer_per_seed_ratio,
-        chunk_guard_pairwise_conflict_density=(
-            chunk_guard_pairwise_conflict_density
-        ),
-        topological_shield_attenuation_per_chunk=(
-            topological_shield_attenuation_per_chunk
-        ),
+        chunk_guard_pairwise_conflict_density=(chunk_guard_pairwise_conflict_density),
+        topological_shield_attenuation_per_chunk=(topological_shield_attenuation_per_chunk),
         router_enabled=router_enabled,
         router_mode=router_mode,
         router_arm_set=router_arm_set,

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import subprocess
@@ -131,15 +131,18 @@ def test_collect_runtime_mcp_self_test_payload_merges_health_warnings() -> None:
             payload.get("memory_primary", "none"),
             payload.get("memory_secondary", "none"),
         ),
-        memory_channels_disabled_fn=lambda primary, secondary: primary == "none"
-        and secondary == "none",
+        memory_channels_disabled_fn=lambda primary, secondary: (
+            primary == "none" and secondary == "none"
+        ),
         memory_config_recommendations_fn=lambda root, skills_dir: ["configure-memory"],
         run_mcp_self_test_fn=lambda **kwargs: {
             "ok": True,
             "memory_primary": "rest",
             "memory_secondary": "none",
             "warnings": ["Runtime code appears stale"],
-            "recommendations": ["Restart the stdio MCP server/session after git pull or pip install -e updates."],
+            "recommendations": [
+                "Restart the stdio MCP server/session after git pull or pip install -e updates."
+            ],
             "runtime_identity": {"stale_process_suspected": True},
             "stdio_session_health": {
                 "scope": "self_test_probe",
@@ -158,7 +161,9 @@ def test_collect_runtime_mcp_self_test_payload_merges_health_warnings() -> None:
 
     assert payload["ok"] is True
     assert "Runtime code appears stale" in payload["warnings"]
-    assert any("Restart the stdio MCP server/session" in item for item in payload["recommendations"])
+    assert any(
+        "Restart the stdio MCP server/session" in item for item in payload["recommendations"]
+    )
     assert payload["session_summary"]["status"] == "warning"
     assert payload["session_summary"]["scope"] == "self_test_probe"
     assert payload["session_summary"]["message"]
@@ -173,7 +178,9 @@ def test_collect_runtime_mcp_doctor_payload_merges_self_test_warnings(monkeypatc
             "memory_primary": "rest",
             "memory_secondary": "none",
             "warnings": ["Runtime code appears stale"],
-            "recommendations": ["Restart the stdio MCP server/session after git pull or pip install -e updates."],
+            "recommendations": [
+                "Restart the stdio MCP server/session after git pull or pip install -e updates."
+            ],
             "runtime_identity": {"stale_process_suspected": True},
             "stdio_session_health": {
                 "scope": "self_test_probe",
@@ -205,7 +212,9 @@ def test_collect_runtime_mcp_doctor_payload_merges_self_test_warnings(monkeypatc
     assert payload["checks"][1]["ok"] is False
     assert payload["session_summary"]["status"] == "warning"
     assert "Runtime code appears stale" in payload["warnings"]
-    assert any("Restart the stdio MCP server/session" in item for item in payload["recommendations"])
+    assert any(
+        "Restart the stdio MCP server/session" in item for item in payload["recommendations"]
+    )
 
 
 def test_collect_runtime_settings_show_payload_matches_bundle_snapshot(
@@ -324,6 +333,41 @@ def test_build_runtime_settings_governance_payload_reports_config_warnings(
         "CFG-TRACE-001",
         "CFG-TRACE-002",
     }
+    assert governance["last_known_good_update_allowed"] is False
+    assert governance["last_known_good_update_reason"] == "config_warning_blocked"
+
+
+def test_build_runtime_settings_governance_payload_reports_path_collision(
+    tmp_path: Path,
+) -> None:
+    current_path = tmp_path / "shared-settings.json"
+    valid_payload = build_runtime_settings_record(
+        snapshot={"plan": {"retrieval": {"top_k_files": 12}}},
+        provenance={"plan": {"retrieval": {"top_k_files": "cli"}}},
+        metadata={"selected_profile": "team-default"},
+    )
+    persist_runtime_settings_record(
+        current_path=current_path,
+        last_known_good_path=current_path,
+        payload=valid_payload,
+        update_last_known_good=True,
+    )
+
+    bundle = resolve_runtime_settings_bundle(
+        root=str(tmp_path),
+        config_file=".ace-lite.yml",
+        mcp_name="ace-lite",
+        runtime_profile=None,
+        use_snapshot=False,
+        current_path=str(current_path),
+        last_known_good_path=str(current_path),
+    )
+    governance = build_runtime_settings_governance_payload(bundle)
+
+    assert governance["governance_state"] == "path_collision"
+    assert governance["persist_paths_collide"] is True
+    assert governance["last_known_good_update_allowed"] is False
+    assert governance["last_known_good_update_reason"] == "path_collision"
 
 
 def test_collect_runtime_settings_persist_payload_writes_current_and_lkg(
@@ -360,16 +404,51 @@ def test_collect_runtime_settings_persist_payload_writes_current_and_lkg(
     assert lkg_record is not None
     assert current_record["fingerprint"] == payload["fingerprint"]
     assert lkg_record["fingerprint"] == payload["fingerprint"]
-    assert json.loads(current_path.read_text(encoding="utf-8"))["fingerprint"] == payload["fingerprint"]
+    assert (
+        json.loads(current_path.read_text(encoding="utf-8"))["fingerprint"]
+        == payload["fingerprint"]
+    )
+    assert payload["last_known_good_update_requested"] is True
+    assert payload["last_known_good_update_reason"] == "updated"
+
+
+def test_collect_runtime_settings_persist_payload_blocks_lkg_update_when_governance_warns(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        (
+            "plan:\n"
+            "  plugins:\n"
+            "    enabled: false\n"
+            "    remote_slot_allowlist: [observability.mcp_plugins]\n"
+        ),
+        encoding="utf-8",
+    )
+    current_path = tmp_path / "current-settings.json"
+    lkg_path = tmp_path / "last-known-good.json"
+
+    payload = collect_runtime_settings_persist_payload(
+        root=str(tmp_path),
+        config_file=".ace-lite.yml",
+        mcp_name="ace-lite",
+        runtime_profile=None,
+        use_snapshot=False,
+        current_path=str(current_path),
+        last_known_good_path=str(lkg_path),
+        update_last_known_good=True,
+    )
+
+    assert payload["last_known_good_update_requested"] is True
+    assert payload["last_known_good_updated"] is False
+    assert payload["last_known_good_update_reason"] == "config_warning_blocked"
+    assert load_runtime_settings_record(current_path) is not None
+    assert load_runtime_settings_record(lkg_path) is None
 
 
 def test_resolve_effective_runtime_skills_dir_prefers_explicit_override() -> None:
     settings = {"plan": {"skills": {"dir": "repo-skills"}}}
 
-    assert (
-        resolve_effective_runtime_skills_dir(settings, skills_dir="cli-skills")
-        == "cli-skills"
-    )
+    assert resolve_effective_runtime_skills_dir(settings, skills_dir="cli-skills") == "cli-skills"
     assert resolve_effective_runtime_skills_dir(settings) == "repo-skills"
     assert resolve_effective_runtime_skills_dir({}) == "skills"
 
@@ -378,11 +457,7 @@ def test_build_runtime_status_snapshot_matches_collect_payload(tmp_path: Path) -
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir(parents=True, exist_ok=True)
     (tmp_path / ".ace-lite.yml").write_text(
-        (
-            "plan:\n"
-            "  retrieval:\n"
-            "    top_k_files: 7\n"
-        ),
+        ("plan:\n  retrieval:\n    top_k_files: 7\n"),
         encoding="utf-8",
     )
 
@@ -403,8 +478,9 @@ def test_build_runtime_status_snapshot_matches_collect_payload(tmp_path: Path) -
             payload.get("memory_primary", "none"),
             payload.get("memory_secondary", "none"),
         ),
-        memory_channels_disabled_fn=lambda primary, secondary: primary == "none"
-        and secondary == "none",
+        memory_channels_disabled_fn=lambda primary, secondary: (
+            primary == "none" and secondary == "none"
+        ),
         memory_config_recommendations_fn=lambda root, skills_dir: [
             f"configure-memory:{Path(root).name}:{Path(skills_dir).name}"
         ],
@@ -422,8 +498,9 @@ def test_build_runtime_status_snapshot_matches_collect_payload(tmp_path: Path) -
             payload.get("memory_primary", "none"),
             payload.get("memory_secondary", "none"),
         ),
-        memory_channels_disabled_fn=lambda primary, secondary: primary == "none"
-        and secondary == "none",
+        memory_channels_disabled_fn=lambda primary, secondary: (
+            primary == "none" and secondary == "none"
+        ),
         memory_config_recommendations_fn=lambda root, skills_dir: [
             f"configure-memory:{Path(root).name}:{Path(skills_dir).name}"
         ],
@@ -735,9 +812,7 @@ def test_load_runtime_stats_summary_canonicalizes_runtime_reason_aliases_in_top_
     )
 
     assert payload["top_pain_summary"]["count"] == 1
-    assert payload["top_pain_summary"]["items"][0]["reason_code"] == (
-        "latency_budget_exceeded"
-    )
+    assert payload["top_pain_summary"]["items"][0]["reason_code"] == ("latency_budget_exceeded")
     assert payload["top_pain_summary"]["items"][0]["reason_family"] == "runtime"
     assert payload["top_pain_summary"]["items"][0]["capture_class"] == "budget"
     assert payload["top_pain_summary"]["items"][0]["runtime_event_count"] == 1
@@ -809,12 +884,14 @@ def test_build_runtime_status_payload_canonicalizes_runtime_reason_aliases_in_de
         for item in payload["degraded_services"]
     )
     assert payload["next_cycle_input"]["primary_stream"] == "budget"
-    assert payload["latest_runtime"]["next_cycle_input_summary"]["priorities"][0][
-        "reason_code"
-    ] == "latency_budget_exceeded"
-    assert payload["latest_runtime"]["agent_loop_control_plane_summary"] == runtime_stats[
-        "agent_loop_control_plane_summary"
-    ]
+    assert (
+        payload["latest_runtime"]["next_cycle_input_summary"]["priorities"][0]["reason_code"]
+        == "latency_budget_exceeded"
+    )
+    assert (
+        payload["latest_runtime"]["agent_loop_control_plane_summary"]
+        == runtime_stats["agent_loop_control_plane_summary"]
+    )
 
 
 def test_execute_codex_mcp_setup_plan_dry_run_does_not_run_commands() -> None:
@@ -1066,7 +1143,9 @@ def test_execute_codex_mcp_setup_plan_formats_add_failure_message(tmp_path: Path
 
 
 def test_runtime_command_domain_registry_covers_phase1_domains() -> None:
-    domains = {descriptor.name: descriptor.handlers for descriptor in iter_runtime_command_domains()}
+    domains = {
+        descriptor.name: descriptor.handlers for descriptor in iter_runtime_command_domains()
+    }
 
     assert domains == {
         "settings": (
@@ -1098,4 +1177,3 @@ def test_runtime_command_domain_registry_covers_phase1_domains() -> None:
         ),
     }
     assert set(RUNTIME_COMMAND_DOMAIN_REGISTRY) == set(domains)
-

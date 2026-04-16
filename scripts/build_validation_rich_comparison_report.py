@@ -7,15 +7,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ace_lite.benchmark_ops import (
-    read_benchmark_deep_symbol_summary,
-    read_benchmark_native_scip_summary,
-    read_benchmark_retrieval_control_plane_gate_summary,
-    read_benchmark_retrieval_frontier_gate_summary,
-    read_benchmark_source_plan_failure_signal_summary,
-    read_benchmark_source_plan_validation_feedback_summary,
-    read_benchmark_validation_probe_summary,
+from ace_lite.benchmark.report_script_support import (
+    build_validation_rich_support_bundle,
+    load_report_json,
+    resolve_report_path,
 )
+from ace_lite.benchmark.report_script_support import (
+    safe_float as _safe_float,
+)
+from ace_lite.benchmark.report_warning_support import join_string_list, normalize_string_list
 
 METRIC_NAMES = (
     "task_success_rate",
@@ -28,39 +28,10 @@ METRIC_NAMES = (
 )
 
 
-def _resolve_path(*, root: Path, value: str) -> Path:
-    candidate = Path(str(value).strip())
-    if candidate.is_absolute():
-        return candidate
-    return (root / candidate).resolve()
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    if not path.exists() or not path.is_file():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def _safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except Exception:
-        return float(default)
-
-
 def _extract_summary(*, label: str, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     metrics_raw = payload.get("metrics")
     metrics_input = metrics_raw if isinstance(metrics_raw, dict) else {}
-    failed_checks_raw = payload.get("failed_checks")
-    failed_checks = (
-        [str(item) for item in failed_checks_raw if str(item).strip()]
-        if isinstance(failed_checks_raw, list)
-        else []
-    )
+    failed_checks = normalize_string_list(payload.get("failed_checks"))
     return {
         "label": label,
         "path": str(path),
@@ -70,25 +41,8 @@ def _extract_summary(*, label: str, path: Path, payload: dict[str, Any]) -> dict
         "case_count": int(payload.get("case_count", 0) or 0),
         "regressed": bool(payload.get("regressed", False)),
         "failed_checks": failed_checks,
-        "metrics": {
-            name: _safe_float(metrics_input.get(name), 0.0)
-            for name in METRIC_NAMES
-        },
-        "retrieval_control_plane_gate_summary": (
-            read_benchmark_retrieval_control_plane_gate_summary(path)
-        ),
-        "retrieval_frontier_gate_summary": (
-            read_benchmark_retrieval_frontier_gate_summary(path)
-        ),
-        "deep_symbol_summary": read_benchmark_deep_symbol_summary(path),
-        "native_scip_summary": read_benchmark_native_scip_summary(path),
-        "validation_probe_summary": read_benchmark_validation_probe_summary(path),
-        "source_plan_failure_signal_summary": (
-            read_benchmark_source_plan_failure_signal_summary(path)
-        ),
-        "source_plan_validation_feedback_summary": (
-            read_benchmark_source_plan_validation_feedback_summary(path)
-        ),
+        "metrics": {name: _safe_float(metrics_input.get(name), 0.0) for name in METRIC_NAMES},
+        **build_validation_rich_support_bundle(path),
     }
 
 
@@ -138,8 +92,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 loaded="✅" if bool(row.get("loaded", False)) else "❌",
                 regressed="✅" if bool(row.get("regressed", False)) else "❌",
                 case_count=int(row.get("case_count", 0) or 0),
-                failed_checks=", ".join(str(item) for item in row.get("failed_checks", []))
-                or "(none)",
+                failed_checks=join_string_list(row.get("failed_checks", [])),
             )
         )
 
@@ -154,12 +107,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
     tuned_metrics = tuned_metrics_raw if isinstance(tuned_metrics_raw, dict) else {}
     for metric_name in METRIC_NAMES:
         lines.append(
-            "| {metric} | {baseline:.4f} | {current:.4f} | {tuned:.4f} |".format(
-                metric=metric_name,
-                baseline=_safe_float(baseline_metrics.get(metric_name), 0.0),
-                current=_safe_float(current_metrics.get(metric_name), 0.0),
-                tuned=_safe_float(tuned_metrics.get(metric_name), 0.0),
-            )
+            f"| {metric_name} | {_safe_float(baseline_metrics.get(metric_name), 0.0):.4f} | {_safe_float(current_metrics.get(metric_name), 0.0):.4f} | {_safe_float(tuned_metrics.get(metric_name), 0.0):.4f} |"
         )
 
     for name in ("baseline_vs_current", "current_vs_tuned", "baseline_vs_tuned"):
@@ -190,12 +138,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
             continue
         gate_raw = row.get("retrieval_control_plane_gate_summary")
         gate = gate_raw if isinstance(gate_raw, dict) else {}
-        failed_checks_raw = gate.get("failed_checks", [])
-        failed_checks = (
-            ", ".join(str(item) for item in failed_checks_raw if str(item).strip())
-            if isinstance(failed_checks_raw, list)
-            else ""
-        )
+        failed_checks = join_string_list(gate.get("failed_checks", []))
         lines.append(
             "| {label} | {gate_passed} | {regression_evaluated} | {regression_detected} | {shadow:.4f} | {gain:.4f} | {latency:.2f} | {failed_checks} |".format(
                 label=str(row.get("label", "")),
@@ -204,16 +147,12 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     "yes" if bool(gate.get("regression_evaluated", False)) else "no"
                 ),
                 regression_detected=(
-                    "yes"
-                    if bool(gate.get("benchmark_regression_detected", False))
-                    else "no"
+                    "yes" if bool(gate.get("benchmark_regression_detected", False)) else "no"
                 ),
-                shadow=_safe_float(
-                    gate.get("adaptive_router_shadow_coverage", 0.0), 0.0
-                ),
+                shadow=_safe_float(gate.get("adaptive_router_shadow_coverage", 0.0), 0.0),
                 gain=_safe_float(gate.get("risk_upgrade_precision_gain", 0.0), 0.0),
                 latency=_safe_float(gate.get("latency_p95_ms", 0.0), 0.0),
-                failed_checks=failed_checks or "(none)",
+                failed_checks=failed_checks,
             )
         )
 
@@ -226,32 +165,17 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         if not isinstance(row, dict):
             continue
         frontier_gate_raw = row.get("retrieval_frontier_gate_summary")
-        frontier_gate = (
-            frontier_gate_raw if isinstance(frontier_gate_raw, dict) else {}
-        )
-        frontier_failed_checks_raw = frontier_gate.get("failed_checks", [])
-        frontier_failed_checks = (
-            ", ".join(
-                str(item) for item in frontier_failed_checks_raw if str(item).strip()
-            )
-            if isinstance(frontier_failed_checks_raw, list)
-            else ""
-        )
+        frontier_gate = frontier_gate_raw if isinstance(frontier_gate_raw, dict) else {}
+        frontier_failed_checks = join_string_list(frontier_gate.get("failed_checks", []))
         lines.append(
             "| {label} | {gate_passed} | {recall:.4f} | {native_scip:.4f} | {precision:.4f} | {noise:.4f} | {failed_checks} |".format(
                 label=str(row.get("label", "")),
-                gate_passed=(
-                    "yes" if bool(frontier_gate.get("gate_passed", False)) else "no"
-                ),
-                recall=_safe_float(
-                    frontier_gate.get("deep_symbol_case_recall", 0.0), 0.0
-                ),
-                native_scip=_safe_float(
-                    frontier_gate.get("native_scip_loaded_rate", 0.0), 0.0
-                ),
+                gate_passed=("yes" if bool(frontier_gate.get("gate_passed", False)) else "no"),
+                recall=_safe_float(frontier_gate.get("deep_symbol_case_recall", 0.0), 0.0),
+                native_scip=_safe_float(frontier_gate.get("native_scip_loaded_rate", 0.0), 0.0),
                 precision=_safe_float(frontier_gate.get("precision_at_k", 0.0), 0.0),
                 noise=_safe_float(frontier_gate.get("noise_rate", 0.0), 0.0),
-                failed_checks=frontier_failed_checks or "(none)",
+                failed_checks=frontier_failed_checks,
             )
         )
 
@@ -273,18 +197,12 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 case_count=_safe_float(deep_symbol.get("case_count", 0.0), 0.0),
                 recall=_safe_float(deep_symbol.get("recall", 0.0), 0.0),
                 loaded=_safe_float(native_scip.get("loaded_rate", 0.0), 0.0),
-                document=_safe_float(
-                    native_scip.get("document_count_mean", 0.0), 0.0
-                ),
+                document=_safe_float(native_scip.get("document_count_mean", 0.0), 0.0),
                 definition=_safe_float(
                     native_scip.get("definition_occurrence_count_mean", 0.0), 0.0
                 ),
-                reference=_safe_float(
-                    native_scip.get("reference_occurrence_count_mean", 0.0), 0.0
-                ),
-                symbol=_safe_float(
-                    native_scip.get("symbol_definition_count_mean", 0.0), 0.0
-                ),
+                reference=_safe_float(native_scip.get("reference_occurrence_count_mean", 0.0), 0.0),
+                symbol=_safe_float(native_scip.get("symbol_definition_count_mean", 0.0), 0.0),
             )
         )
 
@@ -297,9 +215,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         if not isinstance(row, dict):
             continue
         validation_probe_raw = row.get("validation_probe_summary")
-        validation_probe = (
-            validation_probe_raw if isinstance(validation_probe_raw, dict) else {}
-        )
+        validation_probe = validation_probe_raw if isinstance(validation_probe_raw, dict) else {}
         lines.append(
             "| {label} | {validation_test_count:.4f} | {probe_enabled_ratio:.4f} | {probe_executed_count_mean:.4f} | {probe_failure_rate:.4f} |".format(
                 label=str(row.get("label", "")),
@@ -328,19 +244,13 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
             continue
         source_plan_feedback_raw = row.get("source_plan_validation_feedback_summary")
         source_plan_feedback = (
-            source_plan_feedback_raw
-            if isinstance(source_plan_feedback_raw, dict)
-            else {}
+            source_plan_feedback_raw if isinstance(source_plan_feedback_raw, dict) else {}
         )
         lines.append(
             "| {label} | {present_ratio:.4f} | {failure_rate:.4f} | {issue_count_mean:.4f} | {probe_issue_count_mean:.4f} | {probe_executed_count_mean:.4f} | {selected_test_count_mean:.4f} | {executed_test_count_mean:.4f} |".format(
                 label=str(row.get("label", "")),
-                present_ratio=_safe_float(
-                    source_plan_feedback.get("present_ratio", 0.0), 0.0
-                ),
-                failure_rate=_safe_float(
-                    source_plan_feedback.get("failure_rate", 0.0), 0.0
-                ),
+                present_ratio=_safe_float(source_plan_feedback.get("present_ratio", 0.0), 0.0),
+                failure_rate=_safe_float(source_plan_feedback.get("failure_rate", 0.0), 0.0),
                 issue_count_mean=_safe_float(
                     source_plan_feedback.get("issue_count_mean", 0.0), 0.0
                 ),
@@ -363,30 +273,20 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
     lines.append(
         "| Label | Present Ratio | Failure Rate | Issue Count Mean | Probe Issue Count Mean | Probe Executed Count Mean | Replay Cache Origin Ratio | Observability Origin Ratio | Source Plan Origin Ratio | Validate Step Origin Ratio |"
     )
-    lines.append(
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
-    )
+    lines.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
     for row in (baseline, current, tuned):
         if not isinstance(row, dict):
             continue
         source_plan_failure_raw = row.get("source_plan_failure_signal_summary")
         source_plan_failure = (
-            source_plan_failure_raw
-            if isinstance(source_plan_failure_raw, dict)
-            else {}
+            source_plan_failure_raw if isinstance(source_plan_failure_raw, dict) else {}
         )
         lines.append(
             "| {label} | {present_ratio:.4f} | {failure_rate:.4f} | {issue_count_mean:.4f} | {probe_issue_count_mean:.4f} | {probe_executed_count_mean:.4f} | {replay_cache_origin_ratio:.4f} | {observability_origin_ratio:.4f} | {source_plan_origin_ratio:.4f} | {validate_step_origin_ratio:.4f} |".format(
                 label=str(row.get("label", "")),
-                present_ratio=_safe_float(
-                    source_plan_failure.get("present_ratio", 0.0), 0.0
-                ),
-                failure_rate=_safe_float(
-                    source_plan_failure.get("failure_rate", 0.0), 0.0
-                ),
-                issue_count_mean=_safe_float(
-                    source_plan_failure.get("issue_count_mean", 0.0), 0.0
-                ),
+                present_ratio=_safe_float(source_plan_failure.get("present_ratio", 0.0), 0.0),
+                failure_rate=_safe_float(source_plan_failure.get("failure_rate", 0.0), 0.0),
+                issue_count_mean=_safe_float(source_plan_failure.get("issue_count_mean", 0.0), 0.0),
                 probe_issue_count_mean=_safe_float(
                     source_plan_failure.get("probe_issue_count_mean", 0.0), 0.0
                 ),
@@ -426,26 +326,26 @@ def main() -> int:
     args = parser.parse_args(sys.argv[1:])
 
     root = Path(__file__).resolve().parents[1]
-    baseline_path = _resolve_path(root=root, value=str(args.baseline))
-    current_path = _resolve_path(root=root, value=str(args.current))
-    tuned_path = _resolve_path(root=root, value=str(args.tuned))
-    output_dir = _resolve_path(root=root, value=str(args.output_dir))
+    baseline_path = resolve_report_path(root=root, value=str(args.baseline))
+    current_path = resolve_report_path(root=root, value=str(args.current))
+    tuned_path = resolve_report_path(root=root, value=str(args.tuned))
+    output_dir = resolve_report_path(root=root, value=str(args.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     baseline = _extract_summary(
         label="baseline",
         path=baseline_path,
-        payload=_load_json(baseline_path),
+        payload=load_report_json(baseline_path),
     )
     current = _extract_summary(
         label="current",
         path=current_path,
-        payload=_load_json(current_path),
+        payload=load_report_json(current_path),
     )
     tuned = _extract_summary(
         label="tuned",
         path=tuned_path,
-        payload=_load_json(tuned_path),
+        payload=load_report_json(tuned_path),
     )
 
     if not baseline["loaded"] or not current["loaded"] or not tuned["loaded"]:

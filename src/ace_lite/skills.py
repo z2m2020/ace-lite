@@ -13,6 +13,7 @@ from typing import Any
 
 import yaml
 
+from ace_lite.skills_catalog import build_skill_catalog_markdown
 from ace_lite.token_estimator import estimate_tokens
 from ace_lite.utils import to_int, to_lower_list, to_string_list
 
@@ -74,9 +75,7 @@ def build_skill_manifest(skills_dir: str | Path) -> list[dict[str, Any]]:
         if not default_sections:
             missing_frontmatter.append("default_sections")
         declared_frontmatter_keys = {str(key).strip() for key in metadata}
-        if not declared_frontmatter_keys.intersection(
-            {"error_keywords", "errors", "triggers"}
-        ):
+        if not declared_frontmatter_keys.intersection({"error_keywords", "errors", "triggers"}):
             missing_frontmatter.append("error_keywords")
         headings = _extract_headings(body) if needs_body_scan else []
         if token_estimate is None:
@@ -91,9 +90,7 @@ def build_skill_manifest(skills_dir: str | Path) -> list[dict[str, Any]]:
             "intents": to_lower_list(metadata.get("intents") or metadata.get("intent")),
             "modules": to_lower_list(metadata.get("modules") or metadata.get("module")),
             "error_keywords": to_lower_list(
-                metadata.get("error_keywords")
-                or metadata.get("errors")
-                or metadata.get("triggers")
+                metadata.get("error_keywords") or metadata.get("errors") or metadata.get("triggers")
             ),
             "topics": to_lower_list(metadata.get("topics")),
             "default_sections": default_sections,
@@ -106,9 +103,7 @@ def build_skill_manifest(skills_dir: str | Path) -> list[dict[str, Any]]:
         }
         manifest.append(entry)
 
-    manifest.sort(
-        key=lambda item: (-int(item.get("priority") or 0), item.get("name", ""))
-    )
+    manifest.sort(key=lambda item: (-int(item.get("priority") or 0), item.get("name", "")))
     return manifest
 
 
@@ -194,9 +189,7 @@ def select_skills(
             matched.append(f"name_tokens:{name_hits}")
             signal_count += 1
 
-        description_hits = sum(
-            1 for token in query_token_set if token in description_tokens
-        )
+        description_hits = sum(1 for token in query_token_set if token in description_tokens)
         if description_hits >= 2:
             score += min(description_hits, 2)
             matched.append(f"description_tokens:{description_hits}")
@@ -293,47 +286,7 @@ def load_sections(
 
 
 def build_skill_catalog(manifest: list[dict[str, Any]]) -> str:
-    """Render a human-facing markdown catalog from manifest metadata only."""
-
-    lines = [
-        "# ACE-Lite Skill Catalog",
-        "",
-        "Discovered Markdown skills with routing metadata and default load surface.",
-    ]
-    if not manifest:
-        return "\n".join([*lines, "", "_No skills discovered._", ""])
-
-    for entry in manifest:
-        name = str(entry.get("name") or "").strip() or "unnamed-skill"
-        path = str(entry.get("path") or "").strip()
-        description = str(entry.get("description") or "").strip()
-        intents = to_lower_list(entry.get("intents") or [])
-        modules = to_lower_list(entry.get("modules") or [])
-        topics = to_lower_list(entry.get("topics") or [])
-        default_sections = to_string_list(entry.get("default_sections") or [])
-        priority = to_int(entry.get("priority"), default=0)
-        token_estimate = to_int(entry.get("token_estimate"), default=0)
-        normalized_token_estimate = int(token_estimate or 0)
-
-        lines.extend(["", f"## {name}"])
-        if path:
-            lines.append(f"- **Path:** `{path}`")
-        if description:
-            lines.append(f"- **Description:** {description}")
-        if intents:
-            lines.append(f"- **Intents:** {', '.join(intents)}")
-        if modules:
-            lines.append(f"- **Modules:** {', '.join(modules)}")
-        if topics:
-            lines.append(f"- **Topics:** {', '.join(topics)}")
-        if default_sections:
-            lines.append(f"- **Default sections:** {', '.join(default_sections)}")
-        lines.append(f"- **Priority:** {priority}")
-        if normalized_token_estimate > 0:
-            lines.append(f"- **Token estimate:** {normalized_token_estimate}")
-
-    lines.append("")
-    return "\n".join(lines)
+    return build_skill_catalog_markdown(manifest)
 
 
 def _split_frontmatter(markdown_text: str) -> tuple[dict[str, Any], str]:
@@ -371,10 +324,7 @@ def _split_frontmatter(markdown_text: str) -> tuple[dict[str, Any], str]:
 
 
 def _extract_headings(markdown_body: str) -> list[str]:
-    return [
-        match.group(2).strip()
-        for match in _HEADING_PATTERN.finditer(markdown_body)
-    ]
+    return [match.group(2).strip() for match in _HEADING_PATTERN.finditer(markdown_body)]
 
 
 def _extract_sections(markdown_body: str) -> dict[str, str]:
@@ -397,11 +347,7 @@ def _extract_selected_sections(
     markdown_body: str,
     headings: list[str] | tuple[str, ...],
 ) -> dict[str, str]:
-    normalized_headings = [
-        str(heading).strip()
-        for heading in headings
-        if str(heading).strip()
-    ]
+    normalized_headings = [str(heading).strip() for heading in headings if str(heading).strip()]
     if not normalized_headings:
         return {}
 
@@ -449,14 +395,10 @@ def _extract_first_sections(
 
 
 def _tokenize(text: str) -> list[str]:
-    return [
-        token for token in re.split(r"[^a-z0-9_]+", text.lower()) if len(token) >= 3
-    ]
+    return [token for token in re.split(r"[^a-z0-9_]+", text.lower()) if len(token) >= 3]
 
 
-def _estimate_skill_token_estimate(
-    *, markdown_body: str, default_sections: list[str]
-) -> int:
+def _estimate_skill_token_estimate(*, markdown_body: str, default_sections: list[str]) -> int:
     sections = (
         _extract_selected_sections(
             markdown_body=markdown_body,
@@ -466,10 +408,7 @@ def _estimate_skill_token_estimate(
         else _extract_first_sections(markdown_body=markdown_body, limit=2)
     )
     if sections:
-        text = "\n\n".join(
-            f"## {title}\n{content}".strip()
-            for title, content in sections.items()
-        )
+        text = "\n\n".join(f"## {title}\n{content}".strip() for title, content in sections.items())
         return int(estimate_tokens(text))
 
     plain = markdown_body.strip()
@@ -500,9 +439,7 @@ def _expand_terms(values: list[str]) -> set[str]:
 
 
 def _matches_error_keyword(query_keyword: str, skill_keyword: str) -> bool:
-    return _normalize_keyword_phrase(query_keyword) == _normalize_keyword_phrase(
-        skill_keyword
-    )
+    return _normalize_keyword_phrase(query_keyword) == _normalize_keyword_phrase(skill_keyword)
 
 
 def _lint_routing_metadata_overlap(entry: dict[str, Any]) -> list[dict[str, str]]:
@@ -730,11 +667,7 @@ def _matches_module_hint(module_hint: str, modules: list[str]) -> bool:
         return False
 
     candidates = {normalized}
-    candidates.update(
-        token
-        for token in re.split(r"[^a-z0-9_]+", normalized)
-        if len(token) >= 3
-    )
+    candidates.update(token for token in re.split(r"[^a-z0-9_]+", normalized) if len(token) >= 3)
     for item in modules:
         lowered = str(item).lower().strip()
         if not lowered:
@@ -758,9 +691,7 @@ def _collect_exact_terms(values: list[str] | tuple[str, ...]) -> set[str]:
     return {
         normalized
         for normalized in (
-            _normalize_keyword_phrase(str(value))
-            for value in values
-            if str(value).strip()
+            _normalize_keyword_phrase(str(value)) for value in values if str(value).strip()
         )
         if normalized
     }
@@ -782,9 +713,7 @@ def _count_phrase_matches(query_text: str, values: list[str] | tuple[str, ...]) 
     matched = {
         normalized
         for normalized in (
-            _normalize_keyword_phrase(str(value))
-            for value in values
-            if str(value).strip()
+            _normalize_keyword_phrase(str(value)) for value in values if str(value).strip()
         )
         if normalized
         and not re.fullmatch(r"[a-z0-9_]+", normalized)

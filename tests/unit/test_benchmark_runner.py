@@ -240,9 +240,7 @@ def test_benchmark_runner_emits_agent_loop_control_plane_summary() -> None:
     class _AgentLoopStubOrchestrator:
         def plan(self, **kwargs) -> dict[str, object]:
             return {
-                "index": {
-                    "candidate_files": [{"path": "src/app.py", "module": "src.app"}]
-                },
+                "index": {"candidate_files": [{"path": "src/app.py", "module": "src.app"}]},
                 "source_plan": {"validation_tests": ["tests.test_app::test_smoke"]},
                 "repomap": {"dependency_recall": {"hit_rate": 1.0}},
                 "observability": {
@@ -287,6 +285,9 @@ def test_benchmark_runner_emits_agent_loop_control_plane_summary() -> None:
         "actions_executed_mean": 1.0,
         "request_more_context_case_count": 0,
         "request_more_context_case_rate": 0.0,
+        "validation_findings_refine_case_count": 0,
+        "validation_findings_refine_case_rate": 0.0,
+        "validation_findings_refine_focus_path_count_mean": 0.0,
         "request_source_plan_retry_case_count": 1,
         "request_source_plan_retry_case_rate": 1.0,
         "request_validation_retry_case_count": 0,
@@ -725,10 +726,7 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
     assert pair_summary["comparable_case_count"] == 2
     assert pair_summary["disagreement_case_count"] == 2
     assert pair_summary["disagreement_rate"] == 1.0
-    assert [
-        (item["executed_arm_id"], item["shadow_arm_id"])
-        for item in pair_summary["pairs"]
-    ] == [
+    assert [(item["executed_arm_id"], item["shadow_arm_id"]) for item in pair_summary["pairs"]] == [
         ("feature", "feature_graph"),
         ("general", "general_hybrid"),
     ]
@@ -955,6 +953,8 @@ def test_benchmark_runner_surfaces_router_arm_case_rows_and_summary(monkeypatch)
         "plan_available_case_rate": 1.0,
         "history_hits_case_count": 0,
         "history_hits_case_rate": 0.0,
+        "history_path_count_mean": 0.0,
+        "history_matched_path_count_mean": 0.0,
         "candidate_review_case_count": 0,
         "candidate_review_case_rate": 0.0,
         "candidate_review_watch_case_count": 0,
@@ -1023,6 +1023,8 @@ def test_benchmark_runner_submits_router_reward_events_when_writer_is_present() 
     assert writer.flush_calls == 1
     assert len(writer.events) == 1
     event = writer.events[0]
+    context_features = event["context_features"]
+    assert isinstance(context_features, dict)
     assert event["query_id"] == "router-case-01"
     assert event["chosen_arm_id"] == "feature"
     assert event["shadow_arm_id"] == "feature_graph"
@@ -1030,10 +1032,10 @@ def test_benchmark_runner_submits_router_reward_events_when_writer_is_present() 
     assert event["is_exploration"] is False
     assert event["reward_source"] == "benchmark_task_success"
     assert event["reward_value"] == 1.0
-    assert event["context_features"]["comparison_lane"] == "router_eval"
-    assert event["context_features"]["router_experiment_enabled"] is False
-    assert event["context_features"]["router_fallback_applied"] is True
-    assert event["context_features"]["router_fallback_reason"] == "experiment_mode_disabled"
+    assert context_features["comparison_lane"] == "router_eval"
+    assert context_features["router_experiment_enabled"] is False
+    assert context_features["router_fallback_applied"] is True
+    assert context_features["router_fallback_reason"] == "experiment_mode_disabled"
     assert results["reward_log_summary"] == {
         "enabled": True,
         "active": True,

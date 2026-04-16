@@ -37,7 +37,9 @@ def _normalize_path(value: Any) -> str:
     return _str(value).strip().replace("\\", "/").lstrip("./")
 
 
-def _resolve_focused_files(*, repomap_stage: dict[str, Any], index_stage: dict[str, Any]) -> list[str]:
+def _resolve_focused_files(
+    *, repomap_stage: dict[str, Any], index_stage: dict[str, Any]
+) -> list[str]:
     focused = repomap_stage.get("focused_files")
     if isinstance(focused, list) and focused:
         return [_normalize_path(item) for item in focused if _normalize_path(item)]
@@ -62,15 +64,23 @@ def _build_recommendations(
 
     recommendations: list[str] = []
     if not focused_files:
-        recommendations.append("Establish at least one focus path before trusting history guidance.")
+        recommendations.append(
+            "Establish at least one focus path before trusting history guidance."
+        )
     if hit_count > 0:
-        recommendations.append("Review the recent matching commits before repeating the same change pattern.")
+        recommendations.append(
+            "Review the recent matching commits before repeating the same change pattern."
+        )
     elif commit_count > 0:
-        recommendations.append("Recent commits were found, but none match the current focus paths closely.")
+        recommendations.append(
+            "Recent commits were found, but none match the current focus paths closely."
+        )
     else:
         recommendations.append("No recent commit history matched the current candidate set.")
     if not recommendations:
-        recommendations.append("History context is neutral; proceed with direct code evidence first.")
+        recommendations.append(
+            "History context is neutral; proceed with direct code evidence first."
+        )
     return recommendations[:4]
 
 
@@ -102,6 +112,7 @@ def run_history_channel(*, ctx: StageContext) -> dict[str, Any]:
         "reason": reason,
         "focused_files": list(focused_files),
         "commit_count": _int(history_hits.get("commit_count", 0)),
+        "path_count": _int(history_hits.get("path_count", 0)),
         "hit_count": _int(history_hits.get("hit_count", 0)),
         "history_hits": history_hits,
         "recommendations": _build_recommendations(

@@ -199,9 +199,7 @@ class TestPipelineOrderInvariance:
         )
 
         # Stage metrics must follow pipeline order
-        stage_names = [
-            metric["stage"] for metric in payload["observability"]["stage_metrics"]
-        ]
+        stage_names = [metric["stage"] for metric in payload["observability"]["stage_metrics"]]
         assert tuple(stage_names) == self.EXPECTED_ORDER
 
         # Pipeline order in output must match constant
@@ -216,12 +214,14 @@ class TestPipelineOrderInvariance:
 class TestSourcePlanFields:
     """Ensure source_plan stage emits required fields."""
 
-    REQUIRED_FIELDS = frozenset({
-        "steps",
-        "constraints",
-        "candidate_chunks",
-        "validation_tests",
-    })
+    REQUIRED_FIELDS = frozenset(
+        {
+            "steps",
+            "constraints",
+            "candidate_chunks",
+            "validation_tests",
+        }
+    )
 
     def test_source_plan_has_required_fields(
         self, sample_repo: Path, fake_skill_manifest: list[dict[str, Any]]
@@ -419,22 +419,24 @@ class TestScoringConstantsBaseline:
 class TestOutputSchemaStability:
     """Ensure top-level output schema remains stable."""
 
-    REQUIRED_TOP_LEVEL_FIELDS = frozenset({
-        "schema_version",
-        "query",
-        "repo",
-        "root",
-        "pipeline_order",
-        "conventions",
-        "memory",
-        "index",
-        "repomap",
-        "augment",
-        "skills",
-        "source_plan",
-        "validation",
-        "observability",
-    })
+    REQUIRED_TOP_LEVEL_FIELDS = frozenset(
+        {
+            "schema_version",
+            "query",
+            "repo",
+            "root",
+            "pipeline_order",
+            "conventions",
+            "memory",
+            "index",
+            "repomap",
+            "augment",
+            "skills",
+            "source_plan",
+            "validation",
+            "observability",
+        }
+    )
 
     def test_required_top_level_fields_present(
         self, sample_repo: Path, fake_skill_manifest: list[dict[str, Any]]
@@ -489,25 +491,19 @@ class TestArchitectureDocsSync:
     DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs" / "design"
 
     def test_architecture_overview_pipeline_matches_runtime(self) -> None:
-        overview = (self.DOCS_ROOT / "ARCHITECTURE_OVERVIEW.md").read_text(
-            encoding="utf-8"
-        )
+        overview = (self.DOCS_ROOT / "ARCHITECTURE_OVERVIEW.md").read_text(encoding="utf-8")
         expected_pipeline = " -> ".join(AceOrchestrator.PIPELINE_ORDER)
 
         assert expected_pipeline in overview
 
     def test_orchestrator_design_pipeline_matches_runtime(self) -> None:
-        design = (self.DOCS_ROOT / "ORCHESTRATOR_DESIGN.md").read_text(
-            encoding="utf-8"
-        )
+        design = (self.DOCS_ROOT / "ORCHESTRATOR_DESIGN.md").read_text(encoding="utf-8")
         expected_pipeline = " -> ".join(AceOrchestrator.PIPELINE_ORDER)
 
         assert expected_pipeline in design
 
     def test_orchestrator_design_lists_all_top_level_stage_payloads(self) -> None:
-        design = (self.DOCS_ROOT / "ORCHESTRATOR_DESIGN.md").read_text(
-            encoding="utf-8"
-        )
+        design = (self.DOCS_ROOT / "ORCHESTRATOR_DESIGN.md").read_text(encoding="utf-8")
         expected_stage_payloads = (
             "`memory`, `index`, `repomap`, `augment`, `skills`, "
             "`history_channel`, `context_refine`, `source_plan`, `validation`"
@@ -567,13 +563,9 @@ class TestArchitectureSeamsAndGuardrailsGolden:
 
     def test_orchestrator_cross_cutting_seams_exist(self) -> None:
         orchestrator_text = _read_repo_text("src/ace_lite/orchestrator.py")
-        finalization_text = _read_repo_text(
-            "src/ace_lite/orchestrator_runtime_finalization.py"
-        )
+        finalization_text = _read_repo_text("src/ace_lite/orchestrator_runtime_finalization.py")
         support_text = _read_repo_text("src/ace_lite/orchestrator_runtime_support.py")
-        support_types_text = _read_repo_text(
-            "src/ace_lite/orchestrator_runtime_support_types.py"
-        )
+        support_types_text = _read_repo_text("src/ace_lite/orchestrator_runtime_support_types.py")
 
         expected_methods = (
             "def _build_plan_payload(",
@@ -605,10 +597,10 @@ class TestArchitectureSeamsAndGuardrailsGolden:
 
         expected_contract_tokens = (
             '"query_profile": _query_flags(normalized_query)',
-            'candidate_domain_summary = _build_candidate_domain_summary(limited_rows)',
+            "candidate_domain_summary = _build_candidate_domain_summary(limited_rows)",
             '"candidate_domain_summary": candidate_domain_summary',
             '"suggested_query_refinements": _build_suggested_query_refinements(',
-            'risk_hints = _build_plan_quick_risk_hints(',
+            "risk_hints = _build_plan_quick_risk_hints(",
             '"risk_hints": risk_hints',
             '"retrieval_policy_profile": retrieval_policy_profile',
             '"docs_enabled": bool(policy.get("docs_enabled", False))',
@@ -627,3 +619,34 @@ class TestArchitectureSeamsAndGuardrailsGolden:
         )
         for field in expected_guardrail_fields:
             assert field in guardrails_text
+
+    def test_recent_support_seam_import_rules_remain_intact(self) -> None:
+        skills_text = _read_repo_text("src/ace_lite/skills.py")
+        cli_skills_text = _read_repo_text("src/ace_lite/cli_app/commands/skills.py")
+        mcp_service_text = _read_repo_text("src/ace_lite/mcp_server/service.py")
+        source_plan_text = _read_repo_text("src/ace_lite/pipeline/stages/source_plan.py")
+        benchmark_script_text = _read_repo_text("scripts/build_validation_rich_trend_report.py")
+
+        assert "from ace_lite.skills_catalog import build_skill_catalog_markdown" in skills_text
+        assert (
+            "from ace_lite.skills_contract import build_skills_catalog_contract" in cli_skills_text
+        )
+        assert (
+            "from ace_lite.skills_contract import build_skills_catalog_contract" in mcp_service_text
+        )
+        assert "from ace_lite.source_plan.context_refine_support import (" in source_plan_text
+        assert "resolve_source_plan_candidate_review" in source_plan_text
+        assert "from ace_lite.benchmark.report_script_support import (" in benchmark_script_text
+
+    def test_golden_contract_maintenance_doc_mentions_recent_seam_rules(self) -> None:
+        maintenance = _read_repo_text("docs/maintainers/GOLDEN_CONTRACT_TEST_MAINTENANCE.md")
+
+        expected_tokens = (
+            "skills_contract.py",
+            "skills_catalog.py",
+            "context_refine_support.py",
+            "report_script_support.py",
+            "Update the architecture golden tests whenever these seam imports move",
+        )
+        for token in expected_tokens:
+            assert token in maintenance

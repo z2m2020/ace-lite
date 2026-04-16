@@ -345,6 +345,15 @@ def test_mcp_service_skills_catalog_empty_dir_returns_no_skills_message(tmp_path
     assert "_No skills discovered._" in payload["markdown"]
 
 
+def test_mcp_service_skills_catalog_contract_shape_is_stable(tmp_path: Path) -> None:
+    service = _make_service(tmp_path)
+    _write_sample_skill(tmp_path / "skills")
+
+    payload = service.skills_catalog(root=str(tmp_path))
+
+    assert set(payload) == {"ok", "root", "skills_dir", "skill_count", "markdown"}
+
+
 def test_mcp_service_memory_graph_view_reads_long_term_graph(tmp_path: Path) -> None:
     service = _make_service(tmp_path)
     db_path = tmp_path / "context-map" / "long_term_memory.db"

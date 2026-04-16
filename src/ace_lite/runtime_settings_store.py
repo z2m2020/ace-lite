@@ -98,6 +98,14 @@ def resolve_user_runtime_settings_last_known_good_path(
     return (base / candidate).resolve()
 
 
+def runtime_settings_paths_collide(
+    *,
+    current_path: str | Path,
+    last_known_good_path: str | Path,
+) -> bool:
+    return Path(current_path).resolve() == Path(last_known_good_path).resolve()
+
+
 def validate_runtime_settings_record(payload: Mapping[str, Any]) -> dict[str, Any] | None:
     if not isinstance(payload, Mapping):
         return None
@@ -183,24 +191,16 @@ def inspect_runtime_settings_record(path: str | Path) -> dict[str, Any]:
         "path": str(target),
         "exists": bool(exists),
         "valid": valid_payload is not None,
-        "status": (
-            "valid"
-            if valid_payload is not None
-            else ("invalid" if exists else "missing")
-        ),
+        "status": ("valid" if valid_payload is not None else ("invalid" if exists else "missing")),
         "fingerprint": (
-            str(valid_payload.get("fingerprint") or "")
-            if valid_payload is not None
-            else ""
+            str(valid_payload.get("fingerprint") or "") if valid_payload is not None else ""
         ),
         "schema_version": (
             int(valid_payload.get("schema_version", RUNTIME_SETTINGS_SCHEMA_VERSION))
             if valid_payload is not None
             else None
         ),
-        "selected_profile": (
-            str(selected_profile) if selected_profile is not None else None
-        ),
+        "selected_profile": (str(selected_profile) if selected_profile is not None else None),
     }
 
 
@@ -247,6 +247,7 @@ __all__ = [
     "persist_runtime_settings_record",
     "resolve_user_runtime_settings_last_known_good_path",
     "resolve_user_runtime_settings_path",
+    "runtime_settings_paths_collide",
     "validate_runtime_settings_record",
     "write_runtime_settings_record",
 ]

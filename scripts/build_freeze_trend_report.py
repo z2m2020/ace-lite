@@ -10,30 +10,14 @@ from pathlib import Path
 from typing import Any
 
 from ace_lite.benchmark.pq_overlay import resolve_freeze_pq_003_overlay
-
-
-def _resolve_path(*, root: Path, value: str) -> Path:
-    candidate = Path(str(value).strip())
-    if candidate.is_absolute():
-        return candidate
-    return (root / candidate).resolve()
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    if not path.exists() or not path.is_file():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def _safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except Exception:
-        return float(default)
+from ace_lite.benchmark.report_script_support import (
+    collect_recent_git_diff_paths_with_runner,
+    load_report_json,
+    resolve_report_path,
+)
+from ace_lite.benchmark.report_script_support import (
+    safe_float as _safe_float,
+)
 
 
 def _iter_report_paths(*, history_root: Path, latest_report: Path | None, limit: int) -> list[Path]:
@@ -80,20 +64,12 @@ def _extract_failure_signatures(payload: dict[str, Any]) -> list[str]:
             metric = str(row.get("metric") or "unknown")
             signatures.append(f"{gate_name}:{metric}")
     validation_rich_raw = payload.get("validation_rich_benchmark")
-    validation_rich = (
-        validation_rich_raw if isinstance(validation_rich_raw, dict) else {}
-    )
+    validation_rich = validation_rich_raw if isinstance(validation_rich_raw, dict) else {}
     validation_gate_raw = validation_rich.get("retrieval_control_plane_gate_summary")
-    validation_gate = (
-        validation_gate_raw if isinstance(validation_gate_raw, dict) else {}
-    )
-    validation_frontier_gate_raw = validation_rich.get(
-        "retrieval_frontier_gate_summary"
-    )
+    validation_gate = validation_gate_raw if isinstance(validation_gate_raw, dict) else {}
+    validation_frontier_gate_raw = validation_rich.get("retrieval_frontier_gate_summary")
     validation_frontier_gate = (
-        validation_frontier_gate_raw
-        if isinstance(validation_frontier_gate_raw, dict)
-        else {}
+        validation_frontier_gate_raw if isinstance(validation_frontier_gate_raw, dict) else {}
     )
     if validation_gate and not bool(validation_gate.get("gate_passed", False)):
         failed_checks_raw = validation_gate.get("failed_checks")
@@ -105,14 +81,10 @@ def _extract_failure_signatures(payload: dict[str, Any]) -> list[str]:
                     signatures.append(f"validation_rich_q2_gate:{metric}")
         else:
             signatures.append("validation_rich_q2_gate:gate_failed")
-    if validation_frontier_gate and not bool(
-        validation_frontier_gate.get("gate_passed", False)
-    ):
+    if validation_frontier_gate and not bool(validation_frontier_gate.get("gate_passed", False)):
         frontier_failed_checks_raw = validation_frontier_gate.get("failed_checks")
         frontier_failed_checks = (
-            frontier_failed_checks_raw
-            if isinstance(frontier_failed_checks_raw, list)
-            else []
+            frontier_failed_checks_raw if isinstance(frontier_failed_checks_raw, list) else []
         )
         if frontier_failed_checks:
             for item in frontier_failed_checks:
@@ -148,13 +120,9 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     validation_rich = validation_rich_raw if isinstance(validation_rich_raw, dict) else {}
     validation_gate_raw = validation_rich.get("retrieval_control_plane_gate_summary")
     validation_gate = validation_gate_raw if isinstance(validation_gate_raw, dict) else {}
-    validation_frontier_gate_raw = validation_rich.get(
-        "retrieval_frontier_gate_summary"
-    )
+    validation_frontier_gate_raw = validation_rich.get("retrieval_frontier_gate_summary")
     validation_frontier_gate = (
-        validation_frontier_gate_raw
-        if isinstance(validation_frontier_gate_raw, dict)
-        else {}
+        validation_frontier_gate_raw if isinstance(validation_frontier_gate_raw, dict) else {}
     )
     validation_deep_symbol_raw = validation_rich.get("deep_symbol_summary")
     validation_deep_symbol = (
@@ -165,9 +133,7 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         validation_native_scip_raw if isinstance(validation_native_scip_raw, dict) else {}
     )
     validation_probe_raw = validation_rich.get("validation_probe_summary")
-    validation_probe = (
-        validation_probe_raw if isinstance(validation_probe_raw, dict) else {}
-    )
+    validation_probe = validation_probe_raw if isinstance(validation_probe_raw, dict) else {}
     validation_source_plan_feedback_raw = validation_rich.get(
         "source_plan_validation_feedback_summary"
     )
@@ -176,9 +142,7 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(validation_source_plan_feedback_raw, dict)
         else {}
     )
-    validation_source_plan_failure_raw = validation_rich.get(
-        "source_plan_failure_signal_summary"
-    )
+    validation_source_plan_failure_raw = validation_rich.get("source_plan_failure_signal_summary")
     validation_source_plan_failure = (
         validation_source_plan_failure_raw
         if isinstance(validation_source_plan_failure_raw, dict)
@@ -197,9 +161,7 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "concept_noise_rate": _safe_float(concept_metrics.get("noise_rate"), 0.0),
         "external_precision_at_k": _safe_float(external_metrics.get("precision_at_k"), 0.0),
         "external_noise_rate": _safe_float(external_metrics.get("noise_rate"), 0.0),
-        "embedding_enabled_ratio": _safe_float(
-            embedding_means.get("embedding_enabled_ratio"), 0.0
-        ),
+        "embedding_enabled_ratio": _safe_float(embedding_means.get("embedding_enabled_ratio"), 0.0),
         "validation_rich_q2_gate_passed": bool(validation_gate.get("gate_passed", False)),
         "validation_rich_q2_shadow_coverage": _safe_float(
             validation_gate.get("adaptive_router_shadow_coverage"), 0.0
@@ -210,9 +172,7 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "validation_rich_q2_latency_p95_ms": _safe_float(
             validation_gate.get("latency_p95_ms"), 0.0
         ),
-        "validation_rich_q3_gate_passed": bool(
-            validation_frontier_gate.get("gate_passed", False)
-        ),
+        "validation_rich_q3_gate_passed": bool(validation_frontier_gate.get("gate_passed", False)),
         "validation_rich_q3_deep_symbol_case_recall": _safe_float(
             validation_frontier_gate.get("deep_symbol_case_recall"), 0.0
         ),
@@ -256,28 +216,10 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
             validation_source_plan_failure.get("replay_cache_origin_ratio"), 0.0
         ),
         "validation_probe_summary": dict(validation_probe),
-        "source_plan_validation_feedback_summary": dict(
-            validation_source_plan_feedback
-        ),
+        "source_plan_validation_feedback_summary": dict(validation_source_plan_feedback),
         "source_plan_failure_signal_summary": dict(validation_source_plan_failure),
         "failure_signatures": _extract_failure_signatures(payload),
     }
-
-
-def _collect_suspect_files(*, root: Path, limit: int = 20) -> list[str]:
-    command = ["git", "diff", "--name-only", "HEAD~1", "HEAD"]
-    completed = subprocess.run(
-        command,
-        cwd=str(root),
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if completed.returncode != 0:
-        return []
-    rows = [line.strip().replace("\\", "/") for line in str(completed.stdout or "").splitlines()]
-    filtered = [line for line in rows if line]
-    return filtered[: max(0, int(limit))]
 
 
 def _build_delta(*, latest: dict[str, Any], previous: dict[str, Any]) -> dict[str, float]:
@@ -349,29 +291,19 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         lines.append(
             "- Validation-rich Q2 gate: passed={passed}, shadow_coverage={shadow:.4f}, risk_upgrade_gain={gain:.4f}, latency_p95_ms={latency:.2f}".format(
                 passed=bool(latest.get("validation_rich_q2_gate_passed", False)),
-                shadow=_safe_float(
-                    latest.get("validation_rich_q2_shadow_coverage"), 0.0
-                ),
-                gain=_safe_float(
-                    latest.get("validation_rich_q2_risk_upgrade_gain"), 0.0
-                ),
-                latency=_safe_float(
-                    latest.get("validation_rich_q2_latency_p95_ms"), 0.0
-                ),
+                shadow=_safe_float(latest.get("validation_rich_q2_shadow_coverage"), 0.0),
+                gain=_safe_float(latest.get("validation_rich_q2_risk_upgrade_gain"), 0.0),
+                latency=_safe_float(latest.get("validation_rich_q2_latency_p95_ms"), 0.0),
             )
         )
         lines.append(
             "- Validation-rich Q3 gate: passed={passed}, deep_symbol_case_recall={recall:.4f}, native_scip_loaded_rate={native_scip:.4f}, precision_at_k={precision:.4f}, noise_rate={noise:.4f}".format(
                 passed=bool(latest.get("validation_rich_q3_gate_passed", False)),
-                recall=_safe_float(
-                    latest.get("validation_rich_q3_deep_symbol_case_recall"), 0.0
-                ),
+                recall=_safe_float(latest.get("validation_rich_q3_deep_symbol_case_recall"), 0.0),
                 native_scip=_safe_float(
                     latest.get("validation_rich_q3_native_scip_loaded_rate"), 0.0
                 ),
-                precision=_safe_float(
-                    latest.get("validation_rich_q3_precision_at_k"), 0.0
-                ),
+                precision=_safe_float(latest.get("validation_rich_q3_precision_at_k"), 0.0),
                 noise=_safe_float(latest.get("validation_rich_q3_noise_rate"), 0.0),
             )
         )
@@ -388,42 +320,26 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         )
         lines.append(
             "- Validation-rich Q4 validation probe: probe_enabled_ratio={enabled:.4f}, probe_failure_rate={failure:.4f}".format(
-                enabled=_safe_float(
-                    latest.get("validation_rich_q4_probe_enabled_ratio"), 0.0
-                ),
-                failure=_safe_float(
-                    latest.get("validation_rich_q4_probe_failure_rate"), 0.0
-                ),
+                enabled=_safe_float(latest.get("validation_rich_q4_probe_enabled_ratio"), 0.0),
+                failure=_safe_float(latest.get("validation_rich_q4_probe_failure_rate"), 0.0),
             )
         )
         lines.append(
             "- Validation-rich Q4 source-plan feedback: present_ratio={present:.4f}, failure_rate={failure:.4f}, executed_test_count_mean={executed:.4f}".format(
-                present=_safe_float(
-                    latest.get("validation_rich_q4_feedback_present_ratio"), 0.0
-                ),
-                failure=_safe_float(
-                    latest.get("validation_rich_q4_feedback_failure_rate"), 0.0
-                ),
+                present=_safe_float(latest.get("validation_rich_q4_feedback_present_ratio"), 0.0),
+                failure=_safe_float(latest.get("validation_rich_q4_feedback_failure_rate"), 0.0),
                 executed=_safe_float(
-                    latest.get(
-                        "validation_rich_q4_feedback_executed_test_count_mean"
-                    ),
+                    latest.get("validation_rich_q4_feedback_executed_test_count_mean"),
                     0.0,
                 ),
             )
         )
         lines.append(
             "- Validation-rich Q1 failure signal: present_ratio={present:.4f}, failure_rate={failure:.4f}, replay_cache_origin_ratio={replay:.4f}".format(
-                present=_safe_float(
-                    latest.get("validation_rich_q1_failure_present_ratio"), 0.0
-                ),
-                failure=_safe_float(
-                    latest.get("validation_rich_q1_failure_failure_rate"), 0.0
-                ),
+                present=_safe_float(latest.get("validation_rich_q1_failure_present_ratio"), 0.0),
+                failure=_safe_float(latest.get("validation_rich_q1_failure_failure_rate"), 0.0),
                 replay=_safe_float(
-                    latest.get(
-                        "validation_rich_q1_failure_replay_cache_origin_ratio"
-                    ),
+                    latest.get("validation_rich_q1_failure_replay_cache_origin_ratio"),
                     0.0,
                 ),
             )
@@ -445,46 +361,26 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                 e_prec=_safe_float(delta.get("external_precision_at_k"), 0.0),
                 e_noise=_safe_float(delta.get("external_noise_rate"), 0.0),
                 emb=_safe_float(delta.get("embedding_enabled_ratio"), 0.0),
-                shadow=_safe_float(
-                    delta.get("validation_rich_q2_shadow_coverage"), 0.0
-                ),
-                gain=_safe_float(
-                    delta.get("validation_rich_q2_risk_upgrade_gain"), 0.0
-                ),
-                latency=_safe_float(
-                    delta.get("validation_rich_q2_latency_p95_ms"), 0.0
-                ),
-                q3_recall=_safe_float(
-                    delta.get("validation_rich_q3_deep_symbol_case_recall"), 0.0
-                ),
-                q3_scip=_safe_float(
-                    delta.get("validation_rich_q3_native_scip_loaded_rate"), 0.0
-                ),
-                q3_precision=_safe_float(
-                    delta.get("validation_rich_q3_precision_at_k"), 0.0
-                ),
-                q3_noise=_safe_float(
-                    delta.get("validation_rich_q3_noise_rate"), 0.0
-                ),
+                shadow=_safe_float(delta.get("validation_rich_q2_shadow_coverage"), 0.0),
+                gain=_safe_float(delta.get("validation_rich_q2_risk_upgrade_gain"), 0.0),
+                latency=_safe_float(delta.get("validation_rich_q2_latency_p95_ms"), 0.0),
+                q3_recall=_safe_float(delta.get("validation_rich_q3_deep_symbol_case_recall"), 0.0),
+                q3_scip=_safe_float(delta.get("validation_rich_q3_native_scip_loaded_rate"), 0.0),
+                q3_precision=_safe_float(delta.get("validation_rich_q3_precision_at_k"), 0.0),
+                q3_noise=_safe_float(delta.get("validation_rich_q3_noise_rate"), 0.0),
                 q3_case_count=_safe_float(
                     delta.get("validation_rich_q3_deep_symbol_case_count"), 0.0
                 ),
                 q3_document=_safe_float(
-                    delta.get(
-                        "validation_rich_q3_native_scip_document_count_mean"
-                    ),
+                    delta.get("validation_rich_q3_native_scip_document_count_mean"),
                     0.0,
                 ),
             )
         )
         lines.append(
             "- Validation-rich Q4 delta: probe_enabled={probe_enabled:+.4f}, probe_failure={probe_failure:+.4f}, feedback_present={feedback_present:+.4f}, feedback_failure={feedback_failure:+.4f}, feedback_executed_tests={feedback_executed:+.4f}".format(
-                probe_enabled=_safe_float(
-                    delta.get("validation_rich_q4_probe_enabled_ratio"), 0.0
-                ),
-                probe_failure=_safe_float(
-                    delta.get("validation_rich_q4_probe_failure_rate"), 0.0
-                ),
+                probe_enabled=_safe_float(delta.get("validation_rich_q4_probe_enabled_ratio"), 0.0),
+                probe_failure=_safe_float(delta.get("validation_rich_q4_probe_failure_rate"), 0.0),
                 feedback_present=_safe_float(
                     delta.get("validation_rich_q4_feedback_present_ratio"), 0.0
                 ),
@@ -492,25 +388,17 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     delta.get("validation_rich_q4_feedback_failure_rate"), 0.0
                 ),
                 feedback_executed=_safe_float(
-                    delta.get(
-                        "validation_rich_q4_feedback_executed_test_count_mean"
-                    ),
+                    delta.get("validation_rich_q4_feedback_executed_test_count_mean"),
                     0.0,
                 ),
             )
         )
         lines.append(
             "- Validation-rich Q1 delta: failure_present={present:+.4f}, failure_rate={failure:+.4f}, replay_cache_origin={replay:+.4f}".format(
-                present=_safe_float(
-                    delta.get("validation_rich_q1_failure_present_ratio"), 0.0
-                ),
-                failure=_safe_float(
-                    delta.get("validation_rich_q1_failure_failure_rate"), 0.0
-                ),
+                present=_safe_float(delta.get("validation_rich_q1_failure_present_ratio"), 0.0),
+                failure=_safe_float(delta.get("validation_rich_q1_failure_failure_rate"), 0.0),
                 replay=_safe_float(
-                    delta.get(
-                        "validation_rich_q1_failure_replay_cache_origin_ratio"
-                    ),
+                    delta.get("validation_rich_q1_failure_replay_cache_origin_ratio"),
                     0.0,
                 ),
             )
@@ -548,7 +436,9 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
 
     lines.append("## History")
     lines.append("")
-    lines.append("| Generated | Passed | Tabiv3 p95 | Repomap p95 | Concept P | Concept N | External P | External N | Embedding Ratio | Validation Q2 Gate | Validation Q3 Gate |")
+    lines.append(
+        "| Generated | Passed | Tabiv3 p95 | Repomap p95 | Concept P | Concept N | External P | External N | Embedding Ratio | Validation Q2 Gate | Validation Q3 Gate |"
+    )
     lines.append("| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | :---: |")
     for row in rows:
         if not isinstance(row, dict):
@@ -573,7 +463,9 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build trend report from freeze regression history.")
+    parser = argparse.ArgumentParser(
+        description="Build trend report from freeze regression history."
+    )
     parser.add_argument(
         "--history-root",
         default="artifacts/release-freeze/history",
@@ -598,9 +490,9 @@ def main() -> int:
     args = parser.parse_args(sys.argv[1:])
 
     root = Path(__file__).resolve().parents[1]
-    history_root = _resolve_path(root=root, value=str(args.history_root))
-    latest_report = _resolve_path(root=root, value=str(args.latest_report))
-    output_dir = _resolve_path(root=root, value=str(args.output_dir))
+    history_root = resolve_report_path(root=root, value=str(args.history_root))
+    latest_report = resolve_report_path(root=root, value=str(args.latest_report))
+    output_dir = resolve_report_path(root=root, value=str(args.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     report_paths = _iter_report_paths(
@@ -613,7 +505,7 @@ def main() -> int:
     failure_counter: Counter[str] = Counter()
     latest_pq_003_overlay: dict[str, Any] = {}
     for path in report_paths:
-        payload = _load_json(path)
+        payload = load_report_json(path)
         if not payload:
             continue
         row = _extract_row(path=path, payload=payload)
@@ -631,7 +523,10 @@ def main() -> int:
         {"signature": str(signature), "count": int(count)}
         for signature, count in failure_counter.most_common(3)
     ]
-    suspect_files = _collect_suspect_files(root=root)
+    suspect_files = collect_recent_git_diff_paths_with_runner(
+        root=root,
+        subprocess_module=subprocess,
+    )
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),

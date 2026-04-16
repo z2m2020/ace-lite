@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 
 from ace_lite.cli_app.docs_links import get_help_template
-from ace_lite.skills import build_skill_catalog, build_skill_manifest
+from ace_lite.skills_contract import build_skills_catalog_contract
 
 
 def _resolve_skills_path(*, root: str, skills_dir: str) -> Path:
@@ -34,8 +34,12 @@ def skills_group() -> None:
     help="Skills directory relative to --root, or absolute path.",
 )
 def skills_catalog_command(root: str, skills_dir: str) -> None:
-    manifest = build_skill_manifest(_resolve_skills_path(root=root, skills_dir=skills_dir))
-    click.echo(build_skill_catalog(manifest))
+    root_path = Path(root).expanduser().resolve()
+    contract = build_skills_catalog_contract(
+        root_path=root_path,
+        skills_path=_resolve_skills_path(root=root, skills_dir=skills_dir),
+    )
+    click.echo(str(contract.get("markdown") or ""))
 
 
 __all__ = ["skills_catalog_command", "skills_group"]

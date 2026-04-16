@@ -81,6 +81,36 @@ def test_prepare_repomap_seed_runtime_filters_docs_hint_and_dedupes_paths() -> N
     assert runtime.seed_paths_for_cache == ["src/a.py", "src/b.py"]
 
 
+def test_prepare_repomap_seed_runtime_prunes_seed_paths_to_ranked_limit() -> None:
+    files_map = {
+        "src/a.py": {"language": "python"},
+        "src/b.py": {"language": "python"},
+        "src/c.py": {"language": "python"},
+        "src/d.py": {"language": "python"},
+        "src/e.py": {"language": "python"},
+    }
+    index_stage = {
+        "candidate_files": [
+            {"path": "src/a.py", "score": 9.0},
+            {"path": "src/a.py", "score": 8.0},
+            {"path": "src/b.py", "score": 7.0},
+            {"path": "src/c.py", "score": 6.0},
+            {"path": "src/d.py", "score": 5.0},
+            {"path": "src/e.py", "score": 4.0},
+        ],
+    }
+
+    runtime = prepare_repomap_seed_runtime(
+        index_stage=index_stage,
+        index_files=files_map,
+        repomap_top_k=2,
+        normalize_path=normalize_repomap_path,
+        inject_worktree_seed_candidates=lambda **kwargs: (kwargs["seed_candidates"], 0),
+    )
+
+    assert runtime.seed_paths_for_cache == ["src/a.py", "src/b.py", "src/c.py", "src/d.py"]
+
+
 def test_prepare_repomap_stage_cache_runtime_builds_keys_and_meta(tmp_path: Path) -> None:
     seed_runtime = RepomapSeedRuntime(
         seed_candidates=[{"path": "src/a.py", "score": 1.0}],
@@ -123,7 +153,9 @@ def test_prepare_repomap_stage_cache_runtime_builds_keys_and_meta(tmp_path: Path
         cache_content_version="cache-v1",
         precompute_content_version="pre-v1",
         seed_runtime=seed_runtime,
-        build_subgraph_contract_salt=lambda stage: f"salt:{stage['subgraph_payload']['payload_version']}",
+        build_subgraph_contract_salt=lambda stage: (
+            f"salt:{stage['subgraph_payload']['payload_version']}"
+        ),
         build_repomap_cache_key_fn=build_cache_key,
         build_repomap_precompute_key_fn=build_precompute_key,
         load_cached_repomap_checked_fn=load_cache,
@@ -189,9 +221,17 @@ def test_build_repomap_stage_payload_from_cache_runtime_stores_missing_artifacts
         tokenizer_model="tok-y",
         cache_runtime=cache_runtime,
         build_stage_precompute_payload_fn=lambda **kwargs: {"precomputed": True, **kwargs},
-        build_stage_repo_map_fn=lambda **kwargs: {"enabled": True, "seed_paths": ["src/a.py"], **kwargs},
-        store_cached_repomap_fn=lambda **kwargs: calls["store"].append({"kind": "cache", **kwargs}) or True,
-        store_cached_repomap_precompute_fn=lambda **kwargs: calls["store"].append({"kind": "precompute", **kwargs}) or True,
+        build_stage_repo_map_fn=lambda **kwargs: {
+            "enabled": True,
+            "seed_paths": ["src/a.py"],
+            **kwargs,
+        },
+        store_cached_repomap_fn=lambda **kwargs: (
+            calls["store"].append({"kind": "cache", **kwargs}) or True
+        ),
+        store_cached_repomap_precompute_fn=lambda **kwargs: (
+            calls["store"].append({"kind": "precompute", **kwargs}) or True
+        ),
     )
 
     assert payload["enabled"] is True

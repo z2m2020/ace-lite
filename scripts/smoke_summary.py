@@ -152,9 +152,7 @@ def _is_healthy(record: dict) -> bool:
         return False
     if record["file_count"] == 0:
         return False
-    if record["step_count"] == 0:
-        return False
-    return True
+    return record["step_count"] != 0
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────

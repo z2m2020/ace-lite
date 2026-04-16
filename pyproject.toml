@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ace-lite-engine"
-version = "0.3.81"
+version = "0.3.82"
 description = "Local-first Active Context Engine for AI coding"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -67,7 +67,10 @@ module = [
   "ace_lite.orchestrator_runtime_finalization",
   "ace_lite.orchestrator_runtime_support",
   "ace_lite.cli_app.orchestrator_factory_support",
-  "ace_lite.cli_app.orchestrator_factory"
+  "ace_lite.cli_app.orchestrator_factory",
+  "ace_lite.runtime_settings",
+  "ace_lite.plan_quick",
+  "ace_lite.benchmark.report"
 ]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true

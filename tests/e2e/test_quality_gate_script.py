@@ -267,12 +267,7 @@ def test_run_quality_gate_emits_report_only_hotspot_summary(
     hotspot_path = tmp_path / "src" / "ace_lite" / "orchestrator.py"
     hotspot_path.parent.mkdir(parents=True, exist_ok=True)
     hotspot_path.write_text(
-        (
-            "def plan(flag: bool) -> int:\n"
-            "    if flag:\n"
-            "        return 1\n"
-            "    return 0\n"
-        ),
+        ("def plan(flag: bool) -> int:\n    if flag:\n        return 1\n    return 0\n"),
         encoding="utf-8",
     )
 
@@ -327,7 +322,9 @@ def test_hotspot_baseline_matches_current_targets() -> None:
 
     hotspots = payload.get("hotspots")
     assert isinstance(hotspots, list)
-    assert [item.get("path") for item in hotspots if isinstance(item, dict)] == module.HOTSPOT_TARGETS
+    assert [
+        item.get("path") for item in hotspots if isinstance(item, dict)
+    ] == module.HOTSPOT_TARGETS
     keyed = {
         item["path"]: item
         for item in hotspots
@@ -378,12 +375,7 @@ def test_run_quality_gate_can_refresh_hotspot_baseline(
     hotspot_path = tmp_path / "src" / "ace_lite" / "orchestrator.py"
     hotspot_path.parent.mkdir(parents=True, exist_ok=True)
     hotspot_path.write_text(
-        (
-            "def plan(flag: bool) -> int:\n"
-            "    if flag:\n"
-            "        return 1\n"
-            "    return 0\n"
-        ),
+        ("def plan(flag: bool) -> int:\n    if flag:\n        return 1\n    return 0\n"),
         encoding="utf-8",
     )
 
@@ -604,9 +596,33 @@ def test_main_accepts_hotspot_path_arguments(
         "ace_lite.orchestrator_runtime_support",
         "ace_lite.cli_app.orchestrator_factory_support",
         "ace_lite.cli_app.orchestrator_factory",
+        "ace_lite.plan_quick_strategies",
+        "ace_lite.plan_quick_ranking",
     ]
     hotspot_paths = [item["path"] for item in summary["hotspot_summary"]["hotspots"]]
     assert hotspot_paths[:2] == [
         "src/ace_lite/orchestrator.py",
         "src/ace_lite/plan_quick.py",
+    ]
+
+
+def test_hotspot_mypy_commands_expand_runtime_and_benchmark_companions() -> None:
+    module = _load_script("run_quality_gate.py")
+
+    commands = module._quality_hotspot_commands(
+        python_exe=sys.executable,
+        hotspot_paths=[
+            "src/ace_lite/runtime_settings.py",
+            "src/ace_lite/benchmark/report.py",
+        ],
+    )
+
+    assert commands[1][0] == "mypy_hotspots"
+    assert commands[1][1][3:] == [
+        "ace_lite.runtime_settings",
+        "ace_lite.benchmark.report",
+        "ace_lite.runtime_settings_projection",
+        "ace_lite.runtime_settings_store",
+        "ace_lite.benchmark.report_summary",
+        "ace_lite.benchmark.report_observability",
     ]

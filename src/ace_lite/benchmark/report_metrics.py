@@ -140,6 +140,11 @@ METRIC_ORDER = (
     "skills_skipped_for_budget_mean",
     "skills_metadata_only_routing_ratio",
     "skills_precomputed_route_ratio",
+    "skills_manifest_metadata_only_selected_mean",
+    "skills_manifest_body_scan_selected_mean",
+    "skills_selected_matched_count_mean",
+    "skills_selected_signal_count_mean",
+    "skills_selected_priority_mean",
     "candidate_rows_materialized_mean",
     "candidate_chunks_materialized_mean",
     "source_plan_candidate_chunks_materialized_mean",
@@ -265,11 +270,12 @@ SLO_SIGNAL_ORDER = (
     "slo_downgrade_case_rate",
 )
 
-ALL_METRIC_ORDER = METRIC_ORDER + tuple(
-    metric for _, metric in STAGE_LATENCY_ORDER if metric not in METRIC_ORDER
-) + tuple(
-    metric for metric in SLO_BUDGET_LIMIT_ORDER if metric not in METRIC_ORDER
-) + tuple(metric for metric in SLO_SIGNAL_ORDER if metric not in METRIC_ORDER)
+ALL_METRIC_ORDER = (
+    METRIC_ORDER
+    + tuple(metric for _, metric in STAGE_LATENCY_ORDER if metric not in METRIC_ORDER)
+    + tuple(metric for metric in SLO_BUDGET_LIMIT_ORDER if metric not in METRIC_ORDER)
+    + tuple(metric for metric in SLO_SIGNAL_ORDER if metric not in METRIC_ORDER)
+)
 
 COMPARABLE_METRIC_ORDER = ALL_METRIC_ORDER
 

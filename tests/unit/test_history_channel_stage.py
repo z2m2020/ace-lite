@@ -49,9 +49,11 @@ def test_run_history_channel_emits_stable_history_payload() -> None:
     assert payload["reason"] == "matched"
     assert payload["focused_files"] == ["src/app.py"]
     assert payload["commit_count"] == 2
+    assert payload["path_count"] == 1
     assert payload["hit_count"] == 1
     assert payload["history_hits"]["schema_version"] == "history_hits_v1"
     assert payload["history_hits"]["hits"][0]["hash"] == "abc123"
+    assert payload["history_hits"]["hits"][0]["matched_path_count"] == 1
     assert payload["recommendations"]
 
 
@@ -71,5 +73,6 @@ def test_run_history_channel_handles_missing_history_fail_open() -> None:
 
     assert payload["enabled"] is False
     assert payload["reason"] == "disabled"
+    assert payload["path_count"] == 1
     assert payload["hit_count"] == 0
     assert payload["history_hits"]["hit_count"] == 0

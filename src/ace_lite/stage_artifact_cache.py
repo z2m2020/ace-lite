@@ -10,8 +10,9 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from threading import Lock
-from typing import Any, cast
+from typing import Any
 
+from ace_lite.repomap.cache_utils import selective_copy_payload
 from ace_lite.stage_artifact_cache_store import (
     STAGE_ARTIFACT_CACHE_WRITE_ORDER,
     StageArtifactCacheEntry,
@@ -22,7 +23,6 @@ from ace_lite.stage_artifact_cache_store import (
     resolve_stage_artifact_payload_root,
     resolve_stage_artifact_temp_root,
 )
-from ace_lite.repomap.cache_utils import selective_copy_payload
 from ace_lite.token_estimator import estimate_payload_tokens, normalize_tokenizer_model
 
 WriteStepRecorder = Callable[[str], None]

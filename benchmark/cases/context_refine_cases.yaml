@@ -1,0 +1,59 @@
+cases:
+  - case_id: context-refine-review-01
+    query: how does context_refine classify keep downrank drop and need_more_read for source plan candidates
+    expected_keys: [context_refine, candidate_review]
+    filters:
+      include_paths:
+        - src/ace_lite/pipeline/stages/context_refine.py
+        - src/ace_lite/pipeline/contracts.py
+        - tests/unit/test_context_refine_stage.py
+      exclude_globs:
+        - scripts/*context_refine*.py
+    top_k: 8
+    comparison_lane: context_refine
+    task_success:
+      mode: positive
+
+  - case_id: context-refine-source-plan-02
+    query: where does source_plan consume context_refine candidate_review through the support seam
+    expected_keys: [source_plan, candidate_review]
+    filters:
+      include_paths:
+        - src/ace_lite/pipeline/stages/source_plan.py
+        - src/ace_lite/source_plan/context_refine_support.py
+        - tests/unit/test_source_plan_context_refine_support.py
+      exclude_globs:
+        - scripts/*context_refine*.py
+    top_k: 8
+    comparison_lane: context_refine
+    task_success:
+      mode: positive
+
+  - case_id: context-refine-report-03
+    query: how is context_refine_summary rendered in benchmark observability reports
+    expected_keys: [benchmark, context_refine]
+    filters:
+      include_paths:
+        - src/ace_lite/benchmark/summaries.py
+        - src/ace_lite/benchmark/report_observability_routing.py
+        - tests/unit/test_benchmark_runner.py
+      exclude_globs:
+        - scripts/*context_refine*.py
+    top_k: 8
+    comparison_lane: context_refine
+    task_success:
+      mode: positive
+
+  - case_id: context-refine-governance-negative-04
+    query: where are the docs and tests that stop source_plan from reading raw context_refine action lists
+    expected_keys: [report layer, governance]
+    filters:
+      include_paths:
+        - tests/unit/test_report_layer_governance_boundaries.py
+        - docs/maintainers/REPORT_LAYER_GOVERNANCE.md
+      exclude_globs:
+        - scripts/*context_refine*.py
+    top_k: 8
+    comparison_lane: context_refine
+    task_success:
+      mode: negative_control

@@ -30,15 +30,17 @@ def _build_sample_repo(tmp_path: Path) -> Path:
 
 def _build_orchestrator(index_cache_path: Path) -> AceOrchestrator:
     return AceOrchestrator(
-        config=OrchestratorConfig(
-            index={
-                "languages": ["python"],
-                "cache_path": str(index_cache_path),
-            },
-            repomap={"enabled": False},
-            lsp={"enabled": False},
-            cochange={"enabled": False},
-            plugins={"enabled": False},
+        config=OrchestratorConfig.model_validate(
+            {
+                "index": {
+                    "languages": ["python"],
+                    "cache_path": str(index_cache_path),
+                },
+                "repomap": {"enabled": False},
+                "lsp": {"enabled": False},
+                "cochange": {"enabled": False},
+                "plugins": {"enabled": False},
+            }
         )
     )
 
@@ -168,10 +170,96 @@ def test_validate_stage_output_accepts_minimal_valid_payloads() -> None:
             "reason": "disabled",
             "focused_files": [],
             "commit_count": 0,
+            "path_count": 0,
             "hit_count": 0,
-            "history_hits": {},
+            "history_hits": {
+                "schema_version": "history_hits_v1",
+                "enabled": False,
+                "reason": "disabled",
+                "commit_count": 0,
+                "path_count": 0,
+                "hit_count": 0,
+                "hits": [],
+            },
             "recommendations": [],
             "policy_name": "general",
+            "policy_version": "v1",
+        },
+    )
+
+    validate_stage_output(
+        "context_refine",
+        {
+            "enabled": True,
+            "reason": "report_only",
+            "focused_files": ["src/ace_lite/pipeline/stages/source_plan.py"],
+            "candidate_file_actions": [
+                {
+                    "path": "src/ace_lite/pipeline/stages/source_plan.py",
+                    "score": 0.9,
+                    "action": "keep",
+                    "focused": True,
+                    "reasons": ["focused_file", "candidate"],
+                }
+            ],
+            "candidate_chunk_actions": [
+                {
+                    "path": "src/ace_lite/pipeline/stages/source_plan.py",
+                    "qualified_name": "run_source_plan",
+                    "score": 0.8,
+                    "action": "need_more_read",
+                    "focused": True,
+                    "reasons": ["focused_file", "chunk_symbol_exact"],
+                }
+            ],
+            "decision_counts": {
+                "keep": 1,
+                "downrank": 0,
+                "drop": 0,
+                "need_more_read": 1,
+            },
+            "candidate_review": {
+                "schema_version": "candidate_review_v2",
+                "status": "watch",
+                "focus_file_count": 1,
+                "candidate_file_count": 1,
+                "candidate_chunk_count": 1,
+                "validation_test_count": 0,
+                "direct_ratio": 0.0,
+                "neighbor_context_ratio": 0.0,
+                "hint_only_ratio": 0.0,
+                "failure_feedback_present": False,
+                "watch_items": ["need_more_read_candidates_present"],
+                "recommendations": [
+                    "Open need-more-read candidates before editing to confirm intent."
+                ],
+                "decision_counts": {
+                    "keep": 1,
+                    "downrank": 0,
+                    "drop": 0,
+                    "need_more_read": 1,
+                },
+                "candidate_file_actions": [
+                    {
+                        "path": "src/ace_lite/pipeline/stages/source_plan.py",
+                        "score": 0.9,
+                        "action": "keep",
+                        "focused": True,
+                        "reasons": ["focused_file", "candidate"],
+                    }
+                ],
+                "candidate_chunk_actions": [
+                    {
+                        "path": "src/ace_lite/pipeline/stages/source_plan.py",
+                        "qualified_name": "run_source_plan",
+                        "score": 0.8,
+                        "action": "need_more_read",
+                        "focused": True,
+                        "reasons": ["focused_file", "chunk_symbol_exact"],
+                    }
+                ],
+            },
+            "policy_name": "rrf_hybrid",
             "policy_version": "v1",
         },
     )
@@ -499,6 +587,139 @@ def test_validate_stage_output_rejects_report_only_fields(
     exc = exc_info.value
     assert exc.error_code == "stage_contract.forbidden_field"
     assert exc.reason == f"{stage_name}.{field_name}"
+
+
+def test_validate_stage_output_rejects_unknown_context_refine_action() -> None:
+    payload = {
+        "enabled": True,
+        "reason": "report_only",
+        "focused_files": [],
+        "candidate_file_actions": [
+            {
+                "path": "src/app.py",
+                "score": 0.5,
+                "action": "promote",
+                "focused": False,
+                "reasons": ["weak_signal"],
+            }
+        ],
+        "candidate_chunk_actions": [],
+        "decision_counts": {
+            "keep": 0,
+            "downrank": 0,
+            "drop": 0,
+            "need_more_read": 0,
+        },
+        "candidate_review": {
+            "schema_version": "candidate_review_v2",
+            "status": "ok",
+            "focus_file_count": 0,
+            "candidate_file_count": 0,
+            "candidate_chunk_count": 0,
+            "validation_test_count": 0,
+            "direct_ratio": 0.0,
+            "neighbor_context_ratio": 0.0,
+            "hint_only_ratio": 0.0,
+            "failure_feedback_present": False,
+            "watch_items": [],
+            "recommendations": [],
+            "decision_counts": {
+                "keep": 0,
+                "downrank": 0,
+                "drop": 0,
+                "need_more_read": 0,
+            },
+            "candidate_file_actions": [],
+            "candidate_chunk_actions": [],
+        },
+        "policy_name": "rrf_hybrid",
+        "policy_version": "v1",
+    }
+
+    with pytest.raises(StageContractError) as exc_info:
+        validate_stage_output("context_refine", payload)
+
+    exc = exc_info.value
+    assert exc.error_code == "stage_contract.invalid_value"
+    assert exc.reason == "context_refine.candidate_file_actions.0.action"
+
+
+def test_validate_stage_output_rejects_invalid_context_refine_candidate_review_schema() -> None:
+    payload = {
+        "enabled": True,
+        "reason": "report_only",
+        "focused_files": [],
+        "candidate_file_actions": [],
+        "candidate_chunk_actions": [],
+        "decision_counts": {
+            "keep": 0,
+            "downrank": 0,
+            "drop": 0,
+            "need_more_read": 0,
+        },
+        "candidate_review": {
+            "schema_version": "candidate_review_v1",
+            "status": "watch",
+            "focus_file_count": 0,
+            "candidate_file_count": 0,
+            "candidate_chunk_count": 0,
+            "validation_test_count": 0,
+            "direct_ratio": 0.0,
+            "neighbor_context_ratio": 0.0,
+            "hint_only_ratio": 0.0,
+            "failure_feedback_present": False,
+            "watch_items": [],
+            "recommendations": [],
+            "decision_counts": {
+                "keep": 0,
+                "downrank": 0,
+                "drop": 0,
+                "need_more_read": 0,
+            },
+            "candidate_file_actions": [],
+            "candidate_chunk_actions": [],
+        },
+        "policy_name": "rrf_hybrid",
+        "policy_version": "v1",
+    }
+
+    with pytest.raises(StageContractError) as exc_info:
+        validate_stage_output("context_refine", payload)
+
+    exc = exc_info.value
+    assert exc.error_code == "stage_contract.invalid_value"
+    assert exc.reason == "context_refine.candidate_review.schema_version"
+
+
+def test_validate_stage_output_rejects_invalid_history_hits_schema() -> None:
+    payload = {
+        "schema_version": "history_channel_v1",
+        "enabled": True,
+        "reason": "matched",
+        "focused_files": ["src/app.py"],
+        "commit_count": 1,
+        "path_count": 1,
+        "hit_count": 1,
+        "history_hits": {
+            "schema_version": "history_hits_v0",
+            "enabled": True,
+            "reason": "ok",
+            "commit_count": 1,
+            "path_count": 1,
+            "hit_count": 1,
+            "hits": [],
+        },
+        "recommendations": [],
+        "policy_name": "general",
+        "policy_version": "v1",
+    }
+
+    with pytest.raises(StageContractError) as exc_info:
+        validate_stage_output("history_channel", payload)
+
+    exc = exc_info.value
+    assert exc.error_code == "stage_contract.invalid_value"
+    assert exc.reason == "history_channel.history_hits.schema_version"
 
 
 def test_orchestrator_plan_includes_contract_error_payload(tmp_path, monkeypatch) -> None:

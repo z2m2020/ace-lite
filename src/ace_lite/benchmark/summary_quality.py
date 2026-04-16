@@ -115,17 +115,13 @@ def build_missing_context_risk_summary(
             signals["recall_miss"] = signals.get("recall_miss", 0) + 1
         if recall_hit > 0.0 and chunk_hit_at_k <= 0.0:
             score += 0.25
-            signals["chunk_miss_after_recall"] = (
-                signals.get("chunk_miss_after_recall", 0) + 1
-            )
+            signals["chunk_miss_after_recall"] = signals.get("chunk_miss_after_recall", 0) + 1
         if noise_rate > 0.0:
             score += min(0.2, noise_rate * 0.2)
             signals["noisy_candidates"] = signals.get("noisy_candidates", 0) + 1
         if evidence_insufficient > 0.0:
             score += 0.25
-            signals["evidence_insufficient"] = (
-                signals.get("evidence_insufficient", 0) + 1
-            )
+            signals["evidence_insufficient"] = signals.get("evidence_insufficient", 0) + 1
         if budget_exhausted > 0.0:
             score += 0.15
             signals["budget_exhausted"] = signals.get("budget_exhausted", 0) + 1
@@ -213,9 +209,7 @@ def build_evidence_insufficiency_summary(
         if mode == "negative_control":
             excluded_negative_control_case_count += 1
             continue
-        task_success_hit = float(
-            item.get("task_success_hit", item.get("utility_hit", 0.0)) or 0.0
-        )
+        task_success_hit = float(item.get("task_success_hit", item.get("utility_hit", 0.0)) or 0.0)
         if task_success_hit > 0.0:
             continue
 
@@ -344,9 +338,7 @@ def build_decision_observability_summary(
         "case_count": case_count,
         "case_with_decisions_count": case_with_decisions_count,
         "case_with_decisions_rate": (
-            float(case_with_decisions_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(case_with_decisions_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "decision_event_count": decision_event_count,
         "actions": dict(sorted(actions.items())),
@@ -398,9 +390,7 @@ def build_retrieval_context_observability_summary(
         if not isinstance(item, dict):
             continue
         chunk_count = float(item.get("retrieval_context_chunk_count", 0.0) or 0.0)
-        coverage_ratio = float(
-            item.get("retrieval_context_coverage_ratio", 0.0) or 0.0
-        )
+        coverage_ratio = float(item.get("retrieval_context_coverage_ratio", 0.0) or 0.0)
         parent_symbol_chunk_count = float(
             item.get("contextual_sidecar_parent_symbol_chunk_count", 0.0) or 0.0
         )
@@ -413,12 +403,8 @@ def build_retrieval_context_observability_summary(
         reference_hint_coverage_ratio = float(
             item.get("contextual_sidecar_reference_hint_coverage_ratio", 0.0) or 0.0
         )
-        pool_chunk_count = float(
-            item.get("retrieval_context_pool_chunk_count", 0.0) or 0.0
-        )
-        pool_coverage_ratio = float(
-            item.get("retrieval_context_pool_coverage_ratio", 0.0) or 0.0
-        )
+        pool_chunk_count = float(item.get("retrieval_context_pool_chunk_count", 0.0) or 0.0)
+        pool_coverage_ratio = float(item.get("retrieval_context_pool_coverage_ratio", 0.0) or 0.0)
         if chunk_count > 0.0:
             available_case_count += 1
         if parent_symbol_chunk_count > 0.0:
@@ -444,9 +430,7 @@ def build_retrieval_context_observability_summary(
         ),
         "parent_symbol_available_case_count": parent_symbol_available_case_count,
         "parent_symbol_available_case_rate": (
-            float(parent_symbol_available_case_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(parent_symbol_available_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "reference_hint_available_case_count": reference_hint_available_case_count,
         "reference_hint_available_case_rate": (
@@ -456,9 +440,7 @@ def build_retrieval_context_observability_summary(
         ),
         "pool_available_case_count": pool_available_case_count,
         "pool_available_case_rate": (
-            float(pool_available_case_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(pool_available_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "chunk_count_mean": mean(chunk_counts) if chunk_counts else 0.0,
         "coverage_ratio_mean": mean(coverage_ratios) if coverage_ratios else 0.0,
@@ -466,24 +448,16 @@ def build_retrieval_context_observability_summary(
             mean(parent_symbol_chunk_counts) if parent_symbol_chunk_counts else 0.0
         ),
         "parent_symbol_coverage_ratio_mean": (
-            mean(parent_symbol_coverage_ratios)
-            if parent_symbol_coverage_ratios
-            else 0.0
+            mean(parent_symbol_coverage_ratios) if parent_symbol_coverage_ratios else 0.0
         ),
         "reference_hint_chunk_count_mean": (
-            mean(reference_hint_chunk_counts)
-            if reference_hint_chunk_counts
-            else 0.0
+            mean(reference_hint_chunk_counts) if reference_hint_chunk_counts else 0.0
         ),
         "reference_hint_coverage_ratio_mean": (
-            mean(reference_hint_coverage_ratios)
-            if reference_hint_coverage_ratios
-            else 0.0
+            mean(reference_hint_coverage_ratios) if reference_hint_coverage_ratios else 0.0
         ),
         "pool_chunk_count_mean": mean(pool_chunk_counts) if pool_chunk_counts else 0.0,
-        "pool_coverage_ratio_mean": (
-            mean(pool_coverage_ratios) if pool_coverage_ratios else 0.0
-        ),
+        "pool_coverage_ratio_mean": (mean(pool_coverage_ratios) if pool_coverage_ratios else 0.0),
     }
 
 
@@ -498,6 +472,8 @@ def build_wave1_context_governance_summary(
             "plan_available_case_rate": 0.0,
             "history_hits_case_count": 0,
             "history_hits_case_rate": 0.0,
+            "history_path_count_mean": 0.0,
+            "history_matched_path_count_mean": 0.0,
             "candidate_review_case_count": 0,
             "candidate_review_case_rate": 0.0,
             "candidate_review_watch_case_count": 0,
@@ -523,6 +499,8 @@ def build_wave1_context_governance_summary(
     validation_blocker_case_count = 0
     session_end_report_case_count = 0
     history_hit_counts: list[float] = []
+    history_path_counts: list[float] = []
+    history_matched_path_counts: list[float] = []
     validation_warn_counts: list[float] = []
     validation_blocker_counts: list[float] = []
     session_next_action_counts: list[float] = []
@@ -541,11 +519,21 @@ def build_wave1_context_governance_summary(
 
         history_hits = source_plan.get("history_hits")
         if isinstance(history_hits, dict) and history_hits:
+            history_path_counts.append(float(history_hits.get("path_count", 0.0) or 0.0))
             hits = history_hits.get("hits")
             hit_rows = hits if isinstance(hits, list) else []
             if hit_rows:
                 history_hits_case_count += 1
                 history_hit_counts.append(float(len(hit_rows)))
+                history_matched_path_counts.append(
+                    float(
+                        sum(
+                            float(item.get("matched_path_count", 0.0) or 0.0)
+                            for item in hit_rows
+                            if isinstance(item, dict)
+                        )
+                    )
+                )
 
         candidate_review = source_plan.get("candidate_review")
         if isinstance(candidate_review, dict) and candidate_review:
@@ -558,9 +546,7 @@ def build_wave1_context_governance_summary(
         if isinstance(validation_findings, dict) and validation_findings:
             validation_findings_case_count += 1
             warn_count = float(validation_findings.get("warn_count", 0.0) or 0.0)
-            blocker_count = float(
-                validation_findings.get("blocker_count", 0.0) or 0.0
-            )
+            blocker_count = float(validation_findings.get("blocker_count", 0.0) or 0.0)
             validation_warn_counts.append(warn_count)
             validation_blocker_counts.append(blocker_count)
             if blocker_count > 0.0:
@@ -580,45 +566,35 @@ def build_wave1_context_governance_summary(
         "case_count": case_count,
         "plan_available_case_count": plan_available_case_count,
         "plan_available_case_rate": (
-            float(plan_available_case_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(plan_available_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "history_hits_case_count": history_hits_case_count,
         "history_hits_case_rate": (
-            float(history_hits_case_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(history_hits_case_count) / float(case_count) if case_count > 0 else 0.0
+        ),
+        "history_path_count_mean": mean(history_path_counts) if history_path_counts else 0.0,
+        "history_matched_path_count_mean": (
+            mean(history_matched_path_counts) if history_matched_path_counts else 0.0
         ),
         "candidate_review_case_count": candidate_review_case_count,
         "candidate_review_case_rate": (
-            float(candidate_review_case_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(candidate_review_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "candidate_review_watch_case_count": candidate_review_watch_case_count,
         "candidate_review_watch_case_rate": (
-            float(candidate_review_watch_case_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(candidate_review_watch_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "validation_findings_case_count": validation_findings_case_count,
         "validation_findings_case_rate": (
-            float(validation_findings_case_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(validation_findings_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "validation_blocker_case_count": validation_blocker_case_count,
         "validation_blocker_case_rate": (
-            float(validation_blocker_case_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(validation_blocker_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "session_end_report_case_count": session_end_report_case_count,
         "session_end_report_case_rate": (
-            float(session_end_report_case_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(session_end_report_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "history_hit_count_mean": mean(history_hit_counts) if history_hit_counts else 0.0,
         "validation_warn_count_mean": (
@@ -630,9 +606,7 @@ def build_wave1_context_governance_summary(
         "session_next_action_count_mean": (
             mean(session_next_action_counts) if session_next_action_counts else 0.0
         ),
-        "session_risk_count_mean": (
-            mean(session_risk_counts) if session_risk_counts else 0.0
-        ),
+        "session_risk_count_mean": (mean(session_risk_counts) if session_risk_counts else 0.0),
     }
 
 
@@ -676,13 +650,9 @@ def build_context_refine_summary(
             continue
         present_case_count += 1
         decision_counts_raw = context_refine.get("decision_counts")
-        decision_counts = (
-            decision_counts_raw if isinstance(decision_counts_raw, dict) else {}
-        )
+        decision_counts = decision_counts_raw if isinstance(decision_counts_raw, dict) else {}
         candidate_review_raw = context_refine.get("candidate_review")
-        candidate_review = (
-            candidate_review_raw if isinstance(candidate_review_raw, dict) else {}
-        )
+        candidate_review = candidate_review_raw if isinstance(candidate_review_raw, dict) else {}
         status = str(candidate_review.get("status") or "").strip().lower()
         if status == "watch":
             watch_case_count += 1
@@ -691,9 +661,7 @@ def build_context_refine_summary(
         keep_counts.append(float(decision_counts.get("keep", 0.0) or 0.0))
         downrank_counts.append(float(decision_counts.get("downrank", 0.0) or 0.0))
         drop_counts.append(float(decision_counts.get("drop", 0.0) or 0.0))
-        need_more_read_counts.append(
-            float(decision_counts.get("need_more_read", 0.0) or 0.0)
-        )
+        need_more_read_counts.append(float(decision_counts.get("need_more_read", 0.0) or 0.0))
         focused_file_counts.append(
             float(len(context_refine.get("focused_files", [])))
             if isinstance(context_refine.get("focused_files"), list)
@@ -714,9 +682,7 @@ def build_context_refine_summary(
         "need_more_read_count_mean": (
             mean(need_more_read_counts) if need_more_read_counts else 0.0
         ),
-        "focused_file_count_mean": (
-            mean(focused_file_counts) if focused_file_counts else 0.0
-        ),
+        "focused_file_count_mean": (mean(focused_file_counts) if focused_file_counts else 0.0),
     }
 
 
@@ -805,25 +771,13 @@ def build_retrieval_default_strategy_summary(
             continue
         if float(item.get("retrieval_context_chunk_count", 0.0) or 0.0) > 0.0:
             retrieval_context_available_case_count += 1
-        if (
-            float(
-                item.get("contextual_sidecar_parent_symbol_chunk_count", 0.0) or 0.0
-            )
-            > 0.0
-        ):
+        if float(item.get("contextual_sidecar_parent_symbol_chunk_count", 0.0) or 0.0) > 0.0:
             parent_symbol_available_case_count += 1
-        if (
-            float(
-                item.get("contextual_sidecar_reference_hint_chunk_count", 0.0) or 0.0
-            )
-            > 0.0
-        ):
+        if float(item.get("contextual_sidecar_reference_hint_chunk_count", 0.0) or 0.0) > 0.0:
             reference_hint_available_case_count += 1
         provider = str(item.get("embedding_runtime_provider") or "").strip().lower()
         mode = str(item.get("embedding_strategy_mode") or "").strip().lower()
-        semantic_rerank_enabled = (
-            float(item.get("embedding_enabled", 0.0) or 0.0) > 0.0
-        )
+        semantic_rerank_enabled = float(item.get("embedding_enabled", 0.0) or 0.0) > 0.0
         semantic_rerank_applied = (
             float(item.get("embedding_semantic_rerank_applied", 0.0) or 0.0) > 0.0
         )
@@ -839,9 +793,7 @@ def build_retrieval_default_strategy_summary(
         if mode == "cross_encoder":
             semantic_rerank_cross_encoder_case_count += 1
         if mode:
-            semantic_rerank_mode_counts[mode] = (
-                semantic_rerank_mode_counts.get(mode, 0) + 1
-            )
+            semantic_rerank_mode_counts[mode] = semantic_rerank_mode_counts.get(mode, 0) + 1
 
         if float(item.get("graph_lookup_enabled", 0.0) or 0.0) > 0.0:
             graph_lookup_enabled_case_count += 1
@@ -852,9 +804,7 @@ def build_retrieval_default_strategy_summary(
             graph_lookup_normalization_counts[normalization] = (
                 graph_lookup_normalization_counts.get(normalization, 0) + 1
             )
-        graph_lookup_pool_sizes.append(
-            float(item.get("graph_lookup_pool_size", 0.0) or 0.0)
-        )
+        graph_lookup_pool_sizes.append(float(item.get("graph_lookup_pool_size", 0.0) or 0.0))
         graph_lookup_guard_max_candidates.append(
             float(item.get("graph_lookup_guard_max_candidates", 0.0) or 0.0)
         )
@@ -864,21 +814,13 @@ def build_retrieval_default_strategy_summary(
         graph_lookup_guard_max_query_terms.append(
             float(item.get("graph_lookup_guard_max_query_terms", 0.0) or 0.0)
         )
-        graph_lookup_weight_scip.append(
-            float(item.get("graph_lookup_weight_scip", 0.0) or 0.0)
-        )
-        graph_lookup_weight_xref.append(
-            float(item.get("graph_lookup_weight_xref", 0.0) or 0.0)
-        )
+        graph_lookup_weight_scip.append(float(item.get("graph_lookup_weight_scip", 0.0) or 0.0))
+        graph_lookup_weight_xref.append(float(item.get("graph_lookup_weight_xref", 0.0) or 0.0))
         graph_lookup_weight_query_xref.append(
             float(item.get("graph_lookup_weight_query_xref", 0.0) or 0.0)
         )
-        graph_lookup_weight_symbol.append(
-            float(item.get("graph_lookup_weight_symbol", 0.0) or 0.0)
-        )
-        graph_lookup_weight_import.append(
-            float(item.get("graph_lookup_weight_import", 0.0) or 0.0)
-        )
+        graph_lookup_weight_symbol.append(float(item.get("graph_lookup_weight_symbol", 0.0) or 0.0))
+        graph_lookup_weight_import.append(float(item.get("graph_lookup_weight_import", 0.0) or 0.0))
         graph_lookup_weight_coverage.append(
             float(item.get("graph_lookup_weight_coverage", 0.0) or 0.0)
         )
@@ -889,16 +831,12 @@ def build_retrieval_default_strategy_summary(
             topological_shield_report_only_case_count += 1
         mode = str(item.get("topological_shield_mode") or "").strip().lower()
         if mode:
-            topological_shield_mode_counts[mode] = (
-                topological_shield_mode_counts.get(mode, 0) + 1
-            )
+            topological_shield_mode_counts[mode] = topological_shield_mode_counts.get(mode, 0) + 1
         topological_shield_max_attenuations.append(
             float(item.get("topological_shield_max_attenuation", 0.0) or 0.0)
         )
         topological_shield_shared_parent_attenuations.append(
-            float(
-                item.get("topological_shield_shared_parent_attenuation", 0.0) or 0.0
-            )
+            float(item.get("topological_shield_shared_parent_attenuation", 0.0) or 0.0)
         )
         topological_shield_adjacency_attenuations.append(
             float(item.get("topological_shield_adjacency_attenuation", 0.0) or 0.0)
@@ -935,18 +873,12 @@ def build_retrieval_default_strategy_summary(
         "semantic_rerank_applied_case_rate": (
             float(semantic_rerank_applied_case_count) / float(case_count)
         ),
-        "semantic_rerank_cross_encoder_case_count": (
-            semantic_rerank_cross_encoder_case_count
-        ),
+        "semantic_rerank_cross_encoder_case_count": (semantic_rerank_cross_encoder_case_count),
         "semantic_rerank_cross_encoder_case_rate": (
             float(semantic_rerank_cross_encoder_case_count) / float(case_count)
         ),
-        "semantic_rerank_dominant_provider": _dominant_label(
-            semantic_rerank_provider_case_counts
-        ),
-        "semantic_rerank_dominant_mode": _dominant_label(
-            semantic_rerank_mode_counts
-        ),
+        "semantic_rerank_dominant_provider": _dominant_label(semantic_rerank_provider_case_counts),
+        "semantic_rerank_dominant_mode": _dominant_label(semantic_rerank_mode_counts),
         "semantic_rerank_provider_case_counts": dict(
             sorted(semantic_rerank_provider_case_counts.items())
         ),
@@ -958,64 +890,40 @@ def build_retrieval_default_strategy_summary(
         "graph_lookup_guarded_case_rate": (
             float(graph_lookup_guarded_case_count) / float(case_count)
         ),
-        "graph_lookup_dominant_normalization": _dominant_label(
-            graph_lookup_normalization_counts
-        ),
+        "graph_lookup_dominant_normalization": _dominant_label(graph_lookup_normalization_counts),
         "graph_lookup_pool_size_mean": (
             mean(graph_lookup_pool_sizes) if graph_lookup_pool_sizes else 0.0
         ),
         "graph_lookup_guard_max_candidates_mean": (
-            mean(graph_lookup_guard_max_candidates)
-            if graph_lookup_guard_max_candidates
-            else 0.0
+            mean(graph_lookup_guard_max_candidates) if graph_lookup_guard_max_candidates else 0.0
         ),
         "graph_lookup_guard_min_query_terms_mean": (
-            mean(graph_lookup_guard_min_query_terms)
-            if graph_lookup_guard_min_query_terms
-            else 0.0
+            mean(graph_lookup_guard_min_query_terms) if graph_lookup_guard_min_query_terms else 0.0
         ),
         "graph_lookup_guard_max_query_terms_mean": (
-            mean(graph_lookup_guard_max_query_terms)
-            if graph_lookup_guard_max_query_terms
-            else 0.0
+            mean(graph_lookup_guard_max_query_terms) if graph_lookup_guard_max_query_terms else 0.0
         ),
         "graph_lookup_weight_means": {
             "scip": mean(graph_lookup_weight_scip) if graph_lookup_weight_scip else 0.0,
             "xref": mean(graph_lookup_weight_xref) if graph_lookup_weight_xref else 0.0,
             "query_xref": (
-                mean(graph_lookup_weight_query_xref)
-                if graph_lookup_weight_query_xref
-                else 0.0
+                mean(graph_lookup_weight_query_xref) if graph_lookup_weight_query_xref else 0.0
             ),
-            "symbol": (
-                mean(graph_lookup_weight_symbol)
-                if graph_lookup_weight_symbol
-                else 0.0
-            ),
-            "import": (
-                mean(graph_lookup_weight_import)
-                if graph_lookup_weight_import
-                else 0.0
-            ),
+            "symbol": (mean(graph_lookup_weight_symbol) if graph_lookup_weight_symbol else 0.0),
+            "import": (mean(graph_lookup_weight_import) if graph_lookup_weight_import else 0.0),
             "coverage": (
-                mean(graph_lookup_weight_coverage)
-                if graph_lookup_weight_coverage
-                else 0.0
+                mean(graph_lookup_weight_coverage) if graph_lookup_weight_coverage else 0.0
             ),
         },
         "topological_shield_enabled_case_count": topological_shield_enabled_case_count,
         "topological_shield_enabled_case_rate": (
             float(topological_shield_enabled_case_count) / float(case_count)
         ),
-        "topological_shield_report_only_case_count": (
-            topological_shield_report_only_case_count
-        ),
+        "topological_shield_report_only_case_count": (topological_shield_report_only_case_count),
         "topological_shield_report_only_case_rate": (
             float(topological_shield_report_only_case_count) / float(case_count)
         ),
-        "topological_shield_dominant_mode": _dominant_label(
-            topological_shield_mode_counts
-        ),
+        "topological_shield_dominant_mode": _dominant_label(topological_shield_mode_counts),
         "topological_shield_max_attenuation_mean": (
             mean(topological_shield_max_attenuations)
             if topological_shield_max_attenuations
@@ -1053,6 +961,9 @@ def build_agent_loop_control_plane_summary(
             "actions_executed_mean": 0.0,
             "request_more_context_case_count": 0,
             "request_more_context_case_rate": 0.0,
+            "validation_findings_refine_case_count": 0,
+            "validation_findings_refine_case_rate": 0.0,
+            "validation_findings_refine_focus_path_count_mean": 0.0,
             "request_source_plan_retry_case_count": 0,
             "request_source_plan_retry_case_rate": 0.0,
             "request_validation_retry_case_count": 0,
@@ -1068,6 +979,8 @@ def build_agent_loop_control_plane_summary(
     actions_requested: list[float] = []
     actions_executed: list[float] = []
     request_more_context_case_count = 0
+    validation_findings_refine_case_count = 0
+    validation_findings_refine_focus_path_counts: list[float] = []
     request_source_plan_retry_case_count = 0
     request_validation_retry_case_count = 0
     stop_reason_counts: dict[str, int] = {}
@@ -1084,23 +997,20 @@ def build_agent_loop_control_plane_summary(
             attempted_case_count += 1
         if float(item.get("agent_loop_replay_safe", 0.0) or 0.0) > 0.0:
             replay_safe_case_count += 1
-        actions_requested.append(
-            float(item.get("agent_loop_actions_requested", 0.0) or 0.0)
-        )
-        actions_executed.append(
-            float(item.get("agent_loop_actions_executed", 0.0) or 0.0)
-        )
+        actions_requested.append(float(item.get("agent_loop_actions_requested", 0.0) or 0.0))
+        actions_executed.append(float(item.get("agent_loop_actions_executed", 0.0) or 0.0))
         if float(item.get("agent_loop_request_more_context_count", 0.0) or 0.0) > 0.0:
             request_more_context_case_count += 1
-        if (
-            float(item.get("agent_loop_request_source_plan_retry_count", 0.0) or 0.0)
-            > 0.0
-        ):
+        if float(item.get("agent_loop_validation_findings_refine_applied", 0.0) or 0.0) > 0.0:
+            validation_findings_refine_case_count += 1
+            validation_findings_refine_focus_path_counts.append(
+                float(
+                    item.get("agent_loop_validation_findings_refine_focus_path_count", 0.0) or 0.0
+                )
+            )
+        if float(item.get("agent_loop_request_source_plan_retry_count", 0.0) or 0.0) > 0.0:
             request_source_plan_retry_case_count += 1
-        if (
-            float(item.get("agent_loop_request_validation_retry_count", 0.0) or 0.0)
-            > 0.0
-        ):
+        if float(item.get("agent_loop_request_validation_retry_count", 0.0) or 0.0) > 0.0:
             request_validation_retry_case_count += 1
         stop_reason = str(item.get("agent_loop_stop_reason") or "").strip().lower()
         if stop_reason:
@@ -1130,13 +1040,20 @@ def build_agent_loop_control_plane_summary(
         "request_more_context_case_rate": (
             float(request_more_context_case_count) / float(case_count)
         ),
+        "validation_findings_refine_case_count": validation_findings_refine_case_count,
+        "validation_findings_refine_case_rate": (
+            float(validation_findings_refine_case_count) / float(case_count)
+        ),
+        "validation_findings_refine_focus_path_count_mean": (
+            mean(validation_findings_refine_focus_path_counts)
+            if validation_findings_refine_focus_path_counts
+            else 0.0
+        ),
         "request_source_plan_retry_case_count": request_source_plan_retry_case_count,
         "request_source_plan_retry_case_rate": (
             float(request_source_plan_retry_case_count) / float(case_count)
         ),
-        "request_validation_retry_case_count": (
-            request_validation_retry_case_count
-        ),
+        "request_validation_retry_case_count": (request_validation_retry_case_count),
         "request_validation_retry_case_rate": (
             float(request_validation_retry_case_count) / float(case_count)
         ),
@@ -1175,15 +1092,9 @@ def build_preference_observability_summary(
         if not isinstance(item, dict):
             continue
         notes_hit_ratio = float(item.get("notes_hit_ratio", 0.0) or 0.0)
-        profile_selected_count = float(
-            item.get("profile_selected_count", 0.0) or 0.0
-        )
+        profile_selected_count = float(item.get("profile_selected_count", 0.0) or 0.0)
         capture_triggered = float(item.get("capture_triggered", 0.0) or 0.0)
-        if (
-            notes_hit_ratio > 0.0
-            or profile_selected_count > 0.0
-            or capture_triggered > 0.0
-        ):
+        if notes_hit_ratio > 0.0 or profile_selected_count > 0.0 or capture_triggered > 0.0:
             observed_case_count += 1
         if notes_hit_ratio > 0.0:
             notes_hit_case_count += 1
@@ -1206,15 +1117,11 @@ def build_preference_observability_summary(
         ),
         "profile_selected_case_count": profile_selected_case_count,
         "profile_selected_case_rate": (
-            float(profile_selected_case_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(profile_selected_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "capture_triggered_case_count": capture_triggered_case_count,
         "capture_triggered_case_rate": (
-            float(capture_triggered_case_count) / float(case_count)
-            if case_count > 0
-            else 0.0
+            float(capture_triggered_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "notes_hit_ratio_mean": mean(notes_hit_ratios) if notes_hit_ratios else 0.0,
         "profile_selected_count_mean": (
@@ -1256,9 +1163,7 @@ def build_feedback_observability_summary(
         if not isinstance(item, dict):
             continue
         enabled = float(item.get("feedback_enabled", 0.0) or 0.0) > 0.0
-        matched_event_count = float(
-            item.get("feedback_matched_event_count", 0.0) or 0.0
-        )
+        matched_event_count = float(item.get("feedback_matched_event_count", 0.0) or 0.0)
         boosted_count = float(item.get("feedback_boosted_count", 0.0) or 0.0)
         event_count = float(item.get("feedback_event_count", 0.0) or 0.0)
         boosted_paths = float(item.get("feedback_boosted_paths", 0.0) or 0.0)
@@ -1291,13 +1196,9 @@ def build_feedback_observability_summary(
             float(boosted_case_count) / float(case_count) if case_count > 0 else 0.0
         ),
         "event_count_mean": mean(event_counts) if event_counts else 0.0,
-        "matched_event_count_mean": (
-            mean(matched_event_counts) if matched_event_counts else 0.0
-        ),
+        "matched_event_count_mean": (mean(matched_event_counts) if matched_event_counts else 0.0),
         "boosted_candidate_count_mean": mean(boosted_counts) if boosted_counts else 0.0,
-        "boosted_unique_paths_mean": (
-            mean(boosted_paths_counts) if boosted_paths_counts else 0.0
-        ),
+        "boosted_unique_paths_mean": (mean(boosted_paths_counts) if boosted_paths_counts else 0.0),
         "reasons": dict(sorted(reasons.items())),
     }
 
@@ -1353,9 +1254,7 @@ def build_feedback_loop_summary(
             continue
         feedback_surface = str(item.get("feedback_surface") or "").strip()
         if feedback_surface:
-            feedback_surfaces[feedback_surface] = (
-                feedback_surfaces.get(feedback_surface, 0) + 1
-            )
+            feedback_surfaces[feedback_surface] = feedback_surfaces.get(feedback_surface, 0) + 1
 
         lane = str(item.get("comparison_lane") or "").strip()
         if lane == "issue_report_feedback":
@@ -1392,9 +1291,7 @@ def build_feedback_loop_summary(
             dev_feedback_resolved_issue_count += int(
                 item.get("dev_feedback_resolved_issue_count", 0) or 0
             )
-            time_to_fix_hours = float(
-                item.get("dev_feedback_issue_time_to_fix_hours", 0.0) or 0.0
-            )
+            time_to_fix_hours = float(item.get("dev_feedback_issue_time_to_fix_hours", 0.0) or 0.0)
             if time_to_fix_hours > 0.0:
                 dev_feedback_issue_time_to_fix_hours.append(time_to_fix_hours)
 
@@ -1410,8 +1307,7 @@ def build_feedback_loop_summary(
             else 0.0
         ),
         "issue_report_linked_plan_rate": (
-            float(issue_report_linked_plan_case_count)
-            / float(issue_report_linked_case_count)
+            float(issue_report_linked_plan_case_count) / float(issue_report_linked_case_count)
             if issue_report_linked_case_count > 0
             else 0.0
         ),
@@ -1422,9 +1318,7 @@ def build_feedback_loop_summary(
         ),
         "issue_report_time_to_fix_case_count": len(issue_report_time_to_fix_hours),
         "issue_report_time_to_fix_hours_mean": (
-            mean(issue_report_time_to_fix_hours)
-            if issue_report_time_to_fix_hours
-            else 0.0
+            mean(issue_report_time_to_fix_hours) if issue_report_time_to_fix_hours else 0.0
         ),
         "dev_issue_capture_case_count": dev_issue_capture_case_count,
         "dev_issue_captured_case_count": dev_issue_captured_case_count,
@@ -1436,8 +1330,7 @@ def build_feedback_loop_summary(
         "dev_feedback_resolution_case_count": dev_feedback_resolution_case_count,
         "dev_feedback_resolved_case_count": dev_feedback_resolved_case_count,
         "dev_feedback_resolution_rate": (
-            float(dev_feedback_resolved_case_count)
-            / float(dev_feedback_resolution_case_count)
+            float(dev_feedback_resolved_case_count) / float(dev_feedback_resolution_case_count)
             if dev_feedback_resolution_case_count > 0
             else 0.0
         ),
@@ -1449,9 +1342,7 @@ def build_feedback_loop_summary(
             if dev_feedback_issue_count > 0
             else 0.0
         ),
-        "dev_feedback_issue_time_to_fix_case_count": len(
-            dev_feedback_issue_time_to_fix_hours
-        ),
+        "dev_feedback_issue_time_to_fix_case_count": len(dev_feedback_issue_time_to_fix_hours),
         "dev_feedback_issue_time_to_fix_hours_mean": (
             mean(dev_feedback_issue_time_to_fix_hours)
             if dev_feedback_issue_time_to_fix_hours
@@ -1499,17 +1390,13 @@ def build_comparison_lane_summary(case_results: list[dict[str, Any]]) -> dict[st
             },
         )
         filtered_count = float(item.get("chunk_guard_filtered_count", 0.0) or 0.0)
-        expectation_applicable = float(
-            item.get("chunk_guard_expectation_applicable", 0.0) or 0.0
-        )
+        expectation_applicable = float(item.get("chunk_guard_expectation_applicable", 0.0) or 0.0)
         bucket["case_count"] += 1.0
         bucket["task_success_total"] += float(
             item.get("task_success_hit", item.get("utility_hit", 0.0)) or 0.0
         )
         bucket["recall_total"] += float(item.get("recall_hit", 0.0) or 0.0)
-        bucket["chunk_guard_enabled_total"] += float(
-            item.get("chunk_guard_enabled", 0.0) or 0.0
-        )
+        bucket["chunk_guard_enabled_total"] += float(item.get("chunk_guard_enabled", 0.0) or 0.0)
         bucket["chunk_guard_report_only_total"] += float(
             item.get("chunk_guard_report_only", 0.0) or 0.0
         )
@@ -1538,9 +1425,7 @@ def build_comparison_lane_summary(case_results: list[dict[str, Any]]) -> dict[st
     for lane in sorted(buckets):
         bucket = buckets[lane]
         case_count = max(1.0, float(bucket["case_count"]))
-        expectation_case_count = max(
-            0.0, float(bucket["chunk_guard_expectation_case_count"])
-        )
+        expectation_case_count = max(0.0, float(bucket["chunk_guard_expectation_case_count"]))
         lanes.append(
             {
                 "comparison_lane": lane,
@@ -1569,8 +1454,7 @@ def build_comparison_lane_summary(case_results: list[dict[str, Any]]) -> dict[st
                     else 0.0
                 ),
                 "chunk_guard_report_only_improved_rate": (
-                    float(bucket["chunk_guard_report_only_improved_total"])
-                    / expectation_case_count
+                    float(bucket["chunk_guard_report_only_improved_total"]) / expectation_case_count
                     if expectation_case_count > 0.0
                     else 0.0
                 ),
@@ -1646,16 +1530,13 @@ def build_slo_budget_summary(case_results: list[dict[str, Any]]) -> dict[str, An
 
     budget_limits = {
         "parallel_time_budget_ms_mean": mean(
-            float(item.get("parallel_time_budget_ms", 0.0) or 0.0)
-            for item in case_results
+            float(item.get("parallel_time_budget_ms", 0.0) or 0.0) for item in case_results
         ),
         "embedding_time_budget_ms_mean": mean(
-            float(item.get("embedding_time_budget_ms", 0.0) or 0.0)
-            for item in case_results
+            float(item.get("embedding_time_budget_ms", 0.0) or 0.0) for item in case_results
         ),
         "chunk_semantic_time_budget_ms_mean": mean(
-            float(item.get("chunk_semantic_time_budget_ms", 0.0) or 0.0)
-            for item in case_results
+            float(item.get("chunk_semantic_time_budget_ms", 0.0) or 0.0) for item in case_results
         ),
         "xref_time_budget_ms_mean": mean(
             float(item.get("xref_time_budget_ms", 0.0) or 0.0) for item in case_results
@@ -1673,20 +1554,14 @@ def build_slo_budget_summary(case_results: list[dict[str, Any]]) -> dict[str, An
     }
     signals: dict[str, dict[str, float | int]] = {}
     for field, source_field in signal_sources.items():
-        count = sum(
-            1
-            for item in case_results
-            if float(item.get(source_field, 0.0) or 0.0) > 0.0
-        )
+        count = sum(1 for item in case_results if float(item.get(source_field, 0.0) or 0.0) > 0.0)
         signals[field] = {
             "count": count,
             "rate": float(count) / float(case_count),
         }
 
     downgrade_case_count = sum(
-        1
-        for item in case_results
-        if float(item.get("slo_downgrade_triggered", 0.0) or 0.0) > 0.0
+        1 for item in case_results if float(item.get("slo_downgrade_triggered", 0.0) or 0.0) > 0.0
     )
     return {
         "case_count": case_count,

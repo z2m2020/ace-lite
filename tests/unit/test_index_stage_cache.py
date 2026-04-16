@@ -240,3 +240,27 @@ def test_write_cache_payload_primes_manifest_memory_cache(
     assert loaded is not None
     assert loaded["entries"][0]["key"] == "k1"
     assert calls["count"] == 0
+
+
+def test_build_stage_artifact_cache_reuses_manager_for_same_path(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cache_path = tmp_path / "context-map" / "index_candidates" / "cache.json"
+    manager_memory = getattr(index_stage_cache, "_INDEX_CANDIDATE_MANAGER_MEMORY", None)
+    if isinstance(manager_memory, dict):
+        manager_memory.clear()
+
+    calls = {"count": 0}
+
+    class FakeStageArtifactCache:
+        def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+            calls["count"] += 1
+            self.kwargs = kwargs
+
+    monkeypatch.setattr(index_stage_cache, "StageArtifactCache", FakeStageArtifactCache)
+
+    first = index_stage_cache._build_stage_artifact_cache(cache_path=cache_path)
+    second = index_stage_cache._build_stage_artifact_cache(cache_path=cache_path)
+
+    assert calls["count"] == 1
+    assert first is second

@@ -49,6 +49,13 @@ This document defines the clear boundary between **primary execution surfaces** 
 
 ## Explicitly Forbidden Patterns
 
+### Pattern F0: Reverse Dependency from Report Layer to Layer 1
+
+Layer 2 and Layer 3 modules MUST NOT import Layer 1 execution modules such as
+`ace_lite.orchestrator` or `ace_lite.pipeline.stages.*`. Report surfaces may
+read normalized payloads, contracts, or report-only helper modules, but they
+must not depend directly on runtime execution handlers.
+
 ### Pattern F1: Report Artifact as Gate
 
 ```python

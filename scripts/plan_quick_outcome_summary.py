@@ -16,9 +16,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from collections import Counter
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
@@ -152,9 +152,6 @@ def _build_empty_summary(input_dir: Path, warnings: list[str]) -> dict:
 
 def _build_summary_payload(input_dir: Path, records: list[dict], warnings: list[str]) -> dict:
     outcome_counter: Counter = Counter(r["outcome_label"] for r in records)
-    upgrade_rec_counter: Counter = Counter(
-        str(r.get("upgrade_recommended") or "unknown") for r in records
-    )
     value_counter: Counter = Counter(
         str(r.get("expected_incremental_value") or "unknown") for r in records
     )

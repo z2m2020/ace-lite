@@ -17,7 +17,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-
 # Metrics definitions matching PRD-91
 METRICS_DEFINITIONS = {
     "M-ARCH-01": {
@@ -62,7 +61,7 @@ METRICS_DEFINITIONS = {
     },
     "M-IDX-01": {
         "name": "index_scan_elapsed_ms",
-        "description": "索引扫描耗时（毫秒）",
+        "description": "索引扫描耗时(毫秒)",
         "category": "indexer",
         "phase": 1,
         "unit": "milliseconds",

@@ -18,9 +18,12 @@ import pytest
 
 from ace_lite.context_report import (
     SCHEMA_VERSION,
+    append_context_report_note,
+    build_context_report_note,
     build_context_report_payload,
     render_context_report_markdown,
     validate_context_report_payload,
+    write_context_report_artifacts,
     write_context_report_markdown,
 )
 
@@ -748,6 +751,7 @@ def test_write_creates_file(minimal_plan_payload, tmp_path):
     assert Path(result["path"]) == output_path
     assert output_path.exists()
     assert output_path.read_text(encoding="utf-8").startswith("# Context Report")
+    assert (tmp_path / "context_report.json").exists()
 
 
 def test_write_file_contains_all_sections(minimal_plan_payload, tmp_path):
@@ -775,6 +779,7 @@ def test_write_creates_parent_directories(tmp_path):
 
     assert result["ok"] is True
     assert nested.exists()
+    assert (nested.parent / "context_report.json").exists()
 
 
 def test_write_byte_count_reasonable(tmp_path):
@@ -795,6 +800,62 @@ def test_write_byte_count_reasonable(tmp_path):
     assert result["byte_count"] > 0
     # byte_count is computed from the string encoded as UTF-8
     assert result["byte_count"] <= len(output_path.read_bytes()) + 10
+
+
+def test_write_context_report_artifacts_syncs_json_and_note(minimal_plan_payload, tmp_path):
+    output_path = tmp_path / "artifacts" / "context-reports" / "2026-04-16" / "context_report.md"
+    notes_path = tmp_path / "context-map" / "memory_notes.jsonl"
+
+    result = write_context_report_artifacts(
+        minimal_plan_payload,
+        output_path,
+        notes_path=notes_path,
+        repo="demo",
+        namespace="repo:demo",
+    )
+
+    assert result["ok"] is True
+    assert result["markdown_path"] == str(output_path)
+    assert result["json_path"] == str(output_path.parent / "context_report.json")
+    persisted = json.loads((output_path.parent / "context_report.json").read_text(encoding="utf-8"))
+    assert persisted["schema_version"] == SCHEMA_VERSION
+    note_rows = [
+        line for line in notes_path.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
+    assert len(note_rows) == 1
+    note_payload = json.loads(note_rows[0])
+    assert note_payload["source"] == SCHEMA_VERSION
+    assert note_payload["namespace"] == "repo:demo"
+    assert any("context_report.json" in ref for ref in note_payload["artifact_refs"])
+
+
+def test_build_and_append_context_report_note_preserve_artifact_refs(tmp_path):
+    payload = build_context_report_payload({"query": "q", "repo": "r", "root": "/"})
+    note = build_context_report_note(
+        payload=payload,
+        repo="demo",
+        namespace="repo:demo",
+        artifact_refs=["artifacts/context-reports/2026-04-16/context_report.json"],
+    )
+
+    assert note["source"] == SCHEMA_VERSION
+    assert note["namespace"] == "repo:demo"
+    assert note["artifact_refs"] == ["artifacts/context-reports/2026-04-16/context_report.json"]
+
+    notes_path = tmp_path / "context-map" / "memory_notes.jsonl"
+    result = append_context_report_note(
+        payload=payload,
+        notes_path=notes_path,
+        repo="demo",
+        namespace="repo:demo",
+        artifact_refs=["artifacts/context-reports/2026-04-16/context_report.json"],
+    )
+
+    assert result["ok"] is True
+    rows = [line for line in notes_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(rows) == 1
+    stored = json.loads(rows[0])
+    assert stored["namespace"] == "repo:demo"
 
 
 # ----------------------------------------------------------------------

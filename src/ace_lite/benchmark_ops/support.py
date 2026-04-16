@@ -326,6 +326,49 @@ def read_benchmark_validation_probe_summary(results_path: Path) -> dict[str, flo
     return normalized
 
 
+def read_benchmark_context_refine_summary(results_path: Path) -> dict[str, float]:
+    payload = read_benchmark_results(results_path)
+    summary_raw = payload.get("context_refine_summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    metrics_raw = payload.get("metrics")
+    metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
+
+    metric_aliases = {
+        "present_case_rate": ("present_case_rate",),
+        "watch_case_rate": ("watch_case_rate",),
+        "thin_context_case_rate": ("thin_context_case_rate",),
+        "keep_count_mean": ("keep_count_mean",),
+        "need_more_read_count_mean": ("need_more_read_count_mean",),
+        "focused_file_count_mean": ("focused_file_count_mean",),
+    }
+    normalized: dict[str, float] = {}
+    for key, aliases in metric_aliases.items():
+        raw_value: Any = None
+        for alias in aliases:
+            if alias in summary:
+                raw_value = summary.get(alias)
+                break
+        if raw_value is None:
+            for alias in aliases:
+                if alias in metrics:
+                    raw_value = metrics.get(alias)
+                    break
+        if raw_value is None:
+            continue
+        try:
+            normalized[key] = float(raw_value or 0.0)
+        except Exception:
+            continue
+    return {
+        "present_case_rate": float(normalized.get("present_case_rate", 0.0)),
+        "watch_case_rate": float(normalized.get("watch_case_rate", 0.0)),
+        "thin_context_case_rate": float(normalized.get("thin_context_case_rate", 0.0)),
+        "keep_count_mean": float(normalized.get("keep_count_mean", 0.0)),
+        "need_more_read_count_mean": float(normalized.get("need_more_read_count_mean", 0.0)),
+        "focused_file_count_mean": float(normalized.get("focused_file_count_mean", 0.0)),
+    }
+
+
 def read_benchmark_source_plan_validation_feedback_summary(
     results_path: Path,
 ) -> dict[str, float]:
@@ -556,6 +599,7 @@ __all__ = [
     "read_benchmark_case_routing_source",
     "read_benchmark_case_rows",
     "read_benchmark_comparison_lane_metrics",
+    "read_benchmark_context_refine_summary",
     "read_benchmark_deep_symbol_summary",
     "read_benchmark_metrics",
     "read_benchmark_native_scip_summary",

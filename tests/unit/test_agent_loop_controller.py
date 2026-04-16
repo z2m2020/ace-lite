@@ -37,10 +37,13 @@ def test_controller_source_plan_retry_keeps_query_and_exposes_rerun_policy() -> 
         selected_tests=["pytest -q tests/unit/test_source_plan.py"],
     ).as_dict()
 
-    assert controller.build_incremental_query(
-        base_query="draft auth plan",
-        action=action,
-    ) == "draft auth plan"
+    assert (
+        controller.build_incremental_query(
+            base_query="draft auth plan",
+            action=action,
+        )
+        == "draft auth plan"
+    )
 
     rerun_policy = controller.build_rerun_policy(
         action=action,
@@ -121,9 +124,7 @@ def test_controller_synthesizes_and_records_validation_driven_iteration() -> Non
     assert summary["iterations"][0]["retrieval_refinement"]["schema_version"] == (
         "agent_loop_retrieval_refinement_v1"
     )
-    assert summary["iterations"][0]["retrieval_refinement"]["focus_paths"] == [
-        "src/app.py"
-    ]
+    assert summary["iterations"][0]["retrieval_refinement"]["focus_paths"] == ["src/app.py"]
     assert summary["iterations"][0]["validation_branch_score"]["issue_delta"] == 1
     assert summary["iterations"][0]["validation_branch_score"]["passed"] is True
     assert summary["branch_batch"]["schema_version"] == "agent_loop_branch_batch_v1"
@@ -226,4 +227,7 @@ def test_controller_synthesizes_action_from_source_plan_validation_findings() ->
     assert selected["metadata"]["schema_version"] == "validation_findings_v1"
     assert selected["metadata"]["governance_mode"] == "advisory_report_only"
     assert selected["metadata"]["allowed_effect"] == "request_more_context_only"
+    assert selected["metadata"]["request_more_context_reason"] == "source_plan_validation_findings"
+    assert selected["metadata"]["refine_hint_count"] >= 1
+    assert selected["metadata"]["focus_path_count"] == 2
     assert selected["metadata"]["blocker_count"] == 1

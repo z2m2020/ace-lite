@@ -10,8 +10,11 @@ Schema version: ``context_report_v1``
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
+from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Any, cast
 
 from ace_lite.context_report_sections import (
@@ -47,13 +50,17 @@ from ace_lite.plan_payload_view import (
 )
 
 __all__ = [
+    "append_context_report_note",
+    "build_context_report_note",
     "build_context_report_payload",
     "render_context_report_markdown",
     "validate_context_report_payload",
+    "write_context_report_artifacts",
     "write_context_report_markdown",
 ]
 
 SCHEMA_VERSION = "context_report_v1"
+_CONTEXT_REPORT_NOTE_LOCK = Lock()
 
 # ----------------------------------------------------------------------
 # Helpers
@@ -84,6 +91,71 @@ def _bool(value: Any, default: bool = False) -> bool:
 
 def _list(value: Any) -> list[Any]:
     return list(value) if isinstance(value, list) else []
+
+
+def _resolve_context_report_json_path(markdown_path: Path) -> Path:
+    return markdown_path.parent / "context_report.json"
+
+
+def build_context_report_note(
+    *,
+    payload: Mapping[str, Any],
+    repo: str | None = None,
+    namespace: str | None = None,
+    artifact_refs: list[str] | None = None,
+) -> dict[str, Any]:
+    summary = _dict(payload.get("summary"))
+    query = _str(payload.get("query")).strip()
+    root = _str(payload.get("root")).strip()
+    return {
+        "text": " | ".join(
+            part
+            for part in (
+                f"context_report: {query}" if query else "context_report",
+                f"candidate_files={_int(summary.get('candidate_file_count', 0))}",
+                f"candidate_chunks={_int(summary.get('candidate_chunk_count', 0))}",
+                f"warnings={len(_list(payload.get('warnings')))}",
+            )
+            if part
+        ),
+        "repo": _str(repo or payload.get("repo")).strip(),
+        "namespace": _str(namespace).strip() or None,
+        "query": query,
+        "root": root,
+        "source": SCHEMA_VERSION,
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "artifact_refs": [str(item).strip() for item in (artifact_refs or []) if str(item).strip()],
+        "context_report": dict(payload),
+    }
+
+
+def append_context_report_note(
+    *,
+    payload: Mapping[str, Any],
+    notes_path: str | Path,
+    repo: str | None = None,
+    namespace: str | None = None,
+    artifact_refs: list[str] | None = None,
+) -> dict[str, Any]:
+    path = Path(notes_path).expanduser()
+    if not path.is_absolute():
+        path = (Path.cwd() / path).resolve()
+    note = build_context_report_note(
+        payload=payload,
+        repo=repo,
+        namespace=namespace,
+        artifact_refs=artifact_refs,
+    )
+    with _CONTEXT_REPORT_NOTE_LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(note, ensure_ascii=False))
+            fh.write("\n")
+    return {
+        "ok": True,
+        "notes_path": str(path),
+        "namespace": note.get("namespace"),
+    }
 
 
 def _dict(value: Any) -> dict[str, Any]:
@@ -987,30 +1059,57 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
 # ----------------------------------------------------------------------
 
 
-def write_context_report_markdown(
+def write_context_report_artifacts(
     plan_payload: Mapping[str, Any],
     output_path: str | Path,
+    *,
+    notes_path: str | Path | None = None,
+    repo: str | None = None,
+    namespace: str | None = None,
 ) -> dict[str, Any]:
-    """Build the report and write it as a Markdown file.
+    """Build the report and write synchronized markdown/json artifacts.
 
-    Args:
-        plan_payload: A plan output mapping.
-        output_path: Destination file path (relative paths are NOT resolved;
-                     pass an absolute path or resolve against the caller's cwd).
-
-    Returns:
-        A dict with ``path``, ``byte_count``, and ``ok`` fields.
-
-    Raises:
-        OSError / IOError: If the file cannot be written.
+    Returns a dict including markdown/json paths and optional memory-note sync info.
     """
+
     payload = build_context_report_payload(plan_payload)
     markdown = render_context_report_markdown(payload)
     target = Path(output_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(markdown, encoding="utf-8")
+
+    json_path = _resolve_context_report_json_path(target)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    artifact_refs = [str(target), str(json_path)]
+    note_sync: dict[str, Any] | None = None
+    if notes_path is not None and str(notes_path).strip():
+        note_sync = append_context_report_note(
+            payload=payload,
+            notes_path=notes_path,
+            repo=repo,
+            namespace=namespace,
+            artifact_refs=artifact_refs,
+        )
+
     return {
         "path": str(target),
+        "markdown_path": str(target),
+        "json_path": str(json_path),
         "byte_count": len(markdown.encode("utf-8")),
         "ok": True,
+        "note_sync": note_sync,
     }
+
+
+def write_context_report_markdown(
+    plan_payload: Mapping[str, Any],
+    output_path: str | Path,
+) -> dict[str, Any]:
+    """Compatibility wrapper for writing the Markdown context report.
+
+    Also writes the synchronized ``context_report.json`` artifact beside the markdown file.
+    """
+
+    return write_context_report_artifacts(plan_payload, output_path)

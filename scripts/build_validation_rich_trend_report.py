@@ -10,15 +10,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ace_lite.benchmark_ops import (
-    read_benchmark_deep_symbol_summary,
-    read_benchmark_native_scip_summary,
-    read_benchmark_retrieval_control_plane_gate_summary,
-    read_benchmark_retrieval_frontier_gate_summary,
-    read_benchmark_source_plan_failure_signal_summary,
-    read_benchmark_source_plan_validation_feedback_summary,
-    read_benchmark_validation_probe_summary,
+from ace_lite.benchmark.report_script_support import (
+    build_validation_rich_support_bundle,
+    collect_recent_git_diff_paths_with_runner,
+    load_report_json,
+    resolve_report_path,
 )
+from ace_lite.benchmark.report_script_support import (
+    safe_float as _safe_float,
+)
+from ace_lite.benchmark.report_warning_support import join_string_list, normalize_string_list
 
 METRIC_NAMES = (
     "task_success_rate",
@@ -31,30 +32,6 @@ METRIC_NAMES = (
 )
 
 _DATED_CHECKPOINT_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:$|[-_].+)")
-
-
-def _resolve_path(*, root: Path, value: str) -> Path:
-    candidate = Path(str(value).strip())
-    if candidate.is_absolute():
-        return candidate
-    return (root / candidate).resolve()
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    if not path.exists() or not path.is_file():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def _safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except Exception:
-        return float(default)
 
 
 def _parse_generated_at(value: Any) -> datetime:
@@ -91,7 +68,9 @@ def _is_direct_dated_summary(*, history_root: Path, path: Path) -> bool:
     return True
 
 
-def _iter_summary_paths(*, history_root: Path, latest_report: Path | None, limit: int) -> list[Path]:
+def _iter_summary_paths(
+    *, history_root: Path, latest_report: Path | None, limit: int
+) -> list[Path]:
     paths: list[Path] = []
     if history_root.exists() and history_root.is_dir():
         for path in history_root.rglob("summary.json"):
@@ -129,12 +108,7 @@ def _resolve_latest_report(
 def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     metrics_raw = payload.get("metrics")
     metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
-    failed_checks_raw = payload.get("failed_checks")
-    failed_checks = (
-        [str(item) for item in failed_checks_raw if str(item).strip()]
-        if isinstance(failed_checks_raw, list)
-        else []
-    )
+    failed_checks = normalize_string_list(payload.get("failed_checks"))
     return {
         "generated_at": str(payload.get("generated_at", "") or ""),
         "path": str(path),
@@ -143,28 +117,15 @@ def _extract_row(*, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "regressed": bool(payload.get("regressed", False)),
         "failed_checks": failed_checks,
         "metrics": {
-            metric_name: _safe_float(metrics.get(metric_name), 0.0)
-            for metric_name in METRIC_NAMES
+            metric_name: _safe_float(metrics.get(metric_name), 0.0) for metric_name in METRIC_NAMES
         },
-        "retrieval_control_plane_gate_summary": (
-            read_benchmark_retrieval_control_plane_gate_summary(path)
-        ),
-        "retrieval_frontier_gate_summary": (
-            read_benchmark_retrieval_frontier_gate_summary(path)
-        ),
-        "deep_symbol_summary": read_benchmark_deep_symbol_summary(path),
-        "native_scip_summary": read_benchmark_native_scip_summary(path),
-        "validation_probe_summary": read_benchmark_validation_probe_summary(path),
-        "source_plan_failure_signal_summary": (
-            read_benchmark_source_plan_failure_signal_summary(path)
-        ),
-        "source_plan_validation_feedback_summary": (
-            read_benchmark_source_plan_validation_feedback_summary(path)
-        ),
+        **build_validation_rich_support_bundle(path),
     }
 
 
-def _build_delta(*, latest: dict[str, Any], previous: dict[str, Any]) -> dict[str, dict[str, float]]:
+def _build_delta(
+    *, latest: dict[str, Any], previous: dict[str, Any]
+) -> dict[str, dict[str, float]]:
     latest_metrics_raw = latest.get("metrics")
     latest_metrics = latest_metrics_raw if isinstance(latest_metrics_raw, dict) else {}
     previous_metrics_raw = previous.get("metrics")
@@ -187,22 +148,6 @@ def _build_delta(*, latest: dict[str, Any], previous: dict[str, Any]) -> dict[st
             "delta": current - prior,
         }
     return delta
-
-
-def _collect_suspect_files(*, root: Path, limit: int = 20) -> list[str]:
-    command = ["git", "diff", "--name-only", "HEAD~1", "HEAD"]
-    completed = subprocess.run(
-        command,
-        cwd=str(root),
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if completed.returncode != 0:
-        return []
-    rows = [line.strip().replace("\\", "/") for line in str(completed.stdout or "").splitlines()]
-    filtered = [line for line in rows if line]
-    return filtered[: max(0, int(limit))]
 
 
 def _render_markdown(*, payload: dict[str, Any]) -> str:
@@ -233,9 +178,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         latest_gate = latest_gate_raw if isinstance(latest_gate_raw, dict) else {}
         latest_frontier_gate_raw = latest.get("retrieval_frontier_gate_summary")
         latest_frontier_gate = (
-            latest_frontier_gate_raw
-            if isinstance(latest_frontier_gate_raw, dict)
-            else {}
+            latest_frontier_gate_raw if isinstance(latest_frontier_gate_raw, dict) else {}
         )
         latest_deep_symbol_raw = latest.get("deep_symbol_summary")
         latest_deep_symbol = (
@@ -247,21 +190,15 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         )
         latest_validation_probe_raw = latest.get("validation_probe_summary")
         latest_validation_probe = (
-            latest_validation_probe_raw
-            if isinstance(latest_validation_probe_raw, dict)
-            else {}
+            latest_validation_probe_raw if isinstance(latest_validation_probe_raw, dict) else {}
         )
-        latest_source_plan_feedback_raw = latest.get(
-            "source_plan_validation_feedback_summary"
-        )
+        latest_source_plan_feedback_raw = latest.get("source_plan_validation_feedback_summary")
         latest_source_plan_feedback = (
             latest_source_plan_feedback_raw
             if isinstance(latest_source_plan_feedback_raw, dict)
             else {}
         )
-        latest_source_plan_failure_raw = latest.get(
-            "source_plan_failure_signal_summary"
-        )
+        latest_source_plan_failure_raw = latest.get("source_plan_failure_signal_summary")
         latest_source_plan_failure = (
             latest_source_plan_failure_raw
             if isinstance(latest_source_plan_failure_raw, dict)
@@ -288,12 +225,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
             ]
         )
         if latest_gate:
-            failed_checks_raw = latest_gate.get("failed_checks", [])
-            failed_checks = (
-                ", ".join(str(item) for item in failed_checks_raw if str(item).strip())
-                if isinstance(failed_checks_raw, list)
-                else ""
-            )
+            failed_checks = join_string_list(latest_gate.get("failed_checks", []))
             lines.extend(
                 [
                     "## Latest Q2 Retrieval Control Plane Gate",
@@ -303,9 +235,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         evaluated=bool(latest_gate.get("regression_evaluated", False))
                     ),
                     "- Regression detected: {detected}".format(
-                        detected=bool(
-                            latest_gate.get("benchmark_regression_detected", False)
-                        )
+                        detected=bool(latest_gate.get("benchmark_regression_detected", False))
                     ),
                     "- Shadow coverage: {shadow:.4f}".format(
                         shadow=_safe_float(
@@ -314,26 +244,17 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         )
                     ),
                     "- Risk upgrade gain: {gain:.4f}".format(
-                        gain=_safe_float(
-                            latest_gate.get("risk_upgrade_precision_gain", 0.0), 0.0
-                        )
+                        gain=_safe_float(latest_gate.get("risk_upgrade_precision_gain", 0.0), 0.0)
                     ),
                     "- Latency P95 ms: {latency:.2f}".format(
                         latency=_safe_float(latest_gate.get("latency_p95_ms", 0.0), 0.0)
                     ),
-                    f"- Failed checks: {failed_checks or '(none)'}",
+                    f"- Failed checks: {failed_checks}",
                     "",
                 ]
             )
         if latest_frontier_gate:
-            frontier_failed_checks_raw = latest_frontier_gate.get("failed_checks", [])
-            frontier_failed_checks = (
-                ", ".join(
-                    str(item) for item in frontier_failed_checks_raw if str(item).strip()
-                )
-                if isinstance(frontier_failed_checks_raw, list)
-                else ""
-            )
+            frontier_failed_checks = join_string_list(latest_frontier_gate.get("failed_checks", []))
             lines.extend(
                 [
                     "## Latest Q3 Retrieval Frontier Gate",
@@ -352,16 +273,12 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         )
                     ),
                     "- Precision at k: {precision:.4f}".format(
-                        precision=_safe_float(
-                            latest_frontier_gate.get("precision_at_k", 0.0), 0.0
-                        )
+                        precision=_safe_float(latest_frontier_gate.get("precision_at_k", 0.0), 0.0)
                     ),
                     "- Noise rate: {noise:.4f}".format(
-                        noise=_safe_float(
-                            latest_frontier_gate.get("noise_rate", 0.0), 0.0
-                        )
+                        noise=_safe_float(latest_frontier_gate.get("noise_rate", 0.0), 0.0)
                     ),
-                    f"- Failed checks: {frontier_failed_checks or '(none)'}",
+                    f"- Failed checks: {frontier_failed_checks}",
                     "",
                 ]
             )
@@ -380,21 +297,15 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                             latest_native_scip.get("document_count_mean", 0.0), 0.0
                         ),
                         definition=_safe_float(
-                            latest_native_scip.get(
-                                "definition_occurrence_count_mean", 0.0
-                            ),
+                            latest_native_scip.get("definition_occurrence_count_mean", 0.0),
                             0.0,
                         ),
                         reference=_safe_float(
-                            latest_native_scip.get(
-                                "reference_occurrence_count_mean", 0.0
-                            ),
+                            latest_native_scip.get("reference_occurrence_count_mean", 0.0),
                             0.0,
                         ),
                         symbol=_safe_float(
-                            latest_native_scip.get(
-                                "symbol_definition_count_mean", 0.0
-                            ),
+                            latest_native_scip.get("symbol_definition_count_mean", 0.0),
                             0.0,
                         ),
                     ),
@@ -420,9 +331,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     ),
                     "- Probe executed count mean: {count:.4f}".format(
                         count=_safe_float(
-                            latest_validation_probe.get(
-                                "probe_executed_count_mean", 0.0
-                            ),
+                            latest_validation_probe.get("probe_executed_count_mean", 0.0),
                             0.0,
                         )
                     ),
@@ -446,9 +355,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                         )
                     ),
                     "- Failure rate: {rate:.4f}".format(
-                        rate=_safe_float(
-                            latest_source_plan_feedback.get("failure_rate", 0.0), 0.0
-                        )
+                        rate=_safe_float(latest_source_plan_feedback.get("failure_rate", 0.0), 0.0)
                     ),
                     "- Issue count mean: {count:.4f}".format(
                         count=_safe_float(
@@ -458,33 +365,25 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     ),
                     "- Probe issue count mean: {count:.4f}".format(
                         count=_safe_float(
-                            latest_source_plan_feedback.get(
-                                "probe_issue_count_mean", 0.0
-                            ),
+                            latest_source_plan_feedback.get("probe_issue_count_mean", 0.0),
                             0.0,
                         )
                     ),
                     "- Probe executed count mean: {count:.4f}".format(
                         count=_safe_float(
-                            latest_source_plan_feedback.get(
-                                "probe_executed_count_mean", 0.0
-                            ),
+                            latest_source_plan_feedback.get("probe_executed_count_mean", 0.0),
                             0.0,
                         )
                     ),
                     "- Selected test count mean: {count:.4f}".format(
                         count=_safe_float(
-                            latest_source_plan_feedback.get(
-                                "selected_test_count_mean", 0.0
-                            ),
+                            latest_source_plan_feedback.get("selected_test_count_mean", 0.0),
                             0.0,
                         )
                     ),
                     "- Executed test count mean: {count:.4f}".format(
                         count=_safe_float(
-                            latest_source_plan_feedback.get(
-                                "executed_test_count_mean", 0.0
-                            ),
+                            latest_source_plan_feedback.get("executed_test_count_mean", 0.0),
                             0.0,
                         )
                     ),
@@ -497,14 +396,10 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     "## Latest Q1 Source Plan Failure Signal Summary",
                     "",
                     "- Present ratio: {ratio:.4f}".format(
-                        ratio=_safe_float(
-                            latest_source_plan_failure.get("present_ratio", 0.0), 0.0
-                        )
+                        ratio=_safe_float(latest_source_plan_failure.get("present_ratio", 0.0), 0.0)
                     ),
                     "- Failure rate: {rate:.4f}".format(
-                        rate=_safe_float(
-                            latest_source_plan_failure.get("failure_rate", 0.0), 0.0
-                        )
+                        rate=_safe_float(latest_source_plan_failure.get("failure_rate", 0.0), 0.0)
                     ),
                     "- Issue count mean: {count:.4f}".format(
                         count=_safe_float(
@@ -514,27 +409,19 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
                     ),
                     "- Replay cache origin ratio: {replay:.4f}; observability origin ratio: {observability:.4f}; source_plan origin ratio: {source_plan:.4f}; validate_step origin ratio: {validate_step:.4f}".format(
                         replay=_safe_float(
-                            latest_source_plan_failure.get(
-                                "replay_cache_origin_ratio", 0.0
-                            ),
+                            latest_source_plan_failure.get("replay_cache_origin_ratio", 0.0),
                             0.0,
                         ),
                         observability=_safe_float(
-                            latest_source_plan_failure.get(
-                                "observability_origin_ratio", 0.0
-                            ),
+                            latest_source_plan_failure.get("observability_origin_ratio", 0.0),
                             0.0,
                         ),
                         source_plan=_safe_float(
-                            latest_source_plan_failure.get(
-                                "source_plan_origin_ratio", 0.0
-                            ),
+                            latest_source_plan_failure.get("source_plan_origin_ratio", 0.0),
                             0.0,
                         ),
                         validate_step=_safe_float(
-                            latest_source_plan_failure.get(
-                                "validate_step_origin_ratio", 0.0
-                            ),
+                            latest_source_plan_failure.get("validate_step_origin_ratio", 0.0),
                             0.0,
                         ),
                     ),
@@ -664,9 +551,9 @@ def main() -> int:
     args = parser.parse_args(sys.argv[1:])
 
     project_root = Path(__file__).resolve().parents[1]
-    history_root = _resolve_path(root=project_root, value=str(args.history_root))
+    history_root = resolve_report_path(root=project_root, value=str(args.history_root))
     latest_report_arg = (
-        _resolve_path(root=project_root, value=str(args.latest_report))
+        resolve_report_path(root=project_root, value=str(args.latest_report))
         if str(args.latest_report).strip()
         else None
     )
@@ -674,7 +561,7 @@ def main() -> int:
         history_root=history_root,
         latest_report=latest_report_arg,
     )
-    output_dir = _resolve_path(root=project_root, value=str(args.output_dir))
+    output_dir = resolve_report_path(root=project_root, value=str(args.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     report_paths = _iter_summary_paths(
@@ -689,7 +576,7 @@ def main() -> int:
     rows: list[dict[str, Any]] = []
     failed_check_counter: Counter[str] = Counter()
     for path in report_paths:
-        payload = _load_json(path)
+        payload = load_report_json(path)
         if not payload:
             continue
         row = _extract_row(path=path, payload=payload)
@@ -710,7 +597,10 @@ def main() -> int:
     latest = rows[-1]
     previous = rows[-2] if len(rows) > 1 else {}
     delta = _build_delta(latest=latest, previous=previous) if previous else {}
-    suspect_files = _collect_suspect_files(root=project_root)
+    suspect_files = collect_recent_git_diff_paths_with_runner(
+        root=project_root,
+        subprocess_module=subprocess,
+    )
     failed_check_top3 = [
         {"check": str(check), "count": int(count)}
         for check, count in failed_check_counter.most_common(3)

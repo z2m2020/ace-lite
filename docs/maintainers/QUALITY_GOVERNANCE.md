@@ -112,6 +112,17 @@ These suites freeze three contracts that are easy to drift during refactors:
   runtime helper that still leaks `Any`, rather than reopening these wrapper
   seams.
 
+## Focused Ruff Cleanup Batch A (2026-04-16)
+
+- The post-Wave35 runtime/support neighborhood under `src/ace_lite/cli_app` +
+  `tests/unit` was reduced to a single remaining Ruff violation.
+- Wave36 batch A removed that residual import-order issue in
+  `tests/unit/test_plan_payload_view.py`, leaving the checked runtime/status,
+  runtime/doctor, and nearby unit-test surface Ruff-clean.
+- Keep future Ruff cleanup batches scoped and verifiable: prefer one small,
+  low-risk neighborhood at a time, then record the reduction in this document
+  and the active execution tasklog.
+
 ## Local Commands
 
 ```powershell

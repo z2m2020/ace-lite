@@ -11,6 +11,7 @@ from ace_lite.skills import load_sections, select_skills
 from ace_lite.token_estimator import estimate_tokens
 
 _DEFAULT_SKILL_TOP_N = 3
+_DEFAULT_SKILL_TOKEN_BUDGET = 1400
 
 _TROUBLESHOOT_TOKENS = (
     "error",
@@ -199,9 +200,7 @@ def infer_module(module_hint: str) -> str:
     return normalized
 
 
-def extract_error_keywords(
-    query: str, global_keywords: set[str] | None = None
-) -> list[str]:
+def extract_error_keywords(query: str, global_keywords: set[str] | None = None) -> list[str]:
     """Extract error-related keywords from a query."""
 
     text = query.lower()
@@ -280,17 +279,21 @@ def run_skills(
     ctx: StageContext,
     skill_manifest: list[dict[str, Any]],
     top_n: int = _DEFAULT_SKILL_TOP_N,
-    token_budget: int | None = None,
+    token_budget: int | None = _DEFAULT_SKILL_TOKEN_BUDGET,
     routed_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the skills stage and hydrate the selected sections."""
 
     index_stage = ctx.state.get("index", {})
-    routed = routed_payload if isinstance(routed_payload, dict) else route_skills(
-        query=ctx.query,
-        module_hint=str(index_stage.get("module_hint", "") or ""),
-        skill_manifest=skill_manifest,
-        top_n=max(0, int(top_n)),
+    routed = (
+        routed_payload
+        if isinstance(routed_payload, dict)
+        else route_skills(
+            query=ctx.query,
+            module_hint=str(index_stage.get("module_hint", "") or ""),
+            skill_manifest=skill_manifest,
+            top_n=max(0, int(top_n)),
+        )
     )
     query_ctx_raw = routed.get("query_ctx")
     query_ctx: dict[str, Any] = (
@@ -381,6 +384,10 @@ def run_skills(
                 "path": item.get("path"),
                 "score": item.get("score"),
                 "matched": item.get("matched", []),
+                "matched_count": _coerce_int(item.get("matched_count", 0)),
+                "signal_count": _coerce_int(item.get("signal_count", 0)),
+                "priority": _coerce_int(item.get("priority", 0)),
+                "manifest_load_mode": str(item.get("manifest_load_mode") or "metadata_only"),
                 "estimated_tokens": estimated_tokens,
                 "sections": sections,
             }
@@ -422,9 +429,7 @@ def _estimate_selected_skill_tokens(
         return declared
 
     if sections:
-        text = "\n\n".join(
-            f"## {title}\n{content}".strip() for title, content in sections.items()
-        )
+        text = "\n\n".join(f"## {title}\n{content}".strip() for title, content in sections.items())
         if text:
             return _estimate_tokens_cached(text, cache=token_estimate_cache)
 

@@ -105,7 +105,9 @@ def _read_config_file(path: Path | None) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _layer_paths(*, root: str | Path, cwd: str | Path | None, filename: str) -> tuple[Path, Path, Path | None]:
+def _layer_paths(
+    *, root: str | Path, cwd: str | Path | None, filename: str
+) -> tuple[Path, Path, Path | None]:
     root_path = Path(root).resolve()
     cwd_path = Path(cwd).resolve() if cwd is not None else Path.cwd().resolve()
     home_path = (Path.home() / filename).resolve()
@@ -136,116 +138,530 @@ def _load_layer_sources(
 
 
 _PLAN_SPECS: tuple[_FieldSpec, ...] = (
-    _spec(("memory", "disclosure_mode"), "compact", ("memory", "disclosure_mode"), ("memory_disclosure_mode",)),
-    _spec(("memory", "preview_max_chars"), 280, ("memory", "preview_max_chars"), ("memory_preview_max_chars",)),
+    _spec(
+        ("memory", "disclosure_mode"),
+        "compact",
+        ("memory", "disclosure_mode"),
+        ("memory_disclosure_mode",),
+    ),
+    _spec(
+        ("memory", "preview_max_chars"),
+        280,
+        ("memory", "preview_max_chars"),
+        ("memory_preview_max_chars",),
+    ),
     _spec(("memory", "strategy"), "hybrid", ("memory", "strategy"), ("memory_strategy",)),
-    _spec(("memory", "timeline_enabled"), True, ("memory", "timeline", "enabled"), ("memory_timeline_enabled",)),
-    _spec(("memory", "namespace", "container_tag"), None, ("memory", "namespace", "container_tag"), ("memory_container_tag",)),
-    _spec(("memory", "namespace", "auto_tag_mode"), None, ("memory", "namespace", "auto_tag_mode"), ("memory_auto_tag_mode",)),
-    _spec(("memory", "gate", "enabled"), bool(PLAN_MEMORY_GATE_DEFAULTS["memory_gate_enabled"]), ("memory", "gate", "enabled"), ("memory_gate_enabled",)),
-    _spec(("memory", "gate", "mode"), str(PLAN_MEMORY_GATE_DEFAULTS["memory_gate_mode"]), ("memory", "gate", "mode"), ("memory_gate_mode",)),
-    _spec(("memory", "profile", "enabled"), bool(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_enabled"]), ("memory", "profile", "enabled"), ("memory_profile_enabled",)),
-    _spec(("memory", "profile", "path"), str(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_path"]), ("memory", "profile", "path"), ("memory_profile_path",)),
-    _spec(("memory", "profile", "top_n"), int(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_top_n"]), ("memory", "profile", "top_n"), ("memory_profile_top_n",)),
-    _spec(("memory", "profile", "token_budget"), int(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_token_budget"]), ("memory", "profile", "token_budget"), ("memory_profile_token_budget",)),
-    _spec(("memory", "profile", "expiry_enabled"), bool(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_expiry_enabled"]), ("memory", "profile", "expiry_enabled"), ("memory_profile_expiry_enabled",)),
-    _spec(("memory", "profile", "ttl_days"), int(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_ttl_days"]), ("memory", "profile", "ttl_days"), ("memory_profile_ttl_days",)),
-    _spec(("memory", "profile", "max_age_days"), int(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_max_age_days"]), ("memory", "profile", "max_age_days"), ("memory_profile_max_age_days",)),
-    _spec(("memory", "feedback", "enabled"), bool(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_enabled"]), ("memory", "feedback", "enabled"), ("memory_feedback_enabled",)),
-    _spec(("memory", "feedback", "path"), str(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_path"]), ("memory", "feedback", "path"), ("memory_feedback_path",)),
-    _spec(("memory", "feedback", "max_entries"), int(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_max_entries"]), ("memory", "feedback", "max_entries"), ("memory_feedback_max_entries",)),
-    _spec(("memory", "feedback", "boost_per_select"), float(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_boost_per_select"]), ("memory", "feedback", "boost_per_select"), ("memory_feedback_boost_per_select",)),
-    _spec(("memory", "feedback", "max_boost"), float(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_max_boost"]), ("memory", "feedback", "max_boost"), ("memory_feedback_max_boost",)),
-    _spec(("memory", "feedback", "decay_days"), float(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_decay_days"]), ("memory", "feedback", "decay_days"), ("memory_feedback_decay_days",)),
-    _spec(("memory", "long_term", "enabled"), bool(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_enabled"]), ("memory", "long_term", "enabled"), ("memory_long_term_enabled",)),
-    _spec(("memory", "long_term", "path"), str(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_path"]), ("memory", "long_term", "path"), ("memory_long_term_path",)),
-    _spec(("memory", "long_term", "top_n"), int(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_top_n"]), ("memory", "long_term", "top_n"), ("memory_long_term_top_n",)),
-    _spec(("memory", "long_term", "token_budget"), int(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_token_budget"]), ("memory", "long_term", "token_budget"), ("memory_long_term_token_budget",)),
-    _spec(("memory", "long_term", "write_enabled"), bool(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_write_enabled"]), ("memory", "long_term", "write_enabled"), ("memory_long_term_write_enabled",)),
-    _spec(("memory", "long_term", "as_of_enabled"), bool(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_as_of_enabled"]), ("memory", "long_term", "as_of_enabled"), ("memory_long_term_as_of_enabled",)),
-    _spec(("memory", "capture", "enabled"), bool(PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_enabled"]), ("memory", "capture", "enabled"), ("memory_capture_enabled",)),
-    _spec(("memory", "capture", "notes_path"), str(PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_notes_path"]), ("memory", "capture", "notes_path"), ("memory_capture_notes_path",)),
-    _spec(("memory", "capture", "min_query_length"), int(PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_min_query_length"]), ("memory", "capture", "min_query_length"), ("memory_capture_min_query_length",)),
-    _spec(("memory", "capture", "keywords"), tuple(PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_keywords"]), ("memory", "capture", "keywords"), ("memory_capture_keywords",)),
-    _spec(("memory", "notes", "enabled"), bool(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_enabled"]), ("memory", "notes", "enabled"), ("memory_notes_enabled",)),
-    _spec(("memory", "notes", "path"), str(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_path"]), ("memory", "notes", "path"), ("memory_notes_path",)),
-    _spec(("memory", "notes", "limit"), int(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_limit"]), ("memory", "notes", "limit"), ("memory_notes_limit",)),
-    _spec(("memory", "notes", "mode"), str(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_mode"]), ("memory", "notes", "mode"), ("memory_notes_mode",)),
-    _spec(("memory", "notes", "expiry_enabled"), bool(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_expiry_enabled"]), ("memory", "notes", "expiry_enabled"), ("memory_notes_expiry_enabled",)),
-    _spec(("memory", "notes", "ttl_days"), int(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_ttl_days"]), ("memory", "notes", "ttl_days"), ("memory_notes_ttl_days",)),
-    _spec(("memory", "notes", "max_age_days"), int(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_max_age_days"]), ("memory", "notes", "max_age_days"), ("memory_notes_max_age_days",)),
+    _spec(
+        ("memory", "timeline_enabled"),
+        True,
+        ("memory", "timeline", "enabled"),
+        ("memory_timeline_enabled",),
+    ),
+    _spec(
+        ("memory", "namespace", "container_tag"),
+        None,
+        ("memory", "namespace", "container_tag"),
+        ("memory_container_tag",),
+    ),
+    _spec(
+        ("memory", "namespace", "auto_tag_mode"),
+        None,
+        ("memory", "namespace", "auto_tag_mode"),
+        ("memory_auto_tag_mode",),
+    ),
+    _spec(
+        ("memory", "gate", "enabled"),
+        bool(PLAN_MEMORY_GATE_DEFAULTS["memory_gate_enabled"]),
+        ("memory", "gate", "enabled"),
+        ("memory_gate_enabled",),
+    ),
+    _spec(
+        ("memory", "gate", "mode"),
+        str(PLAN_MEMORY_GATE_DEFAULTS["memory_gate_mode"]),
+        ("memory", "gate", "mode"),
+        ("memory_gate_mode",),
+    ),
+    _spec(
+        ("memory", "profile", "enabled"),
+        bool(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_enabled"]),
+        ("memory", "profile", "enabled"),
+        ("memory_profile_enabled",),
+    ),
+    _spec(
+        ("memory", "profile", "path"),
+        str(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_path"]),
+        ("memory", "profile", "path"),
+        ("memory_profile_path",),
+    ),
+    _spec(
+        ("memory", "profile", "top_n"),
+        int(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_top_n"]),
+        ("memory", "profile", "top_n"),
+        ("memory_profile_top_n",),
+    ),
+    _spec(
+        ("memory", "profile", "token_budget"),
+        int(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_token_budget"]),
+        ("memory", "profile", "token_budget"),
+        ("memory_profile_token_budget",),
+    ),
+    _spec(
+        ("memory", "profile", "expiry_enabled"),
+        bool(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_expiry_enabled"]),
+        ("memory", "profile", "expiry_enabled"),
+        ("memory_profile_expiry_enabled",),
+    ),
+    _spec(
+        ("memory", "profile", "ttl_days"),
+        int(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_ttl_days"]),
+        ("memory", "profile", "ttl_days"),
+        ("memory_profile_ttl_days",),
+    ),
+    _spec(
+        ("memory", "profile", "max_age_days"),
+        int(PLAN_MEMORY_PROFILE_DEFAULTS["memory_profile_max_age_days"]),
+        ("memory", "profile", "max_age_days"),
+        ("memory_profile_max_age_days",),
+    ),
+    _spec(
+        ("memory", "feedback", "enabled"),
+        bool(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_enabled"]),
+        ("memory", "feedback", "enabled"),
+        ("memory_feedback_enabled",),
+    ),
+    _spec(
+        ("memory", "feedback", "path"),
+        str(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_path"]),
+        ("memory", "feedback", "path"),
+        ("memory_feedback_path",),
+    ),
+    _spec(
+        ("memory", "feedback", "max_entries"),
+        int(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_max_entries"]),
+        ("memory", "feedback", "max_entries"),
+        ("memory_feedback_max_entries",),
+    ),
+    _spec(
+        ("memory", "feedback", "boost_per_select"),
+        float(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_boost_per_select"]),
+        ("memory", "feedback", "boost_per_select"),
+        ("memory_feedback_boost_per_select",),
+    ),
+    _spec(
+        ("memory", "feedback", "max_boost"),
+        float(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_max_boost"]),
+        ("memory", "feedback", "max_boost"),
+        ("memory_feedback_max_boost",),
+    ),
+    _spec(
+        ("memory", "feedback", "decay_days"),
+        float(PLAN_MEMORY_FEEDBACK_DEFAULTS["memory_feedback_decay_days"]),
+        ("memory", "feedback", "decay_days"),
+        ("memory_feedback_decay_days",),
+    ),
+    _spec(
+        ("memory", "long_term", "enabled"),
+        bool(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_enabled"]),
+        ("memory", "long_term", "enabled"),
+        ("memory_long_term_enabled",),
+    ),
+    _spec(
+        ("memory", "long_term", "path"),
+        str(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_path"]),
+        ("memory", "long_term", "path"),
+        ("memory_long_term_path",),
+    ),
+    _spec(
+        ("memory", "long_term", "top_n"),
+        int(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_top_n"]),
+        ("memory", "long_term", "top_n"),
+        ("memory_long_term_top_n",),
+    ),
+    _spec(
+        ("memory", "long_term", "token_budget"),
+        int(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_token_budget"]),
+        ("memory", "long_term", "token_budget"),
+        ("memory_long_term_token_budget",),
+    ),
+    _spec(
+        ("memory", "long_term", "write_enabled"),
+        bool(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_write_enabled"]),
+        ("memory", "long_term", "write_enabled"),
+        ("memory_long_term_write_enabled",),
+    ),
+    _spec(
+        ("memory", "long_term", "as_of_enabled"),
+        bool(PLAN_MEMORY_LONG_TERM_DEFAULTS["memory_long_term_as_of_enabled"]),
+        ("memory", "long_term", "as_of_enabled"),
+        ("memory_long_term_as_of_enabled",),
+    ),
+    _spec(
+        ("memory", "capture", "enabled"),
+        bool(PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_enabled"]),
+        ("memory", "capture", "enabled"),
+        ("memory_capture_enabled",),
+    ),
+    _spec(
+        ("memory", "capture", "notes_path"),
+        str(PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_notes_path"]),
+        ("memory", "capture", "notes_path"),
+        ("memory_capture_notes_path",),
+    ),
+    _spec(
+        ("memory", "capture", "min_query_length"),
+        int(PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_min_query_length"]),
+        ("memory", "capture", "min_query_length"),
+        ("memory_capture_min_query_length",),
+    ),
+    _spec(
+        ("memory", "capture", "keywords"),
+        tuple(PLAN_MEMORY_CAPTURE_DEFAULTS["memory_capture_keywords"]),
+        ("memory", "capture", "keywords"),
+        ("memory_capture_keywords",),
+    ),
+    _spec(
+        ("memory", "notes", "enabled"),
+        bool(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_enabled"]),
+        ("memory", "notes", "enabled"),
+        ("memory_notes_enabled",),
+    ),
+    _spec(
+        ("memory", "notes", "path"),
+        str(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_path"]),
+        ("memory", "notes", "path"),
+        ("memory_notes_path",),
+    ),
+    _spec(
+        ("memory", "notes", "limit"),
+        int(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_limit"]),
+        ("memory", "notes", "limit"),
+        ("memory_notes_limit",),
+    ),
+    _spec(
+        ("memory", "notes", "mode"),
+        str(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_mode"]),
+        ("memory", "notes", "mode"),
+        ("memory_notes_mode",),
+    ),
+    _spec(
+        ("memory", "notes", "expiry_enabled"),
+        bool(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_expiry_enabled"]),
+        ("memory", "notes", "expiry_enabled"),
+        ("memory_notes_expiry_enabled",),
+    ),
+    _spec(
+        ("memory", "notes", "ttl_days"),
+        int(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_ttl_days"]),
+        ("memory", "notes", "ttl_days"),
+        ("memory_notes_ttl_days",),
+    ),
+    _spec(
+        ("memory", "notes", "max_age_days"),
+        int(PLAN_MEMORY_NOTES_DEFAULTS["memory_notes_max_age_days"]),
+        ("memory", "notes", "max_age_days"),
+        ("memory_notes_max_age_days",),
+    ),
     _spec(("memory", "temporal", "enabled"), True, ("memory", "temporal", "enabled")),
-    _spec(("memory", "temporal", "recency_boost_enabled"), False, ("memory", "temporal", "recency_boost_enabled")),
-    _spec(("memory", "temporal", "recency_boost_max"), 0.15, ("memory", "temporal", "recency_boost_max")),
+    _spec(
+        ("memory", "temporal", "recency_boost_enabled"),
+        False,
+        ("memory", "temporal", "recency_boost_enabled"),
+    ),
+    _spec(
+        ("memory", "temporal", "recency_boost_max"),
+        0.15,
+        ("memory", "temporal", "recency_boost_max"),
+    ),
     _spec(("memory", "temporal", "timezone_mode"), "utc", ("memory", "temporal", "timezone_mode")),
-    _spec(("memory", "postprocess", "enabled"), bool(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_enabled"]), ("memory", "postprocess", "enabled"), ("memory_postprocess_enabled",)),
-    _spec(("memory", "postprocess", "noise_filter_enabled"), bool(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_noise_filter_enabled"]), ("memory", "postprocess", "noise_filter_enabled"), ("memory_postprocess_noise_filter_enabled",)),
-    _spec(("memory", "postprocess", "length_norm_anchor_chars"), int(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_length_norm_anchor_chars"]), ("memory", "postprocess", "length_norm_anchor_chars"), ("memory_postprocess_length_norm_anchor_chars",)),
-    _spec(("memory", "postprocess", "time_decay_half_life_days"), float(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_time_decay_half_life_days"]), ("memory", "postprocess", "time_decay_half_life_days"), ("memory_postprocess_time_decay_half_life_days",)),
-    _spec(("memory", "postprocess", "hard_min_score"), float(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_hard_min_score"]), ("memory", "postprocess", "hard_min_score"), ("memory_postprocess_hard_min_score",)),
-    _spec(("memory", "postprocess", "diversity_enabled"), bool(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_diversity_enabled"]), ("memory", "postprocess", "diversity_enabled"), ("memory_postprocess_diversity_enabled",)),
-    _spec(("memory", "postprocess", "diversity_similarity_threshold"), float(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_diversity_similarity_threshold"]), ("memory", "postprocess", "diversity_similarity_threshold"), ("memory_postprocess_diversity_similarity_threshold",)),
+    _spec(
+        ("memory", "postprocess", "enabled"),
+        bool(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_enabled"]),
+        ("memory", "postprocess", "enabled"),
+        ("memory_postprocess_enabled",),
+    ),
+    _spec(
+        ("memory", "postprocess", "noise_filter_enabled"),
+        bool(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_noise_filter_enabled"]),
+        ("memory", "postprocess", "noise_filter_enabled"),
+        ("memory_postprocess_noise_filter_enabled",),
+    ),
+    _spec(
+        ("memory", "postprocess", "length_norm_anchor_chars"),
+        int(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_length_norm_anchor_chars"]),
+        ("memory", "postprocess", "length_norm_anchor_chars"),
+        ("memory_postprocess_length_norm_anchor_chars",),
+    ),
+    _spec(
+        ("memory", "postprocess", "time_decay_half_life_days"),
+        float(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_time_decay_half_life_days"]),
+        ("memory", "postprocess", "time_decay_half_life_days"),
+        ("memory_postprocess_time_decay_half_life_days",),
+    ),
+    _spec(
+        ("memory", "postprocess", "hard_min_score"),
+        float(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_hard_min_score"]),
+        ("memory", "postprocess", "hard_min_score"),
+        ("memory_postprocess_hard_min_score",),
+    ),
+    _spec(
+        ("memory", "postprocess", "diversity_enabled"),
+        bool(PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_diversity_enabled"]),
+        ("memory", "postprocess", "diversity_enabled"),
+        ("memory_postprocess_diversity_enabled",),
+    ),
+    _spec(
+        ("memory", "postprocess", "diversity_similarity_threshold"),
+        float(
+            PLAN_MEMORY_POSTPROCESS_DEFAULTS["memory_postprocess_diversity_similarity_threshold"]
+        ),
+        ("memory", "postprocess", "diversity_similarity_threshold"),
+        ("memory_postprocess_diversity_similarity_threshold",),
+    ),
     _spec(("skills", "dir"), "skills", ("skills", "dir"), ("skills_dir",)),
     _spec(("skills", "manifest"), None, ("skills", "manifest")),
-    _spec(("skills", "precomputed_routing_enabled"), True, ("skills", "precomputed_routing_enabled"), ("precomputed_skills_routing_enabled",)),
+    _spec(
+        ("skills", "precomputed_routing_enabled"),
+        True,
+        ("skills", "precomputed_routing_enabled"),
+        ("precomputed_skills_routing_enabled",),
+    ),
     _spec(("skills", "top_n"), 3, ("skills", "top_n")),
-    _spec(("skills", "token_budget"), 1200, ("skills", "token_budget")),
+    _spec(("skills", "token_budget"), 1400, ("skills", "token_budget")),
     _spec(("retrieval", "top_k_files"), 8, ("retrieval", "top_k_files"), ("top_k_files",)),
-    _spec(("retrieval", "min_candidate_score"), 2, ("retrieval", "min_candidate_score"), ("min_candidate_score",)),
-    _spec(("retrieval", "candidate_relative_threshold"), 0.0, ("retrieval", "candidate_relative_threshold"), ("candidate_relative_threshold",)),
-    _spec(("retrieval", "candidate_ranker"), "heuristic", ("retrieval", "candidate_ranker"), ("candidate_ranker",)),
-    _spec(("retrieval", "exact_search_enabled"), False, ("retrieval", "exact_search_enabled"), ("exact_search_enabled",)),
-    _spec(("retrieval", "deterministic_refine_enabled"), True, ("retrieval", "deterministic_refine_enabled"), ("deterministic_refine_enabled",)),
-    _spec(("retrieval", "exact_search_time_budget_ms"), 40, ("retrieval", "exact_search_time_budget_ms"), ("exact_search_time_budget_ms",)),
-    _spec(("retrieval", "exact_search_max_paths"), 24, ("retrieval", "exact_search_max_paths"), ("exact_search_max_paths",)),
-    _spec(("retrieval", "hybrid_re2_fusion_mode"), "linear", ("retrieval", "hybrid_re2_fusion_mode"), ("hybrid_re2_fusion_mode",)),
-    _spec(("retrieval", "hybrid_re2_rrf_k"), 60, ("retrieval", "hybrid_re2_rrf_k"), ("hybrid_re2_rrf_k",)),
-    _spec(("retrieval", "hybrid_re2_shortlist_min"), HYBRID_SHORTLIST_MIN, ("retrieval", "hybrid_re2_shortlist_min")),
-    _spec(("retrieval", "hybrid_re2_shortlist_factor"), HYBRID_SHORTLIST_FACTOR, ("retrieval", "hybrid_re2_shortlist_factor")),
-    _spec(("retrieval", "hybrid_re2_bm25_weight"), 0.0, ("retrieval", "hybrid_re2_bm25_weight"), ("hybrid_re2_bm25_weight",)),
-    _spec(("retrieval", "hybrid_re2_heuristic_weight"), 0.0, ("retrieval", "hybrid_re2_heuristic_weight"), ("hybrid_re2_heuristic_weight",)),
-    _spec(("retrieval", "hybrid_re2_coverage_weight"), 0.0, ("retrieval", "hybrid_re2_coverage_weight"), ("hybrid_re2_coverage_weight",)),
-    _spec(("retrieval", "hybrid_re2_combined_scale"), 0.0, ("retrieval", "hybrid_re2_combined_scale"), ("hybrid_re2_combined_scale",)),
+    _spec(
+        ("retrieval", "min_candidate_score"),
+        2,
+        ("retrieval", "min_candidate_score"),
+        ("min_candidate_score",),
+    ),
+    _spec(
+        ("retrieval", "candidate_relative_threshold"),
+        0.0,
+        ("retrieval", "candidate_relative_threshold"),
+        ("candidate_relative_threshold",),
+    ),
+    _spec(
+        ("retrieval", "candidate_ranker"),
+        "heuristic",
+        ("retrieval", "candidate_ranker"),
+        ("candidate_ranker",),
+    ),
+    _spec(
+        ("retrieval", "exact_search_enabled"),
+        False,
+        ("retrieval", "exact_search_enabled"),
+        ("exact_search_enabled",),
+    ),
+    _spec(
+        ("retrieval", "deterministic_refine_enabled"),
+        True,
+        ("retrieval", "deterministic_refine_enabled"),
+        ("deterministic_refine_enabled",),
+    ),
+    _spec(
+        ("retrieval", "exact_search_time_budget_ms"),
+        40,
+        ("retrieval", "exact_search_time_budget_ms"),
+        ("exact_search_time_budget_ms",),
+    ),
+    _spec(
+        ("retrieval", "exact_search_max_paths"),
+        24,
+        ("retrieval", "exact_search_max_paths"),
+        ("exact_search_max_paths",),
+    ),
+    _spec(
+        ("retrieval", "hybrid_re2_fusion_mode"),
+        "linear",
+        ("retrieval", "hybrid_re2_fusion_mode"),
+        ("hybrid_re2_fusion_mode",),
+    ),
+    _spec(
+        ("retrieval", "hybrid_re2_rrf_k"),
+        60,
+        ("retrieval", "hybrid_re2_rrf_k"),
+        ("hybrid_re2_rrf_k",),
+    ),
+    _spec(
+        ("retrieval", "hybrid_re2_shortlist_min"),
+        HYBRID_SHORTLIST_MIN,
+        ("retrieval", "hybrid_re2_shortlist_min"),
+    ),
+    _spec(
+        ("retrieval", "hybrid_re2_shortlist_factor"),
+        HYBRID_SHORTLIST_FACTOR,
+        ("retrieval", "hybrid_re2_shortlist_factor"),
+    ),
+    _spec(
+        ("retrieval", "hybrid_re2_bm25_weight"),
+        0.0,
+        ("retrieval", "hybrid_re2_bm25_weight"),
+        ("hybrid_re2_bm25_weight",),
+    ),
+    _spec(
+        ("retrieval", "hybrid_re2_heuristic_weight"),
+        0.0,
+        ("retrieval", "hybrid_re2_heuristic_weight"),
+        ("hybrid_re2_heuristic_weight",),
+    ),
+    _spec(
+        ("retrieval", "hybrid_re2_coverage_weight"),
+        0.0,
+        ("retrieval", "hybrid_re2_coverage_weight"),
+        ("hybrid_re2_coverage_weight",),
+    ),
+    _spec(
+        ("retrieval", "hybrid_re2_combined_scale"),
+        0.0,
+        ("retrieval", "hybrid_re2_combined_scale"),
+        ("hybrid_re2_combined_scale",),
+    ),
     _spec(("retrieval", "bm25_k1"), BM25_K1, ("retrieval", "bm25_k1")),
     _spec(("retrieval", "bm25_b"), BM25_B, ("retrieval", "bm25_b")),
     _spec(("retrieval", "bm25_score_scale"), BM25_SCORE_SCALE, ("retrieval", "bm25_score_scale")),
-    _spec(("retrieval", "bm25_path_prior_factor"), BM25_PATH_PRIOR_FACTOR, ("retrieval", "bm25_path_prior_factor")),
-    _spec(("retrieval", "bm25_shortlist_min"), BM25_SHORTLIST_MIN, ("retrieval", "bm25_shortlist_min")),
-    _spec(("retrieval", "bm25_shortlist_factor"), BM25_SHORTLIST_FACTOR, ("retrieval", "bm25_shortlist_factor")),
+    _spec(
+        ("retrieval", "bm25_path_prior_factor"),
+        BM25_PATH_PRIOR_FACTOR,
+        ("retrieval", "bm25_path_prior_factor"),
+    ),
+    _spec(
+        ("retrieval", "bm25_shortlist_min"), BM25_SHORTLIST_MIN, ("retrieval", "bm25_shortlist_min")
+    ),
+    _spec(
+        ("retrieval", "bm25_shortlist_factor"),
+        BM25_SHORTLIST_FACTOR,
+        ("retrieval", "bm25_shortlist_factor"),
+    ),
     _spec(("retrieval", "heur_path_exact"), HEUR_PATH_EXACT, ("retrieval", "heur_path_exact")),
-    _spec(("retrieval", "heur_path_contains"), HEUR_PATH_CONTAINS, ("retrieval", "heur_path_contains")),
-    _spec(("retrieval", "heur_module_exact"), HEUR_MODULE_EXACT, ("retrieval", "heur_module_exact")),
+    _spec(
+        ("retrieval", "heur_path_contains"), HEUR_PATH_CONTAINS, ("retrieval", "heur_path_contains")
+    ),
+    _spec(
+        ("retrieval", "heur_module_exact"), HEUR_MODULE_EXACT, ("retrieval", "heur_module_exact")
+    ),
     _spec(("retrieval", "heur_module_tail"), HEUR_MODULE_TAIL, ("retrieval", "heur_module_tail")),
-    _spec(("retrieval", "heur_module_contains"), HEUR_MODULE_CONTAINS, ("retrieval", "heur_module_contains")),
-    _spec(("retrieval", "heur_symbol_exact"), HEUR_SYMBOL_EXACT, ("retrieval", "heur_symbol_exact")),
-    _spec(("retrieval", "heur_symbol_partial_factor"), HEUR_SYMBOL_PARTIAL_FACTOR, ("retrieval", "heur_symbol_partial_factor")),
-    _spec(("retrieval", "heur_symbol_partial_cap"), HEUR_SYMBOL_PARTIAL_CAP, ("retrieval", "heur_symbol_partial_cap")),
-    _spec(("retrieval", "heur_import_factor"), HEUR_IMPORT_FACTOR, ("retrieval", "heur_import_factor")),
+    _spec(
+        ("retrieval", "heur_module_contains"),
+        HEUR_MODULE_CONTAINS,
+        ("retrieval", "heur_module_contains"),
+    ),
+    _spec(
+        ("retrieval", "heur_symbol_exact"), HEUR_SYMBOL_EXACT, ("retrieval", "heur_symbol_exact")
+    ),
+    _spec(
+        ("retrieval", "heur_symbol_partial_factor"),
+        HEUR_SYMBOL_PARTIAL_FACTOR,
+        ("retrieval", "heur_symbol_partial_factor"),
+    ),
+    _spec(
+        ("retrieval", "heur_symbol_partial_cap"),
+        HEUR_SYMBOL_PARTIAL_CAP,
+        ("retrieval", "heur_symbol_partial_cap"),
+    ),
+    _spec(
+        ("retrieval", "heur_import_factor"), HEUR_IMPORT_FACTOR, ("retrieval", "heur_import_factor")
+    ),
     _spec(("retrieval", "heur_import_cap"), HEUR_IMPORT_CAP, ("retrieval", "heur_import_cap")),
-    _spec(("retrieval", "heur_content_symbol_factor"), HEUR_CONTENT_SYMBOL_FACTOR, ("retrieval", "heur_content_symbol_factor")),
-    _spec(("retrieval", "heur_content_import_factor"), HEUR_CONTENT_IMPORT_FACTOR, ("retrieval", "heur_content_import_factor")),
+    _spec(
+        ("retrieval", "heur_content_symbol_factor"),
+        HEUR_CONTENT_SYMBOL_FACTOR,
+        ("retrieval", "heur_content_symbol_factor"),
+    ),
+    _spec(
+        ("retrieval", "heur_content_import_factor"),
+        HEUR_CONTENT_IMPORT_FACTOR,
+        ("retrieval", "heur_content_import_factor"),
+    ),
     _spec(("retrieval", "heur_content_cap"), HEUR_CONTENT_CAP, ("retrieval", "heur_content_cap")),
     _spec(("retrieval", "heur_depth_base"), HEUR_DEPTH_BASE, ("retrieval", "heur_depth_base")),
-    _spec(("retrieval", "heur_depth_factor"), HEUR_DEPTH_FACTOR, ("retrieval", "heur_depth_factor")),
-    _spec(("retrieval", "retrieval_policy"), "auto", ("retrieval", "retrieval_policy"), ("retrieval_policy",)),
-    _spec(("retrieval", "policy_version"), "v1", ("retrieval", "policy_version"), ("policy_version",)),
-    _spec(("retrieval", "adaptive_router_enabled"), False, ("adaptive_router", "enabled"), ("adaptive_router_enabled",)),
-    _spec(("retrieval", "adaptive_router_mode"), "observe", ("adaptive_router", "mode"), ("adaptive_router_mode",)),
-    _spec(("retrieval", "adaptive_router_model_path"), "context-map/router/model.json", ("adaptive_router", "model_path"), ("adaptive_router_model_path",)),
-    _spec(("retrieval", "adaptive_router_state_path"), "context-map/router/state.json", ("adaptive_router", "state_path"), ("adaptive_router_state_path",)),
-    _spec(("retrieval", "adaptive_router_arm_set"), "retrieval_policy_v1", ("adaptive_router", "arm_set"), ("adaptive_router_arm_set",)),
-    _spec(("retrieval", "adaptive_router_online_bandit_enabled"), False, ("adaptive_router", "online_bandit", "enabled"), ("adaptive_router_online_bandit_enabled",)),
-    _spec(("retrieval", "adaptive_router_online_bandit_experiment_enabled"), False, ("adaptive_router", "online_bandit", "experiment_enabled"), ("adaptive_router_online_bandit_experiment_enabled",)),
+    _spec(
+        ("retrieval", "heur_depth_factor"), HEUR_DEPTH_FACTOR, ("retrieval", "heur_depth_factor")
+    ),
+    _spec(
+        ("retrieval", "retrieval_policy"),
+        "auto",
+        ("retrieval", "retrieval_policy"),
+        ("retrieval_policy",),
+    ),
+    _spec(
+        ("retrieval", "policy_version"), "v1", ("retrieval", "policy_version"), ("policy_version",)
+    ),
+    _spec(
+        ("retrieval", "adaptive_router_enabled"),
+        False,
+        ("adaptive_router", "enabled"),
+        ("adaptive_router_enabled",),
+    ),
+    _spec(
+        ("retrieval", "adaptive_router_mode"),
+        "observe",
+        ("adaptive_router", "mode"),
+        ("adaptive_router_mode",),
+    ),
+    _spec(
+        ("retrieval", "adaptive_router_model_path"),
+        "context-map/router/model.json",
+        ("adaptive_router", "model_path"),
+        ("adaptive_router_model_path",),
+    ),
+    _spec(
+        ("retrieval", "adaptive_router_state_path"),
+        "context-map/router/state.json",
+        ("adaptive_router", "state_path"),
+        ("adaptive_router_state_path",),
+    ),
+    _spec(
+        ("retrieval", "adaptive_router_arm_set"),
+        "retrieval_policy_v1",
+        ("adaptive_router", "arm_set"),
+        ("adaptive_router_arm_set",),
+    ),
+    _spec(
+        ("retrieval", "adaptive_router_online_bandit_enabled"),
+        False,
+        ("adaptive_router", "online_bandit", "enabled"),
+        ("adaptive_router_online_bandit_enabled",),
+    ),
+    _spec(
+        ("retrieval", "adaptive_router_online_bandit_experiment_enabled"),
+        False,
+        ("adaptive_router", "online_bandit", "experiment_enabled"),
+        ("adaptive_router_online_bandit_experiment_enabled",),
+    ),
     _spec(("index", "languages"), None, ("index", "languages"), ("languages",)),
-    _spec(("index", "cache_path"), "context-map/index.json", ("index", "cache_path"), ("index_cache_path",)),
+    _spec(
+        ("index", "cache_path"),
+        "context-map/index.json",
+        ("index", "cache_path"),
+        ("index_cache_path",),
+    ),
     _spec(("index", "incremental"), True, ("index", "incremental"), ("index_incremental",)),
-    _spec(("index", "conventions_files"), None, ("index", "conventions_files"), ("conventions_files",)),
+    _spec(
+        ("index", "conventions_files"), None, ("index", "conventions_files"), ("conventions_files",)
+    ),
     _spec(("repomap", "enabled"), True, ("repomap", "enabled"), ("repomap_enabled",)),
     _spec(("repomap", "top_k"), 8, ("repomap", "top_k"), ("repomap_top_k",)),
-    _spec(("repomap", "neighbor_limit"), 20, ("repomap", "neighbor_limit"), ("repomap_neighbor_limit",)),
-    _spec(("repomap", "budget_tokens"), 800, ("repomap", "budget_tokens"), ("repomap_budget_tokens",)),
-    _spec(("repomap", "ranking_profile"), "graph", ("repomap", "ranking_profile"), ("repomap_ranking_profile",)),
-    _spec(("repomap", "signal_weights"), None, ("repomap", "signal_weights"), ("repomap_signal_weights",)),
+    _spec(
+        ("repomap", "neighbor_limit"),
+        20,
+        ("repomap", "neighbor_limit"),
+        ("repomap_neighbor_limit",),
+    ),
+    _spec(
+        ("repomap", "budget_tokens"), 800, ("repomap", "budget_tokens"), ("repomap_budget_tokens",)
+    ),
+    _spec(
+        ("repomap", "ranking_profile"),
+        "graph",
+        ("repomap", "ranking_profile"),
+        ("repomap_ranking_profile",),
+    ),
+    _spec(
+        ("repomap", "signal_weights"),
+        None,
+        ("repomap", "signal_weights"),
+        ("repomap_signal_weights",),
+    ),
 )
 
 
@@ -258,74 +674,302 @@ _PLAN_SPECS += (
     _spec(("lsp", "time_budget_ms"), 1500, ("lsp", "time_budget_ms"), ("lsp_time_budget_ms",)),
     _spec(("lsp", "xref_commands"), None, ("lsp", "xref_commands"), ("lsp_xref_commands",)),
     _spec(("plugins", "enabled"), True, ("plugins", "enabled"), ("plugins_enabled",)),
-    _spec(("plugins", "remote_slot_policy_mode"), "strict", ("plugins", "remote_slot_policy_mode"), ("remote_slot_policy_mode",)),
-    _spec(("plugins", "remote_slot_allowlist"), None, ("plugins", "remote_slot_allowlist"), ("remote_slot_allowlist",)),
+    _spec(
+        ("plugins", "remote_slot_policy_mode"),
+        "strict",
+        ("plugins", "remote_slot_policy_mode"),
+        ("remote_slot_policy_mode",),
+    ),
+    _spec(
+        ("plugins", "remote_slot_allowlist"),
+        None,
+        ("plugins", "remote_slot_allowlist"),
+        ("remote_slot_allowlist",),
+    ),
     _spec(("chunking", "top_k"), 24, ("chunk", "top_k"), ("chunk_top_k",)),
-    _spec(("chunking", "per_file_limit"), 3, ("chunk", "per_file_limit"), ("chunk_per_file_limit",)),
+    _spec(
+        ("chunking", "per_file_limit"), 3, ("chunk", "per_file_limit"), ("chunk_per_file_limit",)
+    ),
     _spec(("chunking", "disclosure"), "refs", ("chunk", "disclosure"), ("chunk_disclosure",)),
     _spec(("chunking", "signature"), False, ("chunk", "signature"), ("chunk_signature",)),
-    _spec(("chunking", "snippet_max_lines"), 18, ("chunk", "snippet", "max_lines"), ("chunk_snippet_max_lines",)),
-    _spec(("chunking", "snippet_max_chars"), 1200, ("chunk", "snippet", "max_chars"), ("chunk_snippet_max_chars",)),
+    _spec(
+        ("chunking", "snippet_max_lines"),
+        18,
+        ("chunk", "snippet", "max_lines"),
+        ("chunk_snippet_max_lines",),
+    ),
+    _spec(
+        ("chunking", "snippet_max_chars"),
+        1200,
+        ("chunk", "snippet", "max_chars"),
+        ("chunk_snippet_max_chars",),
+    ),
     _spec(("chunking", "token_budget"), 1200, ("chunk", "token_budget"), ("chunk_token_budget",)),
-    _spec(("chunking", "topological_shield", "enabled"), False, ("chunk", "topological_shield", "enabled")),
-    _spec(("chunking", "topological_shield", "mode"), "off", ("chunk", "topological_shield", "mode")),
-    _spec(("chunking", "topological_shield", "max_attenuation"), 0.6, ("chunk", "topological_shield", "max_attenuation")),
-    _spec(("chunking", "topological_shield", "shared_parent_attenuation"), 0.2, ("chunk", "topological_shield", "shared_parent_attenuation")),
-    _spec(("chunking", "topological_shield", "adjacency_attenuation"), 0.5, ("chunk", "topological_shield", "adjacency_attenuation")),
-    _spec(("chunking", "guard", "enabled"), False, ("chunk", "guard", "enabled"), ("chunk_guard_enabled",)),
+    _spec(
+        ("chunking", "topological_shield", "enabled"),
+        False,
+        ("chunk", "topological_shield", "enabled"),
+    ),
+    _spec(
+        ("chunking", "topological_shield", "mode"), "off", ("chunk", "topological_shield", "mode")
+    ),
+    _spec(
+        ("chunking", "topological_shield", "max_attenuation"),
+        0.6,
+        ("chunk", "topological_shield", "max_attenuation"),
+    ),
+    _spec(
+        ("chunking", "topological_shield", "shared_parent_attenuation"),
+        0.2,
+        ("chunk", "topological_shield", "shared_parent_attenuation"),
+    ),
+    _spec(
+        ("chunking", "topological_shield", "adjacency_attenuation"),
+        0.5,
+        ("chunk", "topological_shield", "adjacency_attenuation"),
+    ),
+    _spec(
+        ("chunking", "guard", "enabled"),
+        False,
+        ("chunk", "guard", "enabled"),
+        ("chunk_guard_enabled",),
+    ),
     _spec(("chunking", "guard", "mode"), "off", ("chunk", "guard", "mode"), ("chunk_guard_mode",)),
-    _spec(("chunking", "guard", "lambda_penalty"), 0.8, ("chunk", "guard", "lambda_penalty"), ("chunk_guard_lambda_penalty",)),
-    _spec(("chunking", "guard", "min_pool"), 4, ("chunk", "guard", "min_pool"), ("chunk_guard_min_pool",)),
-    _spec(("chunking", "guard", "max_pool"), 32, ("chunk", "guard", "max_pool"), ("chunk_guard_max_pool",)),
-    _spec(("chunking", "guard", "min_marginal_utility"), 0.0, ("chunk", "guard", "min_marginal_utility"), ("chunk_guard_min_marginal_utility",)),
-    _spec(("chunking", "guard", "compatibility_min_overlap"), 0.3, ("chunk", "guard", "compatibility_min_overlap"), ("chunk_guard_compatibility_min_overlap",)),
-    _spec(("chunking", "diversity_enabled"), True, ("chunk", "diversity_enabled"), ("chunk_diversity_enabled",)),
-    _spec(("chunking", "diversity_path_penalty"), 0.20, ("chunk", "diversity_path_penalty"), ("chunk_diversity_path_penalty",)),
-    _spec(("chunking", "diversity_symbol_family_penalty"), 0.30, ("chunk", "diversity_symbol_family_penalty"), ("chunk_diversity_symbol_family_penalty",)),
-    _spec(("chunking", "diversity_kind_penalty"), 0.10, ("chunk", "diversity_kind_penalty"), ("chunk_diversity_kind_penalty",)),
-    _spec(("chunking", "diversity_locality_penalty"), 0.15, ("chunk", "diversity_locality_penalty"), ("chunk_diversity_locality_penalty",)),
-    _spec(("chunking", "diversity_locality_window"), 24, ("chunk", "diversity_locality_window"), ("chunk_diversity_locality_window",)),
-    _spec(("chunking", "file_prior_weight"), CHUNK_FILE_PRIOR_WEIGHT, ("chunk", "file_prior_weight"), ("chunk_file_prior_weight",)),
-    _spec(("chunking", "path_match"), CHUNK_PATH_MATCH, ("chunk", "path_match"), ("chunk_path_match",)),
-    _spec(("chunking", "module_match"), CHUNK_MODULE_MATCH, ("chunk", "module_match"), ("chunk_module_match",)),
-    _spec(("chunking", "symbol_exact"), CHUNK_SYMBOL_EXACT, ("chunk", "symbol_exact"), ("chunk_symbol_exact",)),
-    _spec(("chunking", "symbol_partial"), CHUNK_SYMBOL_PARTIAL, ("chunk", "symbol_partial"), ("chunk_symbol_partial",)),
-    _spec(("chunking", "signature_match"), CHUNK_SIGNATURE_MATCH, ("chunk", "signature_match"), ("chunk_signature_match",)),
-    _spec(("chunking", "reference_factor"), CHUNK_REFERENCE_FACTOR, ("chunk", "reference_factor"), ("chunk_reference_factor",)),
-    _spec(("chunking", "reference_cap"), CHUNK_REFERENCE_CAP, ("chunk", "reference_cap"), ("chunk_reference_cap",)),
+    _spec(
+        ("chunking", "guard", "lambda_penalty"),
+        0.8,
+        ("chunk", "guard", "lambda_penalty"),
+        ("chunk_guard_lambda_penalty",),
+    ),
+    _spec(
+        ("chunking", "guard", "min_pool"),
+        4,
+        ("chunk", "guard", "min_pool"),
+        ("chunk_guard_min_pool",),
+    ),
+    _spec(
+        ("chunking", "guard", "max_pool"),
+        32,
+        ("chunk", "guard", "max_pool"),
+        ("chunk_guard_max_pool",),
+    ),
+    _spec(
+        ("chunking", "guard", "min_marginal_utility"),
+        0.0,
+        ("chunk", "guard", "min_marginal_utility"),
+        ("chunk_guard_min_marginal_utility",),
+    ),
+    _spec(
+        ("chunking", "guard", "compatibility_min_overlap"),
+        0.3,
+        ("chunk", "guard", "compatibility_min_overlap"),
+        ("chunk_guard_compatibility_min_overlap",),
+    ),
+    _spec(
+        ("chunking", "diversity_enabled"),
+        True,
+        ("chunk", "diversity_enabled"),
+        ("chunk_diversity_enabled",),
+    ),
+    _spec(
+        ("chunking", "diversity_path_penalty"),
+        0.20,
+        ("chunk", "diversity_path_penalty"),
+        ("chunk_diversity_path_penalty",),
+    ),
+    _spec(
+        ("chunking", "diversity_symbol_family_penalty"),
+        0.30,
+        ("chunk", "diversity_symbol_family_penalty"),
+        ("chunk_diversity_symbol_family_penalty",),
+    ),
+    _spec(
+        ("chunking", "diversity_kind_penalty"),
+        0.10,
+        ("chunk", "diversity_kind_penalty"),
+        ("chunk_diversity_kind_penalty",),
+    ),
+    _spec(
+        ("chunking", "diversity_locality_penalty"),
+        0.15,
+        ("chunk", "diversity_locality_penalty"),
+        ("chunk_diversity_locality_penalty",),
+    ),
+    _spec(
+        ("chunking", "diversity_locality_window"),
+        24,
+        ("chunk", "diversity_locality_window"),
+        ("chunk_diversity_locality_window",),
+    ),
+    _spec(
+        ("chunking", "file_prior_weight"),
+        CHUNK_FILE_PRIOR_WEIGHT,
+        ("chunk", "file_prior_weight"),
+        ("chunk_file_prior_weight",),
+    ),
+    _spec(
+        ("chunking", "path_match"), CHUNK_PATH_MATCH, ("chunk", "path_match"), ("chunk_path_match",)
+    ),
+    _spec(
+        ("chunking", "module_match"),
+        CHUNK_MODULE_MATCH,
+        ("chunk", "module_match"),
+        ("chunk_module_match",),
+    ),
+    _spec(
+        ("chunking", "symbol_exact"),
+        CHUNK_SYMBOL_EXACT,
+        ("chunk", "symbol_exact"),
+        ("chunk_symbol_exact",),
+    ),
+    _spec(
+        ("chunking", "symbol_partial"),
+        CHUNK_SYMBOL_PARTIAL,
+        ("chunk", "symbol_partial"),
+        ("chunk_symbol_partial",),
+    ),
+    _spec(
+        ("chunking", "signature_match"),
+        CHUNK_SIGNATURE_MATCH,
+        ("chunk", "signature_match"),
+        ("chunk_signature_match",),
+    ),
+    _spec(
+        ("chunking", "reference_factor"),
+        CHUNK_REFERENCE_FACTOR,
+        ("chunk", "reference_factor"),
+        ("chunk_reference_factor",),
+    ),
+    _spec(
+        ("chunking", "reference_cap"),
+        CHUNK_REFERENCE_CAP,
+        ("chunk", "reference_cap"),
+        ("chunk_reference_cap",),
+    ),
     _spec(("tokenizer", "model"), "gpt-4o-mini", ("tokenizer", "model"), ("tokenizer_model",)),
     _spec(("cochange", "enabled"), True, ("cochange", "enabled"), ("cochange_enabled",)),
-    _spec(("cochange", "cache_path"), "context-map/cochange.json", ("cochange", "cache_path"), ("cochange_cache_path",)),
-    _spec(("cochange", "lookback_commits"), 400, ("cochange", "lookback_commits"), ("cochange_lookback_commits",)),
-    _spec(("cochange", "half_life_days"), 60.0, ("cochange", "half_life_days"), ("cochange_half_life_days",)),
-    _spec(("cochange", "top_neighbors"), 12, ("cochange", "top_neighbors"), ("cochange_top_neighbors",)),
-    _spec(("cochange", "boost_weight"), 1.5, ("cochange", "boost_weight"), ("cochange_boost_weight",)),
+    _spec(
+        ("cochange", "cache_path"),
+        "context-map/cochange.json",
+        ("cochange", "cache_path"),
+        ("cochange_cache_path",),
+    ),
+    _spec(
+        ("cochange", "lookback_commits"),
+        400,
+        ("cochange", "lookback_commits"),
+        ("cochange_lookback_commits",),
+    ),
+    _spec(
+        ("cochange", "half_life_days"),
+        60.0,
+        ("cochange", "half_life_days"),
+        ("cochange_half_life_days",),
+    ),
+    _spec(
+        ("cochange", "top_neighbors"),
+        12,
+        ("cochange", "top_neighbors"),
+        ("cochange_top_neighbors",),
+    ),
+    _spec(
+        ("cochange", "boost_weight"), 1.5, ("cochange", "boost_weight"), ("cochange_boost_weight",)
+    ),
     _spec(("tests", "junit_xml"), None, ("tests", "junit_xml"), ("junit_xml",)),
     _spec(("tests", "coverage_json"), None, ("tests", "coverage_json"), ("coverage_json",)),
-    _spec(("tests", "sbfl_json"), None, ("tests", "sbfl_json"), ("tests", "sbfl", "json_path"), ("tests", "sbfl", "json"), ("sbfl_json",)),
-    _spec(("tests", "sbfl_metric"), "ochiai", ("tests", "sbfl_metric"), ("tests", "sbfl", "metric"), ("sbfl_metric",)),
+    _spec(
+        ("tests", "sbfl_json"),
+        None,
+        ("tests", "sbfl_json"),
+        ("tests", "sbfl", "json_path"),
+        ("tests", "sbfl", "json"),
+        ("sbfl_json",),
+    ),
+    _spec(
+        ("tests", "sbfl_metric"),
+        "ochiai",
+        ("tests", "sbfl_metric"),
+        ("tests", "sbfl", "metric"),
+        ("sbfl_metric",),
+    ),
     _spec(("scip", "enabled"), False, ("scip", "enabled"), ("scip_enabled",)),
-    _spec(("scip", "index_path"), "context-map/scip/index.json", ("scip", "index_path"), ("scip_index_path",)),
+    _spec(
+        ("scip", "index_path"),
+        "context-map/scip/index.json",
+        ("scip", "index_path"),
+        ("scip_index_path",),
+    ),
     _spec(("scip", "provider"), "auto", ("scip", "provider"), ("scip_provider",)),
-    _spec(("scip", "generate_fallback"), True, ("scip", "generate_fallback"), ("scip_generate_fallback",)),
-    _spec(("scip", "base_weight"), SCIP_BASE_WEIGHT, ("scip", "base_weight"), ("scip_base_weight",)),
+    _spec(
+        ("scip", "generate_fallback"),
+        True,
+        ("scip", "generate_fallback"),
+        ("scip_generate_fallback",),
+    ),
+    _spec(
+        ("scip", "base_weight"), SCIP_BASE_WEIGHT, ("scip", "base_weight"), ("scip_base_weight",)
+    ),
     _spec(("embeddings", "enabled"), False, ("embeddings", "enabled"), ("embedding_enabled",)),
     _spec(("embeddings", "provider"), "hash", ("embeddings", "provider"), ("embedding_provider",)),
     _spec(("embeddings", "model"), "hash-v1", ("embeddings", "model"), ("embedding_model",)),
     _spec(("embeddings", "dimension"), 256, ("embeddings", "dimension"), ("embedding_dimension",)),
-    _spec(("embeddings", "index_path"), "context-map/embeddings/index.json", ("embeddings", "index_path"), ("embedding_index_path",)),
-    _spec(("embeddings", "rerank_pool"), 24, ("embeddings", "rerank_pool"), ("embedding_rerank_pool",)),
-    _spec(("embeddings", "lexical_weight"), 0.7, ("embeddings", "lexical_weight"), ("embedding_lexical_weight",)),
-    _spec(("embeddings", "semantic_weight"), 0.3, ("embeddings", "semantic_weight"), ("embedding_semantic_weight",)),
-    _spec(("embeddings", "min_similarity"), 0.0, ("embeddings", "min_similarity"), ("embedding_min_similarity",)),
+    _spec(
+        ("embeddings", "index_path"),
+        "context-map/embeddings/index.json",
+        ("embeddings", "index_path"),
+        ("embedding_index_path",),
+    ),
+    _spec(
+        ("embeddings", "rerank_pool"), 24, ("embeddings", "rerank_pool"), ("embedding_rerank_pool",)
+    ),
+    _spec(
+        ("embeddings", "lexical_weight"),
+        0.7,
+        ("embeddings", "lexical_weight"),
+        ("embedding_lexical_weight",),
+    ),
+    _spec(
+        ("embeddings", "semantic_weight"),
+        0.3,
+        ("embeddings", "semantic_weight"),
+        ("embedding_semantic_weight",),
+    ),
+    _spec(
+        ("embeddings", "min_similarity"),
+        0.0,
+        ("embeddings", "min_similarity"),
+        ("embedding_min_similarity",),
+    ),
     _spec(("embeddings", "fail_open"), True, ("embeddings", "fail_open"), ("embedding_fail_open",)),
-    _spec(("trace", "export_enabled"), False, ("trace", "export_enabled"), ("trace_export_enabled",)),
-    _spec(("trace", "export_path"), "context-map/traces/stage_spans.jsonl", ("trace", "export_path"), ("trace_export_path",)),
+    _spec(
+        ("trace", "export_enabled"), False, ("trace", "export_enabled"), ("trace_export_enabled",)
+    ),
+    _spec(
+        ("trace", "export_path"),
+        "context-map/traces/stage_spans.jsonl",
+        ("trace", "export_path"),
+        ("trace_export_path",),
+    ),
     _spec(("trace", "otlp_enabled"), False, ("trace", "otlp_enabled"), ("trace_otlp_enabled",)),
     _spec(("trace", "otlp_endpoint"), "", ("trace", "otlp_endpoint"), ("trace_otlp_endpoint",)),
-    _spec(("trace", "otlp_timeout_seconds"), 1.5, ("trace", "otlp_timeout_seconds"), ("trace_otlp_timeout_seconds",)),
-    _spec(("plan_replay_cache", "enabled"), False, ("plan_replay_cache", "enabled"), ("plan_replay_cache_enabled",)),
-    _spec(("plan_replay_cache", "cache_path"), "context-map/plan-replay/cache.json", ("plan_replay_cache", "cache_path"), ("plan_replay_cache_path",)),
+    _spec(
+        ("trace", "otlp_timeout_seconds"),
+        1.5,
+        ("trace", "otlp_timeout_seconds"),
+        ("trace_otlp_timeout_seconds",),
+    ),
+    _spec(
+        ("plan_replay_cache", "enabled"),
+        False,
+        ("plan_replay_cache", "enabled"),
+        ("plan_replay_cache_enabled",),
+    ),
+    _spec(
+        ("plan_replay_cache", "cache_path"),
+        "context-map/plan-replay/cache.json",
+        ("plan_replay_cache", "cache_path"),
+        ("plan_replay_cache_path",),
+    ),
 )
 
 
@@ -336,8 +980,14 @@ _RUNTIME_SPECS: tuple[_FieldSpec, ...] = (
     _spec(("hot_reload", "debounce_ms"), None, ("hot_reload", "debounce_ms")),
     _spec(("scheduler", "enabled"), None, ("scheduler", "enabled")),
     _spec(("scheduler", "heartbeat", "enabled"), None, ("scheduler", "heartbeat", "enabled")),
-    _spec(("scheduler", "heartbeat", "interval_seconds"), None, ("scheduler", "heartbeat", "interval_seconds")),
-    _spec(("scheduler", "heartbeat", "run_on_start"), None, ("scheduler", "heartbeat", "run_on_start")),
+    _spec(
+        ("scheduler", "heartbeat", "interval_seconds"),
+        None,
+        ("scheduler", "heartbeat", "interval_seconds"),
+    ),
+    _spec(
+        ("scheduler", "heartbeat", "run_on_start"), None, ("scheduler", "heartbeat", "run_on_start")
+    ),
     _spec(("scheduler", "cron"), None, ("scheduler", "cron")),
 )
 
@@ -348,13 +998,13 @@ def _prepare_retrieval_preset_payload(
     if retrieval_preset is None:
         return {}
     if isinstance(retrieval_preset, Mapping):
-        return _normalize_mapping(retrieval_preset)
+        return cast(dict[str, Any], _normalize_mapping(retrieval_preset))
     normalized = str(retrieval_preset or "").strip().lower()
     if not normalized or normalized == "none":
         return {}
     from ace_lite.cli_app.params import _resolve_retrieval_preset
 
-    return _normalize_mapping(_resolve_retrieval_preset(normalized) or {})
+    return cast(dict[str, Any], _normalize_mapping(_resolve_retrieval_preset(normalized) or {}))
 
 
 def _prepare_config_pack_overrides(
@@ -363,13 +1013,13 @@ def _prepare_config_pack_overrides(
     config_pack_overrides: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     if isinstance(config_pack_overrides, Mapping):
-        return _normalize_mapping(config_pack_overrides)
+        return cast(dict[str, Any], _normalize_mapping(config_pack_overrides))
     if config_pack_path is None:
         return {}
     result = load_config_pack(path=config_pack_path)
     if not result.enabled:
         return {}
-    return _normalize_mapping(result.overrides)
+    return cast(dict[str, Any], _normalize_mapping(result.overrides))
 
 
 def _normalize_runtime_profile_name(value: Any) -> str | None:
@@ -388,9 +1038,18 @@ def _resolve_runtime_profile_metadata(
     selected_source = "default"
     for label, raw in (
         ("cli", explicit_profile),
-        ("cwd_config", _extract_path(_normalize_mapping(cwd_root.get("plan")), ("runtime_profile",))),
-        ("repo_config", _extract_path(_normalize_mapping(repo_root.get("plan")), ("runtime_profile",))),
-        ("user_config", _extract_path(_normalize_mapping(user_root.get("plan")), ("runtime_profile",))),
+        (
+            "cwd_config",
+            _extract_path(_normalize_mapping(cwd_root.get("plan")), ("runtime_profile",)),
+        ),
+        (
+            "repo_config",
+            _extract_path(_normalize_mapping(repo_root.get("plan")), ("runtime_profile",)),
+        ),
+        (
+            "user_config",
+            _extract_path(_normalize_mapping(user_root.get("plan")), ("runtime_profile",)),
+        ),
     ):
         if raw is _MISSING:
             continue
@@ -420,9 +1079,7 @@ def _resolve_runtime_profile_metadata(
             "selected_profile_summary": resolved_profile.summary,
             "profile_resolution": "selected",
             "profile_knob_paths": {
-                key: list(value)
-                for key, value in resolved_profile.knob_paths().items()
-                if value
+                key: list(value) for key, value in resolved_profile.knob_paths().items() if value
             },
             "stats_tags": {
                 "profile_key": resolved_profile.name,
@@ -588,7 +1245,9 @@ def _build_mcp_snapshot(
     resolved_skills = (
         Path(str(override_skills)).expanduser()
         if override_skills is not None
-        else Path(_get_str("ACE_LITE_DEFAULT_SKILLS_DIR", str(resolved_root / "skills"))).expanduser()
+        else Path(
+            _get_str("ACE_LITE_DEFAULT_SKILLS_DIR", str(resolved_root / "skills"))
+        ).expanduser()
     )
     if not resolved_skills.is_absolute():
         resolved_skills = (resolved_root / resolved_skills).resolve()
@@ -601,7 +1260,9 @@ def _build_mcp_snapshot(
         env=live_env,
         snapshot_env=saved_env,
     )
-    resolved_user_id = _get_str("ACE_LITE_USER_ID") or _get_str("USERNAME") or _get_str("USER") or None
+    resolved_user_id = (
+        _get_str("ACE_LITE_USER_ID") or _get_str("USERNAME") or _get_str("USER") or None
+    )
     if user_id_source is None and resolved_user_id is not None:
         user_id_source = "identity_fallback"
     elif user_id_source is None:
@@ -625,10 +1286,14 @@ def _build_mcp_snapshot(
         "embedding_provider": _get_str("ACE_LITE_EMBEDDING_PROVIDER", "hash").lower(),
         "embedding_model": _get_str("ACE_LITE_EMBEDDING_MODEL", "hash-v1"),
         "embedding_dimension": max(8, _get_int("ACE_LITE_EMBEDDING_DIMENSION", 256)),
-        "embedding_index_path": _get_str("ACE_LITE_EMBEDDING_INDEX_PATH", "context-map/embeddings/index.json"),
+        "embedding_index_path": _get_str(
+            "ACE_LITE_EMBEDDING_INDEX_PATH", "context-map/embeddings/index.json"
+        ),
         "embedding_rerank_pool": max(1, _get_int("ACE_LITE_EMBEDDING_RERANK_POOL", 24)),
         "embedding_lexical_weight": max(0.0, _get_float("ACE_LITE_EMBEDDING_LEXICAL_WEIGHT", 0.7)),
-        "embedding_semantic_weight": max(0.0, _get_float("ACE_LITE_EMBEDDING_SEMANTIC_WEIGHT", 0.3)),
+        "embedding_semantic_weight": max(
+            0.0, _get_float("ACE_LITE_EMBEDDING_SEMANTIC_WEIGHT", 0.3)
+        ),
         "embedding_min_similarity": _get_float("ACE_LITE_EMBEDDING_MIN_SIMILARITY", 0.0),
         "embedding_fail_open": _get_bool("ACE_LITE_EMBEDDING_FAIL_OPEN", True),
         "ollama_base_url": _get_str("ACE_LITE_OLLAMA_BASE_URL", "http://localhost:11434"),
@@ -638,33 +1303,194 @@ def _build_mcp_snapshot(
         "server_name": "ACE-Lite MCP Server",
     }
     provenance = {
-        "default_root": "explicit_override" if override_root is not None else (_env_source(key="ACE_LITE_DEFAULT_ROOT", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default"),
-        "default_repo": _env_source(key="ACE_LITE_DEFAULT_REPO", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "default_skills_dir": "explicit_override" if override_skills is not None else (_env_source(key="ACE_LITE_DEFAULT_SKILLS_DIR", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default"),
-        "default_languages": _env_source(key="ACE_LITE_DEFAULT_LANGUAGES", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "config_pack": _env_source(key="ACE_LITE_CONFIG_PACK", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "tokenizer_model": _env_source(key="ACE_LITE_TOKENIZER_MODEL", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "memory_primary": _env_source(key="ACE_LITE_MEMORY_PRIMARY", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "memory_secondary": _env_source(key="ACE_LITE_MEMORY_SECONDARY", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "memory_timeout": _env_source(key="ACE_LITE_MEMORY_TIMEOUT", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "memory_limit": _env_source(key="ACE_LITE_MEMORY_LIMIT", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "plan_timeout_seconds": _env_source(key="ACE_LITE_PLAN_TIMEOUT_SECONDS", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "mcp_base_url": _env_source(key="ACE_LITE_MCP_BASE_URL", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "rest_base_url": _env_source(key="ACE_LITE_REST_BASE_URL", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "embedding_enabled": _env_source(key="ACE_LITE_EMBEDDING_ENABLED", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "embedding_provider": _env_source(key="ACE_LITE_EMBEDDING_PROVIDER", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "embedding_model": _env_source(key="ACE_LITE_EMBEDDING_MODEL", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "embedding_dimension": _env_source(key="ACE_LITE_EMBEDDING_DIMENSION", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "embedding_index_path": _env_source(key="ACE_LITE_EMBEDDING_INDEX_PATH", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "embedding_rerank_pool": _env_source(key="ACE_LITE_EMBEDDING_RERANK_POOL", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "embedding_lexical_weight": _env_source(key="ACE_LITE_EMBEDDING_LEXICAL_WEIGHT", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "embedding_semantic_weight": _env_source(key="ACE_LITE_EMBEDDING_SEMANTIC_WEIGHT", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "embedding_min_similarity": _env_source(key="ACE_LITE_EMBEDDING_MIN_SIMILARITY", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "embedding_fail_open": _env_source(key="ACE_LITE_EMBEDDING_FAIL_OPEN", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "ollama_base_url": _env_source(key="ACE_LITE_OLLAMA_BASE_URL", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
+        "default_root": "explicit_override"
+        if override_root is not None
+        else (
+            _env_source(
+                key="ACE_LITE_DEFAULT_ROOT",
+                explicit_overrides=overrides,
+                env=live_env,
+                snapshot_env=saved_env,
+            )
+            or "default"
+        ),
+        "default_repo": _env_source(
+            key="ACE_LITE_DEFAULT_REPO",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "default_skills_dir": "explicit_override"
+        if override_skills is not None
+        else (
+            _env_source(
+                key="ACE_LITE_DEFAULT_SKILLS_DIR",
+                explicit_overrides=overrides,
+                env=live_env,
+                snapshot_env=saved_env,
+            )
+            or "default"
+        ),
+        "default_languages": _env_source(
+            key="ACE_LITE_DEFAULT_LANGUAGES",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "config_pack": _env_source(
+            key="ACE_LITE_CONFIG_PACK",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "tokenizer_model": _env_source(
+            key="ACE_LITE_TOKENIZER_MODEL",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "memory_primary": _env_source(
+            key="ACE_LITE_MEMORY_PRIMARY",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "memory_secondary": _env_source(
+            key="ACE_LITE_MEMORY_SECONDARY",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "memory_timeout": _env_source(
+            key="ACE_LITE_MEMORY_TIMEOUT",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "memory_limit": _env_source(
+            key="ACE_LITE_MEMORY_LIMIT",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "plan_timeout_seconds": _env_source(
+            key="ACE_LITE_PLAN_TIMEOUT_SECONDS",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "mcp_base_url": _env_source(
+            key="ACE_LITE_MCP_BASE_URL",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "rest_base_url": _env_source(
+            key="ACE_LITE_REST_BASE_URL",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "embedding_enabled": _env_source(
+            key="ACE_LITE_EMBEDDING_ENABLED",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "embedding_provider": _env_source(
+            key="ACE_LITE_EMBEDDING_PROVIDER",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "embedding_model": _env_source(
+            key="ACE_LITE_EMBEDDING_MODEL",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "embedding_dimension": _env_source(
+            key="ACE_LITE_EMBEDDING_DIMENSION",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "embedding_index_path": _env_source(
+            key="ACE_LITE_EMBEDDING_INDEX_PATH",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "embedding_rerank_pool": _env_source(
+            key="ACE_LITE_EMBEDDING_RERANK_POOL",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "embedding_lexical_weight": _env_source(
+            key="ACE_LITE_EMBEDDING_LEXICAL_WEIGHT",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "embedding_semantic_weight": _env_source(
+            key="ACE_LITE_EMBEDDING_SEMANTIC_WEIGHT",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "embedding_min_similarity": _env_source(
+            key="ACE_LITE_EMBEDDING_MIN_SIMILARITY",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "embedding_fail_open": _env_source(
+            key="ACE_LITE_EMBEDDING_FAIL_OPEN",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
+        "ollama_base_url": _env_source(
+            key="ACE_LITE_OLLAMA_BASE_URL",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
         "user_id": user_id_source,
-        "app": _env_source(key="ACE_LITE_APP", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
-        "notes_path": _env_source(key="ACE_LITE_NOTES_PATH", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env) or "default",
+        "app": _env_source(
+            key="ACE_LITE_APP", explicit_overrides=overrides, env=live_env, snapshot_env=saved_env
+        )
+        or "default",
+        "notes_path": _env_source(
+            key="ACE_LITE_NOTES_PATH",
+            explicit_overrides=overrides,
+            env=live_env,
+            snapshot_env=saved_env,
+        )
+        or "default",
         "server_name": "default",
     }
     return snapshot, provenance

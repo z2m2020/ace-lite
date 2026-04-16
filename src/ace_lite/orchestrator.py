@@ -155,14 +155,10 @@ class AceOrchestrator:
         self._runtime_state = runtime_state
         self._config = runtime_state.config
         self._memory_provider = runtime_state.services.memory_provider
-        self._durable_stats_store_factory = (
-            runtime_state.services.durable_stats_store_factory
-        )
+        self._durable_stats_store_factory = runtime_state.services.durable_stats_store_factory
         self._durable_stats_session_id = runtime_state.durable_stats_session_id
         self._conventions_files = (
-            list(runtime_state.conventions_files)
-            if runtime_state.conventions_files
-            else None
+            list(runtime_state.conventions_files) if runtime_state.conventions_files else None
         )
         self._conventions_hashes = runtime_state.conventions_hashes
         self._plugin_loader = runtime_state.services.plugin_loader
@@ -241,12 +237,8 @@ class AceOrchestrator:
             end_date=end_date,
             filters=filters,
         )
-        validated_request_payload = validate_plan_request(
-            _typed_dict(request_payload)
-        )
-        request = PlanRequestAdapter(
-            _typed_dict(validated_request_payload)
-        )
+        validated_request_payload = validate_plan_request(_typed_dict(request_payload))
+        request = PlanRequestAdapter(_typed_dict(validated_request_payload))
         query = request.query
         repo = request.repo
         root = request.root
@@ -322,9 +314,7 @@ class AceOrchestrator:
             "validation": lambda ctx: self._run_validation(ctx=ctx),
         }
         for descriptor in iter_stage_descriptors():
-            registry.register_descriptor(
-                descriptor.with_handler(stage_handlers[descriptor.name])
-            )
+            registry.register_descriptor(descriptor.with_handler(stage_handlers[descriptor.name]))
         return registry
 
     def _execute_stage(
@@ -393,9 +383,7 @@ class AceOrchestrator:
             stage_name=stage_name,
             ctx_state=ctx_state,
             stage_payload=stage_payload,
-            precomputed_routing_enabled=bool(
-                self._config.skills.precomputed_routing_enabled
-            ),
+            precomputed_routing_enabled=bool(self._config.skills.precomputed_routing_enabled),
             precompute_skills_route_fn=lambda: self._precompute_skills_route(ctx=ctx),
             capture_payload=capture_payload,
         )
@@ -475,9 +463,7 @@ class AceOrchestrator:
 
     def _resolve_plan_replay_cache_path(self, *, root: str) -> Path:
         return _typed_path(
-            self._source_plan_replay_service.resolve_plan_replay_cache_path(
-                root=root
-            )
+            self._source_plan_replay_service.resolve_plan_replay_cache_path(root=root)
         )
 
     def _extract_source_plan_failure_signal_summary(
@@ -565,17 +551,13 @@ class AceOrchestrator:
     @staticmethod
     def _build_memory_replay_fingerprint(*, memory_payload: dict[str, Any]) -> str:
         return _typed_str(
-            SourcePlanReplayService.build_memory_replay_fingerprint(
-                memory_payload=memory_payload
-            )
+            SourcePlanReplayService.build_memory_replay_fingerprint(memory_payload=memory_payload)
         )
 
     @staticmethod
     def _build_index_replay_fingerprint(*, index_payload: dict[str, Any]) -> str:
         return _typed_str(
-            SourcePlanReplayService.build_index_replay_fingerprint(
-                index_payload=index_payload
-            )
+            SourcePlanReplayService.build_index_replay_fingerprint(index_payload=index_payload)
         )
 
     @staticmethod
@@ -612,9 +594,7 @@ class AceOrchestrator:
     @staticmethod
     def _build_skills_replay_fingerprint(*, skills_payload: dict[str, Any]) -> str:
         return _typed_str(
-            SourcePlanReplayService.build_skills_replay_fingerprint(
-                skills_payload=skills_payload
-            )
+            SourcePlanReplayService.build_skills_replay_fingerprint(skills_payload=skills_payload)
         )
 
     def _load_plugins(self, *, root: str) -> tuple[HookBus, list[str]]:
@@ -669,9 +649,7 @@ class AceOrchestrator:
         )
 
     def _resolve_profile_store(self, *, root: str) -> ProfileStore:
-        return _typed_profile_store(
-            self._memory_context_service.resolve_profile_store(root=root)
-        )
+        return _typed_profile_store(self._memory_context_service.resolve_profile_store(root=root))
 
     def _resolve_capture_notes_path(self, *, root: str) -> Path:
         return _typed_path(self._memory_context_service.resolve_capture_notes_path(root=root))
@@ -731,9 +709,7 @@ class AceOrchestrator:
             start_date=runtime.start_date,
             end_date=runtime.end_date,
             temporal_enabled=bool(self._config.memory.temporal.enabled),
-            recency_boost_enabled=bool(
-                self._config.memory.temporal.recency_boost_enabled
-            ),
+            recency_boost_enabled=bool(self._config.memory.temporal.recency_boost_enabled),
             recency_boost_max=float(self._config.memory.temporal.recency_boost_max),
             timezone_mode=str(self._config.memory.temporal.timezone_mode),
             namespace_mode=runtime.namespace_mode,
@@ -751,9 +727,7 @@ class AceOrchestrator:
                 self._config.memory.postprocess.time_decay_half_life_days
             ),
             postprocess_hard_min_score=float(self._config.memory.postprocess.hard_min_score),
-            postprocess_diversity_enabled=bool(
-                self._config.memory.postprocess.diversity_enabled
-            ),
+            postprocess_diversity_enabled=bool(self._config.memory.postprocess.diversity_enabled),
             postprocess_diversity_similarity_threshold=float(
                 self._config.memory.postprocess.diversity_similarity_threshold
             ),
@@ -832,6 +806,12 @@ class AceOrchestrator:
             config=self._config,
             pipeline_order=tuple(self.PIPELINE_ORDER),
         )
+        handoff_namespace: str | None = None
+        if self._config.memory.capture.enabled:
+            handoff_namespace, _, _ = self._resolve_memory_namespace(
+                repo=ctx.repo,
+                root=ctx.root,
+            )
         return _typed_dict(
             run_source_plan(
                 ctx=ctx,
@@ -841,6 +821,11 @@ class AceOrchestrator:
                 chunk_token_budget=runtime.chunk_token_budget,
                 chunk_disclosure=runtime.chunk_disclosure,
                 policy_version=runtime.policy_version,
+                handoff_artifact_dir=runtime.handoff_artifact_dir,
+                handoff_notes_path=(
+                    runtime.handoff_notes_path if self._config.memory.capture.enabled else None
+                ),
+                handoff_note_namespace=handoff_namespace,
             )
         )
 
@@ -862,6 +847,7 @@ class AceOrchestrator:
         if path.is_absolute():
             return path
         return Path(root) / path
+
 
 __all__ = [
     "BM25_B",

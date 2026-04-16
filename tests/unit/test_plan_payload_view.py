@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from ace_lite.plan_payload_view import (
+    DEFAULT_REPORT_SIGNAL_KEYS,
     coerce_payload,
     resolve_candidate_chunks,
     resolve_candidate_files,
     resolve_candidate_review,
-    resolve_context_refine,
     resolve_confidence_summary,
+    resolve_context_refine,
     resolve_evidence_summary,
+    resolve_handoff_payload,
     resolve_history_channel,
     resolve_history_hits,
-    resolve_handoff_payload,
     resolve_pipeline_stage_names,
     resolve_repomap_payload,
     resolve_report_signals,
@@ -23,6 +24,15 @@ from ace_lite.plan_payload_view import (
     resolve_validation_result,
     resolve_validation_tests,
 )
+
+
+def test_default_report_signal_keys_stay_stable() -> None:
+    assert DEFAULT_REPORT_SIGNAL_KEYS == (
+        "history_hits",
+        "validation_findings",
+        "session_end_report",
+        "handoff_payload",
+    )
 
 
 def test_coerce_payload_accepts_plain_mapping() -> None:
@@ -139,15 +149,9 @@ def test_resolve_report_only_helpers_prefer_nested_shape() -> None:
 
     source_plan = resolve_source_plan_payload(payload)
 
-    assert resolve_history_hits(payload, source_plan=source_plan) == {
-        "hits": [{"hash": "nested"}]
-    }
-    assert resolve_candidate_review(payload, source_plan=source_plan) == {
-        "status": "nested"
-    }
-    assert resolve_validation_findings(payload, source_plan=source_plan) == {
-        "warn_count": 1
-    }
+    assert resolve_history_hits(payload, source_plan=source_plan) == {"hits": [{"hash": "nested"}]}
+    assert resolve_candidate_review(payload, source_plan=source_plan) == {"status": "nested"}
+    assert resolve_validation_findings(payload, source_plan=source_plan) == {"warn_count": 1}
     assert resolve_session_end_report(payload, source_plan=source_plan) == {
         "next_actions": ["nested"]
     }
@@ -164,13 +168,9 @@ def test_resolve_report_only_helpers_prefer_nested_shape() -> None:
 
 def test_resolve_context_refine_reads_top_level_stage_payload() -> None:
     payload = {"context_refine": {"candidate_review": {"status": "watch"}}}
-    assert resolve_context_refine(payload) == {
-        "candidate_review": {"status": "watch"}
-    }
+    assert resolve_context_refine(payload) == {"candidate_review": {"status": "watch"}}
 
 
 def test_resolve_history_channel_reads_top_level_stage_payload() -> None:
     payload = {"history_channel": {"history_hits": {"hits": [{"hash": "watch"}]}}}
-    assert resolve_history_channel(payload) == {
-        "history_hits": {"hits": [{"hash": "watch"}]}
-    }
+    assert resolve_history_channel(payload) == {"history_hits": {"hits": [{"hash": "watch"}]}}

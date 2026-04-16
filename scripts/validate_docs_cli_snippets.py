@@ -71,7 +71,7 @@ def _resolve_click_command(cli, path: list[str]):
     for seg in path:
         if not hasattr(cmd, "commands"):
             raise KeyError(f"not a command group: {' '.join(path)}")
-        commands = getattr(cmd, "commands") or {}
+        commands = cmd.commands or {}
         if seg not in commands:
             raise KeyError(f"unknown command segment: {seg}")
         cmd = commands[seg]
@@ -124,7 +124,7 @@ def validate_docs(*, docs_root: Path) -> list[Finding]:
                 remaining = list(tail)
                 while remaining and hasattr(click_cmd, "commands"):
                     next_seg = remaining[0]
-                    commands = getattr(click_cmd, "commands") or {}
+                    commands = click_cmd.commands or {}
                     if next_seg not in commands:
                         break
                     command_path.append(next_seg)

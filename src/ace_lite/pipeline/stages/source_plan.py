@@ -7,6 +7,7 @@ outputs: memory, index, repomap, augment, and skills.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
 from ace_lite.chunking.skeleton import summarize_chunk_contract
@@ -25,16 +26,20 @@ from ace_lite.source_plan import (
     select_validation_tests,
     summarize_source_plan_grounding,
 )
+from ace_lite.source_plan.context_refine_support import (
+    resolve_source_plan_candidate_review,
+)
 from ace_lite.source_plan.evidence_confidence import (
     annotate_chunk_confidence,
     build_confidence_summary,
 )
 from ace_lite.source_plan.report_only import (
-    build_candidate_review,
+    append_handoff_payload_note,
     build_handoff_payload,
     build_history_hits,
     build_session_end_report,
     build_validation_findings,
+    write_handoff_payload_artifacts,
 )
 from ace_lite.validation.patch_artifact import validate_patch_artifact_contract_v1
 
@@ -52,6 +57,13 @@ def _coerce_int(value: Any, default: int = 0) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _resolve_repo_relative_path(*, root: str, configured_path: str | Path) -> Path:
+    target = Path(configured_path).expanduser()
+    if target.is_absolute():
+        return target.resolve()
+    return (Path(root) / target).resolve()
 
 
 def _extract_memory_hits(memory_stage: dict[str, Any]) -> list[dict[str, Any]]:
@@ -168,9 +180,7 @@ def _build_constraints(
         if item.get("source") == "ltm":
             selected_payload = _coerce_mapping(item.get("ltm_selected"))
             attribution_payload = _coerce_mapping(item.get("ltm_attribution"))
-            graph_neighborhood = _coerce_mapping(
-                attribution_payload.get("graph_neighborhood")
-            )
+            graph_neighborhood = _coerce_mapping(attribution_payload.get("graph_neighborhood"))
             selected_ltm_constraints.append(
                 {
                     "handle": str(item.get("handle") or "").strip(),
@@ -181,9 +191,7 @@ def _build_constraints(
                     "derived_from_observation_id": str(
                         selected_payload.get("derived_from_observation_id") or ""
                     ).strip(),
-                    "graph_neighbor_count": _coerce_int(
-                        graph_neighborhood.get("triple_count", 0)
-                    ),
+                    "graph_neighbor_count": _coerce_int(graph_neighborhood.get("triple_count", 0)),
                 }
             )
         if len(sanitized) >= 5:
@@ -281,6 +289,9 @@ def run_source_plan(
     chunk_token_budget: int,
     chunk_disclosure: str = "refs",
     policy_version: str,
+    handoff_artifact_dir: str | Path | None = None,
+    handoff_notes_path: str | Path | None = None,
+    handoff_note_namespace: str | None = None,
 ) -> dict[str, Any]:
     """Run the source_plan stage.
 
@@ -440,16 +451,14 @@ def run_source_plan(
             vcs_history=vcs_history,
             focused_files=focused_files,
         )
-    context_refine_stage = _coerce_mapping(ctx.state.get("context_refine"))
-    candidate_review = _coerce_mapping(context_refine_stage.get("candidate_review"))
-    if not candidate_review:
-        candidate_review = build_candidate_review(
-            focused_files=focused_files,
-            candidate_chunks=grounded_chunks[: max(1, int(chunk_top_k))],
-            evidence_summary=evidence_summary,
-            failure_signal_summary=failure_signal_summary,
-            validation_tests=validation_tests,
-        )
+    candidate_review = resolve_source_plan_candidate_review(
+        context_refine_state=ctx.state.get("context_refine"),
+        focused_files=focused_files,
+        candidate_chunks=grounded_chunks[: max(1, int(chunk_top_k))],
+        evidence_summary=evidence_summary,
+        failure_signal_summary=failure_signal_summary,
+        validation_tests=validation_tests,
+    )
     # validation_findings stays report-only/advisory: it may request more context later,
     # but must never mutate ranking, chunk selection, or gate outcomes here.
     validation_findings = build_validation_findings(validation_result=validation_result)
@@ -468,6 +477,29 @@ def run_source_plan(
         validation_findings=validation_findings,
         session_end_report=session_end_report,
     )
+    artifact_refs: list[str] = []
+    if handoff_artifact_dir is not None and str(handoff_artifact_dir).strip():
+        artifact_result = write_handoff_payload_artifacts(
+            handoff_payload,
+            handoff_artifact_dir,
+            root=ctx.root,
+        )
+        artifact_refs = [
+            str(artifact_result.get("json_path") or "").strip(),
+            str(artifact_result.get("markdown_path") or "").strip(),
+        ]
+        artifact_refs = [item for item in artifact_refs if item]
+    if handoff_notes_path is not None and str(handoff_notes_path).strip():
+        append_handoff_payload_note(
+            notes_path=_resolve_repo_relative_path(
+                root=ctx.root, configured_path=handoff_notes_path
+            ),
+            query=ctx.query,
+            repo=ctx.repo,
+            handoff_payload=handoff_payload,
+            namespace=handoff_note_namespace,
+            artifact_refs=artifact_refs,
+        )
 
     steps = build_source_plan_steps(
         index_stage=index_stage,

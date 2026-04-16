@@ -31,3 +31,13 @@ def test_orchestrator_factory_support_reexports_misc_payload_builders() -> None:
     )
     assert build_tests_payload is orchestrator_factory_misc_payloads.build_tests_payload
     assert build_scip_payload is orchestrator_factory_misc_payloads.build_scip_payload
+
+
+def test_build_skills_payload_uses_tuned_default_budget() -> None:
+    payload = orchestrator_factory_misc_payloads.build_skills_payload(
+        skills_group={},
+        skills_dir="skills",
+        precomputed_routing_enabled=True,
+    )
+
+    assert payload["token_budget"] == 1400

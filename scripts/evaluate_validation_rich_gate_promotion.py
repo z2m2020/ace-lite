@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ace_lite.benchmark.report_warning_support import normalize_string_list
+
 METRIC_NAMES = (
     "task_success_rate",
     "precision_at_k",
@@ -70,10 +72,7 @@ def _extract_latest_metrics(trend_payload: dict[str, Any]) -> dict[str, float]:
     latest = latest_raw if isinstance(latest_raw, dict) else {}
     metrics_raw = latest.get("metrics")
     metrics = metrics_raw if isinstance(metrics_raw, dict) else latest
-    return {
-        metric_name: _safe_float(metrics.get(metric_name), 0.0)
-        for metric_name in METRIC_NAMES
-    }
+    return {metric_name: _safe_float(metrics.get(metric_name), 0.0) for metric_name in METRIC_NAMES}
 
 
 def evaluate_promotion(
@@ -91,15 +90,10 @@ def evaluate_promotion(
     history_count = int(trend_payload.get("history_count", 0) or 0)
     trend_latest_raw = trend_payload.get("latest")
     trend_latest = trend_latest_raw if isinstance(trend_latest_raw, dict) else {}
-    trend_failed_checks_raw = trend_payload.get("failed_check_top3")
-    trend_failed_checks = (
-        trend_failed_checks_raw if isinstance(trend_failed_checks_raw, list) else []
-    )
+    trend_failed_checks = normalize_string_list(trend_payload.get("failed_check_top3"))
     latest_metrics = _extract_latest_metrics(trend_payload)
     threshold_failures = _evaluate_thresholds(metrics=latest_metrics, thresholds=thresholds)
-    retrieval_control_plane_gate_raw = trend_latest.get(
-        "retrieval_control_plane_gate_summary"
-    )
+    retrieval_control_plane_gate_raw = trend_latest.get("retrieval_control_plane_gate_summary")
     retrieval_control_plane_gate = (
         retrieval_control_plane_gate_raw
         if isinstance(retrieval_control_plane_gate_raw, dict)
@@ -107,9 +101,7 @@ def evaluate_promotion(
     )
     retrieval_frontier_gate_raw = trend_latest.get("retrieval_frontier_gate_summary")
     retrieval_frontier_gate = (
-        retrieval_frontier_gate_raw
-        if isinstance(retrieval_frontier_gate_raw, dict)
-        else {}
+        retrieval_frontier_gate_raw if isinstance(retrieval_frontier_gate_raw, dict) else {}
     )
     deep_symbol_summary_raw = trend_latest.get("deep_symbol_summary")
     deep_symbol_summary = (
@@ -121,32 +113,22 @@ def evaluate_promotion(
     )
     validation_probe_summary_raw = trend_latest.get("validation_probe_summary")
     validation_probe_summary = (
-        validation_probe_summary_raw
-        if isinstance(validation_probe_summary_raw, dict)
-        else {}
+        validation_probe_summary_raw if isinstance(validation_probe_summary_raw, dict) else {}
     )
-    source_plan_feedback_summary_raw = trend_latest.get(
-        "source_plan_validation_feedback_summary"
-    )
+    source_plan_feedback_summary_raw = trend_latest.get("source_plan_validation_feedback_summary")
     source_plan_feedback_summary = (
         source_plan_feedback_summary_raw
         if isinstance(source_plan_feedback_summary_raw, dict)
         else {}
     )
-    source_plan_failure_summary_raw = trend_latest.get(
-        "source_plan_failure_signal_summary"
-    )
+    source_plan_failure_summary_raw = trend_latest.get("source_plan_failure_signal_summary")
     source_plan_failure_summary = (
-        source_plan_failure_summary_raw
-        if isinstance(source_plan_failure_summary_raw, dict)
-        else {}
+        source_plan_failure_summary_raw if isinstance(source_plan_failure_summary_raw, dict) else {}
     )
 
     trend_ok = history_count >= max(1, int(min_history_count))
     if not trend_ok:
-        reasons.append(
-            f"trend history_count {history_count} is below required {min_history_count}"
-        )
+        reasons.append(f"trend history_count {history_count} is below required {min_history_count}")
     if bool(trend_latest.get("regressed", False)):
         reasons.append("latest validation-rich summary is marked regressed")
     if trend_failed_checks:
@@ -169,9 +151,7 @@ def evaluate_promotion(
     retrieval_control_plane_ok = True
     retrieval_control_plane_summary: dict[str, Any] = {"present": False, "passed": True}
     if retrieval_control_plane_gate:
-        retrieval_control_plane_ok = bool(
-            retrieval_control_plane_gate.get("gate_passed", False)
-        )
+        retrieval_control_plane_ok = bool(retrieval_control_plane_gate.get("gate_passed", False))
         if not retrieval_control_plane_ok:
             reasons.append("retrieval control plane gate is not passed")
         retrieval_control_plane_summary = {
@@ -183,13 +163,9 @@ def evaluate_promotion(
             "benchmark_regression_detected": bool(
                 retrieval_control_plane_gate.get("benchmark_regression_detected", False)
             ),
-            "failed_checks": [
-                str(item)
-                for item in retrieval_control_plane_gate.get("failed_checks", [])
-                if str(item).strip()
-            ]
-            if isinstance(retrieval_control_plane_gate.get("failed_checks"), list)
-            else [],
+            "failed_checks": normalize_string_list(
+                retrieval_control_plane_gate.get("failed_checks", [])
+            ),
         }
     gates.append({"name": "retrieval_control_plane", **retrieval_control_plane_summary})
 
@@ -202,13 +178,9 @@ def evaluate_promotion(
         retrieval_frontier_summary = {
             "present": True,
             "passed": retrieval_frontier_ok,
-            "failed_checks": [
-                str(item)
-                for item in retrieval_frontier_gate.get("failed_checks", [])
-                if str(item).strip()
-            ]
-            if isinstance(retrieval_frontier_gate.get("failed_checks"), list)
-            else [],
+            "failed_checks": normalize_string_list(
+                retrieval_frontier_gate.get("failed_checks", [])
+            ),
             "deep_symbol_case_recall": _safe_float(
                 retrieval_frontier_gate.get("deep_symbol_case_recall"), 0.0
             ),
@@ -260,12 +232,8 @@ def evaluate_promotion(
             "name": "source_plan_validation_feedback",
             "present": bool(source_plan_feedback_summary),
             "passed": True,
-            "present_ratio": _safe_float(
-                source_plan_feedback_summary.get("present_ratio"), 0.0
-            ),
-            "failure_rate": _safe_float(
-                source_plan_feedback_summary.get("failure_rate"), 0.0
-            ),
+            "present_ratio": _safe_float(source_plan_feedback_summary.get("present_ratio"), 0.0),
+            "failure_rate": _safe_float(source_plan_feedback_summary.get("failure_rate"), 0.0),
             "issue_count_mean": _safe_float(
                 source_plan_feedback_summary.get("issue_count_mean"), 0.0
             ),
@@ -288,12 +256,8 @@ def evaluate_promotion(
             "name": "source_plan_failure_signal",
             "present": bool(source_plan_failure_summary),
             "passed": True,
-            "present_ratio": _safe_float(
-                source_plan_failure_summary.get("present_ratio"), 0.0
-            ),
-            "failure_rate": _safe_float(
-                source_plan_failure_summary.get("failure_rate"), 0.0
-            ),
+            "present_ratio": _safe_float(source_plan_failure_summary.get("present_ratio"), 0.0),
+            "failure_rate": _safe_float(source_plan_failure_summary.get("failure_rate"), 0.0),
             "issue_count_mean": _safe_float(
                 source_plan_failure_summary.get("issue_count_mean"), 0.0
             ),
@@ -347,16 +311,14 @@ def evaluate_promotion(
             current_metrics.get("noise_rate"), 0.0
         ):
             regression_reasons.append("tuned noise_rate is worse than current")
-        if _safe_float(
-            tuned_metrics.get("missing_validation_rate"), 0.0
-        ) > _safe_float(current_metrics.get("missing_validation_rate"), 0.0):
+        if _safe_float(tuned_metrics.get("missing_validation_rate"), 0.0) > _safe_float(
+            current_metrics.get("missing_validation_rate"), 0.0
+        ):
             regression_reasons.append("tuned missing_validation_rate is worse than current")
-        if _safe_float(
-            tuned_metrics.get("evidence_insufficient_rate"), 0.0
-        ) > _safe_float(current_metrics.get("evidence_insufficient_rate"), 0.0):
-            regression_reasons.append(
-                "tuned evidence_insufficient_rate is worse than current"
-            )
+        if _safe_float(tuned_metrics.get("evidence_insufficient_rate"), 0.0) > _safe_float(
+            current_metrics.get("evidence_insufficient_rate"), 0.0
+        ):
+            regression_reasons.append("tuned evidence_insufficient_rate is worse than current")
         if regression_reasons:
             comparison_ok = False
             reasons.extend(regression_reasons)
@@ -381,8 +343,8 @@ def evaluate_promotion(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "recommendation": "eligible_for_enforced" if eligible else "stay_report_only",
         "eligible": eligible,
-        "reasons": reasons,
-        "warnings": warnings,
+        "reasons": normalize_string_list(reasons),
+        "warnings": normalize_string_list(warnings),
         "gates": gates,
         "thresholds": thresholds,
         "latest_metrics": latest_metrics,
@@ -390,10 +352,8 @@ def evaluate_promotion(
 
 
 def _render_markdown(*, payload: dict[str, Any]) -> str:
-    reasons_raw = payload.get("reasons")
-    reasons = reasons_raw if isinstance(reasons_raw, list) else []
-    warnings_raw = payload.get("warnings")
-    warnings = warnings_raw if isinstance(warnings_raw, list) else []
+    reasons = normalize_string_list(payload.get("reasons"))
+    warnings = normalize_string_list(payload.get("warnings"))
     gates_raw = payload.get("gates")
     gates = gates_raw if isinstance(gates_raw, list) else []
     latest_metrics_raw = payload.get("latest_metrics")
@@ -426,10 +386,7 @@ def _render_markdown(*, payload: dict[str, Any]) -> str:
         lines.append("- None")
     lines.extend(["", "## Latest Metrics", "", "| Metric | Value |", "| --- | ---: |"])
     for metric_name in METRIC_NAMES:
-        lines.append(
-            f"| {metric_name} | "
-            f"{_safe_float(latest_metrics.get(metric_name), 0.0):.4f} |"
-        )
+        lines.append(f"| {metric_name} | {_safe_float(latest_metrics.get(metric_name), 0.0):.4f} |")
     lines.extend(["", "## Reasons", ""])
     if reasons:
         for reason in reasons:
@@ -447,7 +404,10 @@ def main() -> int:
     parser.add_argument("--trend-report", required=True)
     parser.add_argument("--stability-report", required=True)
     parser.add_argument("--comparison-report", default="")
-    parser.add_argument("--output", default="artifacts/benchmark/validation_rich/promotion/latest/promotion_decision.json")
+    parser.add_argument(
+        "--output",
+        default="artifacts/benchmark/validation_rich/promotion/latest/promotion_decision.json",
+    )
     parser.add_argument("--min-history-count", type=int, default=2)
     parser.add_argument("--min-task-success-rate", type=float, default=0.90)
     parser.add_argument("--min-precision-at-k", type=float, default=0.40)
@@ -473,7 +433,10 @@ def main() -> int:
     stability_payload = _load_json(stability_path)
     comparison_payload = _load_json(comparison_path) if comparison_path is not None else {}
     if not trend_payload or not stability_payload:
-        print("[validation-rich-promotion] missing required trend or stability report", file=sys.stderr)
+        print(
+            "[validation-rich-promotion] missing required trend or stability report",
+            file=sys.stderr,
+        )
         return 2
 
     thresholds = {

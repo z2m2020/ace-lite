@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
 
 from ace_lite.run_manifest import append_run_manifest_entry
 

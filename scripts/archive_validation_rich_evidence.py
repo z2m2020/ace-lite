@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ace_lite.benchmark.report_warning_support import join_string_list, normalize_string_list
+
 
 def _resolve_path(*, root: Path, value: str) -> Path:
     candidate = Path(str(value).strip())
@@ -45,9 +47,7 @@ def _load_json(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _extract_retrieval_control_plane_gate_summary(
-    *, payload: dict[str, Any]
-) -> dict[str, Any]:
+def _extract_retrieval_control_plane_gate_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
     summary_raw = payload.get("retrieval_control_plane_gate_summary")
     summary = summary_raw if isinstance(summary_raw, dict) else {}
     normalized: dict[str, Any] = {}
@@ -65,9 +65,7 @@ def _extract_retrieval_control_plane_gate_summary(
     return normalized
 
 
-def _extract_retrieval_frontier_gate_summary(
-    *, payload: dict[str, Any]
-) -> dict[str, Any]:
+def _extract_retrieval_frontier_gate_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
     summary_raw = payload.get("retrieval_frontier_gate_summary")
     summary = summary_raw if isinstance(summary_raw, dict) else {}
     normalized: dict[str, Any] = {}
@@ -108,8 +106,7 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
     archived_files = archived_raw if isinstance(archived_raw, list) else []
     decision_raw = payload.get("promotion_decision")
     decision = decision_raw if isinstance(decision_raw, dict) else {}
-    reasons_raw = decision.get("reasons")
-    reasons = reasons_raw if isinstance(reasons_raw, list) else []
+    reasons = normalize_string_list(decision.get("reasons"))
     gate_raw = payload.get("retrieval_control_plane_gate_summary")
     gate = gate_raw if isinstance(gate_raw, dict) else {}
     frontier_gate_raw = payload.get("retrieval_frontier_gate_summary")
@@ -119,14 +116,10 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
     native_scip_raw = payload.get("native_scip_summary")
     native_scip = native_scip_raw if isinstance(native_scip_raw, dict) else {}
     validation_probe_raw = payload.get("validation_probe_summary")
-    validation_probe = (
-        validation_probe_raw if isinstance(validation_probe_raw, dict) else {}
-    )
+    validation_probe = validation_probe_raw if isinstance(validation_probe_raw, dict) else {}
     source_plan_feedback_raw = payload.get("source_plan_validation_feedback_summary")
     source_plan_feedback = (
-        source_plan_feedback_raw
-        if isinstance(source_plan_feedback_raw, dict)
-        else {}
+        source_plan_feedback_raw if isinstance(source_plan_feedback_raw, dict) else {}
     )
     source_plan_failure_raw = payload.get("source_plan_failure_signal_summary")
     source_plan_failure = (
@@ -149,10 +142,7 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
         lines.append("- None")
 
     if gate:
-        failed_checks_raw = gate.get("failed_checks")
-        failed_checks = (
-            failed_checks_raw if isinstance(failed_checks_raw, list) else []
-        )
+        failed_checks = normalize_string_list(gate.get("failed_checks"))
         lines.extend(
             [
                 "",
@@ -174,21 +164,12 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
                 "- Latency P95 ms: {latency:.2f}".format(
                     latency=float(gate.get("latency_p95_ms", 0.0) or 0.0)
                 ),
-                "- Failed checks: {checks}".format(
-                    checks=",".join(str(item) for item in failed_checks)
-                    if failed_checks
-                    else "(none)"
-                ),
+                f"- Failed checks: {join_string_list(failed_checks)}",
             ]
         )
 
     if frontier_gate:
-        frontier_failed_checks_raw = frontier_gate.get("failed_checks")
-        frontier_failed_checks = (
-            frontier_failed_checks_raw
-            if isinstance(frontier_failed_checks_raw, list)
-            else []
-        )
+        frontier_failed_checks = normalize_string_list(frontier_gate.get("failed_checks"))
         lines.extend(
             [
                 "",
@@ -207,11 +188,7 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
                 "- Noise rate: {noise:.4f}".format(
                     noise=float(frontier_gate.get("noise_rate", 0.0) or 0.0)
                 ),
-                "- Failed checks: {checks}".format(
-                    checks=",".join(str(item) for item in frontier_failed_checks)
-                    if frontier_failed_checks
-                    else "(none)"
-                ),
+                f"- Failed checks: {join_string_list(frontier_failed_checks)}",
             ]
         )
 
@@ -231,12 +208,8 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
                     definition=float(
                         native_scip.get("definition_occurrence_count_mean", 0.0) or 0.0
                     ),
-                    reference=float(
-                        native_scip.get("reference_occurrence_count_mean", 0.0) or 0.0
-                    ),
-                    symbol=float(
-                        native_scip.get("symbol_definition_count_mean", 0.0) or 0.0
-                    ),
+                    reference=float(native_scip.get("reference_occurrence_count_mean", 0.0) or 0.0),
+                    symbol=float(native_scip.get("symbol_definition_count_mean", 0.0) or 0.0),
                 ),
             ]
         )
@@ -254,9 +227,7 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
                     ratio=float(validation_probe.get("probe_enabled_ratio", 0.0) or 0.0)
                 ),
                 "- Probe executed count mean: {count:.4f}".format(
-                    count=float(
-                        validation_probe.get("probe_executed_count_mean", 0.0) or 0.0
-                    )
+                    count=float(validation_probe.get("probe_executed_count_mean", 0.0) or 0.0)
                 ),
                 "- Probe failure rate: {rate:.4f}".format(
                     rate=float(validation_probe.get("probe_failure_rate", 0.0) or 0.0)
@@ -280,27 +251,16 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
                     count=float(source_plan_feedback.get("issue_count_mean", 0.0) or 0.0)
                 ),
                 "- Probe issue count mean: {count:.4f}".format(
-                    count=float(
-                        source_plan_feedback.get("probe_issue_count_mean", 0.0) or 0.0
-                    )
+                    count=float(source_plan_feedback.get("probe_issue_count_mean", 0.0) or 0.0)
                 ),
                 "- Probe executed count mean: {count:.4f}".format(
-                    count=float(
-                        source_plan_feedback.get("probe_executed_count_mean", 0.0)
-                        or 0.0
-                    )
+                    count=float(source_plan_feedback.get("probe_executed_count_mean", 0.0) or 0.0)
                 ),
                 "- Selected test count mean: {count:.4f}".format(
-                    count=float(
-                        source_plan_feedback.get("selected_test_count_mean", 0.0)
-                        or 0.0
-                    )
+                    count=float(source_plan_feedback.get("selected_test_count_mean", 0.0) or 0.0)
                 ),
                 "- Executed test count mean: {count:.4f}".format(
-                    count=float(
-                        source_plan_feedback.get("executed_test_count_mean", 0.0)
-                        or 0.0
-                    )
+                    count=float(source_plan_feedback.get("executed_test_count_mean", 0.0) or 0.0)
                 ),
             ]
         )
@@ -317,26 +277,18 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
                     rate=float(source_plan_failure.get("failure_rate", 0.0) or 0.0)
                 ),
                 "- Issue count mean: {count:.4f}".format(
-                    count=float(
-                        source_plan_failure.get("issue_count_mean", 0.0) or 0.0
-                    )
+                    count=float(source_plan_failure.get("issue_count_mean", 0.0) or 0.0)
                 ),
                 "- Replay cache origin ratio: {replay:.4f}; observability origin ratio: {observability:.4f}; source_plan origin ratio: {source_plan:.4f}; validate_step origin ratio: {validate_step:.4f}".format(
-                    replay=float(
-                        source_plan_failure.get("replay_cache_origin_ratio", 0.0)
-                        or 0.0
-                    ),
+                    replay=float(source_plan_failure.get("replay_cache_origin_ratio", 0.0) or 0.0),
                     observability=float(
-                        source_plan_failure.get("observability_origin_ratio", 0.0)
-                        or 0.0
+                        source_plan_failure.get("observability_origin_ratio", 0.0) or 0.0
                     ),
                     source_plan=float(
-                        source_plan_failure.get("source_plan_origin_ratio", 0.0)
-                        or 0.0
+                        source_plan_failure.get("source_plan_origin_ratio", 0.0) or 0.0
                     ),
                     validate_step=float(
-                        source_plan_failure.get("validate_step_origin_ratio", 0.0)
-                        or 0.0
+                        source_plan_failure.get("validate_step_origin_ratio", 0.0) or 0.0
                     ),
                 ),
             ]
@@ -346,15 +298,11 @@ def _render_next_cycle_todo(*, payload: dict[str, Any]) -> str:
     if reasons:
         for reason in reasons:
             lines.append(f"- Resolve: {reason}")
-    elif gate and isinstance(gate.get("failed_checks"), list) and gate.get("failed_checks"):
-        for item in gate.get("failed_checks", []):
+    elif gate and normalize_string_list(gate.get("failed_checks")):
+        for item in normalize_string_list(gate.get("failed_checks", [])):
             lines.append(f"- Resolve Q2 gate: {item}")
-    elif (
-        frontier_gate
-        and isinstance(frontier_gate.get("failed_checks"), list)
-        and frontier_gate.get("failed_checks")
-    ):
-        for item in frontier_gate.get("failed_checks", []):
+    elif frontier_gate and normalize_string_list(frontier_gate.get("failed_checks")):
+        for item in normalize_string_list(frontier_gate.get("failed_checks", [])):
             lines.append(f"- Resolve Q3 gate: {item}")
     else:
         lines.append("- Review whether `validation_rich_gate.mode` can move beyond `report_only`.")
@@ -394,7 +342,9 @@ def main() -> int:
         ("results.json", args.results),
         ("report.md", args.report),
     ):
-        source = summary_path if name == "summary.json" else _resolve_path(root=root, value=str(value))
+        source = (
+            summary_path if name == "summary.json" else _resolve_path(root=root, value=str(value))
+        )
         if not source.exists():
             print(f"[validation-rich-archive] missing required file: {source}", file=sys.stderr)
             return 2

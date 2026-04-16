@@ -131,3 +131,21 @@ These three docs are the **source of truth** for what fields must be stable.
 Golden fixtures are the **machine-readable enforcement** of those stability
 requirements. When a contract doc is updated, regenerate the corresponding
 fixture.
+
+---
+
+## Architecture Golden Seam Rules (2026-04-16)
+
+`tests/unit/test_architecture_golden.py` now also freezes several post-refactor
+import/dependency seams that should remain stable unless a deliberate
+architecture update is happening:
+
+- `skills.py` -> `skills_catalog.py`
+- CLI/MCP skill catalog surfaces -> `skills_contract.py`
+- `source_plan.py` -> `context_refine_support.py`
+- benchmark trend scripts -> `report_script_support.py`
+
+Update the architecture golden tests whenever these seam imports move, and add a
+matching note here explaining why the dependency boundary changed. This keeps
+the maintenance guide aligned with the actual golden coverage instead of letting
+new support seams drift without ownership.

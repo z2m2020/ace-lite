@@ -13,6 +13,7 @@ from ace_lite.benchmark_ops import (
     read_benchmark_case_routing_source,
     read_benchmark_case_rows,
     read_benchmark_comparison_lane_metrics,
+    read_benchmark_context_refine_summary,
     read_benchmark_deep_symbol_summary,
     read_benchmark_metrics,
     read_benchmark_native_scip_summary,
@@ -56,10 +57,7 @@ def test_benchmark_ops_facade_exports_match_support_module() -> None:
         read_benchmark_source_plan_validation_feedback_summary
         is module.read_benchmark_source_plan_validation_feedback_summary
     )
-    assert (
-        read_benchmark_validation_probe_summary
-        is module.read_benchmark_validation_probe_summary
-    )
+    assert read_benchmark_validation_probe_summary is module.read_benchmark_validation_probe_summary
     assert read_benchmark_metrics is module.read_benchmark_metrics
     assert read_benchmark_results is module.read_benchmark_results
     assert require_success is module.require_success
@@ -68,9 +66,7 @@ def test_benchmark_ops_facade_exports_match_support_module() -> None:
 
 def test_run_command_and_require_success_support_env_and_cwd(tmp_path: Path) -> None:
     script = (
-        "import os, pathlib; "
-        "print(pathlib.Path.cwd().name); "
-        "print(os.environ['ACE_LITE_SAMPLE'])"
+        "import os, pathlib; print(pathlib.Path.cwd().name); print(os.environ['ACE_LITE_SAMPLE'])"
     )
     result = run_command(
         cmd=[sys.executable, "-c", script],
@@ -313,6 +309,14 @@ def test_benchmark_readers_are_fail_open_and_normalize_results(tmp_path: Path) -
     assert read_benchmark_comparison_lane_metrics(payload_path, lane="same_stage") == {
         "task_success_rate": 0.5,
         "precision_at_k": 0.3125,
+    }
+    assert read_benchmark_context_refine_summary(payload_path) == {
+        "present_case_rate": 0.0,
+        "watch_case_rate": 0.0,
+        "thin_context_case_rate": 0.0,
+        "keep_count_mean": 0.0,
+        "need_more_read_count_mean": 0.0,
+        "focused_file_count_mean": 0.0,
     }
     assert read_benchmark_retrieval_control_plane_gate_summary(payload_path) == {
         "regression_evaluated": True,

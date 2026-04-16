@@ -20,7 +20,6 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -196,7 +195,7 @@ def _render_markdown(overlay: dict) -> str:
         f"**Generated**: {overlay.get('generated_at', 'unknown')}",
         f"**Schema**:   {SCHEMA_VERSION}",
         f"**Git SHA**:  {overlay.get('git_sha', 'unknown')}",
-        f"**Phase**:    Phase 2 (report-only)",
+        "**Phase**:    Phase 2 (report-only)",
         "",
     ]
 
