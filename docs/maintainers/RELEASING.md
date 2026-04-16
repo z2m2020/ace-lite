@@ -59,7 +59,7 @@ Recommended release flow:
 
 1. Land the release commit on `main` with the bumped `pyproject.toml` version and updated `CHANGELOG.md`.
 2. Create and push a tag that matches the package version exactly, for example `v0.3.85`.
-3. Let `publish-pypi.yml` build `sdist` + `wheel`, run `twine check`, and publish to PyPI.
+3. Let `publish-pypi.yml` build `sdist` + `wheel`, run `twine check`, emit a publish metadata summary, publish to PyPI, and verify the published version is visible via the PyPI JSON API.
 4. After the publish succeeds, verify the install path you expect users to run:
    - `pip install -U ace-lite-engine`
    - `pipx upgrade ace-lite-engine`
@@ -68,12 +68,14 @@ Recommended release flow:
 Recommended dry run:
 
 - Use `workflow_dispatch` on `publish-pypi.yml` to publish the current tree to **TestPyPI** before the first real release or when changing packaging metadata.
+- The same workflow now verifies TestPyPI visibility after `workflow_dispatch` by polling the TestPyPI JSON API for the expected version.
 
 Important guardrails:
 
 - The tag-triggered publish job refuses to run if `refs/tags/vX.Y.Z` does not match `pyproject.toml` `version`.
 - `workflow_dispatch` publishes only to TestPyPI; production PyPI is intentionally tag-driven.
 - Do not treat a local editable reinstall as proof that package publishing works; only `python -m build`, `twine check`, and the publish workflow validate the distributable artifacts.
+- The build job writes a publish metadata summary to the GitHub Actions step summary so maintainers can copy the exact package/version/ref/workflow tuple into PyPI Trusted Publisher setup when diagnosing first-release failures.
 
 ### 2.2 Manual PyPI fallback
 

@@ -6,9 +6,14 @@ on:
       - "v*"
   workflow_dispatch:
 
+concurrency:
+  group: publish-pypi-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-distributions:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
 
@@ -47,6 +52,39 @@ jobs:
           print(f"Tag/version match confirmed: {package_version}")
           PY
 
+      - name: Emit publish metadata summary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          text = Path("pyproject.toml").read_text(encoding="utf-8")
+          version_match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+          name_match = re.search(r'^name\s*=\s*"([^"]+)"', text, re.MULTILINE)
+          if version_match is None or name_match is None:
+              raise SystemExit("pyproject.toml is missing project name/version")
+
+          package_name = name_match.group(1).strip()
+          package_version = version_match.group(1).strip()
+          ref_name = os.environ.get("GITHUB_REF_NAME", "").strip()
+          summary = os.environ.get("GITHUB_STEP_SUMMARY", "").strip()
+          lines = [
+              "## Publish Metadata",
+              "",
+              f"- package: `{package_name}`",
+              f"- version: `{package_version}`",
+              f"- event: `{os.environ.get('GITHUB_EVENT_NAME', '').strip()}`",
+              f"- ref: `{os.environ.get('GITHUB_REF', '').strip()}`",
+              f"- ref_name: `{ref_name}`",
+              f"- workflow: `.github/workflows/publish-pypi.yml`",
+              "- trusted-publisher-environment: `<none>`",
+          ]
+          if summary:
+              Path(summary).write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
+          PY
+
       - name: Build sdist and wheel
         run: python -m build
 
@@ -63,10 +101,15 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     needs: build-distributions
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
+      contents: read
       id-token: write
 
     steps:
+      - name: Checkout metadata
+        uses: actions/checkout@v4
+
       - name: Download distributions
         uses: actions/download-artifact@v4
         with:
@@ -79,14 +122,61 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: dist/
 
+      - name: Verify version visible on TestPyPI
+        env:
+          PACKAGE_INDEX_URL: https://test.pypi.org/pypi/ace-lite-engine/json
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import os
+          import re
+          import time
+          import urllib.error
+          import urllib.request
+
+          text = Path("pyproject.toml").read_text(encoding="utf-8")
+          version_match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+          if version_match is None:
+              raise SystemExit("pyproject.toml is missing [project].version")
+          expected = version_match.group(1).strip()
+          url = os.environ["PACKAGE_INDEX_URL"].strip()
+
+          last_error = ""
+          for attempt in range(1, 13):
+              try:
+                  with urllib.request.urlopen(url, timeout=20) as response:
+                      payload = json.load(response)
+                  releases = payload.get("releases", {})
+                  if expected in releases and releases.get(expected):
+                      print(f"Verified TestPyPI release visible: {expected}")
+                      raise SystemExit(0)
+                  last_error = f"version {expected} not yet visible"
+              except urllib.error.HTTPError as exc:
+                  last_error = f"HTTP {exc.code}"
+              except Exception as exc:  # pragma: no cover - workflow-only diagnostic
+                  last_error = repr(exc)
+              print(f"[attempt {attempt}/12] waiting for TestPyPI visibility: {last_error}")
+              time.sleep(10)
+
+          raise SystemExit(
+              f"Timed out waiting for TestPyPI package visibility at {url}: {last_error}"
+          )
+          PY
+
   publish-pypi:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build-distributions
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
+      contents: read
       id-token: write
 
     steps:
+      - name: Checkout metadata
+        uses: actions/checkout@v4
+
       - name: Download distributions
         uses: actions/download-artifact@v4
         with:
@@ -97,3 +187,45 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+
+      - name: Verify version visible on PyPI
+        env:
+          PACKAGE_INDEX_URL: https://pypi.org/pypi/ace-lite-engine/json
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import os
+          import re
+          import time
+          import urllib.error
+          import urllib.request
+
+          text = Path("pyproject.toml").read_text(encoding="utf-8")
+          version_match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+          if version_match is None:
+              raise SystemExit("pyproject.toml is missing [project].version")
+          expected = version_match.group(1).strip()
+          url = os.environ["PACKAGE_INDEX_URL"].strip()
+
+          last_error = ""
+          for attempt in range(1, 13):
+              try:
+                  with urllib.request.urlopen(url, timeout=20) as response:
+                      payload = json.load(response)
+                  releases = payload.get("releases", {})
+                  if expected in releases and releases.get(expected):
+                      print(f"Verified PyPI release visible: {expected}")
+                      raise SystemExit(0)
+                  last_error = f"version {expected} not yet visible"
+              except urllib.error.HTTPError as exc:
+                  last_error = f"HTTP {exc.code}"
+              except Exception as exc:  # pragma: no cover - workflow-only diagnostic
+                  last_error = repr(exc)
+              print(f"[attempt {attempt}/12] waiting for PyPI visibility: {last_error}")
+              time.sleep(10)
+
+          raise SystemExit(
+              f"Timed out waiting for PyPI package visibility at {url}: {last_error}"
+          )
+          PY
