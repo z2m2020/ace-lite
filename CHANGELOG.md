@@ -8,6 +8,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.85] - 2026-04-16
+
+### Changed
+
+- Relaxed the PyPI/TestPyPI publish workflow so Trusted Publisher claims no longer require GitHub `environment` bindings by default, reducing first-release setup friction.
+- Updated maintainer release guidance to clarify that workflow environments are optional and must exactly match the claims configured on PyPI/TestPyPI when enabled.
+
 ## [0.3.84] - 2026-04-16
 
 ### Added
