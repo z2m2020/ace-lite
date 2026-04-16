@@ -21,6 +21,7 @@ from ace_lite.cli_app.commands.plan_quick import plan_quick_command
 from ace_lite.cli_app.commands.profile import profile_group
 from ace_lite.cli_app.commands.repomap import repomap_group
 from ace_lite.cli_app.commands.runtime import runtime_group
+from ace_lite.cli_app.commands.self_update import self_update_command
 from ace_lite.cli_app.commands.skills import skills_group
 from ace_lite.cli_app.commands.workspace import workspace_group
 from ace_lite.cli_app.docs_links import get_help_template
@@ -51,6 +52,7 @@ cli.add_command(skills_group)
 cli.add_command(runtime_group)
 cli.add_command(doctor_command)
 cli.add_command(workspace_group)
+cli.add_command(self_update_command)
 
 
 def main() -> None:

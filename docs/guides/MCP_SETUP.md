@@ -15,6 +15,17 @@ ace-lite runtime doctor-mcp --root . --probe-endpoints
 
 Use `--no-probe-endpoints` if you only want local checks.
 
+If you installed ACE-Lite as a package rather than a source checkout, upgrade it
+with one of these flows:
+
+- `ace-lite self-update`
+- `pipx upgrade ace-lite-engine`
+- `uv tool upgrade ace-lite-engine`
+
+`ace_health` now includes `version_info.update_status`, which reports install
+mode, latest published version when the PyPI lookup succeeds, and the
+recommended upgrade command.
+
 ## Generic MCP registration template
 
 If your client supports JSON-based MCP server registration, the shape typically looks like:

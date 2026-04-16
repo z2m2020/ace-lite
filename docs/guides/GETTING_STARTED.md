@@ -37,6 +37,7 @@ ace-lite plan --query "where is shutdown middleware implemented" --repo myrepo -
 
 Notes:
 - `ace-lite doctor` now reports grouped runtime health including git launch diagnostics and install-drift/version-sync status.
+- `ace-lite self-update --check` shows the recommended upgrade path for the current install mode before changing anything.
 - `ace-lite index` reuses `context-map/index.json` on subsequent runs and can do incremental refresh on git repos.
 - If the full pipeline times out, `ace-lite plan` returns a `plan_quick`-style shortlist automatically.
 

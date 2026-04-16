@@ -8,6 +8,17 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.83] - 2026-04-16
+
+### Added
+
+- Added install/update introspection for ACE-Lite so runtime surfaces can report install mode, recommended upgrade command, and fail-open latest-release visibility.
+- Added `ace-lite self-update` with `--check` support to resolve the correct update path for editable checkouts versus installed packages.
+
+### Changed
+
+- Extended MCP/runtime doctor version reporting to expose structured `update_status`, and documented the recommended Python-native upgrade flows including `pipx` and `uv tool`.
+
 ## [0.3.82] - 2026-04-16
 
 ### Changed

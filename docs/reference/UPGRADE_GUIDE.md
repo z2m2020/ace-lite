@@ -22,6 +22,22 @@ prints the drift and keeps going.
 depending on PowerShell. If your repo is already up to date but local `git`
 launch fails, rerun it with `--skip-git-pull`.
 
+## Recommended install and upgrade paths
+
+Use the channel that matches how you run ACE-Lite:
+
+- Source checkout / editable install: `ace-lite self-update` or `python scripts/update.py`
+- Plain `pip` install: `ace-lite self-update` or `python -m pip install -U ace-lite-engine`
+- `pipx` install: `pipx upgrade ace-lite-engine`
+- `uv tool` install: `uv tool upgrade ace-lite-engine`
+
+`ace-lite self-update --check` prints the resolved plan first, including the
+detected install mode and recommended command.
+
+On Windows, `ace-lite self-update` may hand off the actual reinstall to a
+background helper so the current `ace-lite.exe` process can exit before pip
+replaces console scripts.
+
 ## 0.3.16
 
 ### Added

@@ -84,7 +84,7 @@ from ace_lite.runtime_settings_store import (
 )
 from ace_lite.skills_contract import build_skills_catalog_contract
 from ace_lite.vcs_history import collect_git_head_snapshot
-from ace_lite.version import get_version, get_version_info
+from ace_lite.version import get_update_status, get_version, get_version_info
 
 logger = logging.getLogger(__name__)
 _RECENT_REQUEST_LIMIT = 10
@@ -255,6 +255,7 @@ class AceLiteMcpService:
 
     def health(self) -> dict[str, Any]:
         version_info = get_version_info()
+        version_info["update_status"] = get_update_status(version_info=version_info)
         settings_governance = self._health_settings_governance_payload()
         return cast(
             dict[str, Any],

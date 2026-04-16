@@ -8,11 +8,19 @@ CLI/MCP reflect the working tree without requiring a reinstall.
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError
+import json
+import time
+from importlib.metadata import PackageNotFoundError, distribution
 from importlib.metadata import version as dist_version
 from pathlib import Path
+from typing import Any
+from urllib.error import URLError
+from urllib.parse import unquote, urlparse
+from urllib.request import url2pathname, urlopen
 
 _DIST_NAME = "ace-lite-engine"
+_PYPI_RELEASE_CACHE_TTL_SECONDS = 300.0
+_PYPI_RELEASE_CACHE: dict[str, tuple[float, dict[str, object]]] = {}
 
 
 def _find_pyproject_path() -> Path | None:
@@ -69,6 +77,232 @@ def _read_pyproject_version() -> str | None:
     return None
 
 
+def _format_command(parts: list[str]) -> str:
+    formatted: list[str] = []
+    for part in parts:
+        text = str(part).strip()
+        if not text:
+            continue
+        if any(char.isspace() for char in text) or any(char in text for char in "\"'"):
+            escaped = text.replace('"', '\\"')
+            formatted.append(f'"{escaped}"')
+            continue
+        formatted.append(text)
+    return " ".join(formatted)
+
+
+def _read_distribution_direct_url(dist_name: str) -> dict[str, Any] | None:
+    try:
+        dist = distribution(dist_name)
+    except PackageNotFoundError:
+        return None
+    except Exception:
+        return None
+
+    try:
+        raw = dist.read_text("direct_url.json")
+    except Exception:
+        return None
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _file_url_to_path(url: str) -> Path | None:
+    parsed = urlparse(str(url or "").strip())
+    if parsed.scheme != "file":
+        return None
+    if parsed.netloc and parsed.netloc not in {"", "localhost"}:
+        candidate = f"//{parsed.netloc}{parsed.path}"
+    else:
+        candidate = parsed.path
+    resolved = url2pathname(unquote(candidate))
+    if not resolved:
+        return None
+    return Path(resolved).resolve()
+
+
+def _detect_installation_mode(
+    *, dist_name: str, installed_version: str | None, pyproject_path: Path | None
+) -> tuple[str, str]:
+    direct_url = _read_distribution_direct_url(dist_name)
+    if isinstance(direct_url, dict):
+        editable = bool((direct_url.get("dir_info") or {}).get("editable"))
+        if editable:
+            source_root = _file_url_to_path(str(direct_url.get("url") or ""))
+            if source_root is None and pyproject_path is not None:
+                source_root = pyproject_path.parent.resolve()
+            return "editable", str(source_root) if source_root is not None else ""
+    if pyproject_path is not None and not installed_version:
+        return "source_checkout", str(pyproject_path.parent.resolve())
+    if installed_version:
+        return "installed_package", ""
+    if pyproject_path is not None:
+        return "source_checkout", str(pyproject_path.parent.resolve())
+    return "unknown", ""
+
+
+def _version_sort_key(version: str) -> tuple[tuple[int, object], ...]:
+    normalized = str(version or "").strip()
+    if not normalized:
+        return tuple()
+
+    segments: list[tuple[int, object]] = []
+    token = ""
+    mode = "digit" if normalized[:1].isdigit() else "text"
+    for char in normalized:
+        if char in ".-_+":
+            if token:
+                segments.append((0, int(token)) if mode == "digit" else (1, token.lower()))
+                token = ""
+            mode = "digit"
+            continue
+        char_mode = "digit" if char.isdigit() else "text"
+        if token and char_mode != mode:
+            segments.append((0, int(token)) if mode == "digit" else (1, token.lower()))
+            token = ""
+        token += char
+        mode = char_mode
+    if token:
+        segments.append((0, int(token)) if mode == "digit" else (1, token.lower()))
+    return tuple(segments)
+
+
+def _is_newer_version(candidate: str, current: str) -> bool:
+    candidate_key = _version_sort_key(candidate)
+    current_key = _version_sort_key(current)
+    if candidate_key and current_key:
+        return candidate_key > current_key
+    return str(candidate or "").strip() > str(current or "").strip()
+
+
+def _fetch_latest_pypi_release(
+    dist_name: str,
+    *,
+    timeout_seconds: float = 0.75,
+) -> dict[str, object]:
+    now = time.time()
+    cached = _PYPI_RELEASE_CACHE.get(dist_name)
+    if cached is not None and (now - cached[0]) <= _PYPI_RELEASE_CACHE_TTL_SECONDS:
+        return dict(cached[1])
+
+    payload: dict[str, object]
+    url = f"https://pypi.org/pypi/{dist_name}/json"
+    try:
+        with urlopen(url, timeout=max(0.1, float(timeout_seconds))) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        info = data.get("info") if isinstance(data, dict) else None
+        latest_version = str((info or {}).get("version") or "").strip()
+        payload = {
+            "ok": bool(latest_version),
+            "source": "pypi",
+            "latest_version": latest_version or None,
+            "error": "" if latest_version else "missing_version",
+        }
+    except URLError as exc:
+        payload = {
+            "ok": False,
+            "source": "pypi",
+            "latest_version": None,
+            "error": str(exc.reason or exc),
+        }
+    except Exception as exc:
+        payload = {
+            "ok": False,
+            "source": "pypi",
+            "latest_version": None,
+            "error": str(exc),
+        }
+    _PYPI_RELEASE_CACHE[dist_name] = (now, dict(payload))
+    return dict(payload)
+
+
+def get_update_status(
+    *,
+    dist_name: str = _DIST_NAME,
+    version_info: dict[str, object] | None = None,
+    include_latest_release: bool = True,
+    timeout_seconds: float = 0.75,
+    pypi_lookup_fn: Any = _fetch_latest_pypi_release,
+) -> dict[str, object]:
+    info = dict(version_info or get_version_info(dist_name=dist_name))
+    pyproject_path = _find_pyproject_path()
+    installed_version = str(info.get("installed_version") or "").strip() or None
+    install_mode, source_root = _detect_installation_mode(
+        dist_name=dist_name,
+        installed_version=installed_version,
+        pyproject_path=pyproject_path,
+    )
+    effective_version = str(info.get("version") or "").strip()
+    install_sync_required = str(info.get("reason_code") or "").strip() in {
+        "install_drift",
+        "missing_installed_metadata",
+    }
+
+    recommended_parts: list[str]
+    alternative_commands: list[str] = []
+    if install_mode in {"editable", "source_checkout"}:
+        repo_root = Path(source_root).resolve() if source_root else None
+        script_path = repo_root / "scripts" / "update.py" if repo_root is not None else None
+        if script_path is not None and script_path.exists():
+            recommended_parts = ["python", str(script_path), "--root", str(repo_root)]
+        else:
+            recommended_parts = ["python", "-m", "pip", "install", "-e", ".[dev]"]
+        alternative_commands.append("python -m pip install -e .[dev]")
+    else:
+        recommended_parts = ["python", "-m", "pip", "install", "-U", dist_name]
+        alternative_commands.extend(
+            [
+                f"pipx upgrade {dist_name}",
+                f"uv tool upgrade {dist_name}",
+            ]
+        )
+
+    latest_version: str | None = None
+    release_check_ok = False
+    release_check_error = ""
+    release_update_available = False
+    if include_latest_release:
+        release_payload = pypi_lookup_fn(
+            dist_name,
+            timeout_seconds=max(0.1, float(timeout_seconds)),
+        )
+        if not isinstance(release_payload, dict):
+            release_payload = {
+                "ok": False,
+                "source": "pypi",
+                "latest_version": None,
+                "error": "invalid_release_payload",
+            }
+        release_check_ok = bool(release_payload.get("ok"))
+        latest_value = str(release_payload.get("latest_version") or "").strip()
+        latest_version = latest_value or None
+        release_check_error = str(release_payload.get("error") or "").strip()
+        if latest_version and effective_version and effective_version != "unknown":
+            release_update_available = _is_newer_version(latest_version, effective_version)
+
+    return {
+        "dist_name": dist_name,
+        "install_mode": install_mode,
+        "source_root": source_root,
+        "self_update_supported": True,
+        "install_sync_required": install_sync_required,
+        "latest_release_checked": include_latest_release,
+        "latest_release_source": "pypi" if include_latest_release else "",
+        "latest_published_version": latest_version,
+        "release_check_ok": release_check_ok,
+        "release_check_error": release_check_error,
+        "release_update_available": release_update_available,
+        "update_available": bool(install_sync_required or release_update_available),
+        "recommended_update_command": _format_command(recommended_parts),
+        "alternative_update_commands": alternative_commands,
+    }
+
+
 def get_version_info(*, dist_name: str = _DIST_NAME) -> dict[str, object]:
     """Return version details including editable-install drift detection.
 
@@ -77,6 +311,7 @@ def get_version_info(*, dist_name: str = _DIST_NAME) -> dict[str, object]:
     when pip metadata isn't refreshed (entry points / dependencies may be stale).
     This helper surfaces both values so callers can warn proactively.
     """
+    pyproject_path = _find_pyproject_path()
     pyproject_version = _read_pyproject_version()
     installed_version: str | None
     try:
@@ -106,6 +341,11 @@ def get_version_info(*, dist_name: str = _DIST_NAME) -> dict[str, object]:
     else:
         reason_code = "ok"
         repair_steps = []
+    install_mode, source_root = _detect_installation_mode(
+        dist_name=dist_name,
+        installed_version=installed_version,
+        pyproject_path=pyproject_path,
+    )
     return {
         "version": effective,
         "source": source,
@@ -115,6 +355,8 @@ def get_version_info(*, dist_name: str = _DIST_NAME) -> dict[str, object]:
         "drifted": drifted,
         "reason_code": reason_code,
         "repair_steps": repair_steps,
+        "install_mode": install_mode,
+        "source_root": source_root,
     }
 
 
@@ -144,4 +386,9 @@ def verify_version_install_sync(*, dist_name: str = _DIST_NAME) -> dict[str, obj
     return info
 
 
-__all__ = ["get_version", "get_version_info", "verify_version_install_sync"]
+__all__ = [
+    "get_update_status",
+    "get_version",
+    "get_version_info",
+    "verify_version_install_sync",
+]

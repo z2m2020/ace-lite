@@ -147,6 +147,40 @@ def test_mcp_service_health_reports_defaults(tmp_path: Path) -> None:
     assert payload["staleness_warning"] is None
     assert payload["request_stats"]["active_request_count"] == 0
     assert payload["request_stats"]["total_request_count"] == 0
+    assert "update_status" in payload["version_info"]
+
+
+def test_mcp_service_health_embeds_update_status(tmp_path: Path, monkeypatch) -> None:
+    service = _make_service(tmp_path)
+    monkeypatch.setattr(
+        mcp_service_module,
+        "get_version_info",
+        lambda: {
+            "version": "0.3.82",
+            "dist_name": "ace-lite-engine",
+            "drifted": False,
+            "reason_code": "ok",
+        },
+    )
+    monkeypatch.setattr(
+        mcp_service_module,
+        "get_update_status",
+        lambda **kwargs: {
+            "install_mode": "installed_package",
+            "latest_published_version": "0.3.83",
+            "release_update_available": True,
+            "recommended_update_command": "python -m pip install -U ace-lite-engine",
+        },
+    )
+
+    payload = service.health()
+
+    assert payload["version_info"]["update_status"] == {
+        "install_mode": "installed_package",
+        "latest_published_version": "0.3.83",
+        "release_update_available": True,
+        "recommended_update_command": "python -m pip install -U ace-lite-engine",
+    }
 
 
 def test_build_mcp_server_registers_expected_tool_names(tmp_path: Path) -> None:

@@ -88,13 +88,19 @@ def test_build_runtime_version_sync_payload_detects_install_drift() -> None:
             "pyproject_version": "0.3.51",
             "installed_version": "0.3.44",
             "drifted": True,
-        }
+        },
+        get_update_status_fn=lambda **kwargs: {
+            "install_mode": "editable",
+            "recommended_update_command": "python scripts/update.py --root .",
+            "update_available": True,
+        },
     )
 
     assert payload["ok"] is False
     assert payload["reason"] == "install_drift"
     assert payload["reason_code"] == "install_drift"
     assert payload["recommendations"]
+    assert payload["update_status"]["install_mode"] == "editable"
     assert payload["repair_steps"] == ["python -m pip install -e .[dev]"]
     assert payload["修复步骤"] == ["python -m pip install -e .[dev]"]
 

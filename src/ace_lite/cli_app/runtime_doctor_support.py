@@ -20,7 +20,7 @@ from ace_lite.stage_artifact_cache_gc import (
 )
 from ace_lite.vcs_history import collect_git_head_snapshot
 from ace_lite.vcs_worktree import collect_git_worktree_summary
-from ace_lite.version import get_version_info
+from ace_lite.version import get_update_status, get_version_info
 
 
 def _coerce_mapping(value: Any) -> dict[str, Any]:
@@ -296,6 +296,7 @@ def build_runtime_version_sync_payload(
     *,
     dist_name: str = "ace-lite-engine",
     get_version_info_fn: Any = get_version_info,
+    get_update_status_fn: Any = get_update_status,
 ) -> dict[str, Any]:
     info = get_version_info_fn(dist_name=dist_name)
     installed_version = str(info.get("installed_version") or "").strip()
@@ -316,6 +317,10 @@ def build_runtime_version_sync_payload(
         recommendations = []
 
     repair_steps = ["python -m pip install -e .[dev]"] if not ok else []
+    update_status = get_update_status_fn(
+        dist_name=dist_name,
+        version_info=info,
+    )
 
     return {
         "ok": ok,
@@ -328,6 +333,7 @@ def build_runtime_version_sync_payload(
         "pyproject_version": pyproject_version,
         "installed_version": installed_version,
         "drifted": drifted,
+        "update_status": update_status,
         "recommendations": recommendations,
         "repair_steps": repair_steps,
         "修复步骤": repair_steps,
