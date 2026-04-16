@@ -167,7 +167,7 @@ def test_mcp_service_health_embeds_update_status(tmp_path: Path, monkeypatch) ->
         "get_update_status",
         lambda **kwargs: {
             "install_mode": "installed_package",
-            "latest_published_version": "0.3.83",
+            "latest_published_version": "0.3.84",
             "release_update_available": True,
             "recommended_update_command": "python -m pip install -U ace-lite-engine",
         },
@@ -177,7 +177,7 @@ def test_mcp_service_health_embeds_update_status(tmp_path: Path, monkeypatch) ->
 
     assert payload["version_info"]["update_status"] == {
         "install_mode": "installed_package",
-        "latest_published_version": "0.3.83",
+        "latest_published_version": "0.3.84",
         "release_update_available": True,
         "recommended_update_command": "python -m pip install -U ace-lite-engine",
     }

@@ -8,6 +8,16 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.84] - 2026-04-16
+
+### Added
+
+- Added a tag-driven `publish-pypi.yml` workflow so `refs/tags/vX.Y.Z` can build validated distributions and publish them through Trusted Publisher/OIDC.
+
+### Changed
+
+- Updated release and upgrade documentation to distinguish internal editable/source updates from versions that are actually published to PyPI/TestPyPI.
+
 ## [0.3.83] - 2026-04-16
 
 ### Added

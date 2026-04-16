@@ -56,7 +56,7 @@ Recommended setup:
 Recommended release flow:
 
 1. Land the release commit on `main` with the bumped `pyproject.toml` version and updated `CHANGELOG.md`.
-2. Create and push a tag that matches the package version exactly, for example `v0.3.83`.
+2. Create and push a tag that matches the package version exactly, for example `v0.3.84`.
 3. Let `publish-pypi.yml` build `sdist` + `wheel`, run `twine check`, and publish to PyPI.
 4. After the publish succeeds, verify the install path you expect users to run:
    - `pip install -U ace-lite-engine`

@@ -99,9 +99,9 @@ def test_run_self_update_defers_windows_console_script_update() -> None:
         python_executable="python-custom",
         get_version_info_fn=lambda **kwargs: {
             "dist_name": kwargs["dist_name"],
-            "version": "0.3.83",
+            "version": "0.3.84",
             "source": "pyproject",
-            "pyproject_version": "0.3.83",
+            "pyproject_version": "0.3.84",
             "installed_version": "0.3.82",
             "drifted": True,
             "reason_code": "install_drift",
