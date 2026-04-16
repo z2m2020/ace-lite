@@ -548,6 +548,69 @@ def test_local_notes_provider_filters_cross_repo_notes_by_notes_path_boundary(
     assert provider.last_notes_stats["repo_boundary_filtered_count"] == 1
 
 
+def test_local_notes_provider_allows_generic_notes_path_without_repo_boundary_filter(
+    tmp_path: Path,
+) -> None:
+    upstream = _StubProvider(channel="mcp", compact_rows=[], full_rows=[])
+    notes_path = tmp_path / "repo" / "context-map" / "memory_notes.jsonl"
+    _write_notes(
+        notes_path,
+        [
+            {
+                "text": "fix 405 error in API endpoint post method",
+                "repo": "demo",
+                "namespace": "demo",
+                "captured_at": "2026-02-13T01:00:00+00:00",
+            }
+        ],
+    )
+    provider = LocalNotesProvider(
+        upstream,
+        notes_path=notes_path,
+        default_limit=4,
+        mode="local_only",
+    )
+
+    rows = provider.search_compact("api endpoint 405 post method")
+
+    assert len(rows) == 1
+    assert rows[0].source == "local_notes"
+    assert rows[0].metadata.get("repo") == "demo"
+    assert provider.last_notes_stats["repo_boundary_filtered_count"] == 0
+
+
+def test_local_notes_provider_ignores_temp_root_name_for_repo_boundary_filter(
+    tmp_path: Path,
+) -> None:
+    upstream = _StubProvider(channel="mcp", compact_rows=[], full_rows=[])
+    notes_path = tmp_path / "context-map" / "memory_notes.jsonl"
+    _write_notes(
+        notes_path,
+        [
+            {
+                "text": "validate modern_validator token",
+                "repo": "demo",
+                "namespace": "demo",
+                "captured_at": "2026-02-14T00:00:00+00:00",
+            }
+        ],
+    )
+    provider = LocalNotesProvider(
+        upstream,
+        notes_path=notes_path,
+        default_limit=4,
+        mode="local_only",
+        expiry_enabled=False,
+    )
+
+    rows = provider.search_compact("validate token")
+
+    assert len(rows) == 1
+    assert rows[0].source == "local_notes"
+    assert rows[0].metadata.get("repo") == "demo"
+    assert provider.last_notes_stats["repo_boundary_filtered_count"] == 0
+
+
 def test_local_notes_provider_local_only_skips_upstream_fetch(tmp_path: Path) -> None:
     upstream = _StubProvider(
         channel="mcp",

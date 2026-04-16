@@ -24,6 +24,14 @@ from .protocol import MemoryProvider
 from .record import MemoryRecord, MemoryRecordCompact
 
 _CAPTURE_NOTES_LOCK = threading.Lock()
+_GENERIC_NOTES_PATH_TOKENS: frozenset[str] = frozenset(
+    {
+        "",
+        "repo",
+        "repos",
+    }
+)
+_NOTES_PATH_BOUNDARY_MARKERS: frozenset[str] = frozenset({"contextmap", "context"})
 
 
 def _code_tokens(text: str) -> set[str]:
@@ -55,6 +63,18 @@ def _namespace_repo_hint(value: str | None) -> str | None:
         return None
     repo_hint = _normalize_repo_token(normalized)
     return repo_hint or None
+
+
+def _notes_path_repo_tokens(path: str | Path) -> set[str]:
+    normalized_parts = [_normalize_repo_token(part) for part in Path(path).parts]
+    tokens: set[str] = set()
+    for index, token in enumerate(normalized_parts):
+        if token not in _NOTES_PATH_BOUNDARY_MARKERS or index <= 0:
+            continue
+        parent_token = normalized_parts[index - 1]
+        if parent_token and parent_token not in _GENERIC_NOTES_PATH_TOKENS:
+            tokens.add(parent_token)
+    return tokens
 
 
 def append_capture_note(
@@ -299,7 +319,17 @@ class LocalNotesProvider:
         matched: list[tuple[float, float, str, MemoryRecordCompact, MemoryRecord]] = []
         namespace_filtered = 0
         repo_boundary_filtered = 0
-        repo_boundary_blob = _normalize_repo_token(str(self._notes_path))
+        repo_boundary_tokens = _notes_path_repo_tokens(self._notes_path)
+        row_repo_hints = {
+            repo_hint
+            for row in rows
+            for repo_hint in [
+                _normalize_repo_token(str(row.get("repo") or ""))
+                or _namespace_repo_hint(str(row.get("namespace") or "").strip() or None)
+            ]
+            if repo_hint
+        }
+        active_repo_boundary_tokens = repo_boundary_tokens.intersection(row_repo_hints)
 
         for row in rows:
             namespace = str(row.get("namespace") or "").strip() or None
@@ -310,7 +340,11 @@ class LocalNotesProvider:
                 repo_hint = _normalize_repo_token(str(row.get("repo") or ""))
                 if not repo_hint:
                     repo_hint = _namespace_repo_hint(namespace)
-                if repo_hint and repo_boundary_blob and repo_hint not in repo_boundary_blob:
+                if (
+                    repo_hint
+                    and active_repo_boundary_tokens
+                    and repo_hint not in active_repo_boundary_tokens
+                ):
                     repo_boundary_filtered += 1
                     continue
 
