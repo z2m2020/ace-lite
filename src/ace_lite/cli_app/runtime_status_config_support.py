@@ -28,7 +28,7 @@ def resolve_runtime_status_repo_relative_path(
     raw = str(configured_path).strip()
     if not raw:
         return None
-    path = Path(raw)
+    path = Path(raw).expanduser()
     if not path.is_absolute():
         path = Path(root).resolve() / path
     return str(path.resolve())

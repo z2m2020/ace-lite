@@ -11,6 +11,7 @@ import ace_lite.cli as cli_module
 from ace_lite.cli_app.commands import runtime as runtime_module
 from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import SelectionFeedbackStore
+from ace_lite.issue_report_store import IssueReportStore
 from ace_lite.runtime_settings import RuntimeSettingsManager
 from ace_lite.runtime_settings_store import (
     build_runtime_settings_record,
@@ -162,6 +163,37 @@ def _seed_dev_feedback_store(
             "related_invocation_id": "inv-dev-1",
             "resolution_note": "added fallback diagnostics",
             "created_at": "2026-03-19T00:05:00+00:00",
+        }
+    )
+    return store.db_path
+
+
+def _seed_issue_report_store(
+    root: Path,
+    *,
+    repo: str,
+    user_id: str = "bench-user",
+    profile_key: str = "bugfix",
+    status: str = "open",
+) -> Path:
+    store = IssueReportStore(db_path=root / "context-map" / "issue_reports.db")
+    store.record(
+        {
+            "issue_id": f"iss_{repo}_{profile_key}_{status}",
+            "title": "Runtime observation missed issue report",
+            "category": "runtime",
+            "severity": "medium",
+            "status": status,
+            "query": "runtime observation overview",
+            "repo": repo,
+            "root": str(root),
+            "user_id": user_id,
+            "profile_key": profile_key,
+            "actual_behavior": "Issue report exists but runtime view did not surface it.",
+            "selected_path": "src/auth.py",
+            "occurred_at": "2026-03-19T00:02:00+00:00",
+            "created_at": "2026-03-19T00:02:00+00:00",
+            "updated_at": "2026-03-19T00:02:00+00:00",
         }
     )
     return store.db_path
@@ -640,6 +672,7 @@ def test_cli_runtime_doctor_applies_user_id_filter_to_preference_capture_summary
         query="doctor bench",
         repo="repo-alpha",
         user_id="bench-user",
+        profile_key="bugfix",
         selected_path="src/auth.py",
         captured_at="2026-03-18T00:00:00+00:00",
         position=1,
@@ -648,6 +681,7 @@ def test_cli_runtime_doctor_applies_user_id_filter_to_preference_capture_summary
         query="doctor other",
         repo="repo-alpha",
         user_id="other-user",
+        profile_key="bugfix",
         selected_path="src/docs.py",
         captured_at="2026-03-18T00:01:00+00:00",
         position=1,
@@ -665,6 +699,8 @@ def test_cli_runtime_doctor_applies_user_id_filter_to_preference_capture_summary
             str(skills_dir),
             "--stats-db-path",
             str(db_path),
+            "--runtime-profile",
+            "bugfix",
             "--user-id",
             "bench-user",
             "--no-probe-endpoints",
@@ -695,6 +731,7 @@ def test_cli_doctor_alias_applies_user_id_filter_to_preference_capture_summary(
         query="doctor alias bench",
         repo="repo-alpha",
         user_id="bench-user",
+        profile_key="bugfix",
         selected_path="src/auth.py",
         captured_at="2026-03-18T00:00:00+00:00",
         position=1,
@@ -703,6 +740,7 @@ def test_cli_doctor_alias_applies_user_id_filter_to_preference_capture_summary(
         query="doctor alias other",
         repo="repo-alpha",
         user_id="other-user",
+        profile_key="bugfix",
         selected_path="src/docs.py",
         captured_at="2026-03-18T00:01:00+00:00",
         position=1,
@@ -719,6 +757,8 @@ def test_cli_doctor_alias_applies_user_id_filter_to_preference_capture_summary(
             str(skills_dir),
             "--stats-db-path",
             str(db_path),
+            "--runtime-profile",
+            "bugfix",
             "--user-id",
             "bench-user",
             "--no-probe-endpoints",
@@ -1859,7 +1899,7 @@ def test_cli_runtime_status_scopes_preference_capture_to_selected_profile(
         max_entries=8,
     ).record(
         query="repo beta runtime bugfix",
-        repo="repo-beta",
+        repo="repo-alpha",
         profile_key="bugfix",
         selected_path="src/auth.py",
         captured_at="2026-03-18T00:00:00+00:00",
@@ -1870,7 +1910,7 @@ def test_cli_runtime_status_scopes_preference_capture_to_selected_profile(
         max_entries=8,
     ).record(
         query="repo beta runtime docs",
-        repo="repo-beta",
+        repo="repo-alpha",
         profile_key="docs",
         selected_path="src/docs.py",
         captured_at="2026-03-18T00:01:00+00:00",
@@ -1973,6 +2013,7 @@ def test_cli_runtime_status_exposes_dev_feedback_and_top_pain_summary(
     db_path = tmp_path / "runtime-stats.db"
     _seed_runtime_stats_db(db_path)
     _seed_dev_feedback_store(tmp_path, repo="repo-alpha")
+    _seed_issue_report_store(tmp_path, repo="repo-alpha")
 
     runner = CliRunner()
     result = runner.invoke(
@@ -2007,6 +2048,80 @@ def test_cli_runtime_status_exposes_dev_feedback_and_top_pain_summary(
     assert payload["latest_runtime"]["top_pain_summary"]["items"][0]["dev_issue_to_fix_rate"] == 1.0
     assert payload["latest_runtime"]["memory_health_summary"]["linked_fix_issue_count"] == 1
     assert payload["latest_runtime"]["memory_health_summary"]["dev_issue_to_fix_rate"] == 1.0
+    assert payload["latest_runtime"]["observation_overview"]["repo"] == "repo-alpha"
+    assert payload["latest_runtime"]["observation_overview"]["issue_reports"]["report_count"] == 1
+    assert payload["latest_runtime"]["observation_overview"]["issue_reports"]["scope"] == (
+        "filtered"
+    )
+    assert (
+        payload["latest_runtime"]["observation_overview"]["cross_store_gaps"][
+            "issue_report_without_dev_issue_count"
+        ]
+        == 0
+    )
+
+
+def test_cli_runtime_status_infers_repo_scope_for_observation_overview(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".ace-lite.yml").write_text(
+        "plan:\n  runtime_profile: bugfix\n",
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "runtime-stats.db"
+    _seed_runtime_stats_db(db_path)
+    SelectionFeedbackStore(
+        profile_path=tmp_path / ".ace-lite" / "profile.json",
+        max_entries=8,
+    ).record(
+        query="runtime bugfix",
+        repo="repo-alpha",
+        user_id="bench-user",
+        profile_key="bugfix",
+        selected_path="src/auth.py",
+        captured_at="2026-03-19T00:00:00+00:00",
+        position=1,
+    )
+    _seed_issue_report_store(tmp_path, repo="repo-alpha")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_module.cli,
+        [
+            "runtime",
+            "status",
+            "--root",
+            str(tmp_path),
+            "--db-path",
+            str(db_path),
+            "--runtime-profile",
+            "bugfix",
+            "--user-id",
+            "bench-user",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+    assert payload["latest_runtime"]["filters"]["repo"] == "repo-alpha"
+    assert payload["latest_runtime"]["observation_overview"]["repo"] == "repo-alpha"
+    assert payload["latest_runtime"]["observation_overview"]["selection_feedback"][
+        "event_count"
+    ] == 1
+    assert payload["latest_runtime"]["observation_overview"]["developer_feedback"][
+        "issue_count"
+    ] == 0
+    assert payload["latest_runtime"]["observation_overview"]["issue_reports"][
+        "open_issue_count"
+    ] == 1
+    assert (
+        payload["latest_runtime"]["observation_overview"]["cross_store_gaps"][
+            "issue_report_without_dev_issue_count"
+        ]
+        == 1
+    )
 
 
 def test_cli_runtime_status_canonicalizes_runtime_reason_aliases(
@@ -2134,6 +2249,7 @@ def test_cli_runtime_doctor_exposes_dev_feedback_and_top_pain_summary(
     db_path = tmp_path / "runtime-stats.db"
     _seed_runtime_stats_db(db_path)
     _seed_dev_feedback_store(tmp_path, repo="repo-alpha")
+    _seed_issue_report_store(tmp_path, repo="repo-alpha")
 
     runner = CliRunner()
     result = runner.invoke(
@@ -2163,10 +2279,15 @@ def test_cli_runtime_doctor_exposes_dev_feedback_and_top_pain_summary(
     assert payload["stats"]["dev_feedback_summary"]["fix_count"] == 1
     assert payload["stats"]["top_pain_summary"]["count"] == 1
     assert payload["stats"]["top_pain_summary"]["items"][0]["reason_code"] == "memory_fallback"
-    assert payload["stats"]["top_pain_summary"]["items"][0]["runtime_event_count"] == 0
+    assert payload["stats"]["top_pain_summary"]["items"][0]["runtime_event_count"] == 1
     assert payload["stats"]["top_pain_summary"]["items"][0]["manual_issue_count"] == 1
     assert payload["stats"]["top_pain_summary"]["items"][0]["linked_fix_issue_count"] == 1
     assert payload["stats"]["top_pain_summary"]["items"][0]["dev_issue_to_fix_rate"] == 1.0
+    assert payload["stats"]["observation_overview"]["repo"] == "repo-alpha"
+    assert payload["stats"]["observation_overview"]["issue_reports"]["report_count"] == 1
+    assert payload["stats"]["observation_overview"]["cross_store_gaps"][
+        "issue_report_without_dev_issue_count"
+    ] == 0
 
 
 def test_cli_runtime_doctor_canonicalizes_runtime_reason_aliases(

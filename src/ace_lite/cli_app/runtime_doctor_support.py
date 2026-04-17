@@ -381,6 +381,8 @@ def build_runtime_doctor_payload(
     resolved = bundle["resolved"]
     runtime_stats = load_runtime_stats_summary(
         db_path=stats_db_path,
+        root=root,
+        profile_key=runtime_profile,
         user_id=user_id,
         home_path=os.environ.get("HOME") or os.environ.get("USERPROFILE") or Path.home(),
     )

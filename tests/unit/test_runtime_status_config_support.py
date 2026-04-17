@@ -90,3 +90,17 @@ def test_runtime_status_config_support_normalizes_repo_relative_paths(
         root=tmp_path,
         configured_path="context-map/index.json",
     ) == str((tmp_path / "context-map/index.json").resolve())
+
+
+def test_runtime_status_config_support_expands_user_home_paths(tmp_path: Path) -> None:
+    configured_path = "~/runtime-feedback/profile.json"
+
+    expected = str(Path(configured_path).expanduser().resolve())
+
+    assert (
+        resolve_runtime_status_repo_relative_path(
+            root=tmp_path,
+            configured_path=configured_path,
+        )
+        == expected
+    )

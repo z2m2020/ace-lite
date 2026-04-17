@@ -4,8 +4,10 @@ import os
 from pathlib import Path
 from typing import Any
 
+from ace_lite.config import find_git_root
 from ace_lite.cli_app.runtime_stats_data_support import (
     load_runtime_dev_feedback_summary,
+    load_runtime_feedback_observation_overview,
     load_runtime_preference_capture_summary,
     normalize_runtime_stats_filter_value,
 )
@@ -54,6 +56,26 @@ def _normalize_filter_value(value: str | None) -> str | None:
     return normalize_runtime_stats_filter_value(value)
 
 
+def _resolve_runtime_repo_scope(
+    *,
+    repo_key: str | None,
+    latest_match: dict[str, Any] | None,
+    root: str | Path | None,
+) -> str | None:
+    normalized_repo = _normalize_filter_value(repo_key)
+    if normalized_repo is not None:
+        return normalized_repo
+    if isinstance(latest_match, dict):
+        latest_repo = _normalize_filter_value(str(latest_match.get("repo_key") or ""))
+        if latest_repo is not None:
+            return latest_repo
+    if root is None:
+        return None
+    requested_root = Path(root).expanduser().resolve()
+    repo_root = find_git_root(requested_root) or requested_root
+    return _normalize_filter_value(str(repo_root.name or repo_root))
+
+
 def load_runtime_stats_summary(
     *,
     db_path: str | Path | None = None,
@@ -63,6 +85,7 @@ def load_runtime_stats_summary(
     profile_key: str | None = None,
     feedback_path: str | Path | None = None,
     dev_feedback_path: str | Path | None = None,
+    root: str | Path | None = None,
     home_path: str | Path | None = None,
 ) -> dict[str, Any]:
     resolved_path = resolve_user_runtime_stats_path(
@@ -80,6 +103,11 @@ def load_runtime_stats_summary(
         repo_key=normalized_repo,
         profile_key=normalized_profile,
     )
+    effective_repo = _resolve_runtime_repo_scope(
+        repo_key=normalized_repo,
+        latest_match=latest_match if isinstance(latest_match, dict) else None,
+        root=root,
+    )
     scope_map = build_runtime_scope_map(
         store=store,
         latest_match=latest_match,
@@ -92,17 +120,30 @@ def load_runtime_stats_summary(
     ]
     preference_capture_summary = load_runtime_preference_capture_summary(
         feedback_path=feedback_path,
-        repo_key=normalized_repo,
+        repo_key=effective_repo,
         user_id=normalized_user_id,
         profile_key=normalized_profile,
         home_path=home_path,
     )
     dev_feedback_summary = load_runtime_dev_feedback_summary(
         dev_feedback_path=dev_feedback_path,
-        repo_key=normalized_repo,
+        repo_key=effective_repo,
         user_id=normalized_user_id,
         profile_key=normalized_profile,
         home_path=home_path,
+    )
+    observation_overview = (
+        load_runtime_feedback_observation_overview(
+            root=root,
+            repo_key=effective_repo,
+            user_id=normalized_user_id,
+            profile_key=normalized_profile,
+            feedback_path=feedback_path,
+            dev_feedback_path=dev_feedback_path,
+            home_path=home_path,
+        )
+        if root is not None
+        else {}
     )
     top_pain_summary = build_runtime_top_pain_summary(
         runtime_scope_map=scope_map,
@@ -119,10 +160,11 @@ def load_runtime_stats_summary(
         top_pain_summary=top_pain_summary,
         memory_health_summary=memory_health_summary,
     )
-    filters = {
-        "repo": normalized_repo,
-        "profile": normalized_profile,
-    }
+    filters: dict[str, Any] = {}
+    if effective_repo is not None:
+        filters["repo"] = effective_repo
+    if normalized_profile is not None:
+        filters["profile"] = normalized_profile
     if normalized_user_id is not None:
         filters["user_id"] = normalized_user_id
     return {
@@ -133,6 +175,7 @@ def load_runtime_stats_summary(
         "scopes": scopes,
         "preference_capture_summary": preference_capture_summary,
         "dev_feedback_summary": dev_feedback_summary,
+        "observation_overview": observation_overview,
         "top_pain_summary": top_pain_summary,
         "memory_health_summary": memory_health_summary,
         "agent_loop_control_plane_summary": agent_loop_control_plane_summary,
@@ -201,6 +244,7 @@ def build_runtime_status_payload(
                 "preference_capture_summary"
             ),
             "dev_feedback_summary": runtime_stats.get("dev_feedback_summary"),
+            "observation_overview": runtime_stats.get("observation_overview"),
             "top_pain_summary": runtime_stats.get("top_pain_summary"),
             "memory_health_summary": runtime_stats.get("memory_health_summary"),
             "agent_loop_control_plane_summary": runtime_stats.get(
@@ -250,6 +294,7 @@ def build_runtime_status_snapshot(
     )
     runtime_stats = load_runtime_stats_summary(
         db_path=db_path,
+        root=root,
         user_id=user_id,
         profile_key=str(stats_tags.get("profile_key") or "").strip() or None,
         feedback_path=feedback_path,

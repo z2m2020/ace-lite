@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import SelectionFeedbackStore
+from ace_lite.feedback_observation_summary import build_feedback_observation_overview
 from ace_lite.preference_capture_store import DurablePreferenceCaptureStore
 
 
@@ -79,8 +80,36 @@ def load_runtime_dev_feedback_summary(
     return payload
 
 
+def load_runtime_feedback_observation_overview(
+    *,
+    root: str | Path | None,
+    repo_key: str | None = None,
+    user_id: str | None = None,
+    profile_key: str | None = None,
+    feedback_path: str | Path | None = None,
+    dev_feedback_path: str | Path | None = None,
+    issue_store_path: str | Path | None = None,
+    home_path: str | Path | None = None,
+) -> dict[str, object]:
+    if feedback_path is None:
+        base = Path(home_path).expanduser() if home_path is not None else Path.home()
+        profile_path = base / ".ace-lite" / "profile.json"
+    else:
+        profile_path = Path(feedback_path).expanduser()
+    return build_feedback_observation_overview(
+        repo=normalize_runtime_stats_filter_value(repo_key),
+        user_id=normalize_runtime_stats_filter_value(user_id),
+        profile_key=normalize_runtime_stats_filter_value(profile_key),
+        root=root,
+        dev_feedback_store_path=dev_feedback_path,
+        issue_store_path=issue_store_path,
+        profile_path=profile_path,
+    )
+
+
 __all__ = [
     "load_runtime_dev_feedback_summary",
+    "load_runtime_feedback_observation_overview",
     "load_runtime_preference_capture_summary",
     "normalize_runtime_stats_filter_value",
 ]

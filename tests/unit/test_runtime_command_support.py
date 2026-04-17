@@ -28,6 +28,7 @@ from ace_lite.cli_app.runtime_command_support import (
 )
 from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import SelectionFeedbackStore
+from ace_lite.issue_report_store import IssueReportStore
 from ace_lite.runtime_settings_store import (
     build_runtime_settings_record,
     load_runtime_settings_record,
@@ -761,6 +762,60 @@ def test_load_runtime_stats_summary_includes_dev_feedback_and_top_pain_summary(
     assert payload["memory_health_summary"]["reasons"][0]["linked_fix_issue_count"] == 1
 
 
+def test_load_runtime_stats_summary_infers_repo_scope_for_observation_overview(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / ".ace-lite" / "runtime_state.db"
+    _seed_runtime_stats_with_degraded_reason(db_path)
+    SelectionFeedbackStore(
+        profile_path=tmp_path / ".ace-lite" / "profile.json",
+        max_entries=8,
+    ).record(
+        query="runtime bugfix",
+        repo="repo-alpha",
+        user_id="bench-user",
+        selected_path="src/auth.py",
+        captured_at="2026-03-19T00:00:00+00:00",
+        position=1,
+    )
+    IssueReportStore(db_path=tmp_path / "context-map" / "issue_reports.db").record(
+        {
+            "issue_id": "iss_memory_fallback",
+            "title": "Memory fallback unresolved",
+            "category": "runtime",
+            "severity": "medium",
+            "status": "open",
+            "query": "runtime bugfix",
+            "repo": "repo-alpha",
+            "root": str(tmp_path),
+            "user_id": "bench-user",
+            "profile_key": "bugfix",
+            "actual_behavior": "Fallback path still triggers",
+            "occurred_at": "2026-03-19T00:01:00+00:00",
+            "created_at": "2026-03-19T00:01:00+00:00",
+            "updated_at": "2026-03-19T00:01:00+00:00",
+        }
+    )
+
+    payload = load_runtime_stats_summary(
+        db_path=db_path,
+        user_id="bench-user",
+        profile_key="bugfix",
+        root=tmp_path,
+        home_path=tmp_path,
+    )
+
+    assert payload["filters"]["repo"] == "repo-alpha"
+    assert payload["preference_capture_summary"]["repo_key"] == "repo-alpha"
+    assert payload["observation_overview"]["repo"] == "repo-alpha"
+    assert payload["observation_overview"]["selection_feedback"]["event_count"] == 1
+    assert payload["observation_overview"]["issue_reports"]["report_count"] == 1
+    assert payload["observation_overview"]["issue_reports"]["scope"] == "filtered"
+    assert payload["observation_overview"]["cross_store_gaps"][
+        "issue_report_without_dev_issue_count"
+    ] == 1
+
+
 def test_load_runtime_stats_summary_excludes_synthetic_doctor_sessions_from_scope_summaries(
     tmp_path: Path,
 ) -> None:
@@ -892,6 +947,7 @@ def test_build_runtime_status_payload_canonicalizes_runtime_reason_aliases_in_de
         payload["latest_runtime"]["agent_loop_control_plane_summary"]
         == runtime_stats["agent_loop_control_plane_summary"]
     )
+    assert payload["latest_runtime"]["observation_overview"] == runtime_stats["observation_overview"]
 
 
 def test_execute_codex_mcp_setup_plan_dry_run_does_not_run_commands() -> None:
