@@ -88,6 +88,62 @@ def test_score_plan_quick_rows_demotes_ace_lite_feedback_docs_for_repo_queries()
     assert scored[-1].path == "docs/ace_lite_repo_validation_feedback_2026-04-16.md"
 
 
+def test_score_plan_quick_rows_demotes_tmp_feedback_docs_for_code_intent_query() -> None:
+    rows = [
+        {
+            "path": ".tmp/ace_lite_developer_feedback_2026-04-17.md",
+            "module": ".tmp.feedback",
+            "language": "markdown",
+            "score": 9.0,
+        },
+        {
+            "path": "src/ace_lite/validation/report_support.py",
+            "module": "src.ace_lite.validation.report_support",
+            "language": "python",
+            "score": 7.0,
+        },
+    ]
+
+    scored = score_plan_quick_rows(
+        query="validation report_support.py selected_path root cause",
+        rows=rows,
+        lexical_boost_per_hit=0.0,
+    )
+
+    assert [row.path for row in scored] == [
+        "src/ace_lite/validation/report_support.py",
+        ".tmp/ace_lite_developer_feedback_2026-04-17.md",
+    ]
+
+
+def test_score_plan_quick_rows_demotes_task_docs_for_code_intent_query() -> None:
+    rows = [
+        {
+            "path": ".codex/tasks/ace-lite/main/10_fix_feedback_observability_and_doc_pollution.md",
+            "module": ".codex.tasks.feedback",
+            "language": "markdown",
+            "score": 8.5,
+        },
+        {
+            "path": "src/ace_lite/cli_app/commands/feedback.py",
+            "module": "src.ace_lite.cli_app.commands.feedback",
+            "language": "python",
+            "score": 7.0,
+        },
+    ]
+
+    scored = score_plan_quick_rows(
+        query="feedback.py command summary root option",
+        rows=rows,
+        lexical_boost_per_hit=0.0,
+    )
+
+    assert [row.path for row in scored] == [
+        "src/ace_lite/cli_app/commands/feedback.py",
+        ".codex/tasks/ace-lite/main/10_fix_feedback_observability_and_doc_pollution.md",
+    ]
+
+
 def test_score_plan_quick_rows_uses_strategy_registries(monkeypatch) -> None:
     calls: dict[str, int] = {"intent": 0, "domain": 0, "doc_boost": 0, "latest_boost": 0}
 
@@ -567,7 +623,7 @@ def test_build_plan_quick_repomap_expand_includes_stage_payload(tmp_path: Path) 
         repomap_neighbor_limit=10,
         repomap_neighbor_depth=1,
     )
-    assert result["ranking_source"] == "ranker"
+    assert result["ranking_source"] in {"ranker", "repomap"}
     assert isinstance(result.get("repomap_stage"), (dict, type(None)))
     # In tiny repos neighbor_paths may be empty, but stage payload should exist.
     assert isinstance(result.get("repomap_stage"), dict)

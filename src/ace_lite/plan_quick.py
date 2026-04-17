@@ -660,44 +660,75 @@ def _normalize_path(path: str) -> str:
     return str(path or "").strip().replace("\\", "/").lower()
 
 
-def _is_ace_lite_feedback_doc(*, path: str, language: str, semantic_domain: str) -> bool:
+_TOOL_ARTIFACT_PREFIXES: tuple[str, ...] = (
+    ".tmp/",
+    ".context/",
+    ".codex/tasks/",
+)
+_TOOL_ARTIFACT_NAME_MARKERS: tuple[str, ...] = (
+    "ace-lite",
+    "ace_lite",
+    "context_report",
+    "developer_feedback",
+    "repo_validation",
+    "borrowing_analysis",
+)
+_TOOL_ARTIFACT_PURPOSE_MARKERS: tuple[str, ...] = (
+    "feedback",
+    "assessment",
+    "validation",
+    "report",
+    "plan",
+    "task",
+)
+_TOOL_ARTIFACT_QUERY_ALLOWLIST: tuple[str, ...] = (
+    "docs",
+    "doc",
+    "markdown",
+    "report",
+    "plan",
+    "planning",
+    "status",
+    "progress",
+    "assessment",
+)
+
+
+def _is_ace_lite_tooling_artifact_doc(*, path: str, language: str, semantic_domain: str) -> bool:
     normalized_path = _normalize_path(path)
     if semantic_domain not in {"docs", "planning", "reports", "reference", "markdown"}:
         return False
     if not _is_markdown_doc(path=path, language=language):
         return False
-    if not any(marker in normalized_path for marker in ("ace-lite", "ace_lite")):
+    if not any(marker in normalized_path for marker in _TOOL_ARTIFACT_PURPOSE_MARKERS):
         return False
-    return any(
-        marker in normalized_path
-        for marker in (
-            "feedback",
-            "assessment",
-            "validation",
-            "mcp_assessment",
-            "repo_validation",
-        )
+    return any(marker in normalized_path for marker in _TOOL_ARTIFACT_NAME_MARKERS) or any(
+        normalized_path.startswith(prefix) for prefix in _TOOL_ARTIFACT_PREFIXES
     )
 
 
 def _self_feedback_doc_penalty(
-    *, query: str, path: str, language: str, semantic_domain: str
+    *,
+    query: str,
+    path: str,
+    language: str,
+    semantic_domain: str,
+    query_flags: dict[str, Any],
 ) -> float:
     normalized_query = str(query or "").strip().lower()
-    if any(
-        marker in normalized_query
-        for marker in (
-            "ace-lite",
-            "ace_lite",
-            "ace lite",
-            "mcp",
-            "feedback",
-            "assessment",
-            "validation",
-        )
+    if not _is_ace_lite_tooling_artifact_doc(
+        path=path,
+        language=language,
+        semantic_domain=semantic_domain,
     ):
         return 0.0
-    if not _is_ace_lite_feedback_doc(path=path, language=language, semantic_domain=semantic_domain):
+    if bool(query_flags.get("code_intent", False)):
+        return -10.0
+    if bool(query_flags.get("doc_sync", False)) and any(
+        marker in normalized_query for marker in _TOOL_ARTIFACT_QUERY_ALLOWLIST
+    ):
+        return 0.0
+    if any(marker in normalized_query for marker in ("ace-lite", "ace_lite", "ace lite", "mcp")):
         return 0.0
     return -8.0
 
@@ -835,6 +866,7 @@ def score_plan_quick_rows(
             path=path,
             language=language,
             semantic_domain=semantic_domain,
+            query_flags=query_flags,
         )
         fused_score = base_score + lexical_boost + intent_boost + recency_boost
         scored.append(

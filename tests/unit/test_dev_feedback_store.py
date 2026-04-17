@@ -10,6 +10,7 @@ from ace_lite.dev_feedback_store import (
     normalize_dev_issue,
     resolve_dev_feedback_store_path,
 )
+from ace_lite.issue_report_store import IssueReportStore
 
 
 def test_resolve_dev_feedback_store_path_defaults_under_home(tmp_path: Path) -> None:
@@ -193,3 +194,49 @@ def test_normalize_dev_feedback_validates_required_fields() -> None:
 
     with pytest.raises(ValueError, match="resolution_note cannot be empty"):
         normalize_dev_fix({"repo": "demo", "resolution_note": " "})
+
+
+def test_issue_report_store_summarize_by_status(tmp_path: Path) -> None:
+    store = IssueReportStore(db_path=tmp_path / "context-map" / "issue_reports.db")
+    store.record(
+        {
+            "issue_id": "iss_open",
+            "title": "Open issue",
+            "query": "open issue",
+            "actual_behavior": "bad",
+            "repo": "demo",
+            "root": str(tmp_path),
+            "status": "open",
+            "category": "retrieval",
+            "severity": "high",
+            "created_at": "2026-03-19T00:00:00+00:00",
+            "updated_at": "2026-03-19T00:00:00+00:00",
+            "occurred_at": "2026-03-19T00:00:00+00:00",
+        },
+        root_path=tmp_path,
+    )
+    store.record(
+        {
+            "issue_id": "iss_resolved",
+            "title": "Resolved issue",
+            "query": "resolved issue",
+            "actual_behavior": "was bad",
+            "repo": "demo",
+            "root": str(tmp_path),
+            "status": "resolved",
+            "category": "runtime",
+            "severity": "medium",
+            "created_at": "2026-03-19T00:01:00+00:00",
+            "updated_at": "2026-03-19T00:01:00+00:00",
+            "occurred_at": "2026-03-19T00:01:00+00:00",
+            "resolved_at": "2026-03-19T00:02:00+00:00",
+        },
+        root_path=tmp_path,
+    )
+
+    summary = store.summarize(repo="demo")
+
+    assert summary["report_count"] == 2
+    assert summary["open_issue_count"] == 1
+    assert summary["resolved_issue_count"] == 1
+    assert summary["by_status"][0]["report_count"] >= summary["by_status"][1]["report_count"]

@@ -16,6 +16,7 @@ from ace_lite.dev_feedback_runtime_linkage import (
 )
 from ace_lite.dev_feedback_store import DevFeedbackStore
 from ace_lite.feedback_store import FeedbackBoostConfig, SelectionFeedbackStore
+from ace_lite.feedback_observation_summary import build_feedback_observation_overview
 from ace_lite.index_stage.terms import extract_terms
 from ace_lite.issue_report_store import IssueReportStore
 from ace_lite.memory_long_term import build_long_term_capture_service_from_runtime
@@ -214,10 +215,28 @@ def _build_cli_dev_summary_workflow_hints(
     *,
     repo: str | None,
     summary: dict[str, Any],
+    observation_overview: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_repo = str(repo or "").strip() or "<repo>"
     issue_count = int(summary.get("issue_count", 0) or 0)
     open_issue_count = int(summary.get("open_issue_count", 0) or 0)
+    observation = dict(observation_overview or {})
+    issue_reports = dict(observation.get("issue_reports", {}))
+    selection_feedback = dict(observation.get("selection_feedback", {}))
+    cross_store_gaps = dict(observation.get("cross_store_gaps", {}))
+    issue_report_open_count = int(issue_reports.get("open_issue_count", 0) or 0)
+    selection_event_count = int(selection_feedback.get("event_count", 0) or 0)
+    if issue_count <= 0 and issue_report_open_count > 0:
+        return {
+            "workflow": "dev_feedback_issue_bridge_v1",
+            "recommended_next_steps": [
+                f"ace-lite feedback list-issues --repo {normalized_repo} --status open --limit 20",
+                (
+                    "ace-lite feedback report-dev-issue --repo "
+                    f"{normalized_repo} --title <issue-title> --reason-code general"
+                ),
+            ],
+        }
     if issue_count <= 0:
         return {
             "workflow": "dev_feedback_bootstrap_v1",
@@ -245,6 +264,16 @@ def _build_cli_dev_summary_workflow_hints(
                     "ace-lite feedback apply-dev-fix --issue-id <open-issue-id> "
                     "--fix-id <dev-fix-id> --status fixed"
                 ),
+            ],
+        }
+    if selection_event_count > 0 or int(
+        cross_store_gaps.get("issue_report_without_dev_issue_count", 0) or 0
+    ) > 0:
+        return {
+            "workflow": "feedback_observability_v1",
+            "recommended_next_steps": [
+                f"ace-lite feedback dev-feedback-summary --repo {normalized_repo}",
+                f"ace-lite feedback list-issues --repo {normalized_repo} --limit 20",
             ],
         }
     return {
@@ -1118,6 +1147,23 @@ def feedback_apply_dev_fix_command(
 @click.option("--user-id", default=None, help="Optional user filter.")
 @click.option("--profile-key", default=None, help="Optional profile filter.")
 @click.option(
+    "--root",
+    default=".",
+    show_default=True,
+    help="Repo root used to resolve issue report store.",
+)
+@click.option(
+    "--issue-store-path",
+    default=None,
+    help="Optional issue report SQLite path override.",
+)
+@click.option(
+    "--profile-path",
+    default="~/.ace-lite/profile.json",
+    show_default=True,
+    help="Selection feedback store path used for unified observation summary.",
+)
+@click.option(
     "--store-path",
     default="~/.ace-lite/dev_feedback.db",
     show_default=True,
@@ -1127,6 +1173,9 @@ def feedback_dev_feedback_summary_command(
     repo: str | None,
     user_id: str | None,
     profile_key: str | None,
+    root: str,
+    issue_store_path: str | None,
+    profile_path: str,
     store_path: str,
 ) -> None:
     store = DevFeedbackStore(db_path=store_path)
@@ -1135,14 +1184,25 @@ def feedback_dev_feedback_summary_command(
         user_id=user_id,
         profile_key=profile_key,
     )
+    observation_overview = build_feedback_observation_overview(
+        repo=repo,
+        user_id=user_id,
+        profile_key=profile_key,
+        root=root,
+        dev_feedback_store_path=store_path,
+        issue_store_path=issue_store_path,
+        profile_path=profile_path,
+    )
     echo_json(
         {
             "ok": True,
             "store_path": str(store.db_path),
             "summary": summary_payload,
+            "observation_overview": observation_overview,
             "workflow_hints": _build_cli_dev_summary_workflow_hints(
                 repo=repo,
                 summary=summary_payload,
+                observation_overview=observation_overview,
             ),
         }
     )

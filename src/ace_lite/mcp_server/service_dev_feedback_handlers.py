@@ -10,6 +10,7 @@ from ace_lite.dev_feedback_runtime_linkage import (
     resolve_runtime_stats_store_path,
 )
 from ace_lite.dev_feedback_store import DevFeedbackStore
+from ace_lite.feedback_observation_summary import build_feedback_observation_overview
 from ace_lite.memory_long_term import build_long_term_capture_service_from_runtime
 
 
@@ -33,6 +34,7 @@ class DevFeedbackSummaryResponse(TypedDict):
     ok: bool
     store_path: str
     summary: dict[str, Any]
+    observation_overview: NotRequired[dict[str, Any]]
     workflow_hints: NotRequired[dict[str, Any]]
 
 
@@ -158,10 +160,41 @@ def _build_dev_summary_workflow_hints(
     *,
     repo: str | None,
     summary: dict[str, Any],
+    observation_overview: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_repo = str(repo or "").strip()
     issue_count = int(summary.get("issue_count", 0) or 0)
     open_issue_count = int(summary.get("open_issue_count", 0) or 0)
+    observation = dict(observation_overview or {})
+    issue_reports = dict(observation.get("issue_reports", {}))
+    selection_feedback = dict(observation.get("selection_feedback", {}))
+    cross_store_gaps = dict(observation.get("cross_store_gaps", {}))
+    issue_report_open_count = int(issue_reports.get("open_issue_count", 0) or 0)
+    selection_event_count = int(selection_feedback.get("event_count", 0) or 0)
+    if issue_count <= 0 and issue_report_open_count > 0:
+        return {
+            "workflow": "dev_feedback_issue_bridge_v1",
+            "recommended_next_steps": [
+                {
+                    "tool": "ace_issue_report_list",
+                    "reason": "先看用户侧 open issues，再决定哪些需要镜像到开发侧 triage。",
+                    "suggested_args": {
+                        "repo": normalized_repo or None,
+                        "status": "open",
+                        "limit": 20,
+                    },
+                },
+                {
+                    "tool": "ace_dev_issue_record",
+                    "reason": "把高价值 issue_report 镜像到开发者 issue 闭环。",
+                    "suggested_args": {
+                        "repo": normalized_repo or "<repo>",
+                        "title": "<issue title>",
+                        "reason_code": "general",
+                    },
+                },
+            ],
+        }
     if issue_count <= 0:
         return {
             "workflow": "dev_feedback_bootstrap_v1",
@@ -207,6 +240,27 @@ def _build_dev_summary_workflow_hints(
                         "fix_id": "<dev_fix_id>",
                         "status": "fixed",
                     },
+                },
+            ],
+        }
+    if selection_event_count > 0 or int(
+        cross_store_gaps.get("issue_report_without_dev_issue_count", 0) or 0
+    ) > 0:
+        return {
+            "workflow": "feedback_observability_v1",
+            "recommended_next_steps": [
+                {
+                    "tool": "ace_issue_report_list",
+                    "reason": "对照 issue_report 和 dev_feedback 的落差，确认是否还有未镜像的问题。",
+                    "suggested_args": {
+                        "repo": normalized_repo or None,
+                        "limit": 20,
+                    },
+                },
+                {
+                    "tool": "ace_dev_feedback_summary",
+                    "reason": "继续跟踪统一观察面里的闭环差距。",
+                    "suggested_args": {"repo": normalized_repo or None},
                 },
             ],
         }
@@ -410,18 +464,32 @@ def handle_dev_feedback_summary_request(
     user_id: str | None,
     profile_key: str | None,
     store_path: str | None,
+    root_path: Path | None = None,
+    issue_store_path: str | None = None,
+    profile_path: str | None = None,
 ) -> DevFeedbackSummaryResponse:
     store = DevFeedbackStore(
         db_path=resolve_dev_feedback_store_path_for_request(store_path=store_path)
     )
     summary = store.summarize(repo=repo, user_id=user_id, profile_key=profile_key)
+    observation_overview = build_feedback_observation_overview(
+        repo=repo,
+        user_id=user_id,
+        profile_key=profile_key,
+        root=root_path,
+        dev_feedback_store_path=str(store.db_path),
+        issue_store_path=issue_store_path,
+        profile_path=profile_path,
+    )
     payload: DevFeedbackSummaryResponse = {
         "ok": True,
         "store_path": str(store.db_path),
         "summary": summary,
+        "observation_overview": observation_overview,
         "workflow_hints": _build_dev_summary_workflow_hints(
             repo=repo,
             summary=summary,
+            observation_overview=observation_overview,
         ),
     }
     return payload

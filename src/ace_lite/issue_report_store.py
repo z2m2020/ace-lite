@@ -429,6 +429,93 @@ class IssueReportStore:
         finally:
             conn.close()
 
+    def summarize(
+        self,
+        *,
+        repo: str | None = None,
+        user_id: str | None = None,
+        profile_key: str | None = None,
+    ) -> dict[str, Any]:
+        predicates: list[str] = []
+        params: list[Any] = []
+        for field_name, value in (
+            ("repo", _normalize_text(repo, max_len=255)),
+            ("user_id", _normalize_text(user_id, max_len=255)),
+            ("profile_key", _normalize_text(profile_key, max_len=255)),
+        ):
+            if value:
+                predicates.append(f"{field_name} = ?")
+                params.append(value)
+        where_sql = f"WHERE {' AND '.join(predicates)}" if predicates else ""
+
+        conn = self._connect()
+        try:
+            status_rows = conn.execute(
+                f"""
+                SELECT status, COUNT(*) AS report_count, MAX(occurred_at) AS last_seen_at
+                FROM {ISSUE_REPORTS_TABLE}
+                {where_sql}
+                GROUP BY status
+                """,
+                tuple(params),
+            ).fetchall()
+            category_rows = conn.execute(
+                f"""
+                SELECT category, COUNT(*) AS report_count
+                FROM {ISSUE_REPORTS_TABLE}
+                {where_sql}
+                GROUP BY category
+                ORDER BY report_count DESC, category ASC
+                """,
+                tuple(params),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        by_status: list[dict[str, Any]] = []
+        open_issue_count = 0
+        resolved_issue_count = 0
+        report_count = 0
+        latest_occurred_at = ""
+        for row in status_rows:
+            status = str(row["status"] or "")
+            count = int(row["report_count"] or 0)
+            last_seen_at = str(row["last_seen_at"] or "")
+            report_count += count
+            if status in {"resolved", "fixed", "closed"}:
+                resolved_issue_count += count
+            else:
+                open_issue_count += count
+            latest_occurred_at = max(latest_occurred_at, last_seen_at)
+            by_status.append(
+                {
+                    "status": status,
+                    "report_count": count,
+                    "last_seen_at": last_seen_at,
+                }
+            )
+        by_status.sort(key=lambda item: (-int(item["report_count"]), str(item["status"])))
+
+        by_category = [
+            {
+                "category": str(row["category"] or ""),
+                "report_count": int(row["report_count"] or 0),
+            }
+            for row in category_rows
+        ]
+
+        return {
+            "repo": _normalize_text(repo, max_len=255),
+            "user_id": _normalize_text(user_id, max_len=255),
+            "profile_key": _normalize_text(profile_key, max_len=255),
+            "report_count": report_count,
+            "open_issue_count": open_issue_count,
+            "resolved_issue_count": resolved_issue_count,
+            "latest_occurred_at": latest_occurred_at,
+            "by_status": by_status,
+            "by_category": by_category,
+        }
+
     @staticmethod
     def _row_to_report(row: Any) -> IssueReport:
         return IssueReport(

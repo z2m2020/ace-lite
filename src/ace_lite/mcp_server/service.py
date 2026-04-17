@@ -1048,6 +1048,7 @@ class AceLiteMcpService:
                 user_id=user_id,
                 profile_key=profile_key,
                 store_path=store_path,
+                root_path=self._config.default_root,
             ),
         )
 

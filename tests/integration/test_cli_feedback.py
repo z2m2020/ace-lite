@@ -513,6 +513,8 @@ def test_cli_feedback_issue_report_round_trip(tmp_path: Path) -> None:
 def test_cli_feedback_dev_issue_fix_and_summary_round_trip(tmp_path: Path) -> None:
     runner = CliRunner()
     store_path = tmp_path / "dev-feedback.db"
+    profile_path = tmp_path / "profile.json"
+    issue_store_path = tmp_path / "context-map" / "issue_reports.db"
 
     recorded_issue = runner.invoke(
         cli_module.cli,
@@ -595,6 +597,55 @@ def test_cli_feedback_dev_issue_fix_and_summary_round_trip(tmp_path: Path) -> No
     assert recorded_fix_payload["fix"]["issue_id"] == "devi_memory_fallback"
     assert recorded_fix_payload["workflow_hints"]["workflow"] == "dev_fix_linking_v1"
 
+    feedback_record = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "record",
+            "src/planner.py",
+            "--query",
+            "why did memory fallback",
+            "--repo",
+            "demo",
+            "--user-id",
+            "cli-user",
+            "--profile-key",
+            "bugfix",
+            "--profile-path",
+            str(profile_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+    assert feedback_record.exit_code == 0
+
+    issue_report = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "report-issue",
+            "--title",
+            "validation payload missing selected path",
+            "--query",
+            "validation payload selected path",
+            "--actual-behavior",
+            "selected path omitted",
+            "--repo",
+            "demo",
+            "--root",
+            str(tmp_path),
+            "--status",
+            "open",
+            "--category",
+            "retrieval",
+            "--severity",
+            "high",
+            "--store-path",
+            str(issue_store_path),
+        ],
+        env=_cli_env(tmp_path),
+    )
+    assert issue_report.exit_code == 0
+
     summary = runner.invoke(
         cli_module.cli,
         [
@@ -606,6 +657,12 @@ def test_cli_feedback_dev_issue_fix_and_summary_round_trip(tmp_path: Path) -> No
             "cli-user",
             "--profile-key",
             "bugfix",
+            "--root",
+            str(tmp_path),
+            "--profile-path",
+            str(profile_path),
+            "--issue-store-path",
+            str(issue_store_path),
             "--store-path",
             str(store_path),
         ],
@@ -618,6 +675,8 @@ def test_cli_feedback_dev_issue_fix_and_summary_round_trip(tmp_path: Path) -> No
     assert summary_payload["summary"]["open_issue_count"] == 1
     assert summary_payload["summary"]["fix_count"] == 1
     assert summary_payload["summary"]["by_reason_code"][0]["reason_code"] == "memory_fallback"
+    assert summary_payload["observation_overview"]["issue_reports"]["report_count"] == 1
+    assert summary_payload["observation_overview"]["selection_feedback"]["event_count"] == 1
     assert summary_payload["workflow_hints"]["workflow"] == "dev_feedback_closure_v1"
 
 
