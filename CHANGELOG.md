@@ -8,6 +8,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.90] - 2026-04-17
+
+### Added
+
+- Added unified `observation_overview` output on `runtime status` and `runtime doctor` so runtime observability now surfaces developer feedback, issue reports, selection feedback, and cross-store gap signals together.
+- Added regression coverage for runtime observation aggregation, repo-scope inference, issue-report visibility, and user-home feedback path expansion.
+
+### Changed
+
+- Standardized long-term memory layering metadata so captured facts and reports now carry stable abstraction/support/freshness/contradiction fields, and context reports expose the corresponding memory summary counters and follow-up prompts.
+- Unified feedback observability across developer issues, issue reports, and selection feedback while demoting obvious ACE-Lite tooling artifacts during code-intent `plan_quick` queries.
+- Hardened runtime feedback scoping so repo inference falls back from explicit filters to the latest runtime match and then the requested root, and default `~/.ace-lite/...` feedback paths resolve to the user home instead of being misread as repo-relative paths.
+
 ## [0.3.89] - 2026-04-16
 
 ### Changed
