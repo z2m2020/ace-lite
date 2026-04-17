@@ -76,6 +76,20 @@ This capability area still aims to unify four loops into one evolvable product a
 - Feedback must flow back into benchmark cases, long-term memory observations and facts, and developer prioritization.
 - The system should not become a passive warehouse with no optimization feedback path.
 
+### 4.6 Heuristic Admission Policy
+
+- `retrieval_heuristic`-style durable memory must not be promoted from every failed run.
+- Only **partial-correctness** validation cases are eligible for heuristic promotion:
+  - not fully correct
+  - not fully wrong
+  - enough evidence to show the retrieval/use pattern was directionally useful but incomplete
+- Fully failed cases remain issue/debug evidence, not durable heuristics.
+- Fully correct cases are useful for confidence and regression reporting, but do not by themselves justify new heuristics.
+- Any future heuristic promotion path should remain:
+  - report-first
+  - traceable to validation evidence
+  - reversible without schema churn
+
 ### 4.6 Phase 1 Contract Freeze
 
 The first pass of `memory.long_term.*` is intentionally narrow and should remain stable:
@@ -125,6 +139,12 @@ Current limitation:
 
 - the system is intentionally conservative and does not yet attempt a richer graph-evolution or advanced attribution model
 - attribution boundaries remain intentionally narrow: stage captures only describe explicit stage payload evidence, and selection feedback only attributes the explicit selected path rather than inferred downstream impact
+- abstraction-layer metadata is now expected to stay standardized across observation/fact records:
+  - `abstraction_level`
+  - `support_count`
+  - `freshness_state`
+  - `contradiction_state`
+  - `last_confirmed_at`
 
 ### 5.2 User Issue Reporting
 

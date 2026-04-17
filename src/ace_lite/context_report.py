@@ -26,6 +26,7 @@ from ace_lite.context_report_sections import (
     append_history_channel_section,
     append_history_hits_section,
     append_knowledge_gaps_section,
+    append_memory_summary_section,
     append_session_end_report_section,
     append_suggested_questions_section,
     append_surprising_connections_section,
@@ -552,6 +553,50 @@ def _collect_degraded_reasons(plan_payload: dict[str, Any]) -> list[str]:
     return degraded_reasons
 
 
+def _build_memory_summary(plan_payload: dict[str, Any]) -> dict[str, Any]:
+    memory_payload = _dict(plan_payload.get("memory", {}))
+    ltm = _dict(memory_payload.get("ltm", {}))
+    selected = _list(ltm.get("selected", []))
+    if not memory_payload and not selected:
+        return {}
+
+    abstraction_counts = {level: 0 for level in ("abstract", "overview", "detail")}
+    feedback_signal_counts = {
+        key: _int(value, 0)
+        for key, value in _dict(ltm.get("feedback_signal_counts", {})).items()
+    }
+    observation_hit_count = 0
+    fact_hit_count = 0
+    stale_warning_count = 0
+
+    for item in selected:
+        if not isinstance(item, dict):
+            continue
+        memory_kind = str(item.get("memory_kind") or "").strip().lower()
+        if memory_kind == "observation":
+            observation_hit_count += 1
+        elif memory_kind == "fact":
+            fact_hit_count += 1
+        abstraction_level = str(item.get("abstraction_level") or "").strip().lower()
+        if abstraction_level in abstraction_counts:
+            abstraction_counts[abstraction_level] += 1
+        if str(item.get("freshness_state") or "").strip().lower() == "stale":
+            stale_warning_count += 1
+
+    hit_count = len([item for item in selected if isinstance(item, dict)])
+    return {
+        "count": _int(memory_payload.get("count", 0)),
+        "ltm_selected_count": _int(ltm.get("selected_count", hit_count)),
+        "hit_count": hit_count,
+        "abstract_hit_count": abstraction_counts["abstract"] + abstraction_counts["overview"],
+        "observation_hit_count": observation_hit_count,
+        "fact_hit_count": fact_hit_count,
+        "stale_warning_count": stale_warning_count,
+        "feedback_signal_counts": feedback_signal_counts,
+        "abstraction_counts": abstraction_counts,
+    }
+
+
 def _build_knowledge_gaps(
     plan_payload: dict[str, Any],
     source_plan: dict[str, Any],
@@ -617,6 +662,27 @@ def _build_knowledge_gaps(
                 "code": "plan_timeout_fallback",
                 "severity": "medium",
                 "message": "plan execution timed out and fell back to plan_quick",
+            }
+        )
+
+    memory_summary = _build_memory_summary(plan_payload)
+    if _int(memory_summary.get("stale_warning_count", 0)) > 0:
+        gaps.append(
+            {
+                "code": "stale_memory_signal",
+                "severity": "medium",
+                "message": "memory.ltm contains stale long-term memory hits that should be re-validated",
+            }
+        )
+    if (
+        _int(memory_summary.get("hit_count", 0)) > 0
+        and _int(memory_summary.get("abstract_hit_count", 0)) == 0
+    ):
+        gaps.append(
+            {
+                "code": "missing_abstract_memory",
+                "severity": "low",
+                "message": "memory.ltm hits exist, but none are exposed at abstract/overview level",
             }
         )
 
@@ -705,6 +771,22 @@ def _build_suggested_questions(
                 "why": "Plan timed out and fell back to quick mode.",
             }
         )
+    if "stale_memory_signal" in gap_codes:
+        questions.append(
+            {
+                "type": "memory",
+                "question": "Which stale long-term memory hits need reconfirmation before trusting them?",
+                "why": "Stale memory hits can distort the handoff summary without being current facts.",
+            }
+        )
+    if "missing_abstract_memory" in gap_codes:
+        questions.append(
+            {
+                "type": "memory",
+                "question": "Should any long-term memory hits be promoted to abstract or overview level?",
+                "why": "Only detail-level memory is available, so summary-first inspection is weakened.",
+            }
+        )
 
     # Ambiguous evidence questions
     evidence_summary = resolve_evidence_summary(plan_payload, source_plan=source_plan)
@@ -751,6 +833,7 @@ def _build_summary(
     validation_findings = _dict(report_signals.get("validation_findings", {}))
     session_end_report = _dict(report_signals.get("session_end_report", {}))
     handoff_payload = _dict(report_signals.get("handoff_payload", {}))
+    memory_summary = _build_memory_summary(plan_payload)
 
     # Count degraded reasons from observability
     degraded_reasons = _collect_degraded_reasons(plan_payload)
@@ -793,6 +876,11 @@ def _build_summary(
         "validation_finding_count": len(_list(validation_findings.get("findings", []))),
         "next_action_count": len(_list(session_end_report.get("next_actions", []))),
         "handoff_next_task_count": len(_list(handoff_payload.get("next_tasks", []))),
+        "memory_hit_count": _int(memory_summary.get("hit_count", 0)),
+        "memory_abstract_hit_count": _int(memory_summary.get("abstract_hit_count", 0)),
+        "memory_observation_hit_count": _int(memory_summary.get("observation_hit_count", 0)),
+        "memory_fact_hit_count": _int(memory_summary.get("fact_hit_count", 0)),
+        "memory_stale_warning_count": _int(memory_summary.get("stale_warning_count", 0)),
     }
 
 
@@ -846,6 +934,11 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
                 "validation_finding_count": 0,
                 "next_action_count": 0,
                 "handoff_next_task_count": 0,
+                "memory_hit_count": 0,
+                "memory_abstract_hit_count": 0,
+                "memory_observation_hit_count": 0,
+                "memory_fact_hit_count": 0,
+                "memory_stale_warning_count": 0,
             },
             "core_nodes": [],
             "surprising_connections": [],
@@ -871,6 +964,7 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
             "validation_findings": {},
             "session_end_report": {},
             "handoff_payload": {},
+            "memory_summary": {},
             "inputs": inputs,
             "warnings": ["empty_payload"],
         }
@@ -887,6 +981,7 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
     validation_findings = _dict(report_signals.get("validation_findings", {}))
     session_end_report = _dict(report_signals.get("session_end_report", {}))
     handoff_payload = _dict(report_signals.get("handoff_payload", {}))
+    memory_summary = _build_memory_summary(payload)
 
     if confidence_summary:
         confidence_breakdown = _build_confidence_breakdown_p1(sp_chunks, confidence_summary)
@@ -917,6 +1012,7 @@ def build_context_report_payload(plan_payload: Mapping[str, Any]) -> dict[str, A
         "validation_findings": validation_findings,
         "session_end_report": session_end_report,
         "handoff_payload": handoff_payload,
+        "memory_summary": memory_summary,
         "knowledge_gaps": knowledge_gaps,
         "suggested_questions": suggested_questions,
         "inputs": inputs,
@@ -1013,6 +1109,11 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
             "validation_test_count",
             "stage_count",
             "degraded_reason_count",
+            "memory_hit_count",
+            "memory_abstract_hit_count",
+            "memory_observation_hit_count",
+            "memory_fact_hit_count",
+            "memory_stale_warning_count",
             "history_channel_hit_count",
             "history_hit_count",
             "context_refine_decision_count",
@@ -1034,6 +1135,7 @@ def render_context_report_markdown(payload: Mapping[str, Any]) -> str:
     append_candidate_review_section(lines, p)
     append_surprising_connections_section(lines, p)
     append_confidence_breakdown_section(lines, p)
+    append_memory_summary_section(lines, p)
     append_validation_findings_section(lines, p)
     append_knowledge_gaps_section(lines, p)
     append_suggested_questions_section(lines, p)

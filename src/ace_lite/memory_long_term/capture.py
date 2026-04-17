@@ -59,6 +59,42 @@ def _resolve_stage_signal_count(*, stage_name: str, payload: dict[str, Any]) -> 
     return sum(1 for value in payload.values() if value not in ("", None, [], {}))
 
 
+def _build_observation_metadata(
+    *,
+    observed_at: str,
+    support_count: int = 1,
+    abstraction_level: str = "abstract",
+    freshness_state: str = "fresh",
+    contradiction_state: str = "consistent",
+    extras: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = dict(extras) if isinstance(extras, dict) else {}
+    payload["abstraction_level"] = abstraction_level
+    payload["support_count"] = max(1, int(support_count or 1))
+    payload["freshness_state"] = freshness_state
+    payload["contradiction_state"] = contradiction_state
+    payload["last_confirmed_at"] = observed_at
+    return payload
+
+
+def _build_fact_metadata(
+    *,
+    as_of: str,
+    support_count: int = 1,
+    abstraction_level: str = "detail",
+    freshness_state: str = "fresh",
+    contradiction_state: str = "consistent",
+    extras: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = dict(extras) if isinstance(extras, dict) else {}
+    payload["abstraction_level"] = abstraction_level
+    payload["support_count"] = max(1, int(support_count or 1))
+    payload["freshness_state"] = freshness_state
+    payload["contradiction_state"] = contradiction_state
+    payload["last_confirmed_at"] = as_of
+    return payload
+
+
 class LongTermMemoryCaptureService:
     def __init__(
         self,
@@ -118,12 +154,16 @@ class LongTermMemoryCaptureService:
             source_run_id=str(source_run_id or "").strip(),
             severity="info" if stage_name == "source_plan" else self._resolve_validation_severity(stage_payload),
             status=str(payload.get("status") or "captured"),
-            metadata={
-                "stage": stage_name,
-                "capture_gate": "accepted",
-                "signal_count": signal_count,
-                "attribution_scope": "stage_payload_only",
-            },
+            metadata=_build_observation_metadata(
+                observed_at=observed_at,
+                support_count=signal_count,
+                extras={
+                    "stage": stage_name,
+                    "capture_gate": "accepted",
+                    "signal_count": signal_count,
+                    "attribution_scope": "stage_payload_only",
+                },
+            ),
         )
         entry = self._store.upsert_observation(contract)
         return {
@@ -204,14 +244,18 @@ class LongTermMemoryCaptureService:
             source_run_id="",
             severity="info",
             status="selected",
-            metadata={
-                "stage": "selection_feedback",
-                "selected_path": normalized_selected_path,
-                "capture_gate": "accepted",
-                "signal_count": 1,
-                "feedback_signal": "helpful",
-                "attribution_scope": "explicit_selection_only",
-            },
+            metadata=_build_observation_metadata(
+                observed_at=observed_at,
+                support_count=1,
+                extras={
+                    "stage": "selection_feedback",
+                    "selected_path": normalized_selected_path,
+                    "capture_gate": "accepted",
+                    "signal_count": 1,
+                    "feedback_signal": "helpful",
+                    "attribution_scope": "explicit_selection_only",
+                },
+            ),
         )
         entry = self._store.upsert_observation(contract)
         return {
@@ -277,12 +321,16 @@ class LongTermMemoryCaptureService:
             source_run_id=_normalize_text(normalized_issue.get("related_invocation_id")),
             severity="warning" if status not in {"fixed", "resolved", "rejected"} else "info",
             status=status,
-            metadata={
-                "stage": "dev_issue",
-                "reason_code": payload["reason_code"],
-                "issue_id": issue_id,
-                "feedback_signal": "harmful",
-            },
+            metadata=_build_observation_metadata(
+                observed_at=observed_at,
+                support_count=1,
+                extras={
+                    "stage": "dev_issue",
+                    "reason_code": payload["reason_code"],
+                    "issue_id": issue_id,
+                    "feedback_signal": "harmful",
+                },
+            ),
         )
         entry = self._store.upsert_observation(contract)
         return {
@@ -341,13 +389,17 @@ class LongTermMemoryCaptureService:
             source_run_id=_normalize_text(normalized_fix.get("related_invocation_id")),
             severity="info",
             status="recorded",
-            metadata={
-                "stage": "dev_fix",
-                "reason_code": payload["reason_code"],
-                "fix_id": fix_id,
-                "issue_id": payload["issue_id"],
-                "feedback_signal": "helpful",
-            },
+            metadata=_build_observation_metadata(
+                observed_at=observed_at,
+                support_count=1,
+                extras={
+                    "stage": "dev_fix",
+                    "reason_code": payload["reason_code"],
+                    "fix_id": fix_id,
+                    "issue_id": payload["issue_id"],
+                    "feedback_signal": "helpful",
+                },
+            ),
         )
         entry = self._store.upsert_observation(contract)
         return {
@@ -430,13 +482,18 @@ class LongTermMemoryCaptureService:
             source_run_id=observation_payload["related_invocation_id"],
             severity="info",
             status=status,
-            metadata={
-                "stage": "dev_issue_resolution",
-                "reason_code": observation_payload["reason_code"],
-                "issue_id": issue_id,
-                "fix_id": fix_id,
-                "feedback_signal": "helpful",
-            },
+            metadata=_build_observation_metadata(
+                observed_at=observed_at,
+                support_count=2,
+                abstraction_level="overview",
+                extras={
+                    "stage": "dev_issue_resolution",
+                    "reason_code": observation_payload["reason_code"],
+                    "issue_id": issue_id,
+                    "fix_id": fix_id,
+                    "feedback_signal": "helpful",
+                },
+            ),
         )
         observation_entry = self._store.upsert_observation(observation_contract)
         fact_contract = build_long_term_fact_contract_v1(
@@ -460,14 +517,18 @@ class LongTermMemoryCaptureService:
             confidence=1.0,
             valid_from=observed_at,
             derived_from_observation_id=observation_id,
-            metadata={
-                "status": status,
-                "reason_code": observation_payload["reason_code"],
-                "issue_id": issue_id,
-                "fix_id": fix_id,
-                "resolution_note": resolution_note,
-                "feedback_signal": "helpful",
-            },
+            metadata=_build_fact_metadata(
+                as_of=observed_at,
+                support_count=1,
+                extras={
+                    "status": status,
+                    "reason_code": observation_payload["reason_code"],
+                    "issue_id": issue_id,
+                    "fix_id": fix_id,
+                    "resolution_note": resolution_note,
+                    "feedback_signal": "helpful",
+                },
+            ),
         )
         fact_entry = self._store.upsert_fact(fact_contract)
         return {

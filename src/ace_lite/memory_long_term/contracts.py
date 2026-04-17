@@ -7,6 +7,9 @@ from uuid import uuid4
 
 LONG_TERM_OBSERVATION_SCHEMA_VERSION = "long_term_observation_v1"
 LONG_TERM_FACT_SCHEMA_VERSION = "long_term_fact_v1"
+LONG_TERM_ABSTRACTION_LEVELS = ("abstract", "overview", "detail")
+LONG_TERM_FRESHNESS_STATES = ("fresh", "stale", "unknown")
+LONG_TERM_CONTRADICTION_STATES = ("consistent", "contradicted", "unknown")
 
 
 def _normalize_required_text(*, value: Any, context: str) -> str:
@@ -53,6 +56,66 @@ def _normalize_confidence(*, value: Any) -> float:
     if normalized > 1.0:
         return 1.0
     return float(normalized)
+
+
+def _normalize_positive_int(*, value: Any, default: int = 1) -> int:
+    try:
+        normalized = int(value)
+    except Exception:
+        normalized = int(default)
+    return max(1, normalized)
+
+
+def _normalize_enum_text(
+    *,
+    value: Any,
+    allowed: tuple[str, ...],
+    default: str,
+) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in allowed:
+        return normalized
+    return default
+
+
+def _normalize_memory_metadata(
+    *,
+    entry_kind: str,
+    metadata: dict[str, Any] | None,
+    reference_timestamp: str,
+) -> dict[str, Any]:
+    normalized = dict(metadata) if isinstance(metadata, dict) else {}
+    default_abstraction = "abstract" if entry_kind == "observation" else "detail"
+    normalized["abstraction_level"] = _normalize_enum_text(
+        value=normalized.get("abstraction_level"),
+        allowed=LONG_TERM_ABSTRACTION_LEVELS,
+        default=default_abstraction,
+    )
+    normalized["support_count"] = _normalize_positive_int(
+        value=normalized.get("support_count"),
+        default=1,
+    )
+    normalized["freshness_state"] = _normalize_enum_text(
+        value=normalized.get("freshness_state"),
+        allowed=LONG_TERM_FRESHNESS_STATES,
+        default="unknown",
+    )
+    normalized["contradiction_state"] = _normalize_enum_text(
+        value=normalized.get("contradiction_state"),
+        allowed=LONG_TERM_CONTRADICTION_STATES,
+        default="unknown",
+    )
+    last_confirmed_at = str(normalized.get("last_confirmed_at") or "").strip()
+    if last_confirmed_at:
+        normalized["last_confirmed_at"] = _normalize_timestamp(
+            value=last_confirmed_at,
+            context="last_confirmed_at",
+        )
+    elif reference_timestamp and normalized["freshness_state"] != "unknown":
+        normalized["last_confirmed_at"] = reference_timestamp
+    else:
+        normalized["last_confirmed_at"] = ""
+    return normalized
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +218,8 @@ def build_long_term_observation_contract_v1(
     status: str = "observed",
     metadata: dict[str, Any] | None = None,
 ) -> LongTermObservationContractV1:
+    normalized_observed_at = _normalize_timestamp(value=observed_at, context="observed_at")
+    normalized_as_of = _normalize_timestamp(value=as_of, context="as_of")
     return LongTermObservationContractV1(
         observation_id=_normalize_optional_text(value=observation_id) or str(uuid4()),
         kind=_normalize_required_text(value=kind, context="kind"),
@@ -165,12 +230,16 @@ def build_long_term_observation_contract_v1(
         profile_key=_normalize_optional_text(value=profile_key),
         query=_normalize_optional_text(value=query),
         payload=_normalize_payload_mapping(value=payload, context="payload"),
-        observed_at=_normalize_timestamp(value=observed_at, context="observed_at"),
-        as_of=_normalize_timestamp(value=as_of, context="as_of"),
+        observed_at=normalized_observed_at,
+        as_of=normalized_as_of,
         source_run_id=_normalize_optional_text(value=source_run_id),
         severity=_normalize_optional_text(value=severity, default="info") or "info",
         status=_normalize_optional_text(value=status, default="observed") or "observed",
-        metadata=dict(metadata) if isinstance(metadata, dict) else {},
+        metadata=_normalize_memory_metadata(
+            entry_kind="observation",
+            metadata=dict(metadata) if isinstance(metadata, dict) else {},
+            reference_timestamp=normalized_observed_at or normalized_as_of,
+        ),
     )
 
 
@@ -205,6 +274,7 @@ def build_long_term_fact_contract_v1(
         if str(valid_to or "").strip()
         else ""
     )
+    reference_timestamp = normalized_valid_from or normalized_as_of
     return LongTermFactContractV1(
         fact_id=_normalize_optional_text(value=fact_id) or str(uuid4()),
         fact_type=_normalize_required_text(value=fact_type, context="fact_type"),
@@ -225,7 +295,11 @@ def build_long_term_fact_contract_v1(
             value=derived_from_observation_id,
             context="derived_from_observation_id",
         ),
-        metadata=dict(metadata) if isinstance(metadata, dict) else {},
+        metadata=_normalize_memory_metadata(
+            entry_kind="fact",
+            metadata=dict(metadata) if isinstance(metadata, dict) else {},
+            reference_timestamp=reference_timestamp,
+        ),
     )
 
 
@@ -373,7 +447,10 @@ def validate_long_term_fact_contract_v1(
 
 
 __all__ = [
+    "LONG_TERM_ABSTRACTION_LEVELS",
+    "LONG_TERM_CONTRADICTION_STATES",
     "LONG_TERM_FACT_SCHEMA_VERSION",
+    "LONG_TERM_FRESHNESS_STATES",
     "LONG_TERM_OBSERVATION_SCHEMA_VERSION",
     "LongTermFactContractV1",
     "LongTermObservationContractV1",

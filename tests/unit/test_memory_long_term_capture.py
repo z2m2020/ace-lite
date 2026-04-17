@@ -54,7 +54,11 @@ def test_capture_service_records_source_plan_and_validation_observations(
     assert {row.payload["kind"] for row in rows} == {"source_plan", "validation"}
     assert source_rows[0].payload["metadata"]["capture_gate"] == "accepted"
     assert source_rows[0].payload["metadata"]["attribution_scope"] == "stage_payload_only"
+    assert source_rows[0].payload["metadata"]["abstraction_level"] == "abstract"
+    assert source_rows[0].payload["metadata"]["support_count"] == 4
+    assert source_rows[0].payload["metadata"]["freshness_state"] == "fresh"
     assert validation_rows[0].payload["metadata"]["signal_count"] == 3
+    assert validation_rows[0].payload["metadata"]["support_count"] == 3
 
 
 def test_capture_service_skips_low_signal_stage_observation(tmp_path: Path) -> None:
@@ -108,6 +112,7 @@ def test_capture_service_records_selection_feedback_observation(tmp_path: Path) 
     assert rows[0].payload["metadata"]["capture_gate"] == "accepted"
     assert rows[0].payload["metadata"]["feedback_signal"] == "helpful"
     assert rows[0].payload["metadata"]["attribution_scope"] == "explicit_selection_only"
+    assert rows[0].payload["metadata"]["last_confirmed_at"] == "2026-03-19T00:00:00+00:00"
 
 
 def test_capture_service_skips_selection_feedback_without_query_or_path(
@@ -211,3 +216,4 @@ def test_capture_service_records_dev_feedback_observations_and_resolution_fact(
     assert resolution_fact[0].payload["subject"] == "dev_issue:devi_memory_fallback"
     assert resolution_fact[0].payload["predicate"] == "resolved_by"
     assert resolution_fact[0].payload["object"] == "dev_fix:devf_memory_fallback"
+    assert resolution_fact[0].payload["metadata"]["abstraction_level"] == "detail"

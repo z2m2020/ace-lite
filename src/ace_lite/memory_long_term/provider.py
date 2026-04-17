@@ -17,6 +17,8 @@ class LongTermMemoryProvider:
         channel_name: str = "long_term",
         neighborhood_hops: int = 1,
         neighborhood_limit: int = 6,
+        prefer_abstract_memory: bool = True,
+        neighborhood_detail_only: bool = True,
     ) -> None:
         self._store = store
         self._limit = max(1, int(limit))
@@ -25,6 +27,8 @@ class LongTermMemoryProvider:
         self._channel_name = str(channel_name or "long_term").strip() or "long_term"
         self._neighborhood_hops = max(0, min(2, int(neighborhood_hops or 0)))
         self._neighborhood_limit = max(1, int(neighborhood_limit or 6))
+        self._prefer_abstract_memory = bool(prefer_abstract_memory)
+        self._neighborhood_detail_only = bool(neighborhood_detail_only)
         self.last_channel_used = self._channel_name
         self.fallback_reason: str | None = None
         self.last_container_tag_fallback: str | None = None
@@ -48,6 +52,7 @@ class LongTermMemoryProvider:
             limit=resolved_limit,
             container_tag=effective_container_tag,
             as_of=self._as_of,
+            prefer_abstract=self._prefer_abstract_memory,
         )
         self.last_channel_used = self._channel_name
         return [
@@ -69,7 +74,16 @@ class LongTermMemoryProvider:
         for row in rows:
             metadata = dict(row.to_record_metadata())
             text = row.text
-            if row.entry_kind == "fact" and self._neighborhood_hops > 0:
+            abstraction_level = str(metadata.get("abstraction_level") or "").strip().lower()
+            allow_neighborhood = (
+                row.entry_kind == "fact"
+                and self._neighborhood_hops > 0
+                and (
+                    not self._neighborhood_detail_only
+                    or abstraction_level in {"", "detail"}
+                )
+            )
+            if allow_neighborhood:
                 payload = row.payload if isinstance(row.payload, dict) else {}
                 neighborhood = self._store.expand_triple_neighborhood(
                     seeds=[

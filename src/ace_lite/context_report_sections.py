@@ -202,6 +202,40 @@ def append_confidence_breakdown_section(lines: list[str], payload: dict[str, Any
     lines.append("")
 
 
+def append_memory_summary_section(lines: list[str], payload: dict[str, Any]) -> None:
+    memory_summary = _dict(payload.get("memory_summary", {}))
+    if not memory_summary:
+        return
+
+    lines.append("## Memory Summary")
+    lines.append(
+        "- **Hits**: total={total}; abstract={abstract}; observation={observation}; fact={fact}; stale_warnings={stale}".format(
+            total=_int(memory_summary.get("hit_count", 0)),
+            abstract=_int(memory_summary.get("abstract_hit_count", 0)),
+            observation=_int(memory_summary.get("observation_hit_count", 0)),
+            fact=_int(memory_summary.get("fact_hit_count", 0)),
+            stale=_int(memory_summary.get("stale_warning_count", 0)),
+        )
+    )
+    feedback_signal_counts = _dict(memory_summary.get("feedback_signal_counts", {}))
+    if feedback_signal_counts:
+        rendered = ", ".join(
+            f"{key}={_int(value, 0)}"
+            for key, value in sorted(feedback_signal_counts.items())
+        )
+        if rendered:
+            lines.append(f"- **Feedback signals**: {rendered}")
+    abstraction_counts = _dict(memory_summary.get("abstraction_counts", {}))
+    if abstraction_counts:
+        rendered = ", ".join(
+            f"{key}={_int(value, 0)}"
+            for key, value in sorted(abstraction_counts.items())
+        )
+        if rendered:
+            lines.append(f"- **Abstraction levels**: {rendered}")
+    lines.append("")
+
+
 def append_validation_findings_section(
     lines: list[str], payload: dict[str, Any]
 ) -> None:

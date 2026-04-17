@@ -121,6 +121,31 @@ def minimal_plan_payload() -> dict:
                 "degraded_reasons": ["memory_fallback"],
             },
         },
+        "memory": {
+            "count": 2,
+            "ltm": {
+                "selected_count": 2,
+                "feedback_signal_counts": {"helpful": 1, "harmful": 0, "stale": 1},
+                "selected": [
+                    {
+                        "handle": "obs-1",
+                        "memory_kind": "observation",
+                        "abstraction_level": "abstract",
+                        "freshness_state": "fresh",
+                        "contradiction_state": "consistent",
+                        "support_count": 2,
+                    },
+                    {
+                        "handle": "fact-1",
+                        "memory_kind": "fact",
+                        "abstraction_level": "detail",
+                        "freshness_state": "stale",
+                        "contradiction_state": "consistent",
+                        "support_count": 1,
+                    },
+                ],
+            },
+        },
     }
 
 
@@ -193,6 +218,11 @@ def test_minimal_source_plan_payload(minimal_plan_payload):
     assert summary["degraded_reason_count"] == 1
     assert summary["has_validation_payload"] is False
     assert summary["context_refine_decision_count"] == 0
+    assert summary["memory_hit_count"] == 2
+    assert summary["memory_abstract_hit_count"] == 1
+    assert summary["memory_observation_hit_count"] == 1
+    assert summary["memory_fact_hit_count"] == 1
+    assert summary["memory_stale_warning_count"] == 1
 
     # Core nodes
     core_nodes = payload["core_nodes"]
@@ -210,6 +240,15 @@ def test_minimal_source_plan_payload(minimal_plan_payload):
     assert (
         cb["extracted_count"] + cb["inferred_count"] + cb["ambiguous_count"] + cb["unknown_count"]
         == cb["total_count"]
+    )
+    memory_summary = payload["memory_summary"]
+    assert memory_summary["hit_count"] == 2
+    assert memory_summary["abstract_hit_count"] == 1
+    assert memory_summary["stale_warning_count"] == 1
+    assert any(gap["code"] == "stale_memory_signal" for gap in payload["knowledge_gaps"])
+    assert any(
+        question["type"] == "memory" and "stale" in question["question"].lower()
+        for question in payload["suggested_questions"]
     )
 
 
@@ -692,6 +731,7 @@ def test_render_minimal_payload(minimal_plan_payload):
     assert "## Core Nodes" in md
     assert "## Surprising Connections" in md
     assert "## Confidence Breakdown" in md
+    assert "## Memory Summary" in md
     assert "## Knowledge Gaps" in md
     assert "## Suggested Questions" in md
     # Warnings section only appears when there are warnings in the payload
@@ -712,6 +752,7 @@ def test_render_contains_section_headers(minimal_plan_payload):
         "## Core Nodes",
         "## Surprising Connections",
         "## Confidence Breakdown",
+        "## Memory Summary",
         "## Knowledge Gaps",
         "## Suggested Questions",
     ]

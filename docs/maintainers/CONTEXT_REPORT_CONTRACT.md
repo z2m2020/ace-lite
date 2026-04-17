@@ -48,6 +48,11 @@ The `schema_version` field is required and must equal `context_report_v1`. The s
 | `stage_count` | int | Number of pipeline stages run |
 | `degraded_reason_count` | int | Number of degraded/partial signal reasons |
 | `has_validation_payload` | bool | Whether a validation payload was present |
+| `memory_hit_count` | int | Number of long-term memory hits exposed through `memory.ltm.selected` |
+| `memory_abstract_hit_count` | int | Number of memory hits exposed at `abstract` or `overview` level |
+| `memory_observation_hit_count` | int | Number of long-term memory hits whose `memory_kind` is `observation` |
+| `memory_fact_hit_count` | int | Number of long-term memory hits whose `memory_kind` is `fact` |
+| `memory_stale_warning_count` | int | Number of long-term memory hits marked `freshness_state=stale` |
 
 ---
 
@@ -58,9 +63,28 @@ The `schema_version` field is required and must equal `context_report_v1`. The s
 | `ok` | bool | Whether the payload represents a successful run (absent/true = success) |
 | `surprising_connections` | array | Unexpected cross-module relationships detected |
 | `confidence_breakdown` | object | Evidence strength counts by category (EXTRACTED/INFERRED/AMBIGUOUS/UNKNOWN) |
+| `memory_summary` | object | Report-only summary of long-term memory layering, stale warnings, and signal counts |
 | `knowledge_gaps` | array | Identified gaps in retrieved context |
 | `suggested_questions` | array | Agent-generated questions to resolve gaps |
 | `inputs` | object | Flags indicating which inputs were available |
+
+---
+
+## Memory Summary Schema
+
+`memory_summary` is optional and report-only. It summarizes what the already-computed plan payload exposed under the `memory` stage. It must not be used as a ranking gate.
+
+| Field | Type | Description |
+|---|---|---|
+| `count` | int | Top-level `memory.count` when present |
+| `ltm_selected_count` | int | Number of selected long-term memory entries reported by `memory.ltm.selected_count` |
+| `hit_count` | int | Actual number of entries in `memory.ltm.selected` |
+| `abstract_hit_count` | int | Number of entries whose `abstraction_level` is `abstract` or `overview` |
+| `observation_hit_count` | int | Number of selected entries with `memory_kind=observation` |
+| `fact_hit_count` | int | Number of selected entries with `memory_kind=fact` |
+| `stale_warning_count` | int | Number of selected entries with `freshness_state=stale` |
+| `feedback_signal_counts` | object | Pass-through summary of long-term memory feedback signals |
+| `abstraction_counts` | object | Counts by `abstract` / `overview` / `detail` |
 
 ---
 
@@ -151,6 +175,7 @@ result = write_context_report_markdown(
 - **Do NOT** build new main-chain logic on top of ContextReport fields without a governance proposal
 - **Do NOT** treat the `confidence_breakdown` as a ranking signal — it is strictly report-only
 - **Do NOT** use `surprising_connections` as a primary routing mechanism
+- **Do NOT** treat `memory_summary` as a ranking or trust oracle; it is an audit surface over already-selected memory
 - **Do NOT** modify `schema_version` without versioning the contract and updating consumers
 - **Do NOT** use ContextReport as a gate or blocker during Phase 1
 

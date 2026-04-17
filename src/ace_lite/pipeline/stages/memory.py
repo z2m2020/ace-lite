@@ -395,6 +395,18 @@ def _build_ltm_selected_entry(hit: dict[str, Any]) -> dict[str, Any] | None:
             value = str(metadata.get(key) or "").strip()
             if value:
                 payload[key] = value
+    for key in (
+        "abstraction_level",
+        "freshness_state",
+        "contradiction_state",
+        "last_confirmed_at",
+    ):
+        value = str(metadata.get(key) or "").strip()
+        if value:
+            payload[key] = value
+    support_count = metadata.get("support_count")
+    if isinstance(support_count, int):
+        payload["support_count"] = max(1, int(support_count))
     feedback_signal = str(metadata.get("feedback_signal") or "").strip().lower()
     if feedback_signal in _LTM_FEEDBACK_SIGNALS:
         payload["feedback_signal"] = feedback_signal

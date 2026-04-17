@@ -34,6 +34,66 @@ def _normalize_json_mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
+def _normalize_positive_int(value: Any, default: int = 1) -> int:
+    try:
+        normalized = int(value)
+    except Exception:
+        normalized = int(default)
+    return max(1, normalized)
+
+
+def _normalized_metadata_json_sql(alias: str = "e") -> str:
+    metadata_sql = f"lower({alias}.metadata_json)"
+    for needle in ("' '", "char(10)", "char(13)", "char(9)"):
+        metadata_sql = f"replace({metadata_sql}, {needle}, '')"
+    return metadata_sql
+
+
+def _coerce_standard_memory_metadata(
+    *,
+    entry_kind: str,
+    metadata: dict[str, Any],
+    as_of: str,
+    observed_at: str,
+    valid_from: str,
+) -> dict[str, Any]:
+    normalized = dict(metadata) if isinstance(metadata, dict) else {}
+    reference_timestamp = observed_at or valid_from or as_of
+    default_abstraction = "abstract" if entry_kind == "observation" else "detail"
+    abstraction_level = _normalize_text(normalized.get("abstraction_level")).lower()
+    if abstraction_level not in {"abstract", "overview", "detail"}:
+        abstraction_level = default_abstraction
+    freshness_state = _normalize_text(normalized.get("freshness_state")).lower()
+    if freshness_state not in {"fresh", "stale", "unknown"}:
+        freshness_state = "unknown"
+    contradiction_state = _normalize_text(normalized.get("contradiction_state")).lower()
+    if contradiction_state not in {"consistent", "contradicted", "unknown"}:
+        contradiction_state = "unknown"
+    normalized["abstraction_level"] = abstraction_level
+    normalized["support_count"] = _normalize_positive_int(
+        normalized.get("support_count"),
+        default=1,
+    )
+    normalized["freshness_state"] = freshness_state
+    normalized["contradiction_state"] = contradiction_state
+    last_confirmed_at = _normalize_iso_timestamp(normalized.get("last_confirmed_at"))
+    if not last_confirmed_at and freshness_state != "unknown":
+        last_confirmed_at = reference_timestamp
+    normalized["last_confirmed_at"] = last_confirmed_at
+    return normalized
+
+
+def _abstraction_rank_sql(alias: str = "e") -> str:
+    metadata_sql = _normalized_metadata_json_sql(alias)
+    return (
+        "CASE "
+        f"WHEN {alias}.entry_kind = 'observation' AND instr({metadata_sql}, '\"abstraction_level\"') = 0 THEN 0 "
+        f"WHEN instr({metadata_sql}, '\"abstraction_level\":\"abstract\"') > 0 THEN 0 "
+        f"WHEN instr({metadata_sql}, '\"abstraction_level\":\"overview\"') > 0 THEN 1 "
+        "ELSE 2 END"
+    )
+
+
 def _render_observation_text(payload: dict[str, Any]) -> str:
     kind = _normalize_text(payload.get("kind"))
     query = _normalize_text(payload.get("query"))
@@ -178,7 +238,13 @@ class LongTermMemoryEntry:
     payload: dict[str, Any]
 
     def to_record_metadata(self) -> dict[str, Any]:
-        payload = dict(self.metadata)
+        payload = _coerce_standard_memory_metadata(
+            entry_kind=self.entry_kind,
+            metadata=self.metadata,
+            as_of=self.as_of,
+            observed_at=self.observed_at,
+            valid_from=self.valid_from,
+        )
         payload.update(
             {
                 "memory_kind": self.entry_kind,
@@ -336,6 +402,7 @@ class LongTermMemoryStore:
         limit: int = 5,
         container_tag: str | None = None,
         as_of: str | None = None,
+        prefer_abstract: bool = False,
     ) -> list[LongTermMemoryEntry]:
         resolved_limit = max(1, int(limit))
         normalized_container_tag = _normalize_text(container_tag)
@@ -359,20 +426,34 @@ class LongTermMemoryStore:
         conn = self._connect()
         try:
             if normalized_match:
+                order_terms = []
+                if prefer_abstract:
+                    order_terms.append(_abstraction_rank_sql("e"))
+                order_terms.extend(
+                    [
+                        f"bm25({LONG_TERM_MEMORY_FTS_TABLE})",
+                        "e.as_of DESC",
+                        "e.handle ASC",
+                    ]
+                )
                 sql = (
                     f"SELECT e.* FROM {LONG_TERM_MEMORY_FTS_TABLE} f "
                     f"JOIN {LONG_TERM_MEMORY_ENTRIES_TABLE} e ON e.handle = f.handle "
                     f"WHERE f.text MATCH ?{where_sql} "
-                    f"ORDER BY bm25({LONG_TERM_MEMORY_FTS_TABLE}), e.as_of DESC, e.handle ASC "
+                    f"ORDER BY {', '.join(order_terms)} "
                     f"LIMIT ?"
                 )
                 rows = conn.execute(sql, (normalized_match, *params, resolved_limit)).fetchall()
             else:
                 like_pattern = f"%{_normalize_text(query)}%"
+                order_terms = []
+                if prefer_abstract:
+                    order_terms.append(_abstraction_rank_sql("e"))
+                order_terms.extend(["e.as_of DESC", "e.handle ASC"])
                 sql = (
                     f"SELECT e.* FROM {LONG_TERM_MEMORY_ENTRIES_TABLE} e "
                     f"WHERE e.text LIKE ?{where_sql} "
-                    f"ORDER BY e.as_of DESC, e.handle ASC LIMIT ?"
+                    f"ORDER BY {', '.join(order_terms)} LIMIT ?"
                 )
                 rows = conn.execute(sql, (like_pattern, *params, resolved_limit)).fetchall()
             return [self._row_to_entry(row) for row in rows]
@@ -646,6 +727,13 @@ class LongTermMemoryStore:
 
     @staticmethod
     def _row_to_entry(row: Any) -> LongTermMemoryEntry:
+        metadata = _coerce_standard_memory_metadata(
+            entry_kind=str(row["entry_kind"]),
+            metadata=_parse_json_mapping(row["metadata_json"]),
+            as_of=str(row["as_of"]),
+            observed_at=str(row["observed_at"]),
+            valid_from=str(row["valid_from"]),
+        )
         return LongTermMemoryEntry(
             handle=str(row["handle"]),
             entry_kind=str(row["entry_kind"]),
@@ -663,7 +751,7 @@ class LongTermMemoryStore:
             derived_from_observation_id=str(row["derived_from_observation_id"]),
             text=str(row["text"]),
             preview=str(row["preview"]),
-            metadata=_parse_json_mapping(row["metadata_json"]),
+            metadata=metadata,
             payload=_parse_json_mapping(row["payload_json"]),
         )
 
