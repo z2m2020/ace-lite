@@ -14,7 +14,14 @@ def test_get_version_info_no_drift(monkeypatch) -> None:
     assert info["drifted"] is False
     assert info["source"] == "pyproject"
     assert info["reason_code"] == "ok"
-    assert info["repair_steps"] == []
+    assert info["sync_state"] == "clean"
+    repair_steps = info["repair_steps"]
+    assert isinstance(repair_steps, list)
+    assert repair_steps
+    assert any(
+        "scripts/update.py --root" in step or "pip install -U ace-lite-engine" in step
+        for step in repair_steps
+    )
 
 
 def test_get_version_info_detects_drift(monkeypatch) -> None:
@@ -26,7 +33,10 @@ def test_get_version_info_detects_drift(monkeypatch) -> None:
     assert info["installed_version"] == "0.9.9"
     assert info["drifted"] is True
     assert info["reason_code"] == "install_drift"
-    assert info["repair_steps"] == ["python -m pip install -e .[dev]"]
+    assert info["sync_state"] == "install_drift"
+    repair_steps = info["repair_steps"]
+    assert isinstance(repair_steps, list)
+    assert any("pip install -e .[dev]" in step for step in repair_steps)
 
 
 def test_get_version_info_metadata_missing(monkeypatch) -> None:
@@ -42,7 +52,10 @@ def test_get_version_info_metadata_missing(monkeypatch) -> None:
     assert info["installed_version"] is None
     assert info["drifted"] is False
     assert info["reason_code"] == "missing_installed_metadata"
-    assert info["repair_steps"] == ["python -m pip install -e .[dev]"]
+    assert info["sync_state"] == "missing_installed_metadata"
+    repair_steps = info["repair_steps"]
+    assert isinstance(repair_steps, list)
+    assert any("pip install -e .[dev]" in step for step in repair_steps)
 
 
 def test_verify_version_install_sync_returns_info_when_aligned(monkeypatch) -> None:
@@ -111,6 +124,7 @@ def test_get_update_status_prefers_source_update_script_for_editable_install(
     assert status["install_mode"] == "editable"
     assert status["install_sync_required"] is False
     assert "update.py --root" in str(status["recommended_update_command"])
+    assert "python -m pip install -e .[dev]" in status["alternative_update_commands"]
 
 
 def test_get_update_status_detects_newer_published_release(monkeypatch) -> None:
@@ -138,3 +152,22 @@ def test_get_update_status_detects_newer_published_release(monkeypatch) -> None:
     assert status["release_update_available"] is True
     assert status["update_available"] is True
     assert status["recommended_update_command"] == "python -m pip install -U ace-lite-engine"
+
+
+def test_build_repair_steps_prefers_update_script_for_editable_repo(tmp_path) -> None:
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "update.py").write_text("print('ok')\n", encoding="utf-8")
+
+    steps = version_module.build_repair_steps(
+        dist_name="ace-lite-engine",
+        install_mode="editable",
+        source_root=str(tmp_path),
+        python_executable="/tmp/venv/bin/python",
+        reason_code="install_drift",
+    )
+
+    assert steps[0] == (
+        f"/tmp/venv/bin/python {scripts_dir / 'update.py'} --root {tmp_path.resolve()}"
+    )
+    assert "/tmp/venv/bin/python -m pip install -e .[dev]" in steps

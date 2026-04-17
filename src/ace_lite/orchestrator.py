@@ -699,6 +699,8 @@ class AceOrchestrator:
         payload = run_memory(
             memory_provider=self._memory_provider,
             query=query,
+            repo=repo,
+            root=root,
             disclosure_mode=self._config.memory.disclosure_mode,
             strategy=self._config.memory.strategy,
             timeline_enabled=self._config.memory.timeline_enabled,

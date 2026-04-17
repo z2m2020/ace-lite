@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ace_lite.config import resolve_repo_identity
 from ace_lite.config_pack import load_config_pack
 from ace_lite.plan_application import (
     build_plan_contract_summary_from_payload,
@@ -60,7 +61,11 @@ def handle_plan_quick_request(
     if not normalized_query:
         raise ValueError("query cannot be empty")
 
-    resolved_repo = str(repo or default_repo).strip() or default_repo
+    repo_identity = resolve_repo_identity(
+        root=root_path,
+        repo=str(repo or default_repo).strip() or default_repo,
+    )
+    resolved_repo = str(repo_identity.get("repo_id") or default_repo).strip() or default_repo
     quick = build_plan_quick_fn(
         query=normalized_query,
         root=root_path,
@@ -78,7 +83,7 @@ def handle_plan_quick_request(
         include_rows=include_rows,
         tokenizer_model=tokenizer_model,
     )
-    response = {"ok": True, "repo": resolved_repo, **quick}
+    response = {"ok": True, "repo": resolved_repo, "repo_identity": repo_identity, **quick}
     response["root"] = str(root_path)
     return response
 
@@ -111,7 +116,11 @@ def handle_plan_request(
     if not normalized_query:
         raise ValueError("query cannot be empty")
 
-    resolved_repo = str(repo or default_repo).strip() or default_repo
+    repo_identity = resolve_repo_identity(
+        root=root_path,
+        repo=str(repo or default_repo).strip() or default_repo,
+    )
+    resolved_repo = str(repo_identity.get("repo_id") or default_repo).strip() or default_repo
     config_pack_result = load_config_pack(path=config_pack_path)
     config_pack_meta = config_pack_result.to_dict()
     config_pack_overrides = dict(config_pack_result.overrides) if config_pack_result.enabled else {}
@@ -166,6 +175,7 @@ def handle_plan_request(
             "ok": False,
             "query": normalized_query,
             "repo": resolved_repo,
+            "repo_identity": repo_identity,
             "root": str(root_path),
             "config_pack": config_pack_meta,
             "source_plan_steps": len(execution.fallback.steps),
@@ -204,6 +214,7 @@ def handle_plan_request(
         "ok": True,
         "query": normalized_query,
         "repo": resolved_repo,
+        "repo_identity": repo_identity,
         "root": str(root_path),
         "config_pack": config_pack_meta,
         "source_plan_steps": len(

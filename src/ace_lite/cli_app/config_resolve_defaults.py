@@ -60,6 +60,11 @@ PLAN_MEMORY_GATE_DEFAULTS: dict[str, Any] = {
 }
 
 
+PLAN_MEMORY_NAMESPACE_DEFAULTS: dict[str, Any] = {
+    "memory_auto_tag_mode": "repo",
+}
+
+
 PLAN_MEMORY_POSTPROCESS_DEFAULTS: dict[str, Any] = {
     "memory_postprocess_enabled": False,
     "memory_postprocess_noise_filter_enabled": True,

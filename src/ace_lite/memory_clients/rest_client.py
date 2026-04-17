@@ -83,7 +83,12 @@ class OpenMemoryRestClient:
 
         if app:
             try:
-                response = self._search_by_app(app=app, query=query, limit=limit)
+                response = self._search_by_app(
+                    app=app,
+                    query=query,
+                    limit=limit,
+                    container_tag=container_tag,
+                )
                 return self._normalize_response(response, query=query, limit=limit)
             except (HTTPError, URLError, OSError, TimeoutError, ValueError) as exc:
                 errors.append(f"app_fallback:{exc}")
@@ -92,7 +97,14 @@ class OpenMemoryRestClient:
             "OpenMemory REST search failed across all endpoints: " + "; ".join(errors)
         )
 
-    def _search_by_app(self, *, app: str, query: str, limit: int) -> dict[str, Any]:
+    def _search_by_app(
+        self,
+        *,
+        app: str,
+        query: str,
+        limit: int,
+        container_tag: str | None = None,
+    ) -> dict[str, Any]:
         app_name = str(app or "").strip()
         if not app_name:
             raise ValueError("app is required for app fallback search")
@@ -132,13 +144,20 @@ class OpenMemoryRestClient:
         if not isinstance(memories, list):
             memories = []
 
+        normalized_rows = self._normalize_rows(memories)
+        if container_tag:
+            normalized_rows = self._filter_rows_by_container_tag(
+                rows=normalized_rows,
+                container_tag=container_tag,
+            )
+
         query_tokens = self._tokenize_query(query)
 
         scored: list[tuple[float, dict[str, Any]]] = []
-        for item in memories:
+        for item in normalized_rows:
             if not isinstance(item, dict):
                 continue
-            text = str(item.get("content") or "").strip()
+            text = str(item.get("memory") or item.get("text") or item.get("content") or "").strip()
             if not text:
                 continue
 
@@ -324,7 +343,19 @@ class OpenMemoryRestClient:
                 metadata_raw = item.get("metadata_")
             metadata = dict(metadata_raw) if isinstance(metadata_raw, dict) else {}
 
-            for key in ("id", "created_at", "state", "app_id", "app_name", "categories"):
+            for key in (
+                "id",
+                "created_at",
+                "state",
+                "app_id",
+                "app_name",
+                "categories",
+                "namespace",
+                "container_tag",
+                "repo",
+                "repo_identity",
+                "tags",
+            ):
                 if key in item and item[key] is not None and key not in metadata:
                     metadata[key] = item[key]
 
@@ -339,6 +370,58 @@ class OpenMemoryRestClient:
             normalized.append(row)
 
         return normalized
+
+    @staticmethod
+    def _normalize_scope_token(value: Any) -> str:
+        normalized = "".join(
+            ch for ch in str(value or "").strip().lower() if ch.isalnum()
+        )
+        return normalized
+
+    @classmethod
+    def _filter_rows_by_container_tag(
+        cls,
+        *,
+        rows: list[dict[str, Any]],
+        container_tag: str,
+    ) -> list[dict[str, Any]]:
+        expected_namespace = str(container_tag or "").strip().lower()
+        expected_repo = ""
+        if expected_namespace.startswith("repo:"):
+            expected_repo = cls._normalize_scope_token(
+                expected_namespace.split(":", 1)[1]
+            )
+
+        filtered: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            metadata = row.get("metadata")
+            if not isinstance(metadata, dict):
+                continue
+
+            namespace_value = str(
+                metadata.get("namespace")
+                or metadata.get("container_tag")
+                or ""
+            ).strip().lower()
+            repo_value = cls._normalize_scope_token(
+                metadata.get("repo_identity") or metadata.get("repo")
+            )
+
+            if expected_namespace and namespace_value:
+                if namespace_value == expected_namespace:
+                    filtered.append(row)
+                    continue
+                if expected_repo and repo_value and repo_value == expected_repo:
+                    filtered.append(row)
+                    continue
+                continue
+
+            if expected_repo and repo_value and repo_value == expected_repo:
+                filtered.append(row)
+
+        return filtered
 
     @classmethod
     def _filter_rows(cls, *, rows: list[dict[str, Any]], query: str, limit: int) -> list[dict[str, Any]]:

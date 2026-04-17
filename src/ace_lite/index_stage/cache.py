@@ -17,7 +17,9 @@ _MAX_ENTRIES = 96
 _STAGE_NAME = "index_candidates"
 
 _INDEX_CANDIDATE_ARTIFACT_MEMORY: dict[tuple[str, str, str], tuple[int, int, dict[str, Any]]] = {}
-_INDEX_CANDIDATE_CACHE_MEMORY: dict[tuple[str, str], tuple[int, int, dict[str, Any]]] = {}
+_INDEX_CANDIDATE_CACHE_MEMORY: dict[
+    tuple[str, str], tuple[tuple[int, int, int], str, dict[str, Any]]
+] = {}
 _INDEX_CANDIDATE_MANAGER_MEMORY: dict[str, StageArtifactCache] = {}
 
 
@@ -358,23 +360,43 @@ def _is_entry_expired(
     return (now_epoch - updated_at_epoch) > float(max_age_seconds)
 
 
-def _load_cache_payload(*, cache_path: Path, schema_version: str) -> dict[str, Any] | None:
+def _cache_manifest_fingerprint(path: Path) -> tuple[int, int, int] | None:
     try:
-        stat = cache_path.stat()
+        stat = path.stat()
     except OSError:
+        return None
+    return (
+        int(getattr(stat, "st_mtime_ns", 0) or 0),
+        int(getattr(stat, "st_ctime_ns", 0) or 0),
+        int(getattr(stat, "st_size", 0) or 0),
+    )
+
+
+def _cache_manifest_digest(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _load_cache_payload(*, cache_path: Path, schema_version: str) -> dict[str, Any] | None:
+    fingerprint = _cache_manifest_fingerprint(cache_path)
+    if fingerprint is None:
         return None
     if not cache_path.is_file():
         return None
 
     memory_key = (str(schema_version), str(cache_path.resolve()))
     cached = _INDEX_CANDIDATE_CACHE_MEMORY.get(memory_key)
-    if cached is not None and cached[0] == stat.st_mtime_ns and cached[1] == stat.st_size:
-        return cached[2]
-
+    if cached is not None and cached[0] == fingerprint:
+        try:
+            raw_bytes = cache_path.read_bytes()
+        except OSError:
+            return None
+        if _cache_manifest_digest(raw_bytes) == cached[1]:
+            return cached[2]
     try:
         raw = cache_path.read_text(encoding="utf-8")
     except OSError:
         return None
+
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
@@ -383,19 +405,20 @@ def _load_cache_payload(*, cache_path: Path, schema_version: str) -> dict[str, A
         return None
     if str(payload.get("schema_version") or "") != str(schema_version):
         return None
-    _INDEX_CANDIDATE_CACHE_MEMORY[memory_key] = (stat.st_mtime_ns, stat.st_size, payload)
+    _INDEX_CANDIDATE_CACHE_MEMORY[memory_key] = (
+        fingerprint,
+        _cache_manifest_digest(raw.encode("utf-8")),
+        payload,
+    )
     return payload
 
 
 def _write_cache_payload(*, cache_path: Path, payload: dict[str, Any]) -> None:
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    try:
-        stat = cache_path.stat()
-    except OSError:
+    raw = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    cache_path.write_text(raw, encoding="utf-8")
+    fingerprint = _cache_manifest_fingerprint(cache_path)
+    if fingerprint is None:
         _INDEX_CANDIDATE_CACHE_MEMORY.pop(
             (str(payload.get("schema_version") or ""), str(cache_path.resolve())),
             None,
@@ -403,7 +426,7 @@ def _write_cache_payload(*, cache_path: Path, payload: dict[str, Any]) -> None:
         return
     _INDEX_CANDIDATE_CACHE_MEMORY[
         (str(payload.get("schema_version") or ""), str(cache_path.resolve()))
-    ] = (stat.st_mtime_ns, stat.st_size, payload)
+    ] = (fingerprint, _cache_manifest_digest(raw.encode("utf-8")), payload)
 
 
 def _load_artifact_memory(

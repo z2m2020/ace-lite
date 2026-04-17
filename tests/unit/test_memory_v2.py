@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
@@ -258,7 +259,67 @@ def test_local_cache_provider_isolates_namespace_fingerprint(tmp_path: Path) -> 
     assert [row.handle for row in rows_a_first] == ["m1"]
     assert [row.handle for row in rows_b_first] == ["m1"]
     assert [row.handle for row in rows_a_second] == ["m1"]
-    assert upstream.search_calls == 2
+
+
+def test_local_cache_provider_invalidates_legacy_query_fingerprint(tmp_path: Path) -> None:
+    upstream = _StubProvider(
+        channel="mcp",
+        compact_rows=[
+            MemoryRecordCompact(
+                handle="m1",
+                preview="fresh memory",
+                score=0.8,
+                metadata={"path": "docs/a.md"},
+                est_tokens=2,
+                source="mcp",
+            )
+        ],
+        full_rows=[
+            MemoryRecord(
+                text="fresh memory",
+                score=0.8,
+                metadata={"path": "docs/a.md"},
+                handle="m1",
+                source="mcp",
+            )
+        ],
+    )
+    cache_path = tmp_path / "context-map" / "memory_cache.jsonl"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_fingerprint = hashlib.sha256(b"repo:a\nquery").hexdigest()
+    cache_path.write_text(
+        json.dumps(
+            {
+                "handle": "legacy-1",
+                "query_fingerprint": legacy_fingerprint,
+                "preview": "stale cached memory",
+                "text": "",
+                "metadata": {},
+                "score": 1.0,
+                "source": "mcp",
+                "created_at": "2026-04-17T00:00:00+00:00",
+                "updated_at": "2026-04-17T00:00:00+00:00",
+                "updated_at_ts": 1_700_000_000.0,
+                "expires_at_ts": 4_100_000_000.0,
+                "full_text_available": False,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    provider = LocalCacheProvider(
+        upstream,
+        cache_path=cache_path,
+        ttl_seconds=3600,
+        max_entries=64,
+    )
+
+    rows = provider.search_compact("query", container_tag="repo:a")
+
+    assert [row.handle for row in rows] == ["m1"]
+    assert provider.last_channel_used == "mcp"
+    assert upstream.search_calls == 1
 
 
 def test_local_cache_provider_defers_full_fetch_until_fetch_call(

@@ -353,3 +353,13 @@ def test_apply_plan_namespace_overlays_deep_merges_nested_memory_config() -> Non
         "enabled": True,
         "path": "runtime-feedback/profile.json",
     }
+
+
+def test_resolve_shared_plan_defaults_memory_auto_tag_mode_to_repo() -> None:
+    resolved = _resolve_shared_plan()
+
+    memory_payload = resolved["memory"]
+    assert isinstance(memory_payload, dict)
+    namespace_payload = memory_payload["namespace"]
+    assert isinstance(namespace_payload, dict)
+    assert namespace_payload["auto_tag_mode"] == "repo"

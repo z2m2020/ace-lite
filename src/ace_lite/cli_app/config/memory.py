@@ -76,6 +76,9 @@ def resolve_memory_config(
     memory_long_term_write_enabled: bool = False,
     memory_long_term_as_of_enabled: bool = True,
 ) -> dict[str, Any]:
+    if memory_auto_tag_mode is None:
+        memory_auto_tag_mode = "repo"
+
     memory_disclosure_mode = _resolve_from_config(
         ctx=ctx,
         param_name="memory_disclosure_mode",

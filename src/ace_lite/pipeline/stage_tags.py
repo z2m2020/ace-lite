@@ -65,7 +65,10 @@ def build_stage_tags(*, stage_name: str, output: dict[str, Any]) -> dict[str, An
             "memory_container_tag_set": bool(
                 str(namespace.get("container_tag_effective", "")).strip()
             ),
-            "memory_namespace_fallback": bool(str(namespace.get("fallback", "")).strip()),
+            "memory_namespace_fallback": (
+                isinstance(namespace.get("fallback"), str)
+                and bool(str(namespace.get("fallback", "")).strip())
+            ),
             "memory_profile_enabled": bool(profile.get("enabled", False)),
             "memory_profile_selected": int(profile.get("selected_count", 0) or 0),
             "capture_enabled": bool(capture.get("enabled", False)),

@@ -59,6 +59,16 @@ def test_runtime_status_health_support_builds_service_health_and_degraded_servic
             "recommendations": ["configure memory"],
         },
         runtime_stats=runtime_stats,
+        version_sync={
+            "ok": False,
+            "reason_code": "install_drift",
+            "sync_state": "install_drift",
+            "version": "0.3.90",
+            "source_tree_version": "0.3.90",
+            "installed_metadata_version": "0.3.89",
+            "recommendations": ["repair install"],
+            "repair_steps": ["python -m pip install -e .[dev]"],
+        },
     )
     degraded_services = build_runtime_degraded_services(
         service_health=service_health,
@@ -72,10 +82,19 @@ def test_runtime_status_health_support_builds_service_health_and_degraded_servic
     assert service_map["skills"]["status"] == "ok"
     assert service_map["plan_replay_cache"]["status"] == "ok"
     assert service_map["preference_capture"]["event_count"] == 2
+    assert service_map["runtime_sync"]["status"] == "degraded"
+    assert service_map["runtime_sync"]["reason"] == "install_drift"
+    assert service_map["runtime_sync"]["sync_state"] == "install_drift"
 
     assert any(
         item["name"] == "lsp"
         and item["reason"] == "enabled_without_commands"
+        and item["source"] == "service_health"
+        for item in degraded_services
+    )
+    assert any(
+        item["name"] == "runtime_sync"
+        and item["reason"] == "install_drift"
         and item["source"] == "service_health"
         for item in degraded_services
     )

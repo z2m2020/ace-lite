@@ -11,7 +11,7 @@ class MemoryCoreSectionSpec(_StrictModel):
 
 class MemoryNamespaceSectionSpec(_StrictModel):
     container_tag: str | None = None
-    auto_tag_mode: str | None = None
+    auto_tag_mode: str | None = "repo"
 
 
 class MemoryProfileSectionSpec(_StrictModel):

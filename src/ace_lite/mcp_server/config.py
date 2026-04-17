@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from ace_lite.config import resolve_repo_identity
 from ace_lite.utils import normalize_lower_str, normalize_str
 
 
@@ -100,8 +101,12 @@ class AceLiteMcpConfig:
         )
         skills = (root / skills).resolve() if not skills.is_absolute() else skills.resolve()
 
+        repo_identity = resolve_repo_identity(
+            root=root,
+            repo=normalize_str(os.getenv("ACE_LITE_DEFAULT_REPO"), default="") or None,
+        )
         repo = normalize_str(
-            os.getenv("ACE_LITE_DEFAULT_REPO"),
+            str(repo_identity.get("repo_id") or ""),
             default=(root.name or "repo"),
         )
         return cls(

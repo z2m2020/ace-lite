@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ace_lite.config import resolve_repo_identity
 from ace_lite.feedback_store import SelectionFeedbackStore
 from ace_lite.memory.local_notes import append_capture_note
 from ace_lite.memory_long_term import LongTermMemoryCaptureService
@@ -47,7 +48,12 @@ class MemoryContextService:
 
         mode = self.config.memory.namespace.auto_tag_mode
         if mode == "repo":
-            repo_name = str(repo or "").strip() or Path(root or ".").name
+            repo_identity = resolve_repo_identity(root=root, repo=repo)
+            repo_name = (
+                str(repo_identity.get("repo_id") or "").strip()
+                or str(repo or "").strip()
+                or Path(root or ".").name
+            )
             return (
                 f"repo:{self.normalize_namespace_component(value=repo_name, fallback='repo')}",
                 "repo",

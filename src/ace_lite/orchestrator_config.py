@@ -170,7 +170,7 @@ def _as_optional_allowlist(value: Any) -> tuple[str, ...] | None:
 
 
 class MemoryNamespaceConfig(MemoryNamespaceSectionSpec):
-    auto_tag_mode: MemoryAutoTagMode | None = None
+    auto_tag_mode: MemoryAutoTagMode | None = "repo"
 
     @field_validator("container_tag", mode="before")
     @classmethod

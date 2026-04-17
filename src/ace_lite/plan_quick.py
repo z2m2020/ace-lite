@@ -692,6 +692,24 @@ _TOOL_ARTIFACT_QUERY_ALLOWLIST: tuple[str, ...] = (
     "progress",
     "assessment",
 )
+_CODE_INTENT_DOC_ALLOWLIST_MARKERS: tuple[str, ...] = (
+    "schema",
+    "contract",
+    "interface",
+    "architecture",
+    "openapi",
+    "proto",
+    "swagger",
+)
+_CODE_INTENT_DOC_DOMAIN_PENALTIES: dict[str, float] = {
+    "docs": -3.5,
+    "planning": -4.0,
+    "reports": -4.5,
+    "reference": -2.5,
+    "markdown": -3.0,
+}
+_CODE_INTENT_DOC_REBALANCE_GAP_THRESHOLD = 1.0
+_CODE_INTENT_DOC_REBALANCE_PENALTY = -2.0
 
 
 def _is_ace_lite_tooling_artifact_doc(*, path: str, language: str, semantic_domain: str) -> bool:
@@ -731,6 +749,107 @@ def _self_feedback_doc_penalty(
     if any(marker in normalized_query for marker in ("ace-lite", "ace_lite", "ace lite", "mcp")):
         return 0.0
     return -8.0
+
+
+def _code_intent_doc_penalty(
+    *,
+    query: str,
+    path: str,
+    language: str,
+    semantic_domain: str,
+    query_flags: dict[str, Any],
+) -> float:
+    if not bool(query_flags.get("code_intent", False)):
+        return 0.0
+    if bool(query_flags.get("doc_sync", False)):
+        return 0.0
+    if semantic_domain not in _CODE_INTENT_DOC_DOMAIN_PENALTIES:
+        return 0.0
+    if not _is_markdown_doc(path=path, language=language):
+        return 0.0
+    normalized_path = _normalize_path(path)
+    normalized_query = str(query or "").strip().lower()
+    matched_allowlist_markers = [
+        marker for marker in _CODE_INTENT_DOC_ALLOWLIST_MARKERS if marker in normalized_path
+    ]
+    if matched_allowlist_markers and any(
+        marker in normalized_query for marker in matched_allowlist_markers
+    ):
+        return 0.0
+    return float(_CODE_INTENT_DOC_DOMAIN_PENALTIES.get(semantic_domain, -3.0))
+
+
+def _is_code_intent_doc_candidate(*, path: str, language: str, semantic_domain: str) -> bool:
+    if semantic_domain not in _CODE_INTENT_DOC_DOMAIN_PENALTIES:
+        return False
+    return _is_markdown_doc(path=path, language=language)
+
+
+def _query_matches_contract_doc(*, query: str, path: str) -> bool:
+    normalized_query = str(query or "").strip().lower()
+    normalized_path = _normalize_path(path)
+    matched_allowlist_markers = [
+        marker for marker in _CODE_INTENT_DOC_ALLOWLIST_MARKERS if marker in normalized_path
+    ]
+    if not matched_allowlist_markers:
+        return False
+    return any(marker in normalized_query for marker in matched_allowlist_markers)
+
+
+def _rebalance_code_intent_docs(
+    *,
+    query: str,
+    rows: list[PlanQuickScoredRow],
+    query_flags: dict[str, Any],
+) -> list[PlanQuickScoredRow]:
+    if not bool(query_flags.get("code_intent", False)):
+        return rows
+    if bool(query_flags.get("doc_sync", False)):
+        return rows
+    top_code_score = max(
+        (
+            float(row.fused_score)
+            for row in rows
+            if str(row.semantic_domain or "").strip() == "code"
+        ),
+        default=None,
+    )
+    if top_code_score is None:
+        return rows
+    rebalanced: list[PlanQuickScoredRow] = []
+    for row in rows:
+        if not _is_code_intent_doc_candidate(
+            path=row.path,
+            language=row.language,
+            semantic_domain=row.semantic_domain,
+        ):
+            rebalanced.append(row)
+            continue
+        if _query_matches_contract_doc(query=query, path=row.path):
+            rebalanced.append(row)
+            continue
+        score_gap = float(top_code_score) - float(row.fused_score)
+        if score_gap > _CODE_INTENT_DOC_REBALANCE_GAP_THRESHOLD:
+            rebalanced.append(row)
+            continue
+        extra_penalty = float(_CODE_INTENT_DOC_REBALANCE_PENALTY)
+        rebalanced.append(
+            PlanQuickScoredRow(
+                path=row.path,
+                module=row.module,
+                language=row.language,
+                score=row.score,
+                lexical_hits=row.lexical_hits,
+                lexical_boost=row.lexical_boost,
+                intent_boost=row.intent_boost + extra_penalty,
+                recency_boost=row.recency_boost,
+                semantic_domain=row.semantic_domain,
+                fused_score=row.fused_score + extra_penalty,
+                labels=row.labels,
+                role=row.role,
+            )
+        )
+    return rebalanced
 
 
 def _infer_candidate_labels(
@@ -868,6 +987,13 @@ def score_plan_quick_rows(
             semantic_domain=semantic_domain,
             query_flags=query_flags,
         )
+        intent_boost += _code_intent_doc_penalty(
+            query=normalized_query,
+            path=path,
+            language=language,
+            semantic_domain=semantic_domain,
+            query_flags=query_flags,
+        )
         fused_score = base_score + lexical_boost + intent_boost + recency_boost
         scored.append(
             PlanQuickScoredRow(
@@ -892,6 +1018,11 @@ def score_plan_quick_rows(
             )
         )
 
+    scored = _rebalance_code_intent_docs(
+        query=normalized_query,
+        rows=scored,
+        query_flags=query_flags,
+    )
     scored.sort(key=lambda row: (-float(row.fused_score), str(row.path)))
     normalized_scored: list[PlanQuickScoredRow] = []
     for row in scored:

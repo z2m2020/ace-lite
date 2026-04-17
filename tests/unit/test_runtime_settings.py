@@ -139,6 +139,24 @@ def test_runtime_settings_manager_resolves_runtime_and_mcp_sources(
     assert snapshot.provenance["mcp"]["user_id"] == "identity_fallback"
 
 
+def test_runtime_settings_manager_uses_git_root_name_for_default_repo(
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path / "tabiapp-backend"
+    worktree_dir = repo_root / "tabiapp-backend_worktree_aeon_v2"
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
+    worktree_dir.mkdir(parents=True, exist_ok=True)
+
+    snapshot = RuntimeSettingsManager().resolve(
+        root=worktree_dir,
+        cwd=worktree_dir,
+        mcp_explicit_overrides={"default_root": str(worktree_dir)},
+    )
+
+    assert snapshot.snapshot["mcp"]["default_repo"] == "tabiapp-backend"
+    assert snapshot.provenance["mcp"]["default_repo"] == "git_root_name"
+
+
 def test_runtime_settings_manager_uses_tuned_default_skills_token_budget(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     cwd_dir = repo_root / "workspace"

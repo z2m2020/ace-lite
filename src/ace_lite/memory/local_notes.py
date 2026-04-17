@@ -65,6 +65,17 @@ def _namespace_repo_hint(value: str | None) -> str | None:
     return repo_hint or None
 
 
+def _container_tag_repo_hint(value: str | None) -> str | None:
+    normalized = str(value or "").strip().lower()
+    if not normalized.startswith("repo:"):
+        return None
+    repo_name = normalized.split(":", 1)[1].strip()
+    if not repo_name:
+        return None
+    repo_hint = _normalize_repo_token(repo_name)
+    return repo_hint or None
+
+
 def _notes_path_repo_tokens(path: str | Path) -> set[str]:
     normalized_parts = [_normalize_repo_token(part) for part in Path(path).parts]
     tokens: set[str] = set()
@@ -319,6 +330,7 @@ class LocalNotesProvider:
         matched: list[tuple[float, float, str, MemoryRecordCompact, MemoryRecord]] = []
         namespace_filtered = 0
         repo_boundary_filtered = 0
+        requested_repo_hint = _container_tag_repo_hint(container_tag)
         repo_boundary_tokens = _notes_path_repo_tokens(self._notes_path)
         row_repo_hints = {
             repo_hint
@@ -333,13 +345,16 @@ class LocalNotesProvider:
 
         for row in rows:
             namespace = str(row.get("namespace") or "").strip() or None
+            repo_hint = _normalize_repo_token(str(row.get("repo") or ""))
+            if not repo_hint:
+                repo_hint = _namespace_repo_hint(namespace)
             if container_tag and namespace != container_tag:
-                namespace_filtered += 1
-                continue
+                if requested_repo_hint and repo_hint == requested_repo_hint:
+                    pass
+                else:
+                    namespace_filtered += 1
+                    continue
             if not container_tag:
-                repo_hint = _normalize_repo_token(str(row.get("repo") or ""))
-                if not repo_hint:
-                    repo_hint = _namespace_repo_hint(namespace)
                 if (
                     repo_hint
                     and active_repo_boundary_tokens

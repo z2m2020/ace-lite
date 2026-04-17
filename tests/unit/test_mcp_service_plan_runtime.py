@@ -117,4 +117,5 @@ def test_execute_mcp_plan_payload_wires_provider_and_run_plan(
     assert captured_run_plan["plugins_enabled"] is True
     assert captured_run_plan["embedding_enabled"] is True
     assert captured_run_plan["embedding_provider"] == "ollama"
+    assert captured_run_plan["memory_auto_tag_mode"] == "repo"
     assert captured_run_plan["policy_version"] == "v2"

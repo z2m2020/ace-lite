@@ -13,6 +13,7 @@ def build_runtime_service_health(
     sections: RuntimeStatusSections,
     memory_state: dict[str, Any],
     runtime_stats: dict[str, Any],
+    version_sync: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     skills_dir_path = (
         Path(cache_paths["skills_dir"]) if isinstance(cache_paths["skills_dir"], str) else None
@@ -20,6 +21,13 @@ def build_runtime_service_health(
     lsp_commands = sections.plan_lsp.get("commands")
     lsp_xref_commands = sections.plan_lsp.get("xref_commands")
     lsp_has_commands = bool(lsp_commands) or bool(lsp_xref_commands)
+    normalized_version_sync = dict(version_sync or {})
+    version_sync_reason = str(normalized_version_sync.get("reason_code") or "").strip()
+    version_sync_status = (
+        "degraded"
+        if normalized_version_sync and not bool(normalized_version_sync.get("ok", False))
+        else ("ok" if normalized_version_sync else "unknown")
+    )
     return [
         {
             "name": "memory",
@@ -107,6 +115,27 @@ def build_runtime_service_health(
             "store_path": (runtime_stats.get("preference_capture_summary", {}) or {}).get("store_path"),
             "event_count": int(
                 (runtime_stats.get("preference_capture_summary", {}) or {}).get("event_count", 0) or 0
+            ),
+        },
+        {
+            "name": "runtime_sync",
+            "status": version_sync_status,
+            "reason": version_sync_reason if version_sync_status == "degraded" else "",
+            "sync_state": str(normalized_version_sync.get("sync_state") or "").strip(),
+            "version": normalized_version_sync.get("version"),
+            "source_tree_version": normalized_version_sync.get("source_tree_version"),
+            "installed_metadata_version": normalized_version_sync.get(
+                "installed_metadata_version"
+            ),
+            "recommendations": (
+                list(normalized_version_sync.get("recommendations", []))
+                if isinstance(normalized_version_sync.get("recommendations"), list)
+                else []
+            ),
+            "repair_steps": (
+                list(normalized_version_sync.get("repair_steps", []))
+                if isinstance(normalized_version_sync.get("repair_steps"), list)
+                else []
             ),
         },
     ]

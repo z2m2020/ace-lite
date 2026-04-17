@@ -9,10 +9,12 @@ import hashlib
 import json
 import logging
 import math
+import re
 from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
 
+from ace_lite.config import resolve_repo_identity
 from ace_lite.memory import MemoryRecord, MemoryRecordCompact
 from ace_lite.memory.gate import decide_memory_retrieval
 from ace_lite.memory.postprocess import PostprocessConfig, postprocess_hits_preview
@@ -22,6 +24,137 @@ from ace_lite.token_estimator import estimate_tokens
 logger = logging.getLogger(__name__)
 
 _LTM_FEEDBACK_SIGNALS = frozenset({"helpful", "stale", "harmful"})
+_SCOPE_TOKEN_PATTERN = re.compile(r"[^a-z0-9]+")
+
+
+def _normalize_scope_token(value: Any) -> str:
+    normalized = _SCOPE_TOKEN_PATTERN.sub("", str(value or "").strip().lower())
+    return normalized
+
+
+def _normalize_namespace(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _expected_repo_token(*, repo: str | None, container_tag: str | None) -> str | None:
+    normalized_repo = _normalize_scope_token(repo)
+    if normalized_repo:
+        return normalized_repo
+
+    normalized_tag = _normalize_namespace(container_tag)
+    if normalized_tag.startswith("repo:"):
+        candidate = _normalize_scope_token(normalized_tag.split(":", 1)[1])
+        if candidate:
+            return candidate
+    return None
+
+
+def _infer_source_kind(*, source: str, metadata: dict[str, Any]) -> str:
+    normalized_source = str(source or "").strip().lower()
+    if normalized_source == "local_notes":
+        return "local_notes"
+    memory_kind = str(metadata.get("memory_kind") or "").strip().lower()
+    if memory_kind in {"fact", "observation"}:
+        return "ltm"
+    if normalized_source == "profile":
+        return "profile"
+    return "memory"
+
+
+def _collect_repo_hints(*, metadata: dict[str, Any], source_kind: str) -> set[str]:
+    hints: set[str] = set()
+    for key in ("repo_identity", "repo", "project", "project_name"):
+        candidate = _normalize_scope_token(metadata.get(key))
+        if candidate:
+            hints.add(candidate)
+
+    namespace_value = _normalize_namespace(metadata.get("namespace"))
+    if namespace_value.startswith("repo:"):
+        candidate = _normalize_scope_token(namespace_value.split(":", 1)[1])
+        if candidate:
+            hints.add(candidate)
+    elif source_kind == "local_notes" and namespace_value and ":" not in namespace_value:
+        candidate = _normalize_scope_token(namespace_value)
+        if candidate:
+            hints.add(candidate)
+    return hints
+
+
+def annotate_memory_hits_scope(
+    *,
+    hits_preview: list[dict[str, Any]],
+    repo: str | None,
+    container_tag: str | None,
+    namespace_fallback: str | None,
+) -> list[dict[str, Any]]:
+    expected_repo = _expected_repo_token(repo=repo, container_tag=container_tag)
+    expected_namespace = (
+        _normalize_namespace(container_tag)
+        if container_tag and not namespace_fallback
+        else ""
+    )
+
+    for hit in hits_preview:
+        if not isinstance(hit, dict):
+            continue
+        metadata = hit.get("metadata")
+        resolved_metadata = metadata if isinstance(metadata, dict) else {}
+        source = str(hit.get("source") or "memory")
+        source_kind = _infer_source_kind(source=source, metadata=resolved_metadata)
+        namespace_value = _normalize_namespace(resolved_metadata.get("namespace"))
+
+        namespace_scope_match: bool | None = None
+        if expected_namespace:
+            if namespace_value:
+                namespace_scope_match = namespace_value == expected_namespace
+            elif source_kind == "ltm" and expected_repo:
+                namespace_scope_match = None
+            else:
+                namespace_scope_match = None
+
+        repo_scope_match: bool | None = None
+        repo_hints = _collect_repo_hints(metadata=resolved_metadata, source_kind=source_kind)
+        if expected_repo:
+            if repo_hints:
+                repo_scope_match = expected_repo in repo_hints
+            elif namespace_scope_match is False:
+                repo_scope_match = None
+
+        exclusion_reason = ""
+        if namespace_scope_match is False:
+            exclusion_reason = "namespace_mismatch"
+        elif repo_scope_match is False:
+            exclusion_reason = "repo_mismatch"
+
+        hit["source_kind"] = source_kind
+        hit["namespace_scope_match"] = namespace_scope_match
+        hit["repo_scope_match"] = repo_scope_match
+        hit["constraint_eligible"] = not bool(exclusion_reason)
+        hit["constraint_exclusion_reason"] = exclusion_reason or None
+
+    return hits_preview
+
+
+def _build_namespace_effective_reason(
+    *,
+    namespace_mode: str,
+    container_tag: str | None,
+    namespace_fallback: str | None,
+) -> str:
+    if namespace_fallback:
+        return f"fallback:{namespace_fallback}"
+    normalized_mode = str(namespace_mode or "disabled").strip().lower() or "disabled"
+    if not container_tag:
+        return "disabled_by_config"
+    if normalized_mode == "explicit":
+        return "explicit_container_tag"
+    if normalized_mode == "repo":
+        return "auto_repo_namespace"
+    if normalized_mode == "user":
+        return "auto_user_namespace"
+    if normalized_mode == "global":
+        return "auto_global_namespace"
+    return f"{normalized_mode}_namespace"
 
 
 def _estimate_tokens_cached(
@@ -594,6 +727,8 @@ def run_memory(
     *,
     memory_provider: Any,
     query: str,
+    repo: str | None = None,
+    root: str | None = None,
     disclosure_mode: str = "compact",
     strategy: str = "semantic",
     timeline_enabled: bool = True,
@@ -853,6 +988,22 @@ def run_memory(
         config=postprocess_cfg,
         now=now,
     )
+    hits_preview = annotate_memory_hits_scope(
+        hits_preview=hits_preview,
+        repo=repo,
+        container_tag=container_tag,
+        namespace_fallback=namespace_fallback,
+    )
+    filtered_out_count_by_reason: dict[str, int] = {}
+    for item in hits_preview:
+        if not isinstance(item, dict):
+            continue
+        reason = str(item.get("constraint_exclusion_reason") or "").strip()
+        if not reason:
+            continue
+        filtered_out_count_by_reason[reason] = (
+            int(filtered_out_count_by_reason.get(reason, 0) or 0) + 1
+        )
 
     handles: list[str] = []
     preview_by_handle: dict[str, dict[str, Any]] = {}
@@ -933,6 +1084,15 @@ def run_memory(
                         breakdown = {}
                         hit["score_breakdown"] = breakdown
                     breakdown["recency_boost"] = round(boost, 6)
+            for key in (
+                "source_kind",
+                "namespace_scope_match",
+                "repo_scope_match",
+                "constraint_eligible",
+                "constraint_exclusion_reason",
+            ):
+                if key in preview_hit:
+                    hit[key] = preview_hit.get(key)
             hits.append(hit)
 
     provider_strategy = str(
@@ -943,6 +1103,7 @@ def run_memory(
     cache_stats = getattr(memory_provider, "last_cache_stats", {})
     if not isinstance(cache_stats, dict):
         cache_stats = {}
+    cache_schema_version = getattr(memory_provider, "last_query_schema_version", None)
     hybrid_stats = getattr(memory_provider, "last_hybrid_stats", {})
     if not isinstance(hybrid_stats, dict):
         hybrid_stats = {}
@@ -995,6 +1156,17 @@ def run_memory(
             "container_tag_effective": container_tag if not namespace_fallback else None,
             "container_tag_requested": container_tag,
             "fallback": namespace_fallback,
+            "effective_reason": _build_namespace_effective_reason(
+                namespace_mode=namespace_mode,
+                container_tag=container_tag,
+                namespace_fallback=namespace_fallback,
+            ),
+            "repo_identity": (
+                resolve_repo_identity(root=root or ".", repo=repo)
+                if str(root or "").strip()
+                else None
+            ),
+            "filtered_out_count_by_reason": filtered_out_count_by_reason,
         },
         "timeline": timeline,
         "cache": {
@@ -1002,6 +1174,11 @@ def run_memory(
             "hit_count": int(cache_stats.get("hit_count", 0) or 0),
             "miss_count": int(cache_stats.get("miss_count", 0) or 0),
             "evicted_count": int(cache_stats.get("evicted_count", 0) or 0),
+            "query_schema_version": (
+                str(cache_schema_version).strip()
+                if isinstance(cache_schema_version, str) and cache_schema_version.strip()
+                else None
+            ),
         },
         "hybrid": {
             "semantic_candidates": int(hybrid_stats.get("semantic_candidates", 0) or 0),
@@ -1026,6 +1203,9 @@ def run_memory(
             "expired_count": int(notes_stats.get("expired_count", 0) or 0),
             "namespace_filtered_count": int(
                 notes_stats.get("namespace_filtered_count", 0) or 0
+            ),
+            "repo_boundary_filtered_count": int(
+                notes_stats.get("repo_boundary_filtered_count", 0) or 0
             ),
         },
         "ltm": build_ltm_explainability(hits_preview=hits_preview, hits=hits),

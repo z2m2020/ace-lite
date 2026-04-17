@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
+import re
 from typing import Any
 
 from ace_lite.chunking.skeleton import summarize_chunk_contract
@@ -57,6 +58,17 @@ def _coerce_int(value: Any, default: int = 0) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+_SCOPE_TOKEN_PATTERN = re.compile(r"[^a-z0-9]+")
+
+
+def _normalize_scope_token(value: Any) -> str:
+    return _SCOPE_TOKEN_PATTERN.sub("", str(value or "").strip().lower())
+
+
+def _normalize_namespace(value: Any) -> str:
+    return str(value or "").strip().lower()
 
 
 def _resolve_repo_relative_path(*, root: str, configured_path: str | Path) -> Path:
@@ -134,14 +146,59 @@ def _extract_ltm_maps(
     return selected_map, attribution_map
 
 
+def _collect_repo_hints(*, metadata: dict[str, Any], source_kind: str) -> set[str]:
+    hints: set[str] = set()
+    for key in ("repo_identity", "repo", "project", "project_name"):
+        candidate = _normalize_scope_token(metadata.get(key))
+        if candidate:
+            hints.add(candidate)
+    namespace_value = _normalize_namespace(metadata.get("namespace"))
+    if namespace_value.startswith("repo:"):
+        candidate = _normalize_scope_token(namespace_value.split(":", 1)[1])
+        if candidate:
+            hints.add(candidate)
+    elif source_kind == "local_notes" and namespace_value and ":" not in namespace_value:
+        candidate = _normalize_scope_token(namespace_value)
+        if candidate:
+            hints.add(candidate)
+    return hints
+
+
+def _expected_memory_scope(
+    *,
+    repo: str,
+    memory_stage: dict[str, Any],
+) -> tuple[str | None, str | None]:
+    expected_repo = _normalize_scope_token(repo) or None
+    namespace_payload = (
+        memory_stage.get("namespace") if isinstance(memory_stage.get("namespace"), dict) else {}
+    )
+    expected_namespace = _normalize_namespace(
+        namespace_payload.get("container_tag_effective")
+        or namespace_payload.get("container_tag_requested")
+    )
+    return expected_repo, expected_namespace or None
+
+
 def _build_constraints(
     *,
     memory_hits: list[dict[str, Any]],
     profile: dict[str, Any],
+    expected_repo: str | None = None,
+    expected_namespace: str | None = None,
     ltm_selected_map: dict[str, dict[str, Any]] | None = None,
     ltm_attribution_map: dict[str, dict[str, Any]] | None = None,
     return_details: bool = False,
-) -> list[str] | tuple[list[str], list[dict[str, Any]], dict[str, Any]]:
+) -> (
+    list[str]
+    | tuple[
+        list[str],
+        list[dict[str, Any]],
+        dict[str, Any],
+        list[dict[str, Any]],
+        dict[str, Any],
+    ]
+):
     resolved_ltm_selected_map = ltm_selected_map if isinstance(ltm_selected_map, dict) else {}
     resolved_ltm_attribution_map = (
         ltm_attribution_map if isinstance(ltm_attribution_map, dict) else {}
@@ -154,10 +211,40 @@ def _build_constraints(
         if not isinstance(text_raw, str):
             continue
         handle = str(hit.get("handle") or "").strip()
+        metadata = _coerce_mapping(hit.get("metadata"))
+        source_kind = str(hit.get("source_kind") or hit.get("source") or "memory").strip() or "memory"
+        namespace_scope_match = hit.get("namespace_scope_match")
+        if not isinstance(namespace_scope_match, bool):
+            namespace_value = _normalize_namespace(metadata.get("namespace"))
+            if expected_namespace and namespace_value:
+                namespace_scope_match = namespace_value == expected_namespace
+            else:
+                namespace_scope_match = None
+        repo_scope_match = hit.get("repo_scope_match")
+        if not isinstance(repo_scope_match, bool):
+            repo_hints = _collect_repo_hints(metadata=metadata, source_kind=source_kind)
+            if expected_repo and repo_hints:
+                repo_scope_match = expected_repo in repo_hints
+            else:
+                repo_scope_match = None
+        exclusion_reason = str(hit.get("constraint_exclusion_reason") or "").strip()
+        if not exclusion_reason:
+            if namespace_scope_match is False:
+                exclusion_reason = "namespace_mismatch"
+            elif repo_scope_match is False:
+                exclusion_reason = "repo_mismatch"
+        constraint_eligible = hit.get("constraint_eligible")
+        if not isinstance(constraint_eligible, bool):
+            constraint_eligible = not bool(exclusion_reason)
         entry: dict[str, Any] = {
             "text": text_raw,
             "source": "memory",
             "handle": handle,
+            "source_kind": source_kind,
+            "namespace_scope_match": namespace_scope_match,
+            "repo_scope_match": repo_scope_match,
+            "constraint_eligible": constraint_eligible,
+            "constraint_exclusion_reason": exclusion_reason or None,
         }
         if handle and handle in resolved_ltm_selected_map:
             entry["source"] = "ltm"
@@ -167,15 +254,49 @@ def _build_constraints(
 
     sanitized: list[str] = []
     selected_ltm_constraints: list[dict[str, Any]] = []
+    memory_constraint_details: list[dict[str, Any]] = []
+    excluded_by_reason: dict[str, int] = {}
     seen: set[str] = set()
     for item in raw:
         candidate = _sanitize_constraint(str(item.get("text") or ""))
         if not candidate:
             continue
+        detail: dict[str, Any] = {
+            "handle": str(item.get("handle") or "").strip(),
+            "source": str(item.get("source") or "memory"),
+            "source_kind": str(item.get("source_kind") or item.get("source") or "memory"),
+            "constraint": candidate,
+            "constraint_eligible": bool(item.get("constraint_eligible", True)),
+            "constraint_exclusion_reason": item.get("constraint_exclusion_reason"),
+            "namespace_scope_match": item.get("namespace_scope_match"),
+            "repo_scope_match": item.get("repo_scope_match"),
+        }
+        why_included: list[str] = []
+        if detail["source"] == "profile":
+            why_included.append("profile_fact")
+        if detail["source"] == "ltm":
+            why_included.append("ltm_selected")
+        if detail["namespace_scope_match"] is True:
+            why_included.append("namespace_match")
+        if detail["repo_scope_match"] is True:
+            why_included.append("repo_match")
+
         if candidate in seen:
+            detail["constraint_eligible"] = False
+            detail["constraint_exclusion_reason"] = "duplicate_constraint"
+        if not detail["constraint_eligible"]:
+            reason = str(detail.get("constraint_exclusion_reason") or "unknown").strip() or "unknown"
+            excluded_by_reason[reason] = int(excluded_by_reason.get(reason, 0) or 0) + 1
+            detail["why_included"] = []
+            memory_constraint_details.append(detail)
             continue
+
         seen.add(candidate)
         sanitized.append(candidate)
+        if not why_included:
+            why_included.append("fail_open_metadata_missing")
+        detail["why_included"] = why_included
+        memory_constraint_details.append(detail)
 
         if item.get("source") == "ltm":
             selected_payload = _coerce_mapping(item.get("ltm_selected"))
@@ -211,9 +332,25 @@ def _build_constraints(
             if str(item.get("handle") or "").strip()
         ],
     }
+    memory_constraint_summary = {
+        "considered_count": len(memory_constraint_details),
+        "included_count": sum(
+            1 for item in memory_constraint_details if bool(item.get("constraint_eligible"))
+        ),
+        "excluded_count": sum(
+            1 for item in memory_constraint_details if not bool(item.get("constraint_eligible"))
+        ),
+        "excluded_by_reason": excluded_by_reason,
+    }
     if not return_details:
         return sanitized
-    return sanitized, selected_ltm_constraints, summary
+    return (
+        sanitized,
+        selected_ltm_constraints,
+        summary,
+        memory_constraint_details,
+        memory_constraint_summary,
+    )
 
 
 def _resolve_focused_files(
@@ -335,9 +472,21 @@ def run_source_plan(
         memory_stage.get("profile", {}) if isinstance(memory_stage.get("profile"), dict) else {}
     )
     ltm_selected_map, ltm_attribution_map = _extract_ltm_maps(memory_stage)
-    constraints, ltm_constraints, ltm_constraint_summary = _build_constraints(
+    expected_repo, expected_namespace = _expected_memory_scope(
+        repo=ctx.repo,
+        memory_stage=memory_stage,
+    )
+    (
+        constraints,
+        ltm_constraints,
+        ltm_constraint_summary,
+        memory_constraint_details,
+        memory_constraint_summary,
+    ) = _build_constraints(
         memory_hits=memory_hits,
         profile=profile_payload,
+        expected_repo=expected_repo,
+        expected_namespace=expected_namespace,
         ltm_selected_map=ltm_selected_map,
         ltm_attribution_map=ltm_attribution_map,
         return_details=True,
@@ -535,6 +684,8 @@ def run_source_plan(
         "constraints": constraints,
         "ltm_constraints": ltm_constraints,
         "ltm_constraint_summary": ltm_constraint_summary,
+        "memory_constraint_details": memory_constraint_details,
+        "memory_constraint_summary": memory_constraint_summary,
         "diagnostics": diagnostics,
         "xref": xref,
         "tests": tests,

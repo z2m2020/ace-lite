@@ -43,26 +43,12 @@ class DualChannelMemoryProvider:
 
         primary_rows: list[MemoryRecordCompact] = []
         try:
-            if container_tag is None:
-                primary_rows = list(self._primary.search_compact(query, limit=limit))
-            else:
-                primary_rows = list(
-                    self._primary.search_compact(
-                        query,
-                        limit=limit,
-                        container_tag=container_tag,
-                    )
-                )
-            primary_namespace_fallback = getattr(
-                self._primary,
-                "last_container_tag_fallback",
-                None,
+            primary_rows = self._search_provider(
+                provider=self._primary,
+                query=query,
+                limit=limit,
+                container_tag=container_tag,
             )
-            if (
-                isinstance(primary_namespace_fallback, str)
-                and primary_namespace_fallback.strip()
-            ):
-                self.last_container_tag_fallback = primary_namespace_fallback.strip()
             self.last_channel_used = self._provider_channel_name(
                 self._primary, default="primary"
             )
@@ -157,26 +143,12 @@ class DualChannelMemoryProvider:
             return _dedupe_compacts(primary_rows, limit=limit)
 
         try:
-            if container_tag is None:
-                secondary_rows = list(self._secondary.search_compact(query, limit=limit))
-            else:
-                secondary_rows = list(
-                    self._secondary.search_compact(
-                        query,
-                        limit=limit,
-                        container_tag=container_tag,
-                    )
-                )
-            secondary_namespace_fallback = getattr(
-                self._secondary,
-                "last_container_tag_fallback",
-                None,
+            secondary_rows = self._search_provider(
+                provider=self._secondary,
+                query=query,
+                limit=limit,
+                container_tag=container_tag,
             )
-            if (
-                isinstance(secondary_namespace_fallback, str)
-                and secondary_namespace_fallback.strip()
-            ):
-                self.last_container_tag_fallback = secondary_namespace_fallback.strip()
             self.last_channel_used = self._provider_channel_name(
                 self._secondary, default="secondary"
             )
@@ -188,6 +160,34 @@ class DualChannelMemoryProvider:
         if self._merge_on_fallback:
             return _dedupe_compacts([*primary_rows, *secondary_rows], limit=limit)
         return _dedupe_compacts(secondary_rows, limit=limit)
+
+    def _search_provider(
+        self,
+        *,
+        provider: MemoryProvider,
+        query: str,
+        limit: int | None,
+        container_tag: str | None,
+    ) -> list[MemoryRecordCompact]:
+        if container_tag is None:
+            rows = list(provider.search_compact(query, limit=limit))
+        else:
+            try:
+                rows = list(
+                    provider.search_compact(
+                        query,
+                        limit=limit,
+                        container_tag=container_tag,
+                    )
+                )
+            except TypeError:
+                self.last_container_tag_fallback = "provider_unsupported_container_tag"
+                rows = list(provider.search_compact(query, limit=limit))
+
+        provider_namespace_fallback = getattr(provider, "last_container_tag_fallback", None)
+        if isinstance(provider_namespace_fallback, str) and provider_namespace_fallback.strip():
+            self.last_container_tag_fallback = provider_namespace_fallback.strip()
+        return rows
 
     @staticmethod
     def _provider_channel_name(provider: MemoryProvider, *, default: str) -> str:

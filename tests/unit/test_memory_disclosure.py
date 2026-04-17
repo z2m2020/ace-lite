@@ -380,7 +380,50 @@ def test_run_memory_uses_auto_repo_namespace_tag(tmp_path) -> None:
     assert payload["namespace"]["mode"] == "repo"
     assert payload["namespace"]["source"] == "auto"
     assert payload["namespace"]["container_tag_effective"] == "repo:my-demo-repo"
+    assert payload["namespace"]["effective_reason"] == "auto_repo_namespace"
+    assert payload["namespace"]["repo_identity"]["repo_id"] == "my-demo-repo"
+    assert payload["namespace"]["filtered_out_count_by_reason"] == {}
     assert payload["namespace"]["fallback"] is None
+
+
+def test_run_memory_defaults_to_repo_namespace_tag(tmp_path) -> None:
+    provider = _FakeMemoryProvider([MemoryRecord(text="hello world", score=0.5)])
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(),
+    )
+
+    payload = _run_memory_stage(
+        orch, query="q", repo="My Demo Repo", root=str(tmp_path)
+    )
+
+    assert provider.last_container_tag == "repo:my-demo-repo"
+    assert payload["namespace"]["mode"] == "repo"
+    assert payload["namespace"]["source"] == "auto"
+    assert payload["namespace"]["container_tag_effective"] == "repo:my-demo-repo"
+
+
+def test_run_memory_repo_namespace_uses_git_root_name_for_worktree(tmp_path) -> None:
+    repo_root = tmp_path / "tabiapp-backend"
+    worktree_root = repo_root / "tabiapp-backend_worktree_aeon_v2"
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
+    worktree_root.mkdir(parents=True, exist_ok=True)
+    provider = _FakeMemoryProvider([MemoryRecord(text="hello world", score=0.5)])
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(),
+    )
+
+    payload = _run_memory_stage(
+        orch,
+        query="q",
+        repo="tabiapp-backend_worktree_aeon_v2",
+        root=str(worktree_root),
+    )
+
+    assert provider.last_container_tag == "repo:tabiapp-backend"
+    assert payload["namespace"]["repo_identity"]["repo_id"] == "tabiapp-backend"
+    assert payload["namespace"]["repo_identity"]["worktree_name"] == "tabiapp-backend_worktree_aeon_v2"
 
 
 def test_run_memory_explicit_namespace_tag_overrides_auto_mode(tmp_path) -> None:
@@ -403,6 +446,43 @@ def test_run_memory_explicit_namespace_tag_overrides_auto_mode(tmp_path) -> None
     assert payload["namespace"]["mode"] == "explicit"
     assert payload["namespace"]["source"] == "explicit"
     assert payload["namespace"]["container_tag_effective"] == "team-alpha"
+
+
+def test_run_memory_annotates_constraint_scope_matches_for_repo_namespace(tmp_path) -> None:
+    provider = _FakeMemoryProvider(
+        [
+            MemoryRecord(
+                text="same repo memory",
+                score=0.5,
+                metadata={"repo": "demo", "namespace": "repo:demo"},
+            ),
+            MemoryRecord(
+                text="other repo memory",
+                score=0.4,
+                metadata={"repo": "other", "namespace": "repo:other"},
+            ),
+        ]
+    )
+    orch = AceOrchestrator(
+        memory_provider=provider,
+        config=OrchestratorConfig(memory={"namespace": {"auto_tag_mode": "repo"}}),
+    )
+
+    payload = _run_memory_stage(orch, query="memory", repo="demo", root=str(tmp_path))
+
+    same_repo = next(item for item in payload["hits_preview"] if item["preview"] == "same repo memory")
+    other_repo = next(item for item in payload["hits_preview"] if item["preview"] == "other repo memory")
+
+    assert same_repo["source_kind"] == "memory"
+    assert same_repo["namespace_scope_match"] is True
+    assert same_repo["repo_scope_match"] is True
+    assert same_repo["constraint_eligible"] is True
+    assert same_repo["constraint_exclusion_reason"] is None
+
+    assert other_repo["namespace_scope_match"] is False
+    assert other_repo["repo_scope_match"] is False
+    assert other_repo["constraint_eligible"] is False
+    assert other_repo["constraint_exclusion_reason"] == "namespace_mismatch"
 
 
 def test_run_memory_namespace_fallback_marks_effective_tag_none(tmp_path) -> None:
@@ -434,6 +514,7 @@ def test_run_memory_namespace_fallback_marks_effective_tag_none(tmp_path) -> Non
     assert payload["namespace"]["container_tag_requested"] == "team-alpha"
     assert payload["namespace"]["container_tag_effective"] is None
     assert payload["namespace"]["fallback"] == "backend_unsupported_container_tag"
+    assert payload["namespace"]["effective_reason"] == "fallback:backend_unsupported_container_tag"
 
 
 def test_run_memory_injects_profile_facts_deterministically(tmp_path) -> None:

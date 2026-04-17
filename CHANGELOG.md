@@ -8,6 +8,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 No notable changes.
 
+## [0.3.91] - 2026-04-17
+
+### Added
+
+- Added `runtime_fingerprint` and canonical `repo_identity` details to `ace_health` so runtime/source mismatches and worktree-vs-repo identity drift are easier to diagnose from one payload.
+- Added regression coverage for repo identity canonicalization, runtime sync warnings, memory namespace plumbing, and score-explainability constraints across memory/source-plan surfaces.
+
+### Changed
+
+- Tightened code-intent `plan_quick` reranking so ACE-Lite generated docs and broad markdown reports are penalized more aggressively unless the query explicitly asks for schema/contract-style documents.
+- Hardened memory namespace boundaries across dual-channel fallback, local notes repo auto-tagging, and source-plan constraint eligibility so repo-scoped memory stays useful without dropping same-repo fallback rows.
+- Strengthened index-stage cache manifest invalidation and version repair guidance so rapid cache rewrites, editable installs, and MCP runtime sync checks no longer produce stale results or misleading repair steps.
+
 ## [0.3.90] - 2026-04-17
 
 ### Added

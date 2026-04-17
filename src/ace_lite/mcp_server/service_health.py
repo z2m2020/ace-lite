@@ -5,7 +5,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypedDict
 
+from ace_lite.config import resolve_repo_identity
 from ace_lite.mcp_server.config import AceLiteMcpConfig
+from ace_lite.runtime_fingerprint import (
+    build_git_fast_fingerprint,
+    build_git_fast_fingerprint_observability,
+)
+from ace_lite.version import build_repair_steps
 
 
 class RuntimeIdentityPayload(TypedDict):
@@ -38,6 +44,7 @@ class HealthPayload(TypedDict):
     version_info: dict[str, Any]
     default_root: str
     default_repo: str
+    repo_identity: dict[str, Any]
     default_skills_dir: str
     default_languages: str
     default_config_pack: str
@@ -56,8 +63,10 @@ class HealthPayload(TypedDict):
     user_id: str | None
     app: str
     runtime_identity: RuntimeIdentityPayload
+    runtime_fingerprint: dict[str, Any]
     stdio_session_health: dict[str, Any]
     staleness_warning: dict[str, Any] | None
+    runtime_sync_warning: dict[str, Any] | None
     request_stats: dict[str, Any]
     settings_governance: dict[str, Any]
     warnings: list[str]
@@ -65,11 +74,145 @@ class HealthPayload(TypedDict):
     timestamp: str
 
 
-def _build_install_drift_guidance(version_info: dict[str, Any]) -> dict[str, Any] | None:
+def _dedupe_non_empty(items: list[str]) -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = str(item or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        ordered.append(text)
+    return ordered
+
+
+def _safe_resolved_path(value: str | None) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if len(text) >= 3 and text[1] == ":" and text[2] in {"/", "\\"}:
+        return text
+    try:
+        return str(Path(text).resolve())
+    except Exception:
+        return text
+
+
+def _runtime_sync_requires_restart(runtime_version_info: dict[str, Any]) -> bool:
+    sync_state = str(runtime_version_info.get("sync_state") or "").strip()
+    if sync_state == "stale_process":
+        return True
+    mismatch_facts = runtime_version_info.get("mismatch_facts")
+    if not isinstance(mismatch_facts, list):
+        return False
+    mismatch_set = {str(item or "").strip() for item in mismatch_facts}
+    return bool(
+        {
+            "runtime_source_root_mismatch",
+            "runtime_pyproject_missing",
+        }
+        & mismatch_set
+    )
+
+
+def _build_runtime_version_info(
+    *,
+    version: str,
+    version_info: dict[str, Any],
+    runtime_identity: RuntimeIdentityPayload,
+) -> dict[str, Any]:
+    normalized_reason = str(version_info.get("reason_code") or "").strip() or "ok"
+    install_mode = str(version_info.get("install_mode") or "").strip() or "unknown"
+    install_source_root = str(version_info.get("source_root") or "").strip()
+    runtime_source_root = str(runtime_identity.get("source_root") or "").strip()
+    runtime_pyproject_path = str(runtime_identity.get("pyproject_path") or "").strip()
+    runtime_module_path = str(runtime_identity.get("module_path") or "").strip()
+    stale_process = bool(runtime_identity.get("stale_process_suspected"))
+    mismatch_facts: list[str] = []
+
+    declared_source_root = _safe_resolved_path(install_source_root)
+    effective_runtime_root = _safe_resolved_path(runtime_source_root)
+    if install_mode in {"editable", "source_checkout"} and not runtime_pyproject_path:
+        mismatch_facts.append("runtime_pyproject_missing")
+    if (
+        install_mode in {"editable", "source_checkout"}
+        and declared_source_root
+        and effective_runtime_root
+        and declared_source_root != effective_runtime_root
+    ):
+        mismatch_facts.append("runtime_source_root_mismatch")
+
+    sync_state = "clean"
+    if normalized_reason in {"install_drift", "missing_installed_metadata"}:
+        sync_state = normalized_reason
+    if stale_process:
+        sync_state = "mixed_mode" if sync_state != "clean" else "stale_process"
+    elif mismatch_facts:
+        sync_state = "mixed_mode"
+
+    repair_reason = normalized_reason if normalized_reason != "ok" else sync_state
+    repair_steps = build_repair_steps(
+        dist_name=str(version_info.get("dist_name") or "ace-lite-engine"),
+        install_mode=install_mode,
+        source_root=install_source_root or runtime_source_root,
+        python_executable=str(runtime_identity.get("python_executable") or "").strip() or None,
+        reason_code=repair_reason if repair_reason != "clean" else "ok",
+    )
+    if stale_process or _runtime_sync_requires_restart(
+        {
+            "sync_state": sync_state,
+            "mismatch_facts": mismatch_facts,
+        }
+    ):
+        repair_steps = _dedupe_non_empty(
+            [
+                "Restart the long-lived stdio MCP process so it reloads the current checkout.",
+                *repair_steps,
+            ]
+        )
+
+    return {
+        "sync_state": sync_state,
+        "reason_code": "ok" if sync_state == "clean" else sync_state,
+        "runtime_loaded_version": str(version or "").strip(),
+        "source_tree_version": str(version_info.get("pyproject_version") or "").strip() or None,
+        "installed_metadata_version": (
+            str(version_info.get("installed_version") or "").strip() or None
+        ),
+        "install_mode": install_mode,
+        "install_source_root": install_source_root,
+        "runtime_source_root": runtime_source_root,
+        "runtime_pyproject_path": runtime_pyproject_path,
+        "runtime_module_path": runtime_module_path,
+        "stale_process_suspected": stale_process,
+        "mismatch_facts": mismatch_facts,
+        "repair_steps": repair_steps,
+        "修复步骤": repair_steps,
+    }
+
+
+def _build_install_drift_guidance(
+    version_info: dict[str, Any],
+    *,
+    runtime_version_info: dict[str, Any],
+) -> dict[str, Any] | None:
     reason_code = str(version_info.get("reason_code") or "").strip()
     if reason_code != "install_drift":
         return None
-    repair_steps = ["python -m pip install -e .[dev]"]
+    repair_steps = _dedupe_non_empty(
+        [
+            *(
+                list(runtime_version_info.get("repair_steps", []))
+                if isinstance(runtime_version_info.get("repair_steps"), list)
+                else []
+            ),
+            *(
+                list(version_info.get("repair_steps", []))
+                if isinstance(version_info.get("repair_steps"), list)
+                else []
+            ),
+        ]
+    )
     return {
         "triggered": True,
         "reason_code": reason_code,
@@ -79,8 +222,92 @@ def _build_install_drift_guidance(version_info: dict[str, Any]) -> dict[str, Any
         ),
         "pyproject_version": str(version_info.get("pyproject_version") or "").strip(),
         "installed_version": str(version_info.get("installed_version") or "").strip(),
+        "sync_state": str(runtime_version_info.get("sync_state") or "").strip() or reason_code,
+        "runtime_source_root": str(runtime_version_info.get("runtime_source_root") or "").strip(),
         "repair_steps": repair_steps,
         "修复步骤": repair_steps,
+    }
+
+
+def _build_runtime_sync_warning(runtime_version_info: dict[str, Any]) -> dict[str, Any] | None:
+    sync_state = str(runtime_version_info.get("sync_state") or "").strip()
+    if not sync_state or sync_state == "clean":
+        return None
+    repair_steps = (
+        list(runtime_version_info.get("repair_steps", []))
+        if isinstance(runtime_version_info.get("repair_steps"), list)
+        else []
+    )
+    if sync_state == "install_drift":
+        message = (
+            "Installed metadata and source-tree version are out of sync for this runtime. "
+            "Refresh the local install before trusting version-sensitive diagnostics."
+        )
+    elif sync_state == "missing_installed_metadata":
+        message = (
+            "Installed package metadata is missing, so this runtime cannot prove its install state. "
+            "Reinstall the local package before relying on upgrade validation."
+        )
+    elif sync_state == "stale_process":
+        message = (
+            "The long-lived stdio MCP process loaded an older source tree than the current checkout. "
+            "Restart it before continuing."
+        )
+    elif _runtime_sync_requires_restart(runtime_version_info):
+        message = (
+            "The live MCP process is not loading the editable source tree declared by the current install. "
+            "Restart it before trusting plan or health results."
+        )
+    else:
+        message = (
+            "The runtime install, source tree, and live process identity do not describe a single clean state. "
+            "Resolve the mismatch before treating health results as authoritative."
+        )
+    return {
+        "triggered": True,
+        "sync_state": sync_state,
+        "reason_code": str(runtime_version_info.get("reason_code") or "").strip() or sync_state,
+        "message": message,
+        "runtime_loaded_version": runtime_version_info.get("runtime_loaded_version"),
+        "source_tree_version": runtime_version_info.get("source_tree_version"),
+        "installed_metadata_version": runtime_version_info.get("installed_metadata_version"),
+        "mismatch_facts": list(runtime_version_info.get("mismatch_facts", []))
+        if isinstance(runtime_version_info.get("mismatch_facts"), list)
+        else [],
+        "repair_steps": repair_steps,
+        "修复步骤": repair_steps,
+    }
+
+
+def _build_runtime_fingerprint_payload(
+    *,
+    config: AceLiteMcpConfig,
+    runtime_identity: RuntimeIdentityPayload,
+    settings_governance: dict[str, Any] | None,
+) -> dict[str, Any]:
+    normalized_settings_governance = (
+        dict(settings_governance) if isinstance(settings_governance, dict) else {}
+    )
+    settings_fingerprint = str(
+        normalized_settings_governance.get("resolved_fingerprint") or ""
+    ).strip()
+    root_path = _safe_resolved_path(str(config.default_root))
+    runtime_source_root = _safe_resolved_path(str(runtime_identity.get("source_root") or ""))
+    fingerprint = build_git_fast_fingerprint_observability(
+        build_git_fast_fingerprint(
+            repo_root=root_path or ".",
+            settings_fingerprint=settings_fingerprint,
+            latency_budget_ms=50.0,
+        )
+    )
+    return {
+        "source": "default_root",
+        "root_path": root_path,
+        "runtime_source_root": runtime_source_root,
+        "runtime_source_matches_default_root": bool(
+            root_path and runtime_source_root and root_path == runtime_source_root
+        ),
+        **fingerprint,
     }
 
 
@@ -172,7 +399,20 @@ def build_health_response_payload(
         and not str(normalized_version_info.get("reason_code") or "").strip()
     ):
         normalized_version_info["reason_code"] = "install_drift"
-    install_drift_guidance = _build_install_drift_guidance(normalized_version_info)
+    runtime_version_info = _build_runtime_version_info(
+        version=version,
+        version_info=normalized_version_info,
+        runtime_identity=runtime_identity,
+    )
+    normalized_version_info["sync_state"] = str(
+        runtime_version_info.get("sync_state") or normalized_version_info.get("sync_state") or "clean"
+    )
+    normalized_version_info["runtime_version_info"] = runtime_version_info
+    install_drift_guidance = _build_install_drift_guidance(
+        normalized_version_info,
+        runtime_version_info=runtime_version_info,
+    )
+    runtime_sync_warning = _build_runtime_sync_warning(runtime_version_info)
     stale_repair_steps = [
         "Restart the long-lived stdio MCP process so it reloads the current checkout.",
     ]
@@ -181,19 +421,30 @@ def build_health_response_payload(
     normalized_settings_governance = (
         dict(settings_governance) if isinstance(settings_governance, dict) else {}
     )
+    runtime_fingerprint = _build_runtime_fingerprint_payload(
+        config=config,
+        runtime_identity=runtime_identity,
+        settings_governance=normalized_settings_governance,
+    )
     config_warnings = (
         list(normalized_settings_governance.get("config_warnings", []))
         if isinstance(normalized_settings_governance.get("config_warnings"), list)
         else []
     )
+    runtime_repair_steps = (
+        list(runtime_version_info.get("repair_steps", []))
+        if isinstance(runtime_version_info.get("repair_steps"), list)
+        else []
+    )
     if bool(normalized_version_info.get("drifted")):
+        recommended_fix = runtime_repair_steps[0] if runtime_repair_steps else "python -m pip install -e .[dev]"
         warnings.append(
             "Version drift detected: pyproject.toml="
             f"{normalized_version_info.get('pyproject_version')} but installed metadata="
             f"{normalized_version_info.get('installed_version')} (dist={normalized_version_info.get('dist_name')}). "
-            "Run: python -m pip install -e .[dev]"
+            f"Run: {recommended_fix}"
         )
-        recommendations.append("python -m pip install -e .[dev]")
+        recommendations.extend(runtime_repair_steps or [recommended_fix])
     if memory_disabled:
         warnings.append(
             "Memory providers are disabled (ACE_LITE_MEMORY_PRIMARY/SECONDARY are none)."
@@ -226,8 +477,21 @@ def build_health_response_payload(
         recommendations.append(
             "Restart the stdio MCP server/session after git pull or pip install -e updates."
         )
+    if runtime_sync_warning is not None:
+        message = str(runtime_sync_warning.get("message") or "").strip()
+        if message:
+            warnings.append(message)
+        recommendations.extend(
+            list(runtime_sync_warning.get("repair_steps", []))
+            if isinstance(runtime_sync_warning.get("repair_steps"), list)
+            else []
+        )
     current_request_runtime_ms = float(request_stats.get("current_request_runtime_ms") or 0.0)
     active_request_count = int(request_stats.get("active_request_count") or 0)
+    runtime_sync_requires_restart = (
+        runtime_sync_warning is not None
+        and _runtime_sync_requires_restart(runtime_version_info)
+    )
     if active_request_count > 0 and current_request_runtime_ms >= 30000.0:
         warnings.append(
             "A MCP request has been running for over 30s inside the current process. "
@@ -250,6 +514,8 @@ def build_health_response_payload(
     reason_codes: list[str] = []
     if bool(runtime_identity.get("stale_process_suspected")):
         reason_codes.append("stale_process")
+    elif runtime_sync_requires_restart:
+        reason_codes.append("runtime_sync_mismatch")
     if active_request_count > 0 and current_request_runtime_ms >= 30000.0:
         reason_codes.append("long_running_request")
     stdio_session_health = {
@@ -270,9 +536,27 @@ def build_health_response_payload(
                     "Current MCP process appears stale and should be restarted."
                     if reason_codes == ["stale_process"]
                     else (
-                        "Current MCP process has a request that appears stuck for over 30s."
-                        if reason_codes == ["long_running_request"]
-                        else "Current MCP process appears stale and also has a long-running in-flight request."
+                        "Current MCP process is not loading the expected editable source tree and should be restarted."
+                        if reason_codes == ["runtime_sync_mismatch"]
+                        else (
+                            "Current MCP process has a request that appears stuck for over 30s."
+                            if reason_codes == ["long_running_request"]
+                            else (
+                                "Current MCP process appears stale, is loading the wrong source tree, and also has a long-running in-flight request."
+                                if "stale_process" in reason_codes
+                                and "runtime_sync_mismatch" in reason_codes
+                                and "long_running_request" in reason_codes
+                                else (
+                                    "Current MCP process appears stale and also has a long-running in-flight request."
+                                    if reason_codes == ["stale_process", "long_running_request"]
+                                    else (
+                                        "Current MCP process is loading the wrong source tree and also has a long-running in-flight request."
+                                        if reason_codes == ["runtime_sync_mismatch", "long_running_request"]
+                                        else "Current MCP process has restart-required runtime sync issues."
+                                    )
+                                )
+                            )
+                        )
                     )
                 )
             )
@@ -299,6 +583,10 @@ def build_health_response_payload(
         else None
     )
     timestamp = now_iso_fn() if now_iso_fn is not None else datetime.now(timezone.utc).isoformat()
+    repo_identity = resolve_repo_identity(
+        root=config.default_root,
+        repo=config.default_repo,
+    )
     return {
         "ok": True,
         "server_name": config.server_name,
@@ -309,6 +597,7 @@ def build_health_response_payload(
         },
         "default_root": str(config.default_root),
         "default_repo": config.default_repo,
+        "repo_identity": repo_identity,
         "default_skills_dir": str(config.default_skills_dir),
         "default_languages": config.default_languages,
         "default_config_pack": str(config.config_pack or ""),
@@ -328,12 +617,14 @@ def build_health_response_payload(
         "user_id": config.user_id,
         "app": config.app,
         "runtime_identity": runtime_identity,
+        "runtime_fingerprint": runtime_fingerprint,
         "stdio_session_health": stdio_session_health,
         "staleness_warning": staleness_warning,
+        "runtime_sync_warning": runtime_sync_warning,
         "request_stats": request_stats,
         "settings_governance": normalized_settings_governance,
-        "warnings": warnings,
-        "recommendations": recommendations,
+        "warnings": _dedupe_non_empty(warnings),
+        "recommendations": _dedupe_non_empty(recommendations),
         "timestamp": timestamp,
     }
 

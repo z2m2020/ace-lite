@@ -121,6 +121,7 @@ def test_plan_request_options_run_plan_kwargs_match_declared_contract(
     assert kwargs["lsp_enabled"] is True
     assert kwargs["plugins_enabled"] is False
     assert kwargs["embedding_enabled"] is True
+    assert kwargs["memory_auto_tag_mode"] == "repo"
     assert kwargs["memory_gate_enabled"] is True
 
 

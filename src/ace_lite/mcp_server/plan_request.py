@@ -16,6 +16,7 @@ class PlanRequestRunPlanKwargs(
     MemoryGatePostprocessRuntimeKwargs,
     RetrievalPolicyRuntimeKwargs,
 ):
+    memory_auto_tag_mode: str | None
     top_k_files: int
     min_candidate_score: int
     candidate_relative_threshold: float
@@ -58,6 +59,7 @@ class PlanRequestOptions:
     embedding_min_similarity: float
     embedding_fail_open: bool
     memory_notes_enabled: bool
+    memory_auto_tag_mode: str | None
     memory_gate_enabled: bool
     memory_gate_mode: str
     memory_postprocess_enabled: bool
@@ -93,6 +95,11 @@ class PlanRequestOptions:
             "lsp_enabled": bool(self.lsp_enabled),
             "plugins_enabled": bool(self.plugins_enabled),
             "memory_gate_enabled": bool(self.memory_gate_enabled),
+            "memory_auto_tag_mode": (
+                str(self.memory_auto_tag_mode).strip().lower()
+                if self.memory_auto_tag_mode is not None
+                else None
+            ),
             "memory_gate_mode": str(self.memory_gate_mode),
             "memory_postprocess_enabled": bool(self.memory_postprocess_enabled),
             "memory_postprocess_noise_filter_enabled": bool(
@@ -155,6 +162,7 @@ def resolve_plan_request_options(
     embedding_min_similarity = float(config.embedding_min_similarity)
     embedding_fail_open = bool(config.embedding_fail_open)
     memory_notes_enabled = True
+    memory_auto_tag_mode: str | None = "repo"
     memory_gate_enabled = False
     memory_gate_mode = "auto"
     memory_postprocess_enabled = False
@@ -307,6 +315,11 @@ def resolve_plan_request_options(
                 overrides.get("memory_notes_enabled"),
                 memory_notes_enabled,
             )
+        if "memory_auto_tag_mode" in overrides:
+            raw_memory_auto_tag_mode = str(
+                overrides.get("memory_auto_tag_mode") or ""
+            ).strip().lower()
+            memory_auto_tag_mode = raw_memory_auto_tag_mode or None
         if "memory_gate_enabled" in overrides:
             memory_gate_enabled = _coerce_bool(
                 overrides.get("memory_gate_enabled"),
@@ -392,6 +405,7 @@ def resolve_plan_request_options(
         embedding_min_similarity=embedding_min_similarity,
         embedding_fail_open=embedding_fail_open,
         memory_notes_enabled=memory_notes_enabled,
+        memory_auto_tag_mode=memory_auto_tag_mode,
         memory_gate_enabled=memory_gate_enabled,
         memory_gate_mode=memory_gate_mode,
         memory_postprocess_enabled=memory_postprocess_enabled,

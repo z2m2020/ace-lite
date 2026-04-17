@@ -91,6 +91,11 @@ def _format_command(parts: list[str]) -> str:
     return " ".join(formatted)
 
 
+def _resolve_python_command(python_executable: str | None = None) -> str:
+    resolved = str(python_executable or "").strip()
+    return resolved or "python"
+
+
 def _read_distribution_direct_url(dist_name: str) -> dict[str, Any] | None:
     try:
         dist = distribution(dist_name)
@@ -221,6 +226,44 @@ def _fetch_latest_pypi_release(
     return dict(payload)
 
 
+def build_repair_steps(
+    *,
+    dist_name: str = _DIST_NAME,
+    install_mode: str | None = None,
+    source_root: str | None = None,
+    python_executable: str | None = None,
+    reason_code: str | None = None,
+) -> list[str]:
+    normalized_install_mode = str(install_mode or "").strip().lower() or "unknown"
+    normalized_reason = str(reason_code or "").strip().lower() or "ok"
+    python_command = _resolve_python_command(python_executable)
+    resolved_source_root = str(source_root or "").strip()
+    repo_root = Path(resolved_source_root).resolve() if resolved_source_root else None
+    steps: list[str] = []
+
+    def add(parts: list[str]) -> None:
+        command = _format_command(parts)
+        if command and command not in steps:
+            steps.append(command)
+
+    if normalized_reason in {"install_drift", "missing_installed_metadata"}:
+        script_path = repo_root / "scripts" / "update.py" if repo_root is not None else None
+        if script_path is not None and script_path.exists():
+            add([python_command, str(script_path), "--root", str(repo_root)])
+        add([python_command, "-m", "pip", "install", "-e", ".[dev]"])
+        return steps
+
+    if normalized_install_mode in {"editable", "source_checkout"}:
+        script_path = repo_root / "scripts" / "update.py" if repo_root is not None else None
+        if script_path is not None and script_path.exists():
+            add([python_command, str(script_path), "--root", str(repo_root)])
+        add([python_command, "-m", "pip", "install", "-e", ".[dev]"])
+        return steps
+
+    add([python_command, "-m", "pip", "install", "-U", dist_name])
+    return steps
+
+
 def get_update_status(
     *,
     dist_name: str = _DIST_NAME,
@@ -243,24 +286,21 @@ def get_update_status(
         "missing_installed_metadata",
     }
 
-    recommended_parts: list[str]
+    repair_steps = build_repair_steps(
+        dist_name=dist_name,
+        install_mode=install_mode,
+        source_root=source_root,
+        reason_code=str(info.get("reason_code") or "").strip() or "ok",
+    )
+    recommended_command = repair_steps[0] if repair_steps else ""
     alternative_commands: list[str] = []
-    if install_mode in {"editable", "source_checkout"}:
-        repo_root = Path(source_root).resolve() if source_root else None
-        script_path = repo_root / "scripts" / "update.py" if repo_root is not None else None
-        if script_path is not None and script_path.exists():
-            recommended_parts = ["python", str(script_path), "--root", str(repo_root)]
-        else:
-            recommended_parts = ["python", "-m", "pip", "install", "-e", ".[dev]"]
-        alternative_commands.append("python -m pip install -e .[dev]")
-    else:
-        recommended_parts = ["python", "-m", "pip", "install", "-U", dist_name]
-        alternative_commands.extend(
-            [
-                f"pipx upgrade {dist_name}",
-                f"uv tool upgrade {dist_name}",
-            ]
-        )
+    for step in repair_steps[1:]:
+        if step and step not in alternative_commands:
+            alternative_commands.append(step)
+    if install_mode == "installed_package":
+        for command in (f"pipx upgrade {dist_name}", f"uv tool upgrade {dist_name}"):
+            if command not in alternative_commands:
+                alternative_commands.append(command)
 
     latest_version: str | None = None
     release_check_ok = False
@@ -298,7 +338,7 @@ def get_update_status(
         "release_check_error": release_check_error,
         "release_update_available": release_update_available,
         "update_available": bool(install_sync_required or release_update_available),
-        "recommended_update_command": _format_command(recommended_parts),
+        "recommended_update_command": recommended_command,
         "alternative_update_commands": alternative_commands,
     }
 
@@ -334,26 +374,32 @@ def get_version_info(*, dist_name: str = _DIST_NAME) -> dict[str, object]:
     )
     if not installed_version:
         reason_code = "missing_installed_metadata"
-        repair_steps = ["python -m pip install -e .[dev]"]
     elif drifted:
         reason_code = "install_drift"
-        repair_steps = ["python -m pip install -e .[dev]"]
     else:
         reason_code = "ok"
-        repair_steps = []
     install_mode, source_root = _detect_installation_mode(
         dist_name=dist_name,
         installed_version=installed_version,
         pyproject_path=pyproject_path,
     )
+    repair_steps = build_repair_steps(
+        dist_name=dist_name,
+        install_mode=install_mode,
+        source_root=source_root,
+        reason_code=reason_code,
+    )
     return {
         "version": effective,
         "source": source,
         "pyproject_version": pyproject_version,
+        "source_tree_version": pyproject_version,
         "installed_version": installed_version,
+        "installed_metadata_version": installed_version,
         "dist_name": dist_name,
         "drifted": drifted,
         "reason_code": reason_code,
+        "sync_state": "clean" if reason_code == "ok" else reason_code,
         "repair_steps": repair_steps,
         "install_mode": install_mode,
         "source_root": source_root,
@@ -387,6 +433,7 @@ def verify_version_install_sync(*, dist_name: str = _DIST_NAME) -> dict[str, obj
 
 
 __all__ = [
+    "build_repair_steps",
     "get_update_status",
     "get_version",
     "get_version_info",

@@ -144,6 +144,119 @@ def test_score_plan_quick_rows_demotes_task_docs_for_code_intent_query() -> None
     ]
 
 
+def test_score_plan_quick_rows_demotes_generic_docs_for_code_intent_query() -> None:
+    rows = [
+        {
+            "path": "docs/config_test_comparison_report.md",
+            "module": "docs.config_test_comparison_report",
+            "language": "markdown",
+            "score": 8.4,
+        },
+        {
+            "path": "internal/app/api/shutdown/config.go",
+            "module": "internal.app.api.shutdown.config",
+            "language": "go",
+            "score": 8.2,
+        },
+    ]
+
+    scored = score_plan_quick_rows(
+        query="shutdown config redis yaml auto phase fallback refresh status controller",
+        rows=rows,
+        lexical_boost_per_hit=0.0,
+    )
+
+    assert [row.path for row in scored] == [
+        "internal/app/api/shutdown/config.go",
+        "docs/config_test_comparison_report.md",
+    ]
+    assert scored[-1].intent_boost < 0.0
+
+
+def test_score_plan_quick_rows_demotes_public_contract_docs_without_query_marker(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "ace_lite.plan_quick._query_flags",
+        lambda _query: {
+            "doc_sync": False,
+            "code_intent": True,
+            "latest_sensitive": False,
+            "onboarding": False,
+            "has_req_id": False,
+            "req_ids": [],
+        },
+    )
+    rows = [
+        {
+            "path": "docs/reference/ARCHITECTURE_OVERVIEW.md",
+            "module": "docs.reference.architecture_overview",
+            "language": "markdown",
+            "score": 8.9,
+        },
+        {
+            "path": "src/ace_lite/mcp_server/service_health.py",
+            "module": "src.ace_lite.mcp_server.service_health",
+            "language": "python",
+            "score": 8.2,
+        },
+    ]
+
+    scored = score_plan_quick_rows(
+        query="health runtime source_root fingerprint mismatch",
+        rows=rows,
+        lexical_boost_per_hit=0.0,
+    )
+
+    assert [row.path for row in scored] == [
+        "src/ace_lite/mcp_server/service_health.py",
+        "docs/reference/ARCHITECTURE_OVERVIEW.md",
+    ]
+    assert scored[-1].intent_boost < 0.0
+
+
+def test_score_plan_quick_rows_keeps_matching_schema_docs_for_explicit_contract_query(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "ace_lite.plan_quick._query_flags",
+        lambda _query: {
+            "doc_sync": False,
+            "code_intent": True,
+            "latest_sensitive": False,
+            "onboarding": False,
+            "has_req_id": False,
+            "req_ids": [],
+        },
+    )
+    rows = [
+        {
+            "path": "docs/reference/OPENAPI_SCHEMA.md",
+            "module": "docs.reference.openapi_schema",
+            "language": "markdown",
+            "score": 8.4,
+        },
+        {
+            "path": "src/ace_lite/plan_quick.py",
+            "module": "src.ace_lite.plan_quick",
+            "language": "python",
+            "score": 8.2,
+        },
+    ]
+
+    scored = score_plan_quick_rows(
+        query="openapi schema parser contract mapping",
+        rows=rows,
+        lexical_boost_per_hit=0.0,
+    )
+
+    assert [row.path for row in scored] == [
+        "docs/reference/OPENAPI_SCHEMA.md",
+        "src/ace_lite/plan_quick.py",
+    ]
+    assert scored[0].intent_boost >= 0.0
+
+
 def test_score_plan_quick_rows_uses_strategy_registries(monkeypatch) -> None:
     calls: dict[str, int] = {"intent": 0, "domain": 0, "doc_boost": 0, "latest_boost": 0}
 

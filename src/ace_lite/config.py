@@ -6,12 +6,14 @@ active working directory.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 DEFAULT_CONFIG_FILE = ".ace-lite.yml"
+_REPO_IDENTITY_PATTERN = re.compile(r"[^a-z0-9._-]+")
 
 
 def _deep_merge(target: dict[str, Any], source: dict[str, Any]) -> None:
@@ -41,6 +43,45 @@ def find_git_root(start: str | Path) -> Path | None:
         if git_marker.exists():
             return candidate
     return None
+
+
+def normalize_repo_identity(value: str | Path | None, *, fallback: str = "repo") -> str:
+    normalized = _REPO_IDENTITY_PATTERN.sub("-", str(value or "").strip().lower())
+    normalized = normalized.strip("-")
+    return normalized or fallback
+
+
+def resolve_repo_identity(
+    *,
+    root: str | Path,
+    repo: str | None = None,
+) -> dict[str, Any]:
+    root_path = Path(root).expanduser().resolve()
+    git_root = find_git_root(root_path) or root_path
+    requested_repo = str(repo or "").strip()
+    worktree_name = root_path.name or "repo"
+    git_root_name = git_root.name or worktree_name
+
+    repo_label = requested_repo or git_root_name or worktree_name or "repo"
+    repo_source = "explicit_repo" if requested_repo else "git_root_name"
+    if requested_repo and root_path != git_root and requested_repo == worktree_name:
+        repo_label = git_root_name or requested_repo
+        repo_source = "git_root_name"
+    elif not requested_repo and git_root == root_path:
+        repo_source = "root_name"
+
+    repo_id = normalize_repo_identity(repo_label, fallback="repo")
+    return {
+        "repo_id": repo_id,
+        "repo_label": str(repo_label or repo_id),
+        "requested_repo": requested_repo or None,
+        "source": repo_source,
+        "root_path": str(root_path),
+        "git_root": str(git_root),
+        "git_root_name": git_root_name,
+        "worktree_name": worktree_name,
+        "uses_git_root_name": bool(git_root != root_path),
+    }
 
 
 def load_layered_config(
@@ -96,4 +137,6 @@ __all__ = [
     "config_get",
     "find_git_root",
     "load_layered_config",
+    "normalize_repo_identity",
+    "resolve_repo_identity",
 ]

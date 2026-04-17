@@ -3,6 +3,41 @@ from __future__ import annotations
 from ace_lite.pipeline.stage_tags import build_stage_tags
 
 
+def test_memory_stage_tags_treat_none_fallback_as_false() -> None:
+    tags = build_stage_tags(
+        stage_name="memory",
+        output={
+            "channel_used": "rest",
+            "strategy": "semantic",
+            "count": 0,
+            "cache": {"hit_count": 0},
+            "timeline": {"groups": []},
+            "disclosure": {"mode": "compact"},
+            "cost": {"preview_est_tokens_total": 0, "tokenizer_model": "gpt-4o-mini"},
+            "namespace": {
+                "mode": "repo",
+                "source": "auto",
+                "container_tag_effective": "repo:demo",
+                "fallback": None,
+            },
+            "profile": {"enabled": False, "selected_count": 0},
+            "capture": {"enabled": False, "triggered": False, "captured_items": 0},
+            "notes": {"enabled": False, "selected_count": 0, "matched_count": 0, "expired_count": 0},
+            "temporal": {
+                "requested": False,
+                "enabled": True,
+                "reason": "disabled",
+                "filtered_out_count": 0,
+                "unknown_timestamp_count": 0,
+                "recency_boost": {"enabled": False, "enabled_effective": False, "applied_count": 0},
+            },
+        },
+    )
+
+    assert tags["memory_container_tag_set"] is True
+    assert tags["memory_namespace_fallback"] is False
+
+
 def test_index_stage_tags_include_adaptive_router_metadata() -> None:
     tags = build_stage_tags(
         stage_name="index",

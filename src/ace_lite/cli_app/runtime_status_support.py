@@ -193,6 +193,7 @@ def build_runtime_status_payload(
     snapshot_path: str | Path,
     memory_state: dict[str, Any],
     runtime_stats: dict[str, Any],
+    version_sync: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     root_path = Path(root).resolve()
     sections = resolve_runtime_status_sections(settings)
@@ -206,6 +207,7 @@ def build_runtime_status_payload(
         sections=sections,
         memory_state=memory_state,
         runtime_stats=runtime_stats,
+        version_sync=version_sync,
     )
     degraded_services = build_runtime_degraded_services(
         service_health=service_health,
@@ -235,6 +237,7 @@ def build_runtime_status_payload(
         "service_health": service_health,
         "degraded_services": degraded_services,
         "next_cycle_input": next_cycle_input_summary,
+        "version_sync": dict(version_sync or {}),
         "latest_runtime": {
             "filters": runtime_stats.get("filters"),
             "latest_match": runtime_stats.get("latest_match"),
@@ -251,6 +254,7 @@ def build_runtime_status_payload(
                 "agent_loop_control_plane_summary"
             ),
             "next_cycle_input_summary": runtime_stats.get("next_cycle_input_summary"),
+            "version_sync": dict(version_sync or {}),
         },
     }
 
@@ -270,6 +274,7 @@ def build_runtime_status_snapshot(
         evaluate_runtime_memory_state,
         resolve_effective_runtime_skills_dir,
     )
+    from ace_lite.cli_app.runtime_doctor_support import build_runtime_version_sync_payload
 
     resolved = bundle["resolved"]
     stats_tags = (
@@ -302,6 +307,7 @@ def build_runtime_status_snapshot(
         or os.environ.get("USERPROFILE")
         or Path.home(),
     )
+    version_sync = build_runtime_version_sync_payload()
     payload = build_runtime_status_payload(
         root=root,
         settings=settings,
@@ -312,6 +318,7 @@ def build_runtime_status_snapshot(
         snapshot_path=bundle["snapshot_path"],
         memory_state=memory_state,
         runtime_stats=runtime_stats,
+        version_sync=version_sync,
     )
     payload["settings_governance"] = build_runtime_settings_governance_payload(bundle)
     return payload

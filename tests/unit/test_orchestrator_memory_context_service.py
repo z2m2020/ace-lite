@@ -67,6 +67,23 @@ def test_resolve_memory_namespace_uses_repo_auto_tag(tmp_path: Path) -> None:
     assert namespace_source == "auto"
 
 
+def test_resolve_memory_namespace_uses_git_root_name_for_worktree_repo(tmp_path: Path) -> None:
+    repo_root = tmp_path / "tabiapp-backend"
+    worktree_root = repo_root / "tabiapp-backend_worktree_aeon_v2"
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
+    worktree_root.mkdir(parents=True, exist_ok=True)
+    service = _build_service(root=worktree_root, auto_tag_mode="repo")
+
+    container_tag, namespace_mode, namespace_source = service.resolve_memory_namespace(
+        repo="tabiapp-backend_worktree_aeon_v2",
+        root=str(worktree_root),
+    )
+
+    assert container_tag == "repo:tabiapp-backend"
+    assert namespace_mode == "repo"
+    assert namespace_source == "auto"
+
+
 def test_capture_memory_signal_writes_recent_context_and_notes(tmp_path: Path) -> None:
     service = _build_service(root=tmp_path)
 

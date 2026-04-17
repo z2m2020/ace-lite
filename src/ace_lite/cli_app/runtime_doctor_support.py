@@ -20,7 +20,7 @@ from ace_lite.stage_artifact_cache_gc import (
 )
 from ace_lite.vcs_history import collect_git_head_snapshot
 from ace_lite.vcs_worktree import collect_git_worktree_summary
-from ace_lite.version import get_update_status, get_version_info
+from ace_lite.version import build_repair_steps, get_update_status, get_version_info
 
 
 def _coerce_mapping(value: Any) -> dict[str, Any]:
@@ -302,36 +302,55 @@ def build_runtime_version_sync_payload(
     installed_version = str(info.get("installed_version") or "").strip()
     pyproject_version = str(info.get("pyproject_version") or "").strip()
     drifted = bool(info.get("drifted", False))
+    sync_state = str(info.get("sync_state") or "").strip() or "clean"
 
     if not installed_version:
         reason = "missing_installed_metadata"
         ok = False
-        recommendations = ["Run `python -m pip install -e .[dev]` to install editable metadata."]
     elif drifted:
         reason = "install_drift"
         ok = False
-        recommendations = ["Run `python -m pip install -e .[dev]` to resync installed metadata."]
     else:
         reason = "ok"
         ok = True
-        recommendations = []
-
-    repair_steps = ["python -m pip install -e .[dev]"] if not ok else []
     update_status = get_update_status_fn(
         dist_name=dist_name,
         version_info=info,
     )
+    repair_steps = build_repair_steps(
+        dist_name=str(info.get("dist_name") or dist_name),
+        install_mode=str(info.get("install_mode") or "").strip() or None,
+        source_root=str(info.get("source_root") or "").strip() or None,
+        reason_code=reason,
+    )
+    update_recommendation = str(update_status.get("recommended_update_command") or "").strip()
+    if update_recommendation and update_recommendation not in repair_steps:
+        repair_steps = [update_recommendation, *repair_steps]
+    recommendations = []
+    if not ok:
+        if reason == "missing_installed_metadata":
+            recommendations.append(
+                "Run the recommended repair command to install local package metadata before relying on health results."
+            )
+        elif reason == "install_drift":
+            recommendations.append(
+                "Run the recommended repair command to resync installed metadata with the local source tree."
+            )
+        recommendations.extend(repair_steps)
 
     return {
         "ok": ok,
         "event": "runtime_doctor_version_sync",
         "reason": reason,
         "reason_code": reason,
+        "sync_state": sync_state if reason == "ok" else reason,
         "dist_name": str(info.get("dist_name") or dist_name),
         "version": str(info.get("version") or ""),
         "source": str(info.get("source") or ""),
         "pyproject_version": pyproject_version,
+        "source_tree_version": pyproject_version or None,
         "installed_version": installed_version,
+        "installed_metadata_version": installed_version or None,
         "drifted": drifted,
         "update_status": update_status,
         "recommendations": recommendations,

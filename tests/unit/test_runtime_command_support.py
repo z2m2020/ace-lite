@@ -929,6 +929,16 @@ def test_build_runtime_status_payload_canonicalizes_runtime_reason_aliases_in_de
             "recommendations": [],
         },
         runtime_stats=runtime_stats,
+        version_sync={
+            "ok": False,
+            "reason_code": "install_drift",
+            "sync_state": "install_drift",
+            "version": "0.3.90",
+            "source_tree_version": "0.3.90",
+            "installed_metadata_version": "0.3.89",
+            "recommendations": ["repair install"],
+            "repair_steps": ["python -m pip install -e .[dev]"],
+        },
     )
 
     assert any(
@@ -938,6 +948,13 @@ def test_build_runtime_status_payload_canonicalizes_runtime_reason_aliases_in_de
         and item["source"] == "latest_runtime_stats"
         for item in payload["degraded_services"]
     )
+    assert any(
+        item["name"] == "runtime_sync"
+        and item["reason"] == "install_drift"
+        and item["source"] == "service_health"
+        for item in payload["degraded_services"]
+    )
+    assert payload["version_sync"]["sync_state"] == "install_drift"
     assert payload["next_cycle_input"]["primary_stream"] == "budget"
     assert (
         payload["latest_runtime"]["next_cycle_input_summary"]["priorities"][0]["reason_code"]
@@ -948,6 +965,7 @@ def test_build_runtime_status_payload_canonicalizes_runtime_reason_aliases_in_de
         == runtime_stats["agent_loop_control_plane_summary"]
     )
     assert payload["latest_runtime"]["observation_overview"] == runtime_stats["observation_overview"]
+    assert payload["latest_runtime"]["version_sync"]["sync_state"] == "install_drift"
 
 
 def test_execute_codex_mcp_setup_plan_dry_run_does_not_run_commands() -> None:

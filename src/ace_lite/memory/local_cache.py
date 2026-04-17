@@ -21,6 +21,7 @@ from .protocol import MemoryProvider
 from .record import MemoryRecord, MemoryRecordCompact
 
 logger = logging.getLogger(__name__)
+_CACHE_QUERY_SCHEMA_VERSION = "memory_scope_v2"
 
 
 class LocalCacheProvider:
@@ -44,6 +45,7 @@ class LocalCacheProvider:
         self.last_channel_used = channel_name
         self.fallback_reason: str | None = None
         self.last_container_tag_fallback: str | None = None
+        self.last_query_schema_version = _CACHE_QUERY_SCHEMA_VERSION
         self.strategy = getattr(upstream, "strategy", "semantic")
         self.last_cache_stats: dict[str, Any] = {
             "enabled": True,
@@ -65,7 +67,9 @@ class LocalCacheProvider:
             max(1, int(limit)) if isinstance(limit, int) and limit > 0 else None
         )
         namespace_key = str(container_tag or "").strip()
-        fingerprint_source = f"{namespace_key}\n{query}".encode()
+        fingerprint_source = (
+            f"{_CACHE_QUERY_SCHEMA_VERSION}\n{namespace_key}\n{query}"
+        ).encode()
         query_fingerprint = hashlib.sha256(fingerprint_source).hexdigest()
         now_ts = time.time()
 

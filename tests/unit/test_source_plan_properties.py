@@ -222,6 +222,13 @@ def test_run_source_plan_emits_selected_ltm_constraints() -> None:
         "graph_neighbor_count": 1,
         "handles": ["fact-1"],
     }
+    assert result["memory_constraint_summary"] == {
+        "considered_count": 2,
+        "included_count": 2,
+        "excluded_count": 0,
+        "excluded_by_reason": {},
+    }
+    assert result["memory_constraint_details"][0]["why_included"] == ["ltm_selected"]
     assert result["ltm_constraints"] == [
         {
             "handle": "fact-1",
@@ -233,6 +240,75 @@ def test_run_source_plan_emits_selected_ltm_constraints() -> None:
             "graph_neighbor_count": 1,
         }
     ]
+
+
+def test_run_source_plan_filters_cross_repo_memory_constraints() -> None:
+    ctx = StageContext(query="memory boundary", repo="ace-lite", root=".")
+    ctx.state = {
+        "memory": {
+            "namespace": {
+                "container_tag_effective": "repo:ace-lite",
+                "container_tag_requested": "repo:ace-lite",
+            },
+            "hits_preview": [
+                {
+                    "handle": "same-repo",
+                    "preview": "same repo guidance",
+                    "metadata": {"repo": "ace-lite", "namespace": "repo:ace-lite"},
+                    "source_kind": "local_notes",
+                    "repo_scope_match": True,
+                    "namespace_scope_match": True,
+                    "constraint_eligible": True,
+                },
+                {
+                    "handle": "other-repo",
+                    "preview": "other repo guidance",
+                    "metadata": {"repo": "tabiapp-backend", "namespace": "repo:tabiapp-backend"},
+                    "source_kind": "local_notes",
+                    "repo_scope_match": False,
+                    "namespace_scope_match": False,
+                    "constraint_eligible": False,
+                    "constraint_exclusion_reason": "repo_mismatch",
+                },
+            ],
+        },
+        "index": {
+            "candidate_files": [{"path": "src/ace_lite/pipeline/stages/source_plan.py"}],
+            "candidate_chunks": [],
+            "chunk_metrics": {"chunk_budget_used": 0.0},
+        },
+        "repomap": {"focused_files": ["src/ace_lite/pipeline/stages/source_plan.py"]},
+        "augment": {
+            "diagnostics": [],
+            "xref": {"count": 0, "results": []},
+            "tests": {"suspicious_chunks": [], "suggested_tests": []},
+        },
+        "skills": {"selected": []},
+        "__policy": {"name": "general", "version": "v1", "test_signal_weight": 1.0},
+    }
+
+    result = run_source_plan(
+        ctx=ctx,
+        pipeline_order=["memory", "index", "repomap", "augment", "skills", "source_plan"],
+        chunk_top_k=4,
+        chunk_per_file_limit=2,
+        chunk_token_budget=256,
+        chunk_disclosure="refs",
+        policy_version="v1",
+    )
+
+    assert result["constraints"] == ["same repo guidance"]
+    assert result["memory_constraint_summary"] == {
+        "considered_count": 2,
+        "included_count": 1,
+        "excluded_count": 1,
+        "excluded_by_reason": {"repo_mismatch": 1},
+    }
+    excluded = next(
+        item for item in result["memory_constraint_details"] if item["handle"] == "other-repo"
+    )
+    assert excluded["constraint_eligible"] is False
+    assert excluded["constraint_exclusion_reason"] == "repo_mismatch"
 
 
 def test_run_source_plan_emits_patch_artifact_candidates() -> None:

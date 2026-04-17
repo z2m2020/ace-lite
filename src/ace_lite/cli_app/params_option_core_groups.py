@@ -104,8 +104,8 @@ SHARED_MEMORY_OPTION_DESCRIPTORS: tuple[OptionDescriptor, ...] = (
     (
         ("--memory-auto-tag-mode",),
         {
-            "default": None,
-            "show_default": "(disabled)",
+            "default": "repo",
+            "show_default": True,
             "type": click.Choice(list(MEMORY_AUTO_TAG_MODE_CHOICES), case_sensitive=False),
             "help": "Auto-generate memory container tag (repo/user/global). Enables namespace isolation when set.",
         },

@@ -254,6 +254,8 @@ def test_handle_dev_issue_from_runtime_promotes_auto_captured_event(
 
 def test_handle_dev_issue_apply_fix_updates_open_issue_count(tmp_path: Path) -> None:
     store_path = str(tmp_path / "context-map" / "dev-feedback.db")
+    issue_store_path = str(tmp_path / "context-map" / "issue_reports.db")
+    profile_path = str(tmp_path / ".ace-lite" / "profile.json")
 
     handle_dev_issue_record_request(
         title="Memory fallback while planning",
@@ -299,6 +301,9 @@ def test_handle_dev_issue_apply_fix_updates_open_issue_count(tmp_path: Path) -> 
         user_id="mcp-user",
         profile_key="bugfix",
         store_path=store_path,
+        root_path=tmp_path,
+        issue_store_path=issue_store_path,
+        profile_path=profile_path,
     )
 
     assert resolved_issue["ok"] is True

@@ -88,6 +88,7 @@ def test_build_runtime_version_sync_payload_detects_install_drift() -> None:
             "pyproject_version": "0.3.51",
             "installed_version": "0.3.44",
             "drifted": True,
+            "sync_state": "install_drift",
         },
         get_update_status_fn=lambda **kwargs: {
             "install_mode": "editable",
@@ -99,10 +100,19 @@ def test_build_runtime_version_sync_payload_detects_install_drift() -> None:
     assert payload["ok"] is False
     assert payload["reason"] == "install_drift"
     assert payload["reason_code"] == "install_drift"
+    assert payload["sync_state"] == "install_drift"
     assert payload["recommendations"]
     assert payload["update_status"]["install_mode"] == "editable"
-    assert payload["repair_steps"] == ["python -m pip install -e .[dev]"]
-    assert payload["修复步骤"] == ["python -m pip install -e .[dev]"]
+    assert payload["source_tree_version"] == "0.3.51"
+    assert payload["installed_metadata_version"] == "0.3.44"
+    assert payload["repair_steps"] == [
+        "python scripts/update.py --root .",
+        "python -m pip install -e .[dev]",
+    ]
+    assert payload["修复步骤"] == [
+        "python scripts/update.py --root .",
+        "python -m pip install -e .[dev]",
+    ]
 
 
 def test_collect_runtime_doctor_degraded_reason_codes_normalizes_doctor_failures() -> None:

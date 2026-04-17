@@ -20,7 +20,7 @@ def build_memory_payload(
     memory_gate_mode: str = "auto",
     memory_timeline_enabled: bool = True,
     memory_container_tag: str | None = None,
-    memory_auto_tag_mode: str | None = None,
+    memory_auto_tag_mode: str | None = "repo",
     memory_profile_enabled: bool = False,
     memory_profile_path: str = "~/.ace-lite/profile.json",
     memory_profile_top_n: int = 4,
@@ -59,6 +59,9 @@ def build_memory_payload(
     memory_postprocess_diversity_enabled: bool = True,
     memory_postprocess_diversity_similarity_threshold: float = 0.9,
 ) -> dict[str, Any]:
+    resolved_memory_auto_tag_mode = (
+        memory_auto_tag_mode if memory_auto_tag_mode is not None else "repo"
+    )
     return build_canonical_payload(
         field_specs=(
             CanonicalFieldSpec(
@@ -105,8 +108,8 @@ def build_memory_payload(
             ),
             CanonicalFieldSpec(
                 ("namespace", "auto_tag_mode"),
-                memory_auto_tag_mode,
-                None,
+                resolved_memory_auto_tag_mode,
+                "repo",
                 ((memory_group, (("namespace", "auto_tag_mode"),)),),
             ),
             CanonicalFieldSpec(

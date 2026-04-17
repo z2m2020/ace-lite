@@ -12,11 +12,12 @@ from ace_lite.cli_app.config_resolve_defaults import (
     PLAN_MEMORY_FEEDBACK_DEFAULTS,
     PLAN_MEMORY_GATE_DEFAULTS,
     PLAN_MEMORY_LONG_TERM_DEFAULTS,
+    PLAN_MEMORY_NAMESPACE_DEFAULTS,
     PLAN_MEMORY_NOTES_DEFAULTS,
     PLAN_MEMORY_POSTPROCESS_DEFAULTS,
     PLAN_MEMORY_PROFILE_DEFAULTS,
 )
-from ace_lite.config import DEFAULT_CONFIG_FILE
+from ace_lite.config import DEFAULT_CONFIG_FILE, resolve_repo_identity
 from ace_lite.config_models import validate_cli_config
 from ace_lite.config_pack import load_config_pack
 from ace_lite.config_runtime_projection import (
@@ -165,7 +166,7 @@ _PLAN_SPECS: tuple[_FieldSpec, ...] = (
     ),
     _spec(
         ("memory", "namespace", "auto_tag_mode"),
-        None,
+        str(PLAN_MEMORY_NAMESPACE_DEFAULTS["memory_auto_tag_mode"]),
         ("memory", "namespace", "auto_tag_mode"),
         ("memory_auto_tag_mode",),
     ),
@@ -1268,9 +1269,15 @@ def _build_mcp_snapshot(
     elif user_id_source is None:
         user_id_source = "default"
 
+    default_repo_env = _get_str("ACE_LITE_DEFAULT_REPO", "")
+    default_repo_identity = resolve_repo_identity(
+        root=resolved_root,
+        repo=default_repo_env or None,
+    )
+
     snapshot = {
         "default_root": str(resolved_root),
-        "default_repo": _get_str("ACE_LITE_DEFAULT_REPO", resolved_root.name or "repo"),
+        "default_repo": str(default_repo_identity.get("repo_id") or resolved_root.name or "repo"),
         "default_skills_dir": str(resolved_skills),
         "default_languages": _get_str("ACE_LITE_DEFAULT_LANGUAGES", _DEFAULT_LANGUAGE_PROFILE),
         "config_pack": _get_str("ACE_LITE_CONFIG_PACK"),
@@ -1320,7 +1327,7 @@ def _build_mcp_snapshot(
             env=live_env,
             snapshot_env=saved_env,
         )
-        or "default",
+        or ("git_root_name" if bool(default_repo_identity.get("uses_git_root_name")) else "default"),
         "default_skills_dir": "explicit_override"
         if override_skills is not None
         else (
