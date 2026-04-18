@@ -1039,6 +1039,7 @@ class AceLiteMcpService:
         repo: str | None = None,
         user_id: str | None = None,
         profile_key: str | None = None,
+        root: str | None = None,
         store_path: str | None = None,
     ) -> dict[str, Any]:
         return self._run_tracked(
@@ -1048,7 +1049,7 @@ class AceLiteMcpService:
                 user_id=user_id,
                 profile_key=profile_key,
                 store_path=store_path,
-                root_path=self._config.default_root,
+                root_path=self._resolve_root(root),
             ),
         )
 

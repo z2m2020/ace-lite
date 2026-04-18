@@ -34,6 +34,7 @@ def build_feedback_observation_overview(
     issue_store_path: str | Path | None = None,
     profile_path: str | Path | None = None,
 ) -> dict[str, Any]:
+    root_was_explicit = root is not None
     root_path = _resolve_root_path(root)
     dev_store = DevFeedbackStore(db_path=dev_feedback_store_path)
     issue_store = IssueReportStore(
@@ -61,6 +62,25 @@ def build_feedback_observation_overview(
     ):
         issue_reports = issue_store.summarize(repo=repo)
         issue_report_scope = "repo_fallback"
+    issue_scope_diagnostics = {
+        "root_path": str(root_path),
+        "root_source": "explicit" if root_was_explicit else "process_cwd",
+        "store_path": str(issue_store.db_path),
+        "issue_store_path_source": "explicit" if issue_store_path else "default_under_root",
+        "repo_filter": str(repo or "").strip(),
+        "user_id_filter": str(user_id or "").strip(),
+        "profile_key_filter": str(profile_key or "").strip(),
+        "repo_fallback_applied": issue_report_scope == "repo_fallback",
+    }
+    if (
+        int(issue_reports.get("report_count", 0) or 0) <= 0
+        and str(repo or "").strip()
+        and not root_was_explicit
+    ):
+        issue_scope_diagnostics["warning"] = (
+            "issue reports are scoped by the resolved root; pass root explicitly "
+            "when validating another repository"
+        )
     selection_feedback = feedback_store.stats(
         repo=repo,
         user_id=user_id,
@@ -85,6 +105,7 @@ def build_feedback_observation_overview(
             "resolved_issue_count": int(issue_reports.get("resolved_issue_count", 0) or 0),
             "latest_occurred_at": str(issue_reports.get("latest_occurred_at") or ""),
             "scope": issue_report_scope,
+            "scope_diagnostics": issue_scope_diagnostics,
             "by_status": list(issue_reports.get("by_status", [])),
             "by_category": list(issue_reports.get("by_category", []))[:5],
         },

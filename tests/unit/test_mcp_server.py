@@ -9,6 +9,7 @@ from threading import Event, Thread
 import pytest
 
 import ace_lite.mcp_server.service as mcp_service_module
+from ace_lite.issue_report_store import IssueReportStore
 from ace_lite.mcp_server import AceLiteMcpConfig, AceLiteMcpService
 from ace_lite.mcp_server.server import build_mcp_server
 from ace_lite.mcp_server.server_tool_registration import (
@@ -211,6 +212,9 @@ def test_build_mcp_server_exposes_stable_tool_metadata_and_schema(tmp_path: Path
     assert tools["ace_skills_catalog"].parameters.get("required", []) == []
     assert "root" in tools["ace_skills_catalog"].parameters["properties"]
     assert "skills_dir" in tools["ace_skills_catalog"].parameters["properties"]
+    assert "root" in tools["ace_feedback_record"].parameters["properties"]
+    assert "root" in tools["ace_feedback_stats"].parameters["properties"]
+    assert "root" in tools["ace_dev_feedback_summary"].parameters["properties"]
     assert (
         tools["ace_memory_store"].parameters["properties"]["tags"]["anyOf"][0]["type"] == "object"
     )
@@ -1086,6 +1090,45 @@ def test_mcp_service_dev_issue_apply_fix_updates_summary(tmp_path: Path) -> None
     assert resolved["long_term_capture"]["stage"] == "dev_issue_resolution"
     assert summary["summary"]["issue_count"] == 1
     assert summary["summary"]["open_issue_count"] == 0
+
+
+def test_mcp_service_dev_feedback_summary_uses_explicit_root_for_issue_reports(
+    tmp_path: Path,
+) -> None:
+    _write_sample_repo(tmp_path)
+    service = _make_service(tmp_path)
+    remote_root = tmp_path / "external-repo"
+    remote_root.mkdir(parents=True, exist_ok=True)
+    IssueReportStore(db_path=remote_root / "context-map" / "issue_reports.db").record(
+        {
+            "issue_id": "iss_remote_scope",
+            "title": "remote issue summary",
+            "query": "remote scope query",
+            "actual_behavior": "summary missed remote issue store",
+            "repo": "remote-repo",
+            "root": str(remote_root),
+            "status": "open",
+            "created_at": "2026-03-19T00:00:00+00:00",
+            "updated_at": "2026-03-19T00:00:00+00:00",
+            "occurred_at": "2026-03-19T00:00:00+00:00",
+            "category": "retrieval",
+            "severity": "high",
+        },
+        root_path=remote_root,
+    )
+
+    summary = service.dev_feedback_summary(
+        repo="remote-repo",
+        root=str(remote_root),
+        store_path=str(tmp_path / "context-map" / "dev-feedback.db"),
+    )
+
+    assert summary["ok"] is True
+    assert summary["observation_overview"]["issue_reports"]["report_count"] == 1
+    assert (
+        summary["observation_overview"]["issue_reports"]["scope_diagnostics"]["root_path"]
+        == str(remote_root.resolve())
+    )
 
 
 def test_mcp_service_plan_smoke_returns_summary(tmp_path: Path) -> None:

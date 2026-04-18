@@ -619,6 +619,12 @@ class SelectionFeedbackStore:
                     "count": 0,
                     "decayed_weight_sum": 0.0,
                     "last_selected_at": "",
+                    "positions": [],
+                    "bridge_count": 0,
+                    "bridge_hit_count": 0,
+                    "matched_terms": set(),
+                    "capture_modes": set(),
+                    "sample_events": [],
                 },
             )
             bucket["count"] += 1
@@ -630,19 +636,78 @@ class SelectionFeedbackStore:
                 > _parse_iso_timestamp(bucket["last_selected_at"])
             ):
                 bucket["last_selected_at"] = captured_at
+            position = int(event.get("position") or 0)
+            if position > 0:
+                bucket["positions"].append(position)
+            event_terms = _normalize_terms(event.get("terms"))
+            matched_terms = (
+                sorted(term for term in query_terms_norm if term in event_terms)
+                if query_terms_norm
+                else []
+            )
+            if matched_terms:
+                bucket["matched_terms"].update(matched_terms)
+            candidate_count = int(event.get("candidate_count", 0) or 0)
+            selected_in_candidates = bool(event.get("selected_in_candidates"))
+            if candidate_count > 0:
+                bucket["bridge_count"] += 1
+                if selected_in_candidates:
+                    bucket["bridge_hit_count"] += 1
+            capture_mode = _normalize_text(event.get("capture_mode"))
+            if capture_mode:
+                bucket["capture_modes"].add(capture_mode)
+            bucket["sample_events"].append(
+                {
+                    "query": str(event.get("query") or ""),
+                    "captured_at": captured_at,
+                    "position": position if position > 0 else None,
+                    "candidate_count": candidate_count if candidate_count > 0 else None,
+                    "selected_in_candidates": (
+                        selected_in_candidates if candidate_count > 0 else None
+                    ),
+                    "matched_terms": matched_terms,
+                    "capture_mode": capture_mode or "",
+                }
+            )
 
         rows: list[dict[str, Any]] = []
         for path, bucket in per_path.items():
             weight_sum = float(bucket.get("decayed_weight_sum", 0.0) or 0.0)
             raw_boost = float(boost_cfg.boost_per_select) * weight_sum
             applied_boost = min(max(0.0, float(boost_cfg.max_boost)), max(0.0, raw_boost))
+            positions = [int(item) for item in bucket.get("positions", []) if int(item) > 0]
+            avg_position = round(sum(positions) / len(positions), 6) if positions else None
+            bridge_count = int(bucket.get("bridge_count", 0) or 0)
+            bridge_hit_count = int(bucket.get("bridge_hit_count", 0) or 0)
+            capture_rate = (
+                round(float(bridge_hit_count) / float(bridge_count), 6)
+                if bridge_count > 0
+                else None
+            )
+            sample_events = sorted(
+                list(bucket.get("sample_events", [])),
+                key=lambda item: _parse_iso_timestamp(item.get("captured_at")),
+                reverse=True,
+            )[:3]
+            sample_queries: list[str] = []
+            for sample in sample_events:
+                query_text = str(sample.get("query") or "").strip()
+                if query_text and query_text not in sample_queries:
+                    sample_queries.append(query_text)
             rows.append(
                 {
                     "selected_path": path,
                     "count": int(bucket.get("count", 0) or 0),
+                    "matching_event_count": int(bucket.get("count", 0) or 0),
                     "decayed_weight_sum": round(weight_sum, 6),
                     "boost": round(applied_boost, 6),
                     "last_selected_at": str(bucket.get("last_selected_at") or ""),
+                    "matched_terms": sorted(bucket.get("matched_terms", set())),
+                    "avg_position": avg_position,
+                    "capture_rate": capture_rate,
+                    "capture_mode_samples": sorted(bucket.get("capture_modes", set())),
+                    "sample_queries": sample_queries,
+                    "sample_events": sample_events,
                 }
             )
 

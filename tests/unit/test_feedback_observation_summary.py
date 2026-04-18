@@ -61,5 +61,10 @@ def test_build_feedback_observation_overview_aggregates_three_feedback_channels(
 
     assert payload["developer_feedback"]["issue_count"] == 1
     assert payload["issue_reports"]["report_count"] == 1
+    assert payload["issue_reports"]["scope_diagnostics"]["root_path"] == str(tmp_path.resolve())
+    assert payload["issue_reports"]["scope_diagnostics"]["root_source"] == "explicit"
+    assert payload["issue_reports"]["scope_diagnostics"]["store_path"].endswith(
+        "context-map/issue_reports.db"
+    )
     assert payload["selection_feedback"]["event_count"] == 1
     assert payload["cross_store_gaps"]["has_split_feedback_signals"] is True

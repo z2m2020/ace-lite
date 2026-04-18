@@ -40,7 +40,21 @@ def find_git_root(start: str | Path) -> Path | None:
     current = Path(start).resolve()
     for candidate in [current, *current.parents]:
         git_marker = candidate / ".git"
-        if git_marker.exists():
+        if git_marker.is_dir():
+            return candidate
+        if git_marker.is_file():
+            try:
+                raw = git_marker.read_text(encoding="utf-8").strip()
+            except OSError:
+                return candidate
+            if raw.lower().startswith("gitdir:"):
+                gitdir = Path(raw.split(":", 1)[1].strip()).expanduser()
+                if not gitdir.is_absolute():
+                    gitdir = (candidate / gitdir).resolve()
+                else:
+                    gitdir = gitdir.resolve()
+                if gitdir.parent.name == "worktrees" and gitdir.parent.parent.name == ".git":
+                    return gitdir.parent.parent.parent.resolve()
             return candidate
     return None
 

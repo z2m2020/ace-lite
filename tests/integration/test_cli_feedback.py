@@ -122,6 +122,71 @@ def test_cli_feedback_record_stats_and_reset(tmp_path: Path) -> None:
     assert after_payload["matched_event_count"] == 0
 
 
+def test_cli_feedback_stats_resolves_relative_profile_path_under_root(tmp_path: Path) -> None:
+    runner = CliRunner()
+    repo_root = tmp_path / "repo"
+    selected = repo_root / "src" / "demo.py"
+    selected.parent.mkdir(parents=True, exist_ok=True)
+    selected.write_text("print('demo')\n", encoding="utf-8")
+
+    record = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "record",
+            str(selected),
+            "--query",
+            "shutdown config refresh",
+            "--repo",
+            "demo",
+            "--root",
+            str(repo_root),
+            "--profile-path",
+            "context-map/profile.json",
+        ],
+        env=_cli_env(tmp_path),
+    )
+    assert record.exit_code == 0
+
+    stats = runner.invoke(
+        cli_module.cli,
+        [
+            "feedback",
+            "stats",
+            "--repo",
+            "demo",
+            "--root",
+            str(repo_root),
+            "--profile-path",
+            "context-map/profile.json",
+            "--query",
+            "shutdown config refresh",
+        ],
+        env=_cli_env(tmp_path),
+    )
+
+    assert stats.exit_code == 0
+    stats_payload = json.loads(stats.output)
+    assert stats_payload["ok"] is True
+    assert stats_payload["matched_event_count"] == 1
+    assert stats_payload["configured_path"] == str(
+        (repo_root / "context-map" / "profile.json").resolve()
+    )
+    assert stats_payload["paths"][0]["sample_queries"] == ["shutdown config refresh"]
+
+
+def test_cli_feedback_stats_help_mentions_root_option() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli_module.cli, ["feedback", "stats", "--help"])
+
+    assert result.exit_code == 0
+    assert "--root" in result.output
+    assert "resolve relative" in result.output
+    assert "feedback" in result.output
+    assert "store paths" in result.output
+
+
 def test_cli_feedback_export_and_replay_roundtrip(tmp_path: Path) -> None:
     runner = CliRunner()
     profile_path = tmp_path / "profile.json"

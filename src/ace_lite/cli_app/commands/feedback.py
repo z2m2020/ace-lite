@@ -42,6 +42,18 @@ def _build_long_term_capture_service(*, root: str | None) -> Any:
         return None
 
 
+def _resolve_feedback_profile_path_cli(*, root: str | None, profile_path: str | None) -> Path:
+    base_root = Path(_resolve_root_path(root))
+    profile = (
+        Path(profile_path).expanduser()
+        if profile_path
+        else Path("~/.ace-lite/profile.json").expanduser()
+    )
+    if not profile.is_absolute():
+        return (base_root / profile).resolve()
+    return profile.resolve()
+
+
 def _capture_long_term_event(
     *,
     service: Any,
@@ -378,7 +390,10 @@ def feedback_record_command(
 ) -> None:
     long_term_capture_service = _build_long_term_capture_service(root=root)
     store = SelectionFeedbackStore(
-        profile_path=profile_path,
+        profile_path=_resolve_feedback_profile_path_cli(
+            root=root,
+            profile_path=profile_path,
+        ),
         max_entries=max(0, int(max_entries)),
         long_term_capture_service=long_term_capture_service,
     )
@@ -440,6 +455,11 @@ def feedback_record_command(
     show_default=True,
     help="Feedback store path. Legacy profile JSON paths are still accepted for compatibility.",
 )
+@click.option(
+    "--root",
+    default=None,
+    help="Optional repo root used to resolve relative feedback store paths.",
+)
 @click.option("--user-id", default=None, help="Optional user filter.")
 @click.option("--profile-key", default=None, help="Optional profile filter.")
 @click.option(
@@ -457,11 +477,19 @@ def feedback_stats_command(
     decay_days: float,
     top_n: int,
     profile_path: str,
+    root: str | None,
     user_id: str | None,
     profile_key: str | None,
     max_entries: int,
 ) -> None:
-    store = SelectionFeedbackStore(profile_path=profile_path, max_entries=max(0, int(max_entries)))
+    resolved_profile_path = _resolve_feedback_profile_path_cli(
+        root=root,
+        profile_path=profile_path,
+    )
+    store = SelectionFeedbackStore(
+        profile_path=resolved_profile_path,
+        max_entries=max(0, int(max_entries)),
+    )
     query_terms: list[str] | None = None
     normalized_query = str(query or "").strip()
     if normalized_query:

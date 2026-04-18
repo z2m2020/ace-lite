@@ -250,6 +250,47 @@ def test_feedback_store_tracks_bridge_capture_coverage(tmp_path: Path) -> None:
     assert stats["capture_coverage"] == 1.0
 
 
+def test_feedback_store_stats_include_per_path_explainability(tmp_path: Path) -> None:
+    profile_path = tmp_path / "profile.json"
+    store = SelectionFeedbackStore(profile_path=profile_path, max_entries=8)
+    store.record(
+        query="shutdown config refresh",
+        repo="demo",
+        selected_path="src/shutdown/config.py",
+        candidate_paths=["src/shutdown/config.py", "src/router.py"],
+        captured_at="2026-02-14T00:00:00+00:00",
+        position=1,
+    )
+    store.record(
+        query="shutdown controller refresh",
+        repo="demo",
+        selected_path="src/shutdown/config.py",
+        candidate_paths=["src/shutdown/config.py", "src/controller.py"],
+        captured_at="2026-02-15T00:00:00+00:00",
+        position=2,
+    )
+
+    stats = store.stats(
+        repo="demo",
+        query_terms=["shutdown", "refresh"],
+        boost=FeedbackBoostConfig(boost_per_select=0.2, max_boost=0.5, decay_days=30.0),
+        top_n=5,
+    )
+
+    path_row = stats["paths"][0]
+    assert path_row["selected_path"] == "src/shutdown/config.py"
+    assert path_row["matching_event_count"] == 2
+    assert path_row["matched_terms"] == ["refresh", "shutdown"]
+    assert path_row["avg_position"] == 1.5
+    assert path_row["capture_rate"] == 1.0
+    assert path_row["sample_queries"] == [
+        "shutdown controller refresh",
+        "shutdown config refresh",
+    ]
+    assert len(path_row["sample_events"]) == 2
+    assert path_row["sample_events"][0]["query"] == "shutdown controller refresh"
+
+
 def test_feedback_store_reads_legacy_profile_payload_when_durable_store_is_empty(
     tmp_path: Path,
 ) -> None:

@@ -6,7 +6,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
-No notable changes.
+## [0.3.92] - 2026-04-18
+
+### Added
+
+- Added unified feedback scope diagnostics so `dev-feedback-summary` now reports the resolved issue-store path, root source, and fallback behavior directly in `observation_overview.issue_reports.scope_diagnostics`.
+- Added per-path feedback explainability fields for selection reranking, including matched query terms, sample queries/events, capture-rate summaries, and average selected position.
+- Added regression coverage for explicit feedback `root` propagation, MCP tool schema exposure, CLI help/root parity, and actual git worktree `.git` file layouts.
+
+### Changed
+
+- Aligned feedback scope handling across MCP and CLI so `feedback record`, `feedback stats`, and `ace_dev_feedback_summary` all resolve relative stores consistently under the requested `root`.
+- Hardened git worktree repo-identity detection by parsing real `.git` indirection files, so fresh `ace-lite-mcp --self-test --root <worktree>` runs now keep `default_repo` on the canonical repository name instead of the worktree directory name.
+- Expanded feedback and repo-identity validation to include fresh-process self-test checks and full local regression reruns, closing the gap between local code changes and live MCP runtime behavior.
 
 ## [0.3.91] - 2026-04-17
 

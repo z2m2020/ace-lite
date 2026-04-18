@@ -140,6 +140,48 @@ def test_build_health_payload_exposes_canonical_repo_identity_for_worktree(
     }
 
 
+def test_build_health_payload_exposes_canonical_repo_identity_for_actual_git_worktree(
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path / "tabiapp-backend"
+    worktree_root = tmp_path / "tabiapp-backend_worktree_aeon_v2"
+    skills_dir = worktree_root / "skills"
+    common_git_dir = repo_root / ".git"
+    worktree_git_dir = common_git_dir / "worktrees" / "tabiapp-backend_worktree_aeon_v2"
+    worktree_git_dir.mkdir(parents=True, exist_ok=True)
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    (worktree_root / ".git").write_text(
+        f"gitdir: {worktree_git_dir}\n",
+        encoding="utf-8",
+    )
+    config = AceLiteMcpConfig.from_env(
+        default_root=worktree_root,
+        default_skills_dir=skills_dir,
+    )
+
+    payload = build_health_response_payload(
+        config=config,
+        request_stats={"active_request_count": 0},
+        version="0.3.90",
+        version_info={"drifted": False},
+        runtime_identity=_runtime_identity(),
+        now_iso_fn=lambda: "2026-03-14T00:00:00+00:00",
+    )
+
+    assert payload["default_repo"] == "tabiapp-backend"
+    assert payload["repo_identity"] == {
+        "repo_id": "tabiapp-backend",
+        "repo_label": "tabiapp-backend",
+        "requested_repo": "tabiapp-backend",
+        "source": "explicit_repo",
+        "root_path": str(worktree_root.resolve()),
+        "git_root": str(repo_root.resolve()),
+        "git_root_name": "tabiapp-backend",
+        "worktree_name": "tabiapp-backend_worktree_aeon_v2",
+        "uses_git_root_name": True,
+    }
+
+
 def test_build_health_payload_surfaces_version_drift_warning(
     tmp_path: Path,
 ) -> None:

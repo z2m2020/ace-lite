@@ -576,12 +576,14 @@ def _register_feedback_tools(*, server: FastMCP, service: AceLiteMcpService) -> 
         repo: str | None = None,
         user_id: str | None = None,
         profile_key: str | None = None,
+        root: str | None = None,
         store_path: str | None = None,
     ) -> dict[str, Any]:
         return service.dev_feedback_summary(
             repo=repo,
             user_id=user_id,
             profile_key=profile_key,
+            root=root,
             store_path=store_path,
         )
 
